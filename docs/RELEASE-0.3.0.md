@@ -101,8 +101,13 @@ gh pr close 237 --comment "Superseded: site/brand landed in main."
 
 ## 5. Tag and publish
 
-The tag is the release trigger; `.github/workflows/release.yml` builds five
-targets, checksums them into `SHA256SUMS`, and publishes the GitHub Release.
+The tag is the release trigger; `.github/workflows/release.yml` builds the
+enabled targets, checksums them into `SHA256SUMS`, and publishes the GitHub
+Release. The matrix is data: three targets run by default (linux x86_64, linux
+aarch64, windows x86_64), and the two darwin rows are selected by the
+repository variable `PHERO_MACOS_RUNNERS=true` once the organization has macOS
+runners — the runner configuration currently answers "not supported" for
+`macos-14`, and the Intel label never provisions.
 
 ```sh
 git tag -a v0.3.0 -m "Phero Lang"
@@ -111,15 +116,27 @@ gh run list --workflow release.yml --limit 1
 gh run watch --exit-status "$(gh run list --workflow release.yml --limit 1 --json databaseId -q '.[0].databaseId')"
 ```
 
-If the workflow fails after a fix, re-run it on the tag ref — never from a
-branch, because the ref name is what names every asset:
+If the workflow fails after a fix that changes the workflow file itself, the
+tag must be re-created: a dispatch reads the workflow at the ref, so it can
+only re-run the version the tag already contains. Delete and re-tag at the
+fixed `main` tip (safe while no release was published and no asset was
+consumed), then let the push trigger a fresh run:
+
+```sh
+git push --delete origin v0.3.0
+git tag -a v0.3.0 -m "Phero Lang" origin/main
+git push origin v0.3.0
+```
+
+For a transient failure with an unchanged workflow, re-run it on the tag ref —
+never from a branch, because the ref name is what names every asset:
 
 ```sh
 gh workflow run release.yml --ref v0.3.0
 ```
 
-Verify the published set (five archives plus the manifest) and validate the
-checksums as a user would:
+Verify the published set (one archive per enabled target plus the manifest)
+and validate the checksums as a user would:
 
 ```sh
 gh release view v0.3.0 --json assets -q '.assets[].name'
@@ -127,17 +144,19 @@ gh release download v0.3.0 --dir /tmp/pherolang-0.3.0
 (cd /tmp/pherolang-0.3.0 && sha256sum -c SHA256SUMS)
 ```
 
-Expected names — four unix archives and one windows archive, all rooted at
-version `0.3.0`:
+Expected names at version `0.3.0` with the default matrix — two unix archives
+and one windows archive, plus the manifest:
 
 ```
 pherolang-0.3.0-x86_64-unknown-linux-gnu.tar.gz
 pherolang-0.3.0-aarch64-unknown-linux-gnu.tar.gz
-pherolang-0.3.0-x86_64-apple-darwin.tar.gz
-pherolang-0.3.0-aarch64-apple-darwin.tar.gz
 pherolang-0.3.0-x86_64-pc-windows-msvc.zip
 SHA256SUMS
 ```
+
+With `PHERO_MACOS_RUNNERS=true`, add
+`pherolang-0.3.0-x86_64-apple-darwin.tar.gz` and
+`pherolang-0.3.0-aarch64-apple-darwin.tar.gz`.
 
 ## 6. Install smoke test
 

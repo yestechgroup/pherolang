@@ -206,8 +206,8 @@ Actions that do not appear in a repository diff:
       — owner:
 - [ ] Tag `v0.3.0` "Phero Lang" and publish release notes from the
       changelog — owner:
-- [ ] Publish renamed release assets (binaries for all five targets plus
-      `SHA256SUMS`) — owner:
+- [ ] Publish renamed release assets (one binary per enabled target, plus
+      `SHA256SUMS`; the darwin rows wait on macOS runners) — owner:
 - [ ] 301 `rexlang.com` → `pherolang.com`, and `docs.rexlang.com` →
       `docs.pherolang.com` — owner:
 - [ ] Create the `hello@` and `security@` aliases (open question on the

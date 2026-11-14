@@ -7,7 +7,9 @@ name: Release
 # dispatched ON THE TAG REF (`gh workflow run release.yml --ref v0.3.0`),
 # because GITHUB_REF_NAME is what names the archives, the checksum manifest,
 # and the published release. A dispatch from a branch fails the "Resolve
-# version" step by construction.
+# version" step by construction. Note that a dispatch reads the workflow file
+# *at that ref*, so a fix to this file only reaches a tag that is re-created
+# after the fix lands on main.
 on:
   push:
     tags: ['v[0-9]+.[0-9]+.[0-9]+']
@@ -30,9 +32,9 @@ jobs:
   build:
     name: ${{ matrix.target }}
     strategy:
-      # One broken leg must not cancel the other four: a partial matrix tells
-      # the operator which platform regressed, and the release job still waits
-      # for every leg before publishing.
+      # One broken leg must not cancel the others: a partial matrix tells the
+      # operator which platform regressed. `release` waits for every leg and
+      # never publishes from a half-built matrix.
       fail-fast: false
       matrix:
         # Asset-naming contract, shared with `.github/workflows/site.yml`:
@@ -44,26 +46,26 @@ jobs:
         # changes, that pattern changes in the same commit or the site's
         # binary download silently 404s.
         #
-        # Every leg runs on a native or standard runner, so no leg needs an
-        # emulator: the one honest exception is aarch64-linux, which links a
-        # GNU cross toolchain on the x86_64 runner (the target is standard,
-        # the host is not).
-        include:
-          - target: x86_64-unknown-linux-gnu
-            os: ubuntu-latest
-            binary: pherolang
-          - target: aarch64-unknown-linux-gnu
-            os: ubuntu-latest
-            binary: pherolang
-          - target: x86_64-apple-darwin
-            os: macos-13
-            binary: pherolang
-          - target: aarch64-apple-darwin
-            os: macos-14
-            binary: pherolang
-          - target: x86_64-pc-windows-msvc
-            os: windows-latest
-            binary: pherolang.exe
+        # The macOS rows are data, not dead code: the organization's runner
+        # configuration does not currently offer macOS runners (the arm64
+        # label answers "configuration 'macos-14-arm64-us-default' is not
+        # supported" and the Intel label never provisions), and a matrix row
+        # cannot be conditional, so the whole list is selected here. Set the
+        # repository variable PHERO_MACOS_RUNNERS=true once the org has macOS
+        # runners; the next release then publishes the two darwin archives
+        # with no other edit. Everything downstream reads the matrix, so no
+        # count to keep in sync.
+        include: ${{ fromJSON(vars.PHERO_MACOS_RUNNERS == 'true' && '[
+          {"target":"x86_64-unknown-linux-gnu","os":"ubuntu-latest","binary":"pherolang"},
+          {"target":"aarch64-unknown-linux-gnu","os":"ubuntu-latest","binary":"pherolang"},
+          {"target":"x86_64-apple-darwin","os":"macos-13","binary":"pherolang"},
+          {"target":"aarch64-apple-darwin","os":"macos-14","binary":"pherolang"},
+          {"target":"x86_64-pc-windows-msvc","os":"windows-latest","binary":"pherolang.exe"}
+          ]' || '[
+          {"target":"x86_64-unknown-linux-gnu","os":"ubuntu-latest","binary":"pherolang"},
+          {"target":"aarch64-unknown-linux-gnu","os":"ubuntu-latest","binary":"pherolang"},
+          {"target":"x86_64-pc-windows-msvc","os":"windows-latest","binary":"pherolang.exe"}
+          ]') }}
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
@@ -83,13 +85,16 @@ jobs:
           fi
           echo "version=$version" >> "$GITHUB_OUTPUT"
 
-      # Only the cross leg needs the extra C toolchain; rustc's own backend is
-      # already installed by the toolchain action below.
-      - name: Install aarch64 cross linker
+      # The cross leg needs the target's C toolchain *and* its libc headers:
+      # the compiler alone links, but `ring`'s build script includes
+      # <bits/libc-header-start.h> from the target sysroot and fails without
+      # libc6-dev-<arch>-cross.
+      - name: Install aarch64 cross toolchain
         if: matrix.target == 'aarch64-unknown-linux-gnu'
         run: |
           sudo apt-get update
-          sudo apt-get install -y --no-install-recommends gcc-aarch64-linux-gnu
+          sudo apt-get install -y --no-install-recommends \
+            gcc-aarch64-linux-gnu libc6-dev-arm64-cross
 
       - uses: dtolnay/rust-toolchain@stable
         with:
@@ -174,22 +179,25 @@ jobs:
         run: |
           set -euo pipefail
           cd dist
+          # Completeness is already structural: a failed or cancelled leg
+          # leaves this job unrun (`needs: build`), so nothing below has to
+          # count archives. What is checked here is integrity — every archive
+          # carries a checksum, and the checksum matches the bytes.
           archives=$(ls pherolang-*.tar.gz pherolang-*.zip)
-          found=$(printf '%s\n' "$archives" | wc -l | tr -d ' ')
-          # Five matrix legs: four unix .tar.gz plus one windows .zip. A
-          # missing leg would otherwise publish a release that looks complete.
-          if [ "$found" -ne 5 ]; then
-            echo "::error::expected 5 archives (four unix + one windows), found $found"
-            ls -l
-            exit 1
-          fi
+          for archive in $archives; do
+            if [ ! -f "$archive.sha256" ]; then
+              echo "::error::$archive has no checksum"
+              exit 1
+            fi
+          done
           # One `sha256sum -c`-compatible line per archive, sorted by file
           # name so the manifest is byte-stable across re-runs.
           cat ./*.sha256 | LC_ALL=C sort -k2 > SHA256SUMS
           # Verify the concatenation against the files before publishing it:
           # a truncated download artifact is caught here, not by a user.
           sha256sum -c SHA256SUMS
-          cat SHA256SUMS
+          echo "targets published by this run:"
+          ls -l ./*.tar.gz ./*.zip
 
       # Notes are generated from the merged PRs rather than pasted from
       # CHANGELOG.md. The changelog stays the source of truth for drift, and
