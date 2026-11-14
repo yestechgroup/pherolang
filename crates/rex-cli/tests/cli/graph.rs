@@ -1,4 +1,6 @@
-//! `rexlang` CLI tests: the semantic graph command (`rexlang graph`).
+//! `rexlang` CLI tests: the semantic graph commands (`rexlang graph build` /
+//! `rexlang graph query`). `graph` is a pure namespace — one of the two verbs
+//! is always required, so an input path can never collide with a verb name.
 //!
 //! The committed golden `examples/artifacts/examples.graph.json` pins the
 //! whole `examples/` tree — every surface, the support stack, and the
@@ -24,7 +26,7 @@
 //! file under `examples/` compiles and every application is coherent
 //! (rexlang#258): `orders.ddd` no longer resolves `PlaceOrder` against the
 //! unrelated `support.actor` pool, so the capability join stays silent there
-//! and both `graph examples/` and `check examples/` exit `0`. The
+//! and both `graph build examples/` and `check examples/` exit `0`. The
 //! `build`-precedent best-effort path is still pinned by
 //! `graph_still_writes_when_a_file_fails`.
 //!
@@ -65,12 +67,12 @@ fn golden_of(json: &str) -> String {
         .expect("read examples graph golden — regenerate with REX_UPDATE_FIXTURES=1")
 }
 
-fn run_graph(arguments: &[&str]) -> std::process::Output {
+fn run_build(arguments: &[&str]) -> std::process::Output {
     rexlang()
-        .arg("graph")
+        .args(["graph", "build"])
         .args(arguments)
         .output()
-        .expect("run rexlang graph")
+        .expect("run rexlang graph build")
 }
 
 fn stderr(output: &std::process::Output) -> String {
@@ -95,7 +97,7 @@ fn graph_prints_the_examples_golden_to_stdout() {
     // Regenerate through `-o`: the file bytes carry no trailing newline and
     // the stdout contract is that golden plus exactly one newline.
     let out = scratch_dir().join("examples.graph.json");
-    let written = run_graph(&[dir, "-o", out.to_str().expect("utf-8 output path")]);
+    let written = run_build(&[dir, "-o", out.to_str().expect("utf-8 output path")]);
     assert!(
         String::from_utf8_lossy(&written.stdout).is_empty(),
         "`-o` writes no stdout"
@@ -109,7 +111,7 @@ fn graph_prints_the_examples_golden_to_stdout() {
         .unwrap_or_else(|error| panic!("read graph output {}: {error}", out.display()));
     let golden = golden_of(&json);
 
-    let printed = run_graph(&[dir]);
+    let printed = run_build(&[dir]);
     assert_eq!(
         String::from_utf8_lossy(&printed.stdout),
         format!("{golden}\n"),
@@ -121,7 +123,7 @@ fn graph_prints_the_examples_golden_to_stdout() {
 fn graph_writes_the_golden_to_an_output_file() {
     let directory = examples_dir();
     let out = scratch_dir().join("examples.graph.json");
-    let output = run_graph(&[
+    let output = run_build(&[
         directory.to_str().expect("utf-8 examples path"),
         "-o",
         out.to_str().expect("utf-8 output path"),
@@ -138,8 +140,8 @@ fn graph_writes_the_golden_to_an_output_file() {
 #[test]
 fn graph_is_deterministic_across_invocations() {
     let path = write_source("support.mox", GOOD);
-    let first = run_graph(&[path.to_str().expect("utf-8 source path")]);
-    let second = run_graph(&[path.to_str().expect("utf-8 source path")]);
+    let first = run_build(&[path.to_str().expect("utf-8 source path")]);
+    let second = run_build(&[path.to_str().expect("utf-8 source path")]);
     assert_eq!(
         String::from_utf8_lossy(&first.stdout),
         String::from_utf8_lossy(&second.stdout),
@@ -151,7 +153,7 @@ fn graph_is_deterministic_across_invocations() {
 #[test]
 fn graph_paths_are_root_relative() {
     let out = scratch_dir().join("examples.graph.json");
-    let _ = run_graph(&[
+    let _ = run_build(&[
         examples_dir().to_str().expect("utf-8 examples path"),
         "-o",
         out.to_str().expect("utf-8 output path"),
@@ -193,7 +195,7 @@ fn graph_still_writes_when_a_file_fails() {
     let broken = write_source("broken.mox", BAD);
     let directory = good.parent().expect("scratch dir").to_path_buf();
     let out = directory.join("failed.graph.json");
-    let output = run_graph(&[
+    let output = run_build(&[
         directory.to_str().expect("utf-8 scratch path"),
         "-o",
         out.to_str().expect("utf-8 output path"),
@@ -226,7 +228,7 @@ fn graph_uses_the_directory_argument_as_base() {
     let nested = root.join("nested");
     std::fs::create_dir_all(&nested).expect("create nested dir");
     std::fs::write(nested.join("support.mox"), GOOD).expect("write nested source");
-    let output = run_graph(&[nested.to_str().expect("utf-8 nested path")]);
+    let output = run_build(&[nested.to_str().expect("utf-8 nested path")]);
     let graph = read_graph(&output);
     assert!(
         graph
@@ -246,12 +248,60 @@ fn graph_uses_the_directory_argument_as_base() {
 
 #[test]
 fn graph_with_no_inputs_errors() {
-    let output = run_graph(&[]);
+    let output = run_build(&[]);
     assert_eq!(output.status.code(), Some(1));
     let rendered = stderr(&output);
     assert!(
         rendered.starts_with("error: no model files found"),
         "clean clap-style error: {rendered}"
+    );
+}
+
+/// `graph` is a pure namespace: the verb is required, so the bare command is
+/// a clap usage error naming both verbs (issue rexlang#257).
+#[test]
+fn graph_without_a_verb_is_a_clap_usage_error() {
+    let output = rexlang().arg("graph").output().expect("run rexlang graph");
+    assert_eq!(output.status.code(), Some(2), "clap usage error");
+    let rendered = stderr(&output);
+    assert!(
+        rendered.contains("build") && rendered.contains("query"),
+        "the usage error names both verbs: {rendered}"
+    );
+}
+
+/// A directory literally named `query` is an ordinary `build` input — the
+/// positional/subcommand ambiguity the old overloaded `graph` shape had is
+/// structurally gone (issue rexlang#257).
+#[test]
+fn graph_build_accepts_a_directory_named_query() {
+    let root = scratch_dir();
+    let query = root.join("query");
+    std::fs::create_dir_all(&query).expect("create the query directory");
+    std::fs::write(query.join("a.mox"), "package q\n\nclass A { String x }\n")
+        .expect("write the model in the query directory");
+    let out = root.join("query.graph.json");
+    let output = run_build(&[
+        query.to_str().expect("utf-8 query path"),
+        "-o",
+        out.to_str().expect("utf-8 output path"),
+    ]);
+    assert!(
+        output.status.success(),
+        "a directory named `query` must build: {}",
+        stderr(&output)
+    );
+    let graph = GraphModel::from_json(
+        &std::fs::read_to_string(&out).expect("read the graph written next to the query directory"),
+    )
+    .expect("the output is a versioned graph artifact");
+    assert!(
+        graph
+            .nodes
+            .iter()
+            .any(|node| node.kind == "class" && node.name == "q.A" && node.file == "a.mox"),
+        "the class from <dir>/query/a.mox is a node: {:#?}",
+        graph.nodes
     );
 }
 
@@ -262,7 +312,7 @@ fn graph_skips_formatter_goldens() {
     let root = scratch_dir();
     write_source("support.mox", GOOD);
     std::fs::write(root.join("broken.fmt.ddd"), "not a design\n").expect("write formatter golden");
-    let output = run_graph(&[root.to_str().expect("utf-8 scratch path")]);
+    let output = run_build(&[root.to_str().expect("utf-8 scratch path")]);
     assert!(
         output.status.success(),
         "the formatter golden must not be compiled: {}",
@@ -279,7 +329,7 @@ fn graph_skips_formatter_goldens() {
 fn graph_rebuild_round_trips_through_from_json() {
     let path = write_source("support.mox", GOOD);
     let out = scratch_dir().join("round-trip.graph.json");
-    let output = run_graph(&[
+    let output = run_build(&[
         path.to_str().expect("utf-8 source path"),
         "-o",
         out.to_str().expect("utf-8 output path"),

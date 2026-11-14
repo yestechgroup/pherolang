@@ -465,7 +465,7 @@ fn outcome(
 }
 
 /// The resolved import paths of one `(path, payload)` reader bucket,
-/// deduplicated and sorted — the host-normalized keys `rexlang graph`
+/// deduplicated and sorted — the host-normalized keys `rexlang graph build`
 /// clusters applications and draws `imports` edges from.
 fn import_paths<T>(buckets: &[(String, T)]) -> Vec<String> {
     let mut paths: Vec<String> = buckets.iter().map(|(path, _)| path.clone()).collect();

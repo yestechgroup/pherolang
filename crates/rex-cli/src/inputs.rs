@@ -265,7 +265,7 @@ pub(crate) struct IfmlInputs {
     /// The resolved disk paths of every surface import the walk fetched
     /// (`.ifml`, `.mox`, `.actor`, `.dmn`), deduplicated and sorted. These
     /// are the host-normalized import keys the semantic graph's `imports`
-    /// edges are drawn from (`rexlang graph`); decision-table references are
+    /// edges are drawn from (`rexlang graph build`); decision-table references are
     /// not surface imports and stay out.
     pub(crate) imports: Vec<String>,
 }

@@ -1,6 +1,6 @@
 # The unified semantic graph
 
-`rexlang graph` compiles a tree of model files into **one queryable,
+`rexlang graph build` compiles a tree of model files into **one queryable,
 versioned artifact**: `rex_ir::graph::GraphModel`. It is the substrate for
 impact analysis, `graph query`, the MCP server (v0.6), Studio, and AI
 agents — the answer to "what is affected if I change capability X" is a
@@ -89,11 +89,16 @@ from the open document's directory snapshot, scoped by the same relation.
 `applications[].id` is the component's smallest member path;
 `applications[].files` and `.packages` are sorted.
 
-## The `rexlang graph` command
+## The `rexlang graph build` command
 
 ```sh
-rexlang graph <paths>... [-o <file>]
+rexlang graph build <paths>... [-o <file>]
 ```
+
+`graph` is a pure namespace with two required verbs — `build` (this section)
+and `query` ([below](#queries)) — so no input path can ever be mistaken for a
+verb: a directory literally named `query` is an ordinary `build` input
+(issue #257).
 
 Compiles every input and emits **one** `GraphModel` — pretty-printed
 (2-space) JSON — to stdout, or to `-o <file>`. Directories enter **project
@@ -115,7 +120,7 @@ Classification lives in **one surface table**, `rex_driver::SurfaceKind`
 project snapshot's written-import dispatch, `verify`'s receipt kinds, and the
 LSP's `surface_for` all delegate to it. `commands/pipeline.rs::compile_one`
 is the CLI's single per-surface dispatch — an exhaustive match with no `_`
-arm — behind `check`, `ir`, `build`, `graph`, `verify`, and the union pass's
+arm — behind `check`, `ir`, `build`, `graph build`, `verify`, and the union pass's
 phase-2 re-check, so a new surface is one table row plus its pipeline arm.
 
 ### Display paths and the base rule
@@ -138,13 +143,13 @@ base `examples/` — every surface, the support stack, and the unrelated
 applications clustered together:
 
 ```sh
-rexlang graph examples/ -o /tmp/examples.graph.json
+rexlang graph build examples/ -o /tmp/examples.graph.json
 diff /tmp/examples.graph.json examples/artifacts/examples.graph.json
 REX_UPDATE_FIXTURES=1 cargo test -p rex-cli --test cli graph
 ```
 
 Every file under the tree compiles and every application is coherent, so
-both `graph examples/` and `check examples/` exit `0`: `orders.ddd` no
+both `graph build examples/` and `check examples/` exit `0`: `orders.ddd` no
 longer resolves its `PlaceOrder` capability against `support.actor`'s names
 (the two files belong to different applications — rexlang#249), and each
 application's events/actions are wired to its own design (rexlang#258). The
@@ -304,9 +309,10 @@ rexlang graph query <graph.json|-> dependencies <ref> [--pretty]
 ```
 
 `-` reads the artifact from stdin. `--pretty` changes whitespace only.
-`rexlang graph <paths>...` (compile) and `rexlang graph query …` (query)
-coexist; clap matches the subcommand first, so a directory literally named
-`query` must be given as `./query`.
+`rexlang graph build <paths>...` (compile) and `rexlang graph query …`
+(query) are sibling verbs under the `graph` namespace: one is always
+required, so an input path can never be mistaken for a verb (a directory
+literally named `query` is an ordinary `build` input).
 
 ### Reference resolution
 
