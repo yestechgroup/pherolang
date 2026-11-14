@@ -134,7 +134,17 @@ fn check_contribution(files: &[PathBuf]) -> anyhow::Result<Vec<Contribution>> {
                     return Ok(sink);
                 }
             };
-        let binding = rex_ifml::check_ifml(&compilation, inputs.domains.as_ref());
+        // The same dimensions phase 1 checked with: the imported `.actor`
+        // policies (the `requires:`/`roles:` authorization pass) and the
+        // imported `.dmn` decisions (`data:` names). Without them the
+        // standalone re-check would reject a `data:` binding the project
+        // pipeline accepted and re-report it as a phase-2 disagreement.
+        let binding = rex_ifml::check_ifml_with_decisions(
+            &compilation,
+            inputs.domains.as_ref(),
+            &inputs.actors,
+            &inputs.decisions,
+        );
         // Only an error-severity finding disagrees with phase 1 (which
         // owns the warnings' rendering, and the `--deny-warnings` call on
         // them): a warning-only standalone re-check still contributes.
