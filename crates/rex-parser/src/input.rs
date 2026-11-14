@@ -12,7 +12,7 @@ use chumsky::prelude::*;
 
 use crate::Span;
 
-/// Parser input: a token slice paired with a custom [`chumsky::Input`]
+/// Parser input: a token slice paired with a custom [`chumsky::input::Input`]
 /// implementation that reports **byte-offset** spans (chumsky's built-in slice
 /// input would report token indices instead).
 ///

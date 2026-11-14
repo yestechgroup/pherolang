@@ -23,9 +23,9 @@
 //!
 //! # The unsafe exception
 //!
-//! chumsky 0.10's [`chumsky::Input`] trait declares required `unsafe fn`s;
+//! chumsky 0.10's [`chumsky::input::Input`] trait declares required `unsafe fn`s;
 //! [`input`] implements them exactly as documented (cursors come from
-//! [`chumsky::Input::begin`], are never shared across inputs, and the token
+//! [`chumsky::input::Input::begin`], are never shared across inputs, and the token
 //! slice is immutable). There are no other unsafe blocks in this crate, and
 //! every other workspace member keeps the workspace-level
 //! `unsafe_code = "forbid"` lint.

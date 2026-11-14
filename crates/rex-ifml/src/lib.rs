@@ -11,10 +11,10 @@
 //!
 //! # Parsing
 //!
-//! The surface is lexed by logos ([`lexer`]) and parsed by chumsky
-//! (`parser`) into a spanned syntax tree ([`ast`]), then lowered into the
+//! The surface is lexed by logos (`lexer`) and parsed by chumsky
+//! (`parser`) into a spanned syntax tree (`ast`), then lowered into the
 //! [`rex_ir::ifml::IfmlModel`] artifact (`lower`). The **normative grammar
-//! (EBNF)** lives in the [`parser`] module docs — the one grammar authority
+//! (EBNF)** lives in the `parser` module docs — the one grammar authority
 //! for the surface; `docs/IFML.md` links there and stays non-normative.
 //! [`parse_ifml`] / [`parse_ifml_file`] return the model, and
 //! [`parse_ifml_indexed`] returns the same model plus the [`IfmlIndex`] span
