@@ -17,15 +17,15 @@ const FLAGSHIP: &str = "examples/artifacts/support.receipt.json";
 /// The nine `support` surfaces the flagship receipt covers, in the sorted
 /// order the receipt records them (the canonical document sorts `inputs`).
 const SUPPORT_INPUTS: [&str; 9] = [
-    "examples/support.actor",
-    "examples/support.cmmn",
-    "examples/support.ddd",
-    "examples/support.deploy",
-    "examples/support.dmn",
-    "examples/support.evt",
-    "examples/support.ifml",
-    "examples/support.mox",
-    "examples/support.uc",
+    "examples/support/support.actor",
+    "examples/support/support.cmmn",
+    "examples/support/support.ddd",
+    "examples/support/support.deploy",
+    "examples/support/support.dmn",
+    "examples/support/support.evt",
+    "examples/support/support.ifml",
+    "examples/support/support.mox",
+    "examples/support/support.uc",
 ];
 
 fn receipt_path(relative: &str) -> PathBuf {
@@ -90,7 +90,7 @@ fn the_flagship_receipt_reports_the_register_and_its_closure() {
         "patterns/ifml/collections.ifml",
         "patterns/ifml/data.ifml",
         "patterns/ifml/navigation.ifml",
-        "examples/tables/refund-authority.md",
+        "examples/support/tables/refund-authority.md",
     ] {
         assert!(
             sources.contains(&required),
@@ -528,10 +528,10 @@ fn copied_workspace() -> PathBuf {
     let receipt = root.join(FLAGSHIP);
     std::fs::create_dir_all(receipt.parent().unwrap()).expect("mkdir artifacts");
     std::fs::copy(workspace_root().join(FLAGSHIP), receipt).expect("copy receipt");
-    let tables = root.join("examples/tables");
+    let tables = root.join("examples/support/tables");
     std::fs::create_dir_all(&tables).expect("mkdir tables");
     std::fs::copy(
-        workspace_root().join("examples/tables/refund-authority.md"),
+        workspace_root().join("examples/support/tables/refund-authority.md"),
         tables.join("refund-authority.md"),
     )
     .expect("copy table");
@@ -577,7 +577,7 @@ fn the_copied_receipt_is_fresh_before_anything_changes() {
 #[test]
 fn a_touched_source_makes_the_receipt_stale() {
     let root = copied_workspace();
-    let source = root.join("examples/support.ddd");
+    let source = root.join("examples/support/support.ddd");
     let mut text = std::fs::read_to_string(&source).expect("read source");
     text.push_str("\n// a comment-only edit still changes the source bytes\n");
     std::fs::write(&source, text).expect("touch source");
@@ -599,7 +599,7 @@ fn a_touched_source_makes_the_receipt_stale() {
 #[test]
 fn a_touched_decision_table_makes_the_receipt_stale() {
     let root = copied_workspace();
-    let table = root.join("examples/tables/refund-authority.md");
+    let table = root.join("examples/support/tables/refund-authority.md");
     let mut text = std::fs::read_to_string(&table).expect("read table");
     text.push('\n');
     std::fs::write(&table, text).expect("touch table");

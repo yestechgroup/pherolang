@@ -176,8 +176,12 @@
 //! Every artifact root is gated by its own marker const, and each marker
 //! is versioned **independently** of the others: a bump on one never
 //! moves another. This table is the single inventory — the per-const docs
-//! link here instead of restating the full set, so a new artifact root is
-//! one table row.
+//! link here instead of restating the full set. Adding a root is one table
+//! row **plus one `wire::versioned_artifact!` line** in its module: that
+//! invocation generates the version-gated `to_json` / `to_json_pretty` /
+//! `from_json` methods, the `VersionedArtifact` impl that names the marker
+//! (a required macro argument), and the `Default` — so the gate cannot be
+//! forgotten, and no root hand-writes the plumbing.
 //!
 //! | Marker | Owning root | Surface |
 //! |---|---|---|

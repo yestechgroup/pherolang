@@ -29,17 +29,22 @@
 //! capability is not renamed from the `.ddd` document — the refusal names
 //! the owning file. See [`rename_target`].
 
-use std::collections::BTreeMap;
+use std::collections::hash_map::DefaultHasher;
+use std::collections::{BTreeMap, HashMap, HashSet};
+use std::hash::{Hash, Hasher};
 use std::path::{Path, PathBuf};
+use std::sync::atomic::Ordering;
 use std::sync::Arc;
 
 use rex_driver::graph::{build, GraphFile, GraphIndex, GraphInputs};
 use rex_driver::navigation::{
     ifml_surface, mox_index, IndexedDefinition, IndexedReference, SurfaceIndex, SurfaceLookup,
 };
+use rex_driver::SurfaceKind;
 use rex_ir::graph::{kinds, GraphModel, GraphNode};
 use tower_lsp_server::ls_types::*;
 
+use super::pipeline::{to_ifml_diagnostic, to_lsp_diagnostic};
 use super::{RexBackend, Surface};
 use crate::position::PositionMap;
 
@@ -63,6 +68,67 @@ pub(super) struct SnapshotFile {
     pub(super) text: String,
     /// The file's spanned index.
     pub(super) index: SurfaceIndex,
+}
+
+/// The per-file compile memo behind the snapshot (rexlang#254).
+///
+/// The snapshot itself is still rebuilt whenever the open-document
+/// signature moves, but a rebuild only **recompiles** the candidates whose
+/// [`MemoEntry::key`] changed; every other entry's artifact and spanned
+/// index are reused. The memo is bounded by the directory's candidate set:
+/// [`RexBackend::build_graph_snapshot`] prunes every entry whose path is no
+/// longer a candidate on the build that observes the removal.
+#[derive(Default)]
+pub(super) struct GraphMemo {
+    /// One entry per candidate file, keyed by its path.
+    entries: HashMap<PathBuf, MemoEntry>,
+}
+
+/// One memoized candidate: the content key it was compiled under, the text
+/// it was compiled from, and the compile's whole product.
+struct MemoEntry {
+    /// The invalidation key: own-text hash plus the open-or-disk text hash
+    /// of every resolved import (see [`RexBackend::compile_key`]).
+    key: u64,
+    /// The text the entry was built from — the snapshot's text for this
+    /// file, open buffer when one exists.
+    text: String,
+    /// The compiled artifact, or `None` when the file did not compile (a
+    /// non-compiling sibling contributes nothing, and is retried when its
+    /// key moves).
+    artifact: Option<SnapshotArtifact>,
+    /// The diagnostics this compile produced (own-file only, filtered
+    /// exactly like the publish pipeline's), already in LSP shape — the
+    /// publish source for the surfaces whose only compile is this one
+    /// (rexlang#255), read through
+    /// [`RexBackend::snapshot_diagnostics`].
+    diagnostics: Vec<Diagnostic>,
+    /// The file's spanned index, or `None` when its source does not parse.
+    index: Option<SurfaceIndex>,
+}
+
+impl GraphMemo {
+    /// The number of memoized candidates (the memory bound's observable
+    /// half; tests use it to assert pruning).
+    #[cfg(test)]
+    pub(super) fn entry_count(&self) -> usize {
+        self.entries.len()
+    }
+
+    /// Whether the memo retains an entry for `path`.
+    #[cfg(test)]
+    pub(super) fn contains(&self, path: &Path) -> bool {
+        self.entries.contains_key(path)
+    }
+
+    /// The diagnostics the memoized compile of `path` produced, in LSP
+    /// shape (own-file only). [`RexBackend::snapshot_diagnostics`] is the
+    /// publish pipeline's reader; tests also assert the stored product.
+    pub(super) fn diagnostics(&self, path: &Path) -> Option<&[Diagnostic]> {
+        self.entries
+            .get(path)
+            .map(|entry| entry.diagnostics.as_slice())
+    }
 }
 
 impl GraphSnapshot {
@@ -202,6 +268,41 @@ impl RexBackend {
         Some(snapshot)
     }
 
+    /// The diagnostics the snapshot's **memoized** compile attributed to
+    /// `uri`'s own file, in LSP shape (rexlang#255).
+    ///
+    /// The four artifact surfaces whose compile lives only in the snapshot
+    /// (`.evt`, `.deploy`, `.uc`, `.cmmn`) publish from here rather than
+    /// compiling a second time: ensuring the snapshot exists for the
+    /// document's directory runs [`RexBackend::build_graph_snapshot`], which
+    /// compiles the candidates whose content key moved (rexlang#254) and
+    /// stores each file's own-file diagnostics. A URI that is not a file,
+    /// or has no directory, has no snapshot — the caller publishes nothing.
+    /// A file the memo never compiled (absent from the candidate set) also
+    /// publishes nothing; a clean compile publishes an empty vector, which
+    /// clears stale diagnostics.
+    pub(super) fn snapshot_diagnostics(&self, uri: &Uri) -> Vec<Diagnostic> {
+        // A snapshot is built from a directory on disk, so only a `file:`
+        // URI names one. An opaque URI (`untitled:…`) is still dispatched to
+        // its surface by extension, but has no directory to compile — the
+        // pipeline publishes nothing rather than a bogus empty set.
+        if !uri.scheme().as_str().eq_ignore_ascii_case("file") {
+            return Vec::new();
+        }
+        let Some(path) = uri.to_file_path() else {
+            return Vec::new();
+        };
+        if self.graph_snapshot(uri).is_none() {
+            return Vec::new();
+        }
+        self.graph_memo
+            .lock()
+            .unwrap()
+            .diagnostics(&path)
+            .map(<[Diagnostic]>::to_vec)
+            .unwrap_or_default()
+    }
+
     /// The `(uri, version)` of every open document in `directory`, sorted —
     /// the snapshot cache key.
     fn open_signature(&self, directory: &Path) -> Vec<(String, i32)> {
@@ -220,7 +321,15 @@ impl RexBackend {
         signature
     }
 
-    /// Builds the snapshot for one directory: enumerate, compile, index.
+    /// Builds the snapshot for one directory: enumerate, compile (memo
+    /// hits reused), index, and prune the memo to the current candidates.
+    ///
+    /// The directory listing itself is re-read on every build: a `read_dir`
+    /// plus one `stat` per entry is cheap next to a compile, and it keeps
+    /// the candidate set honest without a filesystem watcher (an external
+    /// edit to an unopened sibling still arrives on the next
+    /// open/change/close, which is also when the snapshot cache is
+    /// cleared).
     fn build_graph_snapshot(&self, directory: &Path) -> Option<GraphSnapshot> {
         let open: Vec<(Uri, Surface, String)> = {
             let documents = self.documents.lock().unwrap();
@@ -262,8 +371,14 @@ impl RexBackend {
             }
         }
 
+        // The memo lock is held across the build: a rebuild is one logical
+        // unit (compile the misses, reuse the hits, prune), and tower-lsp
+        // may dispatch navigation requests concurrently. Compiles never
+        // reach back into the memo, so this cannot deadlock.
+        let mut memo = self.graph_memo.lock().unwrap();
         let mut inputs = GraphInputs::default();
         let mut files: Vec<SnapshotFile> = Vec::new();
+        let mut seen: HashSet<PathBuf> = HashSet::with_capacity(candidates.len());
         for (path, surface) in candidates {
             let Some(display) = display_path(&path) else {
                 continue;
@@ -280,19 +395,60 @@ impl RexBackend {
                     (uri, text)
                 }
             };
+            seen.insert(path.clone());
+            // The application edges the graph clusters on stay exactly
+            // `resolved_imports`; the compile key hashes the same imports'
+            // text (plus `.mox`'s own schema/sigil imports).
             let imports = resolved_imports(surface, &text, &path);
-            if let Some(artifact) = self.compile_snapshot_file(surface, &path, &text, &uri) {
-                push_artifact(&mut inputs, display.clone(), &path, imports, artifact);
+            let key = self.compile_key(surface, &path, &text, &imports);
+            // The text equality is a collision guard on top of the key: a
+            // 64-bit hash is not a proof, and the own text is right here.
+            let hit = memo
+                .entries
+                .get(&path)
+                .is_some_and(|entry| entry.key == key && entry.text == text);
+            if !hit {
+                // One compile per candidate, never per memo hit — the
+                // counter tests assert exactly this.
+                self.compile_count.fetch_add(1, Ordering::Relaxed);
+                let (artifact, diagnostics) =
+                    self.compile_snapshot_file(surface, &path, &text, &uri);
+                let index = surface_index(surface, &text, &display);
+                memo.entries.insert(
+                    path.clone(),
+                    MemoEntry {
+                        key,
+                        text: text.clone(),
+                        artifact,
+                        diagnostics,
+                        index,
+                    },
+                );
             }
-            if let Some(index) = surface_index(surface, &text, &display) {
+            let Some(entry) = memo.entries.get(&path) else {
+                continue;
+            };
+            if let Some(artifact) = &entry.artifact {
+                push_artifact(
+                    &mut inputs,
+                    display.clone(),
+                    &path,
+                    imports,
+                    artifact.clone(),
+                );
+            }
+            if let Some(index) = &entry.index {
                 files.push(SnapshotFile {
                     display,
                     uri,
-                    text,
-                    index,
+                    text: entry.text.clone(),
+                    index: index.clone(),
                 });
             }
         }
+        // Memory is bounded by the candidate set: a file removed from the
+        // directory (or a deleted open buffer's sibling) is dropped now.
+        memo.entries.retain(|path, _| seen.contains(path));
         files.sort_by(|left, right| left.display.cmp(&right.display));
         Some(GraphSnapshot {
             model: build(&inputs),
@@ -300,28 +456,76 @@ impl RexBackend {
         })
     }
 
-    /// Compiles one snapshot file's artifact, or `None` when it does not
-    /// compile (a non-compiling sibling contributes no nodes and no edges).
+    /// The invalidation key of one candidate (rexlang#254): its own text
+    /// plus the **open-or-disk text** of every import it resolves, hashed
+    /// with the std `DefaultHasher` (process-local; no dependency, no
+    /// stability promise outside one server run).
+    ///
+    /// The import closure is load-bearing: a `.ddd` compiling against an
+    /// edited `.mox` must recompile even though its own text is unchanged,
+    /// and an unsaved `.mox` buffer wins over its disk copy exactly as the
+    /// compile's own import fetch does ([`RexBackend::fetch_open_or_disk`]).
+    /// `resolved_imports` deliberately omits `.mox`'s `import
+    /// schema`/`import sigil` declarations (they are not application
+    /// edges), so those are hashed separately here.
+    ///
+    /// A content key was chosen over `(version, mtime)`: open buffers have
+    /// no mtime, a version bump with identical text should not recompile,
+    /// and only content tells a dependent's compile that an imported
+    /// domain moved.
+    fn compile_key(&self, surface: Surface, path: &Path, text: &str, imports: &[String]) -> u64 {
+        let mut hasher = DefaultHasher::new();
+        path.hash(&mut hasher);
+        text.hash(&mut hasher);
+        for import in imports {
+            import.hash(&mut hasher);
+            hash_text(&mut hasher, self.fetch_open_or_disk(import));
+        }
+        if surface == Surface::Known(SurfaceKind::Mox) {
+            for import in mox_schema_imports(text, path) {
+                import.hash(&mut hasher);
+                hash_text(&mut hasher, std::fs::read_to_string(&import).ok());
+            }
+        }
+        hasher.finish()
+    }
+
+    /// Compiles one snapshot file: its artifact (`None` when it does not
+    /// compile — a non-compiling sibling contributes no nodes and no
+    /// edges) and the diagnostics the compile attributed to the file
+    /// itself, already in LSP shape.
     fn compile_snapshot_file(
         &self,
         surface: Surface,
         path: &Path,
         text: &str,
         uri: &Uri,
-    ) -> Option<SnapshotArtifact> {
+    ) -> (Option<SnapshotArtifact>, Vec<Diagnostic>) {
         let key = path.display().to_string();
+        let map = PositionMap::new(text);
         let domain_imports =
             |domains: &[(String, String)]| super::pipeline::domain_import_bundle(domains);
         let mut fetch = |resolved: &str| -> Option<String> { self.fetch_open_or_disk(resolved) };
         match surface {
-            Surface::Mox => {
-                let imports =
-                    rex_driver::workspace_imports::collect_for_source(&key, path, text).ok()?;
-                rex_driver::compile_str(&key, text, &imports)
-                    .model
-                    .map(SnapshotArtifact::Domain)
+            Surface::Known(SurfaceKind::Mox) => {
+                // A schema/sigil import that cannot be read is not a compile
+                // diagnostic (the import content never reached the driver).
+                let Ok(imports) =
+                    rex_driver::workspace_imports::collect_for_source(&key, path, text)
+                else {
+                    return (None, Vec::new());
+                };
+                let compilation = rex_driver::compile_str(&key, text, &imports);
+                (
+                    compilation.model.map(SnapshotArtifact::Domain),
+                    compilation
+                        .diagnostics
+                        .iter()
+                        .map(|diagnostic| to_lsp_diagnostic(diagnostic, &map))
+                        .collect(),
+                )
             }
-            Surface::Actor => {
+            Surface::Known(SurfaceKind::Actor) => {
                 let domains = rex_driver::project::gather_domain_sources(
                     &key,
                     text,
@@ -333,11 +537,14 @@ impl RexBackend {
                     },
                     &mut fetch,
                 );
-                rex_driver::compile_actors_str(&key, text, &domains, &domain_imports(&domains))
-                    .model
-                    .map(SnapshotArtifact::Actor)
+                let compilation =
+                    rex_driver::compile_actors_str(&key, text, &domains, &domain_imports(&domains));
+                (
+                    compilation.model.map(SnapshotArtifact::Actor),
+                    keyed_diagnostics(&compilation.diagnostics, &key, &map),
+                )
             }
-            Surface::Ddd => {
+            Surface::Known(SurfaceKind::Ddd) => {
                 let domains = rex_driver::project::gather_domain_sources(
                     &key,
                     text,
@@ -349,11 +556,14 @@ impl RexBackend {
                     },
                     &mut fetch,
                 );
-                rex_driver::compile_ddd_str(&key, text, &domains, &domain_imports(&domains))
-                    .model
-                    .map(SnapshotArtifact::Design)
+                let compilation =
+                    rex_driver::compile_ddd_str(&key, text, &domains, &domain_imports(&domains));
+                (
+                    compilation.model.map(SnapshotArtifact::Design),
+                    keyed_diagnostics(&compilation.diagnostics, &key, &map),
+                )
             }
-            Surface::Evt => {
+            Surface::Known(SurfaceKind::Evt) => {
                 let domains = rex_driver::project::gather_domain_sources(
                     &key,
                     text,
@@ -365,12 +575,15 @@ impl RexBackend {
                     },
                     &mut fetch,
                 );
-                rex_driver::compile_evt_str(&key, text, &domains, &domain_imports(&domains))
-                    .model
-                    .map(SnapshotArtifact::Event)
+                let compilation =
+                    rex_driver::compile_evt_str(&key, text, &domains, &domain_imports(&domains));
+                (
+                    compilation.model.map(SnapshotArtifact::Event),
+                    keyed_diagnostics(&compilation.diagnostics, &key, &map),
+                )
             }
-            Surface::Deploy => {
-                let pair = rex_driver::project::gather_deploy_imports(
+            Surface::Known(SurfaceKind::Deploy) => {
+                let Ok(pair) = rex_driver::project::gather_deploy_imports(
                     &key,
                     text,
                     |source| {
@@ -380,18 +593,29 @@ impl RexBackend {
                             .unwrap_or_default()
                     },
                     &mut fetch,
+                ) else {
+                    return (None, Vec::new());
+                };
+                let compilation =
+                    rex_driver::compile_deploy_str(&key, text, &pair.designs, &pair.flows);
+                (
+                    compilation.model.map(SnapshotArtifact::Deploy),
+                    keyed_diagnostics(&compilation.diagnostics, &key, &map),
                 )
-                .ok()?;
-                rex_driver::compile_deploy_str(&key, text, &pair.designs, &pair.flows)
-                    .model
-                    .map(SnapshotArtifact::Deploy)
             }
-            Surface::Ifml => {
-                let (snapshot, _diagnostics) = self.compile_ifml(uri, text);
-                snapshot.map(|snapshot| SnapshotArtifact::Flow(snapshot.compilation.model))
+            Surface::Known(SurfaceKind::Ifml) => {
+                let (snapshot, diagnostics) = self.compile_ifml(uri, text);
+                (
+                    snapshot.map(|snapshot| SnapshotArtifact::Flow(snapshot.compilation.model)),
+                    diagnostics
+                        .iter()
+                        .filter(|diagnostic| diagnostic.file == uri.as_str())
+                        .map(|diagnostic| to_ifml_diagnostic(diagnostic, &map))
+                        .collect(),
+                )
             }
-            Surface::Uc => {
-                let buckets = rex_driver::project::gather_usecase_imports(
+            Surface::Known(SurfaceKind::Uc) => {
+                let Ok(buckets) = rex_driver::project::gather_usecase_imports(
                     &key,
                     text,
                     |source| {
@@ -401,9 +625,10 @@ impl RexBackend {
                             .unwrap_or_default()
                     },
                     &mut fetch,
-                )
-                .ok()?;
-                rex_driver::compile_usecase_str(
+                ) else {
+                    return (None, Vec::new());
+                };
+                let compilation = rex_driver::compile_usecase_str(
                     &key,
                     text,
                     &buckets.domains,
@@ -411,12 +636,14 @@ impl RexBackend {
                     &buckets.designs,
                     &buckets.actors,
                     &buckets.events,
+                );
+                (
+                    compilation.model.map(SnapshotArtifact::UseCase),
+                    keyed_diagnostics(&compilation.diagnostics, &key, &map),
                 )
-                .model
-                .map(SnapshotArtifact::UseCase)
             }
-            Surface::Cmmn => {
-                let buckets = rex_driver::project::gather_case_imports(
+            Surface::Known(SurfaceKind::Cmmn) => {
+                let Ok(buckets) = rex_driver::project::gather_case_imports(
                     &key,
                     text,
                     &|source| {
@@ -426,9 +653,10 @@ impl RexBackend {
                             .unwrap_or_default()
                     },
                     &mut fetch,
-                )
-                .ok()?;
-                rex_driver::compile_cmmn_str(
+                ) else {
+                    return (None, Vec::new());
+                };
+                let compilation = rex_driver::compile_cmmn_str(
                     &key,
                     text,
                     &buckets.domains,
@@ -437,29 +665,116 @@ impl RexBackend {
                     &buckets.actors,
                     &buckets.events,
                     &buckets.decisions,
+                );
+                (
+                    compilation.model.map(SnapshotArtifact::Case),
+                    keyed_diagnostics(&compilation.diagnostics, &key, &map),
                 )
-                .model
-                .map(SnapshotArtifact::Case)
             }
-            Surface::Dmn => {
+            Surface::Known(SurfaceKind::Dmn) => {
                 let sources = self.dmn_sources_for(uri, text);
-                rex_driver::compile_dmn_str(
+                let compilation = rex_driver::compile_dmn_str(
                     &key,
                     text,
                     &sources.domains,
                     &sources.imports,
                     &sources.tables,
                     &sources.events,
+                );
+                (
+                    compilation.model.map(SnapshotArtifact::Decision),
+                    keyed_diagnostics(&compilation.diagnostics, &key, &map),
                 )
-                .model
-                .map(SnapshotArtifact::Decision)
             }
-            Surface::Other => None,
+            Surface::Other => (None, Vec::new()),
         }
+    }
+
+    /// The number of memoized candidates (tests assert pruning).
+    #[cfg(test)]
+    pub(super) fn graph_memo_len(&self) -> usize {
+        self.graph_memo.lock().unwrap().entry_count()
+    }
+
+    /// Whether the memo retains an entry for `path`.
+    #[cfg(test)]
+    pub(super) fn graph_memo_contains(&self, path: &Path) -> bool {
+        self.graph_memo.lock().unwrap().contains(path)
+    }
+
+    /// The diagnostics the memoized compile of `path` produced.
+    #[cfg(test)]
+    pub(super) fn graph_memo_diagnostics(&self, path: &Path) -> Option<Vec<Diagnostic>> {
+        self.graph_memo
+            .lock()
+            .unwrap()
+            .diagnostics(path)
+            .map(<[Diagnostic]>::to_vec)
     }
 }
 
-/// One compiled surface artifact, ready for its graph input bucket.
+/// Feeds one optional import text into the compile key's hasher: the
+/// presence byte distinguishes "absent" from "empty", so a deleted import
+/// file moves the key.
+fn hash_text(hasher: &mut DefaultHasher, text: Option<String>) {
+    match text {
+        Some(text) => {
+            1u8.hash(hasher);
+            text.hash(hasher);
+        }
+        None => 0u8.hash(hasher),
+    }
+}
+
+/// The `import schema`/`import sigil` files one `.mox` source names,
+/// resolved relative to it and canonicalized where they exist — hashed by
+/// [`RexBackend::compile_key`] because [`resolved_imports`] deliberately
+/// leaves them out (they are not application edges).
+fn mox_schema_imports(text: &str, path: &Path) -> Vec<String> {
+    let directory = path.parent().unwrap_or_else(|| Path::new("."));
+    let mut imports: Vec<String> = rex_syntax::parse(text)
+        .ast
+        .map(|ast| {
+            ast.declarations
+                .iter()
+                .filter_map(|declaration| match declaration {
+                    rex_syntax::ast::Decl::ImportSchema(import) => Some(import.path.clone()),
+                    _ => None,
+                })
+                .collect::<Vec<_>>()
+        })
+        .unwrap_or_default()
+        .into_iter()
+        .map(|import| {
+            let resolved = directory.join(import);
+            std::fs::canonicalize(&resolved)
+                .map(|canonical| canonical.display().to_string())
+                .unwrap_or_else(|_| resolved.display().to_string())
+        })
+        .collect();
+    imports.sort();
+    imports.dedup();
+    imports
+}
+
+/// The diagnostics a keyed compile attributes to `key`, in LSP shape — the
+/// same own-file filter the publish pipeline applies.
+fn keyed_diagnostics(
+    diagnostics: &[(String, rex_driver::Diagnostic)],
+    key: &str,
+    map: &PositionMap,
+) -> Vec<Diagnostic> {
+    diagnostics
+        .iter()
+        .filter(|(file, _)| file == key)
+        .map(|(_, diagnostic)| to_lsp_diagnostic(diagnostic, map))
+        .collect()
+}
+
+/// One compiled surface artifact, ready for its graph input bucket. Cloned
+/// out of the memo on every snapshot rebuild (the build consumes owned
+/// artifacts; the memo keeps the compile's product).
+#[derive(Clone)]
 enum SnapshotArtifact {
     /// A `.mox` domain model.
     Domain(rex_ir::Model),
@@ -522,24 +837,13 @@ fn push_artifact(
 }
 
 /// The surface of a path, by extension.
-fn surface_of_path(path: &Path) -> Option<Surface> {
-    match path.extension().and_then(|extension| extension.to_str())? {
-        "mox" => Some(Surface::Mox),
-        "actor" => Some(Surface::Actor),
-        "ddd" => Some(Surface::Ddd),
-        "evt" => Some(Surface::Evt),
-        "deploy" => Some(Surface::Deploy),
-        "ifml" => Some(Surface::Ifml),
-        "uc" => Some(Surface::Uc),
-        "cmmn" => Some(Surface::Cmmn),
-        "dmn" => Some(Surface::Dmn),
-        _ => None,
-    }
+pub(super) fn surface_of_path(path: &Path) -> Option<Surface> {
+    SurfaceKind::of_path(path).map(Surface::Known)
 }
 
 /// `true` for a formatter-golden `X.fmt.<ext>` file — an output, not a
 /// standalone model (the `check` project-mode rule).
-fn is_formatter_golden(path: &Path) -> bool {
+pub(super) fn is_formatter_golden(path: &Path) -> bool {
     path.file_name()
         .and_then(|name| name.to_str())
         .is_some_and(|name| name.contains(".fmt."))
@@ -558,26 +862,28 @@ fn display_path(path: &Path) -> Option<String> {
 /// equivalent answer).
 fn surface_index(surface: Surface, text: &str, display: &str) -> Option<SurfaceIndex> {
     Some(match surface {
-        Surface::Mox => mox_index(text),
-        Surface::Actor => rex_driver::navigation::actors_index(text),
-        Surface::Ddd => rex_driver::navigation::ddd_index(text),
-        Surface::Evt => rex_driver::navigation::evt_index(text, display),
-        Surface::Deploy => rex_driver::navigation::deploy_index(text),
-        Surface::Ifml => {
+        Surface::Known(SurfaceKind::Mox) => mox_index(text),
+        Surface::Known(SurfaceKind::Actor) => rex_driver::navigation::actors_index(text),
+        Surface::Known(SurfaceKind::Ddd) => rex_driver::navigation::ddd_index(text),
+        Surface::Known(SurfaceKind::Evt) => rex_driver::navigation::evt_index(text, display),
+        Surface::Known(SurfaceKind::Deploy) => rex_driver::navigation::deploy_index(text),
+        Surface::Known(SurfaceKind::Ifml) => {
             let (model, index) = rex_ifml::parse_ifml_indexed(text).ok()?;
             ifml_surface(&model, &index)
         }
-        Surface::Uc => rex_driver::navigation::uc_index(text),
-        Surface::Cmmn => rex_driver::navigation::cmmn_index(text),
-        Surface::Dmn => rex_driver::navigation::dmn_index(text, display),
+        Surface::Known(SurfaceKind::Uc) => rex_driver::navigation::uc_index(text),
+        Surface::Known(SurfaceKind::Cmmn) => rex_driver::navigation::cmmn_index(text),
+        Surface::Known(SurfaceKind::Dmn) => rex_driver::navigation::dmn_index(text, display),
         Surface::Other => return None,
     })
 }
 
 /// The resolved import keys of one file: every written import string joined
 /// with the file's directory, canonicalized where the file exists — the
-/// host-normalized keys the graph clusters applications on.
-fn resolved_imports(surface: Surface, text: &str, path: &Path) -> Vec<String> {
+/// host-normalized keys the graph clusters applications on. The publish
+/// pipeline's compile-time joins reuse this (rexlang#249), so graph
+/// clustering and capability pooling can never see different edges.
+pub(super) fn resolved_imports(surface: Surface, text: &str, path: &Path) -> Vec<String> {
     let directory = path.parent().unwrap_or_else(|| Path::new("."));
     let mut keys: Vec<String> = written_imports(surface, text)
         .into_iter()
@@ -597,33 +903,33 @@ fn resolved_imports(surface: Surface, text: &str, path: &Path) -> Vec<String> {
 fn written_imports(surface: Surface, text: &str) -> Vec<String> {
     match surface {
         // `.mox` imports are schema/sigil content, not application files.
-        Surface::Mox | Surface::Other => Vec::new(),
-        Surface::Actor => rex_syntax::parse_actors(text)
+        Surface::Known(SurfaceKind::Mox) | Surface::Other => Vec::new(),
+        Surface::Known(SurfaceKind::Actor) => rex_syntax::parse_actors(text)
             .ast
             .map(|ast| ast.imports.into_iter().map(|import| import.path).collect())
             .unwrap_or_default(),
-        Surface::Ddd => rex_syntax::parse_ddd(text)
+        Surface::Known(SurfaceKind::Ddd) => rex_syntax::parse_ddd(text)
             .ast
             .map(|ast| ast.imports.into_iter().map(|import| import.path).collect())
             .unwrap_or_default(),
-        Surface::Evt => rex_syntax::parse_evt(text)
+        Surface::Known(SurfaceKind::Evt) => rex_syntax::parse_evt(text)
             .ast
             .map(|ast| ast.imports.into_iter().map(|import| import.path).collect())
             .unwrap_or_default(),
-        Surface::Deploy => rex_syntax::parse_deploy(text)
+        Surface::Known(SurfaceKind::Deploy) => rex_syntax::parse_deploy(text)
             .ast
             .map(|ast| ast.imports.into_iter().map(|import| import.path).collect())
             .unwrap_or_default(),
-        Surface::Uc => rex_syntax::parse_usecases(text)
+        Surface::Known(SurfaceKind::Uc) => rex_syntax::parse_usecases(text)
             .ast
             .map(|ast| ast.imports.into_iter().map(|import| import.path).collect())
             .unwrap_or_default(),
-        Surface::Cmmn => rex_syntax::parse_cmmn(text)
+        Surface::Known(SurfaceKind::Cmmn) => rex_syntax::parse_cmmn(text)
             .ast
             .map(|ast| ast.imports.into_iter().map(|import| import.path).collect())
             .unwrap_or_default(),
-        Surface::Dmn => rex_driver::project::dmn_import_paths(text),
-        Surface::Ifml => rex_ifml::parse_ifml(text)
+        Surface::Known(SurfaceKind::Dmn) => rex_driver::project::dmn_import_paths(text),
+        Surface::Known(SurfaceKind::Ifml) => rex_ifml::parse_ifml(text)
             .map(|model| model.imports)
             .unwrap_or_default(),
     }

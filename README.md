@@ -69,6 +69,8 @@ rexlang check model/              # batch: every supported surface under a direc
 rexlang fmt model/                # format every supported surface under a directory
 rexlang fmt --check model/        # gate: exit 1 naming any unformatted file (formatter-golden X.fmt.<ext> outputs are skipped, like check's)
 rexlang ir model.mox -o model.rex.json
+rexlang graph build examples/ -o graph.json   # one semantic graph across every surface (`graph` needs a verb: build|query)
+rexlang graph query graph.json node Support.RaiseRefund   # artifact-only: node/list/affected-by/dependencies + cross-policy analytics
 rexlang artifact check model.rex.json   # validate any serialized artifact
 rexlang gen rust model.mox -o src-gen/
 rexlang gen json-schema model.mox --profile wire -o schemas/
@@ -184,7 +186,7 @@ domain IR or its JSON Schemas. They live in `.actor` files that import the
 domain so everything stays type safe:
 
 ```actor
-import "examples/support.mox"
+import "examples/support/support.mox"
 
 actors Support {
     actor Customer
@@ -208,7 +210,7 @@ actors Support {
 }
 ```
 
-(This policy compiles — it is the shape of `examples/support.actor`, and
+(This policy compiles — it is the shape of `examples/support/support.actor`, and
 the fenced blocks in these docs are compiled by CI.)
 ```
 
@@ -322,4 +324,14 @@ Model instances exchange through a cross-language JSON contract:
 `tests/conformance/` holds the flagship model plus its golden artifacts (Core
 IR JSON and canonical instance JSON). Every backend must round-trip them.
 Regenerate goldens with `REX_UPDATE_FIXTURES=1 cargo test --workspace`.
+
+When running tests locally, prefer the wrappers: `scripts/dev-test.sh [args]`
+runs `cargo test` with the CI env (`debuginfo=0`, no incremental compilation,
+`TMPDIR=target/tmp`, `--jobs 2`), and `scripts/ci-local.sh` runs the full gate
+sequence. A bare `cargo test --workspace` leaves the default `debuginfo=2` on,
+and cargo never collects old hashes under `target/debug/build/<pkg>/<hash>/out/`
+— repeated builds can fill the disk, which surfaces as
+`ld terminated with signal 7 [Bus error]` during doctest linking. Reclaim with
+`rm -rf target/debug/build/rex-*` (workspace crates only); the full rationale
+is the AGENTS.md operational bullet (issue #261).
 

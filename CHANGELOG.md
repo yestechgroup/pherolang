@@ -53,7 +53,7 @@ byte moves.
   the graph builder's node key — pinned by the anti-drift equality test
   over all nine surfaces. The `.mox` index moved verbatim into
   `navigation/mox.rs` (behavior frozen).
-- **`rexlang graph`** (issue #240, the semantic-graph slice 3/8): compile a
+- **`rexlang graph build`** (issue #240, the semantic-graph slice 3/8): compile a
   tree of model files into **one** deterministic, versioned
   `rex_ir::graph::GraphModel` — the import-connected applications, the full
   node/edge vocabulary, and the semantic edges between every surface —
@@ -127,9 +127,47 @@ byte moves.
   the external decision table.
 - **`docs/RECEIPTS.md`**: what a receipt is and is not, its schema and
   closed vocabularies, the commands, and the staleness classes.
+- **Editor diagnostics for every artifact surface** (issue #255):
+  `.evt`, `.deploy`, `.uc`, and `.cmmn` documents now publish their
+  compiler diagnostics (spanned, with the `rexlang` source) instead of
+  silently accepting errors. They reuse the already memoized graph-snapshot
+  compile — no second compile per keystroke — and a clean document publishes
+  an empty set that clears stale diagnostics; a document with no directory
+  snapshot (a non-file URI) publishes nothing.
 
 ### Changed
 
+- **Compile-time cross-surface joins are scoped to the application** (issue
+  #249): the `.ddd` capability pool, the `.ddd` decision bucket, and the
+  `.actor` grant-coverage carrier set pool the checked file's
+  **import-connected application** (`rex_driver::applications`) — the same
+  relation the union integrity pass already used — instead of every sibling
+  in the directory. A design in one application is no longer validated
+  against a policy in another; an application with no counterpart surface
+  keeps the joins silent (the documented opt-in behavior). `check examples/`
+  no longer rejects `orders.ddd`'s `PlaceOrder` against `support.actor`, and
+  `graph examples/` exits `0` with the full tree.
+- **`examples/` is split into per-application directories** (issue #258):
+  `examples/{support,shop,library,org,iot,shapes,pricing,lending}/`, each a
+  complete vertical slice; `artifacts/`, `instances/`, and the README stay
+  at the root. The support and shop designs now emit the events their
+  `.evt` contracts declare and carry the service operations their `.ifml`
+  actions bind to, so every application is wired end to end and
+  `check examples/` exits `0`. Graph display paths (and the graph, query,
+  and receipt goldens) carry the application directory. The union pass's
+  phase-2 `.ifml` re-check now keeps the decision and actor dimensions
+  phase 1 uses, so a `data:` binding to a decision output is no longer
+  re-reported as a disagreement.
+- **`rexlang graph` is now a pure namespace with two verbs** (issue #257):
+  `rexlang graph build <paths>... [-o <file>]` compiles sources into one
+  artifact, and `rexlang graph query <graph.json|-> …` answers from a
+  committed artifact. The previous shape overloaded a positional `PATHS`
+  list with an optional `query` subcommand, and clap matches the subcommand
+  first, so a directory literally named `query` could not be passed
+  directly. **Breaking for the unreleased command only**: `rexlang graph
+  <paths>` becomes `rexlang graph build <paths>`, and bare `rexlang graph`
+  is now a clap usage error. The artifact bytes and the query envelopes are
+  unchanged — no golden moves.
 - The `#[trusted]` register gate (issue #89) is now the full **register
   drift gate** (#203): a dead evidence pointer, a status outside the closed
   vocabulary (`"verified"` is rejected by name), an `argued`/`assumed`/

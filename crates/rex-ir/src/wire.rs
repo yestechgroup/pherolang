@@ -5,16 +5,27 @@
 //! [`usecases::UseCaseModel`], [`ifml::IfmlModel`],
 //! [`ifml_manifest::IfmlManifest`], [`cmmn::CmmnModel`], [`dmn::DmnModel`],
 //! [`graph::GraphModel`])
-//! carries a `format_version` field and implements
-//! [`VersionedArtifact`]. The serialize/version-gate plumbing is written
-//! once here, as the trait's default methods: each root's public inherent
-//! `to_json` / `to_json_pretty` / `from_json` — the API external consumers
-//! call — is a one-line delegation to the corresponding default, and
-//! [`default_format_version!`] generates the root's `Default` from its
-//! constructor. The next artifact surface is a [`VersionedArtifact`] impl,
-//! that macro invocation, and three one-line delegations, and the gate
-//! semantics cannot drift between roots because every root routes through
-//! the same defaults.
+//! carries a `format_version` field and declares its wire plumbing with one
+//! [`versioned_artifact!`] invocation next to its struct:
+//!
+//! ```text
+//! crate::wire::versioned_artifact!(GraphModel, GRAPH_MODEL_FORMAT_VERSION, "the graph");
+//! ```
+//!
+//! The serialize/version-gate semantics live once here, as
+//! [`VersionedArtifact`]'s default methods. That one invocation expands to
+//!
+//! - the root's crate-private [`VersionedArtifact`] impl, naming its marker
+//!   const (the const is a required argument — a root cannot forget it),
+//! - the root's `Default`, delegating to its constructor so the marker is
+//!   always stamped, and
+//! - the public inherent `to_json` / `to_json_pretty` / `from_json` — the
+//!   API external consumers call — each a one-line delegation whose
+//!   generated doc names the gate.
+//!
+//! A new artifact surface is therefore the explicit struct (plus its marker
+//! const) and one `versioned_artifact!` line: the gate semantics cannot
+//! drift between roots because every root routes through the same defaults.
 //!
 //! The module also owns the two small pieces of vocabulary-level
 //! machinery every artifact file shares: the [`is_false`]
@@ -64,31 +75,124 @@ pub(crate) trait VersionedArtifact {
     }
 }
 
-/// Generates an artifact root's `Default` impl from its inherent
-/// constructor: `default_format_version!(Model);` for the usual
-/// argument-less `new()`, or
-/// `default_format_version!(IfmlModel, Self::new(...));` with the
-/// constructor call for the root whose `new()` takes arguments. Every
-/// root's `Default` must stamp its format version via that constructor —
-/// never hand-write a `Default` that bypasses it.
-macro_rules! default_format_version {
-    ($root:ident) => {
-        impl Default for $root {
-            fn default() -> Self {
-                Self::new()
-            }
-        }
+/// Declares one artifact root's complete wire plumbing: the crate-private
+/// [`VersionedArtifact`] impl, the `Default`, and the three public inherent
+/// delegation methods. The struct definition stays explicit at the call
+/// site — only the plumbing is generated.
+///
+/// The marker const is a **required argument**, so a root cannot retain the
+/// trait/gate while forgetting its version marker: omitting it (or naming a
+/// non-const) is a compile error.
+///
+/// The usual invocation, for a root whose `new()` takes no arguments:
+///
+/// ```text
+/// crate::wire::versioned_artifact!(Model, FORMAT_VERSION, "the model");
+/// ```
+///
+/// A root whose constructor needs arguments passes `default = <call>`; the
+/// expression is expanded inside `fn default() -> Self`, so `Self::new(…)`
+/// works:
+///
+/// ```text
+/// crate::wire::versioned_artifact!(
+///     IfmlModel,
+///     IFML_MODEL_FORMAT_VERSION,
+///     "the IFML artifact",
+///     default = Self::new(Vec::new(), Vec::new(), Vec::new(), Vec::new(),
+///                        Vec::new(), Vec::new(), Vec::new())
+/// );
+/// ```
+///
+/// A root with root-specific forward-compatibility wording replaces the
+/// final `from_json` doc line with `unknown = "<text>"`.
+///
+/// Every generated method is documented: the docs are `concat!`-built so
+/// each root's methods still name their own marker const and version gate.
+///
+/// Two compile-time guards make forgetting impossible: the marker const is
+/// a required argument of the trait impl, and an expansion-level
+/// `const _: fn(&Root) -> u32` requires the root's `format_version` field.
+macro_rules! versioned_artifact {
+    ($root:ident, $version:ident, $noun:literal $(,)?) => {
+        $crate::wire::versioned_artifact!(
+            @plumbing $root,
+            $version,
+            $noun,
+            "Unknown fields are ignored for forward compatibility.",
+            $root::new()
+        );
     };
-    ($root:ident, $new_call:expr) => {
-        impl Default for $root {
-            fn default() -> Self {
-                $new_call
+    ($root:ident, $version:ident, $noun:literal, unknown = $unknown:expr $(,)?) => {
+        $crate::wire::versioned_artifact!(
+            @plumbing $root,
+            $version,
+            $noun,
+            $unknown,
+            $root::new()
+        );
+    };
+    ($root:ident, $version:ident, $noun:literal, default = $constructor:expr $(,)?) => {
+        $crate::wire::versioned_artifact!(
+            @plumbing $root,
+            $version,
+            $noun,
+            "Unknown fields are ignored for forward compatibility.",
+            $constructor
+        );
+    };
+    (@plumbing $root:ident, $version:ident, $noun:literal, $unknown:expr, $constructor:expr) => {
+        impl $root {
+            #[doc = ::core::concat!(
+                "Serializes ",
+                $noun,
+                " to pretty-printed (2-space indent) JSON."
+            )]
+            pub fn to_json_pretty(&self) -> ::core::result::Result<::std::string::String, $crate::IrError> {
+                $crate::wire::VersionedArtifact::to_json_pretty(self)
+            }
+
+            #[doc = ::core::concat!("Serializes ", $noun, " to compact JSON.")]
+            pub fn to_json(&self) -> ::core::result::Result<::std::string::String, $crate::IrError> {
+                $crate::wire::VersionedArtifact::to_json(self)
+            }
+
+            #[doc = ::core::concat!(
+                "Deserializes ",
+                $noun,
+                " from JSON, rejecting artifacts whose"
+            )]
+            #[doc = ::core::concat!(
+                "`formatVersion` is not [`",
+                ::core::stringify!($version),
+                "`]."
+            )]
+            #[doc = ""]
+            #[doc = $unknown]
+            pub fn from_json(json: &str) -> ::core::result::Result<Self, $crate::IrError> {
+                <Self as $crate::wire::VersionedArtifact>::from_json(json)
             }
         }
+
+        impl $crate::wire::VersionedArtifact for $root {
+            const FORMAT_VERSION: u32 = $version;
+        }
+
+        impl ::core::default::Default for $root {
+            fn default() -> Self {
+                $constructor
+            }
+        }
+
+        // Compile-time guard: the root must actually carry the stamped
+        // `format_version` field the `Default` above and the version gate
+        // rely on. A root that renames or drops it fails to compile here
+        // rather than silently emitting an ungated artifact.
+        const _: fn(&$root) -> u32 = |artifact| artifact.format_version;
     };
 }
 
-pub(crate) use default_format_version;
+pub(crate) use versioned_artifact;
 
 /// Serializes an artifact to pretty-printed (2-space indent) JSON.
 pub(crate) fn to_json_pretty<T: Serialize + ?Sized>(value: &T) -> Result<String, IrError> {
@@ -212,35 +316,67 @@ pub(crate) mod tests {
     use crate::usecases::{UseCaseModel, USE_CASE_MODEL_FORMAT_VERSION};
     use crate::{ActorModel, IrError, Model, ACTOR_MODEL_FORMAT_VERSION, FORMAT_VERSION};
 
+    /// One line per artifact root: asserts that its macro-generated plumbing
+    /// is complete and agrees with its marker — the crate-private
+    /// [`super::VersionedArtifact`] const, the `Default` stamp, and the three
+    /// inherent delegations (`from_json`, `to_json`, `to_json_pretty`). A new
+    /// root is added to this list (the only per-root list left in this
+    /// module).
+    macro_rules! assert_root_wired {
+        ($root:ident, $version:ident) => {{
+            assert_eq!(
+                <$root as VersionedArtifact>::FORMAT_VERSION,
+                $version,
+                concat!(stringify!($root), " must gate on ", stringify!($version))
+            );
+            let default = $root::default();
+            assert_eq!(
+                default.format_version, $version,
+                concat!(
+                    stringify!($root),
+                    "::default() must stamp ",
+                    stringify!($version)
+                )
+            );
+            let accepted = $root::from_json(&format!("{{\"formatVersion\":{}}}", $version)).expect(
+                concat!(stringify!($root), " must accept its own format version"),
+            );
+            assert_eq!(accepted.format_version, $version);
+            let compact = accepted.to_json().expect(concat!(
+                stringify!($root),
+                " must serialize to compact JSON"
+            ));
+            let through_compact: $root =
+                $root::from_json(&compact).expect("compact output must round-trip");
+            assert_eq!(through_compact, accepted);
+            let pretty = accepted
+                .to_json_pretty()
+                .expect(concat!(stringify!($root), " must serialize to pretty JSON"));
+            let through_pretty: $root =
+                $root::from_json(&pretty).expect("pretty output must round-trip");
+            assert_eq!(through_pretty, accepted);
+        }};
+    }
+
     /// The version gate is one function, so every root must accept
     /// exactly its declared version and reject absent/wrong versions
     /// with the same error shape. The uniformity this pins is the reason
-    /// [`super::VersionedArtifact`] exists; a new root is added to both
-    /// lists below.
+    /// [`super::VersionedArtifact`] exists; [`assert_root_wired!`] covers
+    /// the per-root plumbing, and this test adds the shared rejection
+    /// matrix.
     #[test]
     fn every_artifact_root_gates_format_version_identically() {
-        let model: Model = from_json("{\"formatVersion\":1}").unwrap();
-        assert_eq!(model.format_version, FORMAT_VERSION);
-        let actors: ActorModel = from_json("{\"formatVersion\":1}").unwrap();
-        assert_eq!(actors.format_version, ACTOR_MODEL_FORMAT_VERSION);
-        let ddd: DddModel = from_json("{\"formatVersion\":1}").unwrap();
-        assert_eq!(ddd.format_version, DDD_MODEL_FORMAT_VERSION);
-        let events: EventModel = from_json("{\"formatVersion\":1}").unwrap();
-        assert_eq!(events.format_version, EVENT_MODEL_FORMAT_VERSION);
-        let deploy: DeployModel = from_json("{\"formatVersion\":1}").unwrap();
-        assert_eq!(deploy.format_version, DEPLOY_MODEL_FORMAT_VERSION);
-        let usecases: UseCaseModel = from_json("{\"formatVersion\":1}").unwrap();
-        assert_eq!(usecases.format_version, USE_CASE_MODEL_FORMAT_VERSION);
-        let ifml: IfmlModel = from_json("{\"formatVersion\":1}").unwrap();
-        assert_eq!(ifml.format_version, IFML_MODEL_FORMAT_VERSION);
-        let manifest: IfmlManifest = from_json("{\"formatVersion\":1}").unwrap();
-        assert_eq!(manifest.format_version, IFML_MANIFEST_FORMAT_VERSION);
-        let cmmn: CmmnModel = from_json("{\"formatVersion\":1}").unwrap();
-        assert_eq!(cmmn.format_version, CMMN_MODEL_FORMAT_VERSION);
-        let dmn: DmnModel = from_json("{\"formatVersion\":1}").unwrap();
-        assert_eq!(dmn.format_version, DMN_MODEL_FORMAT_VERSION);
-        let graph: GraphModel = from_json("{\"formatVersion\":1}").unwrap();
-        assert_eq!(graph.format_version, GRAPH_MODEL_FORMAT_VERSION);
+        assert_root_wired!(Model, FORMAT_VERSION);
+        assert_root_wired!(ActorModel, ACTOR_MODEL_FORMAT_VERSION);
+        assert_root_wired!(DddModel, DDD_MODEL_FORMAT_VERSION);
+        assert_root_wired!(EventModel, EVENT_MODEL_FORMAT_VERSION);
+        assert_root_wired!(DeployModel, DEPLOY_MODEL_FORMAT_VERSION);
+        assert_root_wired!(UseCaseModel, USE_CASE_MODEL_FORMAT_VERSION);
+        assert_root_wired!(IfmlModel, IFML_MODEL_FORMAT_VERSION);
+        assert_root_wired!(IfmlManifest, IFML_MANIFEST_FORMAT_VERSION);
+        assert_root_wired!(CmmnModel, CMMN_MODEL_FORMAT_VERSION);
+        assert_root_wired!(DmnModel, DMN_MODEL_FORMAT_VERSION);
+        assert_root_wired!(GraphModel, GRAPH_MODEL_FORMAT_VERSION);
 
         for json in ["{}", "{\"formatVersion\":2}"] {
             rejects_version::<Model>(json);

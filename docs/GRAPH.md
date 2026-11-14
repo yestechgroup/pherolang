@@ -1,6 +1,6 @@
 # The unified semantic graph
 
-`rexlang graph` compiles a tree of model files into **one queryable,
+`rexlang graph build` compiles a tree of model files into **one queryable,
 versioned artifact**: `rex_ir::graph::GraphModel`. It is the substrate for
 impact analysis, `graph query`, the MCP server (v0.6), Studio, and AI
 agents — the answer to "what is affected if I change capability X" is a
@@ -75,28 +75,74 @@ without contributing nodes of its own beyond its domain declarations.
 Unrelated applications in one tree never cross-check, and an import that
 leaves the checked set contributes no edge.
 
+**Pools follow the application, not the directory.** The compile-time
+joins — the `.ddd` capability clause against `.actor` policies
+(rexlang#128), the `.ddd` `invokes`/`inject decision` links against `.dmn`
+models (rexlang#78), and the `.actor` grant coverage against `.ddd`
+designs — resolve inside the compiled file's application component only.
+Two applications sharing a directory (or a checked tree) never see each
+other's capabilities, decisions, or designs, and a file whose application
+holds no counterpart surface keeps the plain compile behavior (the join is
+silent). The CLI pools from its project snapshot's component; the LSP pools
+from the open document's directory snapshot, scoped by the same relation.
+
 `applications[].id` is the component's smallest member path;
 `applications[].files` and `.packages` are sorted.
 
-## The `rexlang graph` command
+## The `rexlang graph build` command
 
 ```sh
-rexlang graph <paths>... [-o <file>]
+rexlang graph build <paths>... [-o <file>]
 ```
+
+`graph` is a pure namespace with two required verbs — `build` (this section)
+and `query` ([below](#queries)) — so no input path can ever be mistaken for a
+verb: a directory literally named `query` is an ordinary `build` input
+(issue #257).
 
 Compiles every input and emits **one** `GraphModel` — pretty-printed
 (2-space) JSON — to stdout, or to `-o <file>`. Directories enter **project
 mode** exactly like `check`/`build`: every supported surface under the tree
 is gathered into one snapshot, each file compiles independently with its
 imports resolving map-first, sibling artifacts are reused compile-once, the
-union-wide capability joins run, and formatter-golden `X.fmt.<ext>` files are
-skipped. Explicit files compile in their own context, like `build`.
+capability/design/decision joins run scoped to each file's import-connected
+application, and formatter-golden `X.fmt.<ext>` files are skipped. Explicit
+files compile in their own context, like `build`.
+
+**No second compile.** The pipeline hands the builder each file's
+already-computed typed artifact and resolved imports — one `GraphInputs`
+bucket per surface, `GraphFile` rows carrying the display path, the
+host-normalized key, and the imports the surface's reader resolved
+(`SurfaceOutcome.artifact`/`.imports` in `crates/rex-cli/src/commands/`;
+`.ifml`'s imports ride the same field). The builder never re-reads a source
+or re-compiles a file, and `check`/`ir`/`build` ignore those two fields, so
+their output stays byte-identical.
 
 Emission is **best-effort over the compiling subset** (the `build`
 precedent): a failing file renders its diagnostics per file and contributes
 nothing, and the command still writes the graph for everything that
 compiled, exiting `1`. Unresolved wiring never becomes an edge — it stays
 the compiler's diagnostic, not a guessed binding.
+
+### One surface table, one compile pipeline
+
+Classification lives in **one surface table**, `rex_driver::SurfaceKind`
+(`crates/rex-driver/src/surface.rs`): the CLI's `is_*_file` helpers, its
+project snapshot's written-import dispatch, `verify`'s receipt kinds, and the
+LSP's `surface_for`/`surface_of_path` all delegate to it (the LSP's wrapper
+adds only the "not a rexlang surface" case).
+
+`commands/pipeline.rs::compile_one` is the CLI's single per-surface
+dispatch — an exhaustive match with no `_` arm, pinned by
+`every_surface_kind_compiles_through_compile_one` — behind `check`, `ir`,
+`build`, `graph build`, `verify`, and the union pass's phase-2 re-check.
+Its `CompileContext` carries the project snapshot (the sibling scope and
+cache), `--expand`, JSON serialization, and the reporting mode (`Always` for
+the commands, `OnFailure` for the union pass's re-check, which stays silent
+when it agrees with phase 1).
+
+A new surface is one `of_extension`/`ALL` edit, one pipeline arm, and the
+host's own arm — never a new `is_*_file` tower.
 
 ### Display paths and the base rule
 
@@ -118,16 +164,19 @@ base `examples/` — every surface, the support stack, and the unrelated
 applications clustered together:
 
 ```sh
-rexlang graph examples/ -o /tmp/examples.graph.json
+rexlang graph build examples/ -o /tmp/examples.graph.json
 diff /tmp/examples.graph.json examples/artifacts/examples.graph.json
 REX_UPDATE_FIXTURES=1 cargo test -p rex-cli --test cli graph
 ```
 
-The tree keeps one pre-existing project-mode failure (`orders.ddd`'s
-`PlaceOrder` capability against the union-wide pooled `support.actor`
-capabilities — the same finding `check examples/` renders), which exercises
-the best-effort path: the artifact is written over the compiling subset and
-the command exits `1`.
+Every file under the tree compiles and every application is coherent, so
+both `graph build examples/` and `check examples/` exit `0`: `orders.ddd` no
+longer resolves its `PlaceOrder` capability against `support.actor`'s names
+(the two files belong to different applications — rexlang#249), and each
+application's events/actions are wired to its own design (rexlang#258). The
+best-effort emission path (a failing file renders its diagnostics, the
+artifact covers the compiling subset, the command exits `1`) is still the
+contract; it is just not exercised by `examples/` any more.
 
 ## Nodes (v1)
 
@@ -240,9 +289,10 @@ binding.
 
 The graph mirrors the compiler; it never invents a binding:
 
-- Capability/actor names are block-local but pool union-wide (`.ddd`
-  clause resolution, `.ifml` `requires:`/`roles:`, `.uc` steps). One match
-  binds; several emit all with `attributes["ambiguous"]="true"`.
+- Capability/actor names are block-local but pool across the file's
+  import-connected application (`.ddd` clause resolution, `.ifml`
+  `requires:`/`roles:`, `.uc` steps) — never across applications. One
+  match binds; several emit all with `attributes["ambiguous"]="true"`.
 - `action → operation` follows the #114 rule: ASCII-case-insensitive name
   equality; unique binds, several emit all with `ambiguous`.
 - `.uc` step → operation: by name among the application's design
@@ -280,16 +330,17 @@ rexlang graph query <graph.json|-> dependencies <ref> [--pretty]
 ```
 
 `-` reads the artifact from stdin. `--pretty` changes whitespace only.
-`rexlang graph <paths>...` (compile) and `rexlang graph query …` (query)
-coexist; clap matches the subcommand first, so a directory literally named
-`query` must be given as `./query`.
+`rexlang graph build <paths>...` (compile) and `rexlang graph query …`
+(query) are sibling verbs under the `graph` namespace: one is always
+required, so an input path can never be mistaken for a verb (a directory
+literally named `query` is an ordinary `build` input).
 
 ### Reference resolution
 
 A `<ref>` resolves **exact id → exact name → unique name suffix**:
 
 ```sh
-rexlang graph query g.json node 'capability:support.actor#Support.RaiseRefund'  # id
+rexlang graph query g.json node 'capability:support/support.actor#Support.RaiseRefund'  # id
 rexlang graph query g.json node 'Support.RaiseRefund'                           # name
 rexlang graph query g.json node 'TicketService.raiseRefund'                     # suffix
 ```
@@ -298,6 +349,13 @@ One match binds. Several are **ambiguous** — never guessed — and the CLI
 exits `1` with the sorted candidates on stderr. No match is **unknown**, and
 the did-you-mean candidates (also sorted) come from the adaptive name/id
 suggestion policy in `rex-diagnostics`.
+
+Both resolutions are **indexed, never scanned**: exact ids, exact
+`(kind, name)` pairs, every proper `.`-suffix of every node name, and the
+adjacency views are built once per artifact (each name with `d` `.`-segments
+contributes at most `d - 1` borrowed suffix keys), so one reference costs
+`O(log n + matches)` map work and a lookup never walks the node table — the
+property the v0.6 MCP server and Studio rely on over 10k+ node artifacts.
 
 ### Result envelopes
 
@@ -310,26 +368,26 @@ an array, sorted by id (`list`) or by `(depth, id)` (the closures):
 {
   "formatVersion": 1,
   "query": "affectedBy",
-  "reference": "capability:support.actor#Support.RaiseRefund",
-  "resolved": "capability:support.actor#Support.RaiseRefund",
+  "reference": "capability:support/support.actor#Support.RaiseRefund",
+  "resolved": "capability:support/support.actor#Support.RaiseRefund",
   "direction": "dependents",
   "results": [
     {
-      "id": "capability:support.actor#Support.RaiseRefund",
+      "id": "capability:support/support.actor#Support.RaiseRefund",
       "kind": "capability",
       "name": "Support.RaiseRefund",
-      "file": "support.actor",
-      "application": "cli.ifml",
+      "file": "support/support.actor",
+      "application": "support/cli.ifml",
       "depth": 0
     },
     {
-      "id": "serviceOperation:support.ddd#SupportDesk.desk.TicketService.raiseRefund",
+      "id": "serviceOperation:support/support.ddd#SupportDesk.desk.TicketService.raiseRefund",
       "kind": "serviceOperation",
       "name": "SupportDesk.desk.TicketService.raiseRefund",
-      "file": "support.ddd",
-      "application": "cli.ifml",
+      "file": "support/support.ddd",
+      "application": "support/cli.ifml",
       "depth": 1,
-      "parent": "capability:support.actor#Support.RaiseRefund",
+      "parent": "capability:support/support.actor#Support.RaiseRefund",
       "via": "carries"
     }
   ]
@@ -361,7 +419,7 @@ operation, which is the opposite of an impact answer.
 two ownership edges walk back to the members.
 
 **File nodes answer with the `imports` graph.** `affected-by
-file:support.mox#support.mox` is the set of files that import it,
+file:support/support.mox#support/support.mox` is the set of files that import it,
 transitively; `dependencies` is the set it imports. The symbol walk never
 reports nor expands a `file` node, so a cross-file import hop can never
 smuggle a whole file's symbols into a symbol answer.
@@ -506,9 +564,12 @@ all nine surfaces plus the unrelated `other.*` application (an opaque
 `cedar` policy). The fixture exercises every outcome: a declared pair with no
 violation, an undeclared pair with one (inheritance), a monotonicity gap,
 `alive`/`dead`/`latent`/`unknown` capabilities, and a reachable and an
-unreachable field. The compiler's two self-narrowing warnings for the
-fixture's permit-then-forbid pairs are expected — the gap is the analytic's
-subject, so the fixture does not deny warnings. Regenerate with:
+unreachable field. The fixture is in the CI format gate's globs
+(`FIXTURE_FORMAT_GLOBS` in `scripts/ci-local.sh`), so its layout is
+formatted like every other canonical model. The compiler's two
+self-narrowing warnings for the fixture's permit-then-forbid pairs are
+expected — the gap is the analytic's subject, so the fixture does not deny
+warnings. Regenerate with:
 
 ```sh
 REX_UPDATE_FIXTURES=1 cargo test -p rex-driver --test graph_analytics
@@ -525,6 +586,117 @@ and the snake_case-key scan. The empty graph (`{"formatVersion":1}`) is
 byte-identical to the block-less actor artifact and classifies as one — the
 documented empty-form limitation shared by every standalone artifact.
 
+## Union integrity
+
+`rex_driver::check_integrity` (issue #114, register row **V12**) is the
+cross-surface pass `rexlang check <dir>` hosts after the per-file checks: a
+pure function over path-tagged artifact buckets
+(`DddModel`/`ActorModel`/`EventModel`/`DeployModel`/`IfmlModel`) that
+publishes no artifact of its own. Every diagnostic is span-less (the wire
+artifacts are span-free by contract) and tags the owning file; the code
+table — messages, severities, help — is generated into
+[DIAGNOSTICS.md](DIAGNOSTICS.md) (`driver.integrity`, `X0001`–`X0008`;
+`rexlang explain X0006` resolves one).
+
+| code | check | severity |
+|---|---|---|
+| `X0001` | every `capability` clause on an operation/search names a declared capability | warning |
+| `X0002` | every granted or delegated capability is carried by an operation/search | warning |
+| `X0003` | every `emits` name is a declared event | error |
+| `X0004` | every declared event is emitted by some service operation | error |
+| `X0005` | every `.ifml` action binds to a service operation | error |
+| `X0006` | that action binding is unambiguous | error |
+| `X0007` | every `.evt` subscription consumer names a declared deploy component | error |
+| `X0008` | every `.ifml` `requires:`/`roles:` name resolves against the actor layer | error |
+
+The two capability checks are **warnings since rexlang#128**: their joins
+resolve at compile time with spans (`unknownCapability`; the actor engine's
+`grantedCapabilityUncarried` for coverage), so this pass is their lint
+channel for hosts that gather artifacts without compiling. Each check is
+opt-in — it fires only when the counterpart surface is present in the union,
+so a host compiling one surface never sees these diagnostics.
+
+**Pools follow the application, not the directory.** The pass runs over one
+import-connected application at a time (the same union-find relation as the
+[graph's applications](#applications)): a `.mox` file is a bridge node,
+`.deploy`/`.uc`/`.cmmn` contribute no bucket, and unrelated applications in
+one checked tree never cross-check. In the CLI's directory batch mode the
+pass is phase 2 only — each successful file's artifact is retained, the
+contributions cluster by import, and the capability lint stays unprinted for
+files phase 1 already failed. The compile-time joins pool the same relation
+from the project snapshot (`Project::sibling_actors`/`sibling_designs`/
+`sibling_decisions`, built on `Project::application_of`, rexlang#249), and
+the LSP pools it over its directory snapshot; an empty sibling set is
+exactly the plain behavior.
+
+Traps the checks encode: `agent` is a lexer keyword, never a bare `.ddd`
+parameter name; a standalone `cedar { … }` grant serializes an empty
+capability name (coverage skips it — verbatim policy, not a reference); and
+action→operation binding is ASCII-case-insensitive (`ApproveRefund` ↔
+`approveRefund`).
+
+## Span tables
+
+Every surface's navigation index lives in `rex_driver::navigation`
+(`crates/rex-driver/src/navigation/`) behind one contract (`surface.rs`):
+`IndexedDefinition`, `IndexedReference`, `ReferenceContext`, and the
+`SurfaceLookup` answer type. Each builder is a pure function of source text
+that returns an **empty index, never a panic**, on a source that does not
+parse.
+
+- `.mox`'s own `NavigationIndex` moved verbatim into `mox.rs`; its behavior
+  is **frozen** — the existing suites are the oracle.
+- The seven artifact surfaces implement `SurfaceIndex` with
+  `actors_index`/`ddd_index`/`evt_index`/`deploy_index`/`uc_index`/
+  `cmmn_index`/`dmn_index`; `.mox` and `.ifml` project through
+  `mox_index`/`ifml_surface` (below), completing the nine.
+- Definitions are the graph's `(kind, name)` node keys, derived through
+  `graph::ids` — the one naming source (`ids.rs` is `pub(crate)` for exactly
+  this, and the emitters share `deploy_component_name`, `deployment_name`,
+  `case_role_name`, `case_file_item_name`, `plan_item_name`,
+  `decision_model_name`, `dmn_element_name`).
+- `evt_index(source, file)` and `dmn_index(source, file)` take the document
+  path because their model prefix is the file stem when the artifact
+  declares none; `ddd_index` returns empty for a source with no
+  `application` (the graph's stem fallback is a path fact the index cannot
+  know), and `cmmn_index`/`dmn_index` skip a nameless recovered declaration
+  (it cannot key a node).
+- References carry `target_kinds` hints only — the name as written plus the
+  kinds it may denote. Binding is the graph index's job, never the syntax
+  layer's (the per-surface reference tables are in [the LSP
+  contract](#the-lsp-contract)).
+- The builders needed name spans the artifact surfaces' ASTs did not carry:
+  `.uc` (`UcDecl`/`UcParticipant`/`UcStep` name+type+operation spans,
+  `UcStep.requires` now a `Vec<Name>`), `.cmmn` (case/role/case-file
+  item/plan item names, the `performer` role name, the `execute`/`invokes`
+  mentions, the on-part source), and `.deploy`
+  (`DeployBindingDecl.reference_span`, the string's contents inside the
+  quotes). All additive fields — no format or golden change.
+- `.mox` and `.ifml` keep their richer tables (`NavigationIndex`: typed
+  reference targets, `DefId`s, `opposite` ends; `IfmlIndex`: module uses,
+  nested interaction sites) as their reference and outline source.
+  `navigation::mox_index` projects the `.mox` model's graph nodes (classes,
+  interfaces-as-class, registers, enums, datatypes, features, operations,
+  and the inline `actors` block's actors/capabilities — enum literals and
+  vocabularies stay `NavigationIndex`-only), and
+  `navigation::ifml_surface(model, index)` projects a compilation's
+  entry-file declarations (module/view/container/component
+  paths/action/command; the `flow` node has no written site).
+
+**The anti-drift gate** is
+`every_indexed_definition_maps_to_exactly_one_graph_node` plus
+`span_slices_equal_the_written_name` in
+`crates/rex-driver/tests/navigation.rs`, over **all nine** surfaces of the
+`examples/support/support.*` stack (plus
+`tests/conformance/models/actors.mox` for inline actors and the two
+conformance designs). Exactly two node kinds are excluded, both naming a
+host fact a source-only index cannot know: the `file` node (a display path)
+and the `.ifml` `flow` node (the file stem). Transitions are the one
+composite node key, so the span test skips the `->`; `.ifml` spans are the
+quoted string token. The unit-test fixture is the self-contained
+`tests/conformance/graph/app.*` application
+(`navigation/test_support::fixture_graph`, compiled once).
+
 ## The LSP contract
 
 The artifact and the editor share **one node table**: every spanned
@@ -533,7 +705,16 @@ key, pinned by the anti-drift test in
 `crates/rex-driver/tests/navigation.rs`. Spans are per surface; resolution
 is the graph's.
 
-The span tables live in `rex_driver::navigation`
+Dispatch is by URI extension through `SurfaceKind` (`surface_for`,
+`crates/rex-lsp/src/server/mod.rs`): `.mox` drives the salsa session and its
+own `NavigationIndex`, `.ifml` the rex-ifml one-shot compile (resolver +
+typed checker) *and* its own outline/hover, and **every other surface**
+(`.ddd`, `.actor`, `.evt`, `.deploy`, `.uc`, `.cmmn`, `.dmn`) navigates
+through the graph snapshot [below](#one-snapshot-one-index).
+
+The server classifies open documents and directory siblings through the same
+`rex_driver::SurfaceKind` table the CLI uses (its `Surface` type only adds the
+"not a rexlang surface" case); the span tables live in `rex_driver::navigation`
 (`crates/rex-driver/src/navigation/`): one builder per surface, a pure
 function of source text that yields an empty index (never a panic) on a
 source that does not parse. The graph's node names are derived by the
@@ -611,50 +792,94 @@ The scope is the directory, not a project root: a tree that spreads one
 application across directories resolves within the opened file's directory
 only.
 
+**Incremental invalidation (rexlang#254).** A snapshot rebuild recompiles
+only the candidates whose **content key** moved; every other file's
+compiled artifact and spanned index are reused from a per-file memo
+(`GraphMemo` in `crates/rex-lsp/src/server/graph.rs`). The key is a hash of
+the file's own text plus the **open-or-disk text of every import it
+resolves** (`resolved_imports`, plus a `.mox` file's `import
+schema`/`import sigil` paths, which are not application edges) — so one
+keystroke recompiles the edited file and the files importing it, never the
+rest of the directory, and a `.ddd` whose imported `.mox` changed
+recompiles even with its own text untouched. A `didChange` that only bumps
+the version recompiles nothing. Content was chosen over `(version, mtime)`
+because open buffers have no mtime and only content tells a dependant that
+an imported domain moved; the hasher is the std `DefaultHasher` (process
+local, no stability promise outside one server run). The memo is bounded by
+the directory's candidate set: entries whose path is no longer a candidate
+(a file deleted from the directory) are pruned on the next build, and the
+directory listing itself is re-read per build — no filesystem watcher, so
+an external edit to an unopened sibling is still picked up on the next
+open/change/close. A file that does not compile is memoized as such (no
+artifact, its diagnostics kept) and retried when its key moves.
+
+**Diagnostics.** Diagnostics stay per surface: `.mox` and `.ifml` publish
+from their own compile pipelines, `.ddd`/`.actor`/`.dmn` from their compiles
+with the sibling-artifact joins, and `.evt`/`.deploy`/`.uc`/`.cmmn` — whose
+only compile is this snapshot's — from the memoized entry's own-file
+diagnostics (rexlang#255). Publishing therefore adds **no compile**: a
+same-text change re-publishes the stored set and compiles nothing. A
+document with no directory (a non-file URI) has no snapshot and publishes
+nothing rather than a bogus empty set; a clean document publishes an empty
+set, which clears its stale diagnostics.
+
 **The resolution rule.** A reference binds by `(kind, name)`, restricted to
 the hint's node kinds and to the referring file's application (a name
 declared in another application is never a binding). The spellings are tried
 in the compiler's order — exact name, written `.`-suffix
 (`TicketService.raiseRefund`), the written name minus its leading alias
 (`<alias>.Service.operation`), last segment (`RaiseRefund`). One match binds;
-several are ambiguous and the editor answers "no location".
+several are ambiguous and the editor answers "no location"
+(`GraphIndex::resolve_in`; ambiguity is not a location).
+
+**Application pooling.** The `.ddd` capability and `.ddd` decision joins
+pool the open document's import-connected application
+(rexlang#249) *inside* its directory snapshot:
+`crates/rex-lsp/src/server/pipeline.rs` builds `ApplicationFile`s from the
+directory candidates' resolved imports and filters them through
+`rex_driver::applications`, mirroring `graph.rs::resolved_imports`. Open
+documents win over their disk copies and a non-compiling sibling contributes
+nothing.
 
 ### Definition targets
 
-One row per surface and grammatical position; each row has a green
-definition test in `crates/rex-lsp/src/server/tests/graph.rs`.
+One row per surface and grammatical position. Every row names the test that
+proves it in `crates/rex-lsp/src/server/tests/graph.rs` (the **Test** column);
+the `definition_matrix_names_the_tests_that_cover_it` test reads this table
+and fails when a row and its test drift apart.
 
-| From (surface) | At | To |
-|---|---|---|
-| `.actor` | `capability <X> on <Class>` | `.mox` class |
-| `.actor` | grant/delegation capability names | capability declaration (same file / sibling `.actor` / inline `.mox` block) |
-| `.actor` | `extends`, delegation `from`/`to` | actor |
-| `.actor` | `never_both` names | capability |
-| `.ddd` | operation/search `capability X` | `.actor` capability |
-| `.ddd` | `invokes D`, `inject decision D` | `.dmn` decision / decision service |
-| `.ddd` | operation `emits E` | `.evt` event |
-| `.ddd` | `inject Repo`, body receiver | same-file repository |
-| `.ddd` | `entity C`, class references | `.mox` class |
-| `.ddd` | machine `on` field / state enum | `.mox` feature / enum (the `via <Trigger>` row has no source-side node: the graph encodes the trigger as an operation → `transition` `triggers` edge) |
-| `.evt` | subscription `consumer C` | `.deploy` component |
-| `.evt` | `publishes` / `events` names, field types | event / domain type |
-| `.ifml` | `requires:` / `roles:` | capability / actor |
-| `.ifml` | `action("A")` | the `.ddd` operation its `binds` edge names (else the `.ifml` action) |
-| `.ifml` | `data:` | `.mox` class |
-| `.ifml` | `navigate` / `refresh` targets | view / container / component |
-| `.deploy` | `design "<path>#<Module>"` | `.ddd` module |
-| `.deploy` | `connects a -> b` | component |
-| `.deploy` | `flow "<path>"` | the `.ifml` flow node has no written declaration site (the `file`-node exclusion, above) — no location |
-| `.deploy` | `requires` / `use <Profile>` / `for <App>` | capability / profile / deployment application |
-| `.uc` | `realizes`, step `: <operation>` | `.ddd` service operation |
-| `.uc` | subject/participant types, policy participants | `.mox` class / `.actor` actor |
-| `.uc` | step `requires`, event payloads | capability / event |
-| `.cmmn` | service task `execute` | `.ddd` service operation |
-| `.cmmn` | decision task `invokes` | `.dmn` decision service |
-| `.cmmn` | role `as <Actor>`, case-file item types | `.actor` actor / domain type |
-| `.dmn` | requirement edges, `invoke` | decision / BKM / knowledge source |
-| `.dmn` | `emits`, io types | `.evt` event / domain type |
-| `.mox` | inline `actors` grant/`extends`/`never_both` names | same-file capability / actor (the `.mox` navigation index) |
+| From (surface) | At | To | Test |
+|---|---|---|---|
+| `.actor` | `capability <X> on <Class>` | `.mox` class | `actor_capability_class_definition_lands_on_the_mox_name` |
+| `.actor` | grant/delegation capability names | capability declaration (same file / sibling `.actor` / inline `.mox` block) | `actor_grant_entry_definition_lands_on_the_capability` |
+| `.actor` | `extends`, delegation `from`/`to` | actor | `actor_extends_definition_lands_on_the_parent_actor`, `actor_delegation_from_definition_lands_on_the_actor`, `actor_delegation_to_definition_lands_on_the_agent` |
+| `.actor` | `never_both` names | capability | `actor_never_both_definition_lands_on_the_capability` |
+| `.ddd` | operation/search `capability X` | `.actor` capability | `ddd_capability_definition_lands_on_the_actor_capability` |
+| `.ddd` | `invokes D`, `inject decision D` | `.dmn` decision / decision service | `ddd_invokes_definition_lands_on_the_dmn_service` |
+| `.ddd` | operation `emits E` | `.evt` event | `ddd_emits_definition_lands_on_the_evt_event` |
+| `.ddd` | `inject Repo`, body receiver | same-file repository | `ddd_injected_repository_definition_lands_on_the_repository` |
+| `.ddd` | `entity C`, class references | `.mox` class | `ddd_entity_definition_lands_on_the_mox_class` |
+| `.ddd` | machine `on` field / state enum | `.mox` feature / enum (the `via <Trigger>` row has no source-side node: the graph encodes the trigger as an operation → `transition` `triggers` edge) | `ddd_machine_field_definition_lands_on_the_mox_feature`, `ddd_machine_state_enum_definition_lands_on_the_mox_enum` |
+| `.ddd` | delegated operation `=> Repo.op` | `repositoryOperation` (the `forwardsTo` edge's target) | `ddd_delegation_forward_definition_lands_on_the_repository_operation` |
+| `.evt` | subscription `consumer C` | `.deploy` component | `evt_consumer_definition_lands_on_the_deploy_component` |
+| `.evt` | `publishes` / `events` names, field types | event / domain type | `evt_field_type_definition_lands_on_the_mox_enum` |
+| `.ifml` | `requires:` / `roles:` | capability / actor | `ifml_requires_definition_lands_on_the_capability`, `ifml_roles_definition_lands_on_the_actor` |
+| `.ifml` | `action("A")` | the `.ddd` operation its `binds` edge names (else the `.ifml` action) | `ifml_action_definition_lands_on_the_ddd_operation` |
+| `.ifml` | `data:` | `.mox` class | `ifml_data_definition_lands_on_the_mox_class` |
+| `.ifml` | `navigate` / `refresh` targets | view / container / component | `ifml_navigate_definition_lands_on_the_view`, `ifml_refresh_definition_lands_on_the_component` |
+| `.deploy` | `design "<path>#<Module>"` | `.ddd` module | `deploy_binding_definition_lands_on_the_ddd_module` |
+| `.deploy` | `connects a -> b` | component | `deploy_connection_definition_lands_on_the_component` |
+| `.deploy` | `flow "<path>"` | the `.ifml` flow node has no written declaration site (the `file`-node exclusion, above) — no location | `deploy_flow_binding_has_no_definition_site` |
+| `.deploy` | `requires` / `use <Profile>` / `for <App>` | target capability (the closed target vocabulary has no graph node — no location), profile, deployment application | `deploy_requires_has_no_definition_site`, `deploy_profile_use_definition_lands_on_the_profile`, `deploy_for_definition_lands_on_the_application` |
+| `.uc` | `realizes`, step `: <operation>` | `.ddd` service operation | `uc_realizes_definition_lands_on_the_ddd_operation` |
+| `.uc` | subject/participant types, policy participants | `.mox` class / `.actor` actor | `uc_subject_type_definition_lands_on_the_mox_class`, `uc_policy_actor_definition_lands_on_the_actor` |
+| `.uc` | step `requires`, event payloads | capability / event | `uc_step_requires_definition_lands_on_the_capability`, `uc_message_payload_definition_lands_on_the_evt_event` |
+| `.cmmn` | service task `execute` | `.ddd` service operation | `cmmn_execute_definition_lands_on_the_ddd_operation` |
+| `.cmmn` | decision task `invokes` | `.dmn` decision service | `cmmn_invokes_definition_lands_on_the_decision_service` |
+| `.cmmn` | role `as <Actor>`, case-file item types | `.actor` actor / domain type | `cmmn_role_definition_lands_on_the_actor`, `cmmn_case_file_item_type_definition_lands_on_the_mox_class` |
+| `.dmn` | requirement edges (information / knowledge / authority), `invoke` | decision / BKM / knowledge source | `dmn_requirement_information_definition_lands_on_the_decision`, `dmn_requirement_knowledge_definition_lands_on_the_bkm`, `dmn_requirement_authority_definition_lands_on_the_knowledge_source`, `dmn_logic_invoke_definition_lands_on_the_bkm` |
+| `.dmn` | `emits`, io types | `.evt` event / domain type | `dmn_emits_definition_lands_on_the_evt_event`, `dmn_input_type_definition_lands_on_the_mox_class` |
+| `.mox` | inline `actors` grant/`extends`/`never_both` names | same-file capability / actor (the `.mox` navigation index) | `mox_inline_actor_grant_definition_lands_on_the_capability` |
 
 ### Rename ownership
 

@@ -12,12 +12,17 @@ application SupportDesk {
         service TicketService {
             inject TicketRepository;
             inject TicketSearch;
-            boolean raiseRefund(String ticketNo, int cents) capability RaiseRefund;
-            boolean approveRefund(String ticketNo, int cents, User approver) capability ApproveRefund;
+            Ticket raise(String title, boolean internal) emits TicketRaised;
+            boolean raiseRefund(String ticketNo, int cents) capability RaiseRefund emits RefundRequested;
+            boolean approveRefund(String ticketNo, int cents, User approver) capability ApproveRefund emits RefundApproved;
             Ticket[] listTickets();
             Ticket getTicket(String ticketNo);
             boolean claimTicket(String ticketNo, User helper);
             boolean refundTicket(String ticketNo, int cents);
+            boolean markRead(String ticketNo) capability ReadTicket;
+            boolean assign(String ticketNo, User assignee) capability UpdateTicket;
+            boolean approve(String ticketNo) capability ResolveTicket;
+            boolean reject(String ticketNo) capability UpdateTicket;
             boolean updateTicket(String ticketNo) capability UpdateTicket => TicketRepository {
                 let ticket = self.findById(ticketNo) else error NotFound("Ticket", ticketNo);
                 guard ticket.state != TicketState.Resolved else error Conflict("already resolved");
@@ -25,7 +30,7 @@ application SupportDesk {
                 let saved = self.save(ticket);
                 return true;
             }
-            boolean resolveTicket(String ticketNo) capability ResolveTicket;
+            boolean resolveTicket(String ticketNo) capability ResolveTicket emits TicketResolved;
             protected close => TicketRepository.delete;
             findTickets => TicketSearch.search;
         }

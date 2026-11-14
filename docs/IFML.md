@@ -318,7 +318,7 @@ the bindings for its `if` guards and event expressions — domain types
 included, so `if agent.active` navigates `User`'s features. Generic
 identifier types and prompt names are deferred, not errors; option and
 prompt defaults get the structural literal check (the resolver's rule).
-The example `examples/cli.ifml` is the reference consumer; the deferred
+The example `examples/support/cli.ifml` is the reference consumer; the deferred
 CLI ideas (modality profiles, CLI pattern modules, doc/completion
 generation, TUI constructs) are tracked in the follow-up issue.
 
@@ -483,7 +483,7 @@ crates/rex-ifml/
     ├── manifest.rs       # The manifest emitter's derivation contract
     ├── resolve.rs        # Resolver conformance tests
     ├── patterns.rs       # patterns/ifml library compiles clean; composition + negative cases
-    └── examples.rs       # examples/*.ifml compile, type-check, are fmt-canonical, and manifest byte-identically
+    └── examples.rs       # examples/*/*.ifml compile, type-check, are fmt-canonical, and manifest byte-identically
 ```
 
 ### Module Resolution
@@ -654,8 +654,8 @@ hard-errors on a missing or non-compiling model; the LSP degrades to no
 decision checking in incomplete workspaces. The conformance fixture
 `tests/conformance/ifml/rexlang/decisions.dmn` makes `app.ifml`'s
 `import "rexlang/decisions.dmn"` load-bearing, and
-`examples/support.ifml` binds `data: AssessRefund` to the service
-`examples/support.dmn` declares.
+`examples/support/support.ifml` binds `data: AssessRefund` to the service
+`examples/support/support.dmn` declares.
 
 ### Warnings and Lints
 
@@ -700,7 +700,8 @@ for what the interaction model lowers to, derived from the compilation
   is indistinguishable from app-authored UI), flattened with its
   container path, carrying the component type, the `data:` entity as
   written plus its resolved `(package, class)` when the host provides
-  the domain union, and the form fields / table columns. Resolution is
+  the domain union and the name resolves uniquely there (a bare spelling
+  always rides along), and the form fields / table columns. Resolution is
   **domain-only**: a `data:` that names a decision service (the
   [decision dimension](#decision-data)) rides along as the bare
   spelling with no `resolvedData` — the manifest never encodes decision
@@ -791,14 +792,14 @@ container; `action("AddToCart")` needs the action — the
 instantiation rule of E0104–E0106 above). App-facing targets stay
 deliberately undeclared in the library: declaring what you back is the
 consumer's job, and the reference consumers
-(`examples/ecommerce.ifml`, `examples/support.ifml`) show the
+(`examples/shop/ecommerce.ifml`, `examples/support/support.ifml`) show the
 declaration blocks. The library's own wiring resolves internally —
 `Wizard`'s steps navigate its own containers, `SearchPanel` refreshes
 its own `results` component — and the presentational modules carry no
 interaction references at all (`Pagination`'s pager binds page state;
 paging is not navigation).
 
-`examples/ecommerce.ifml` and `examples/support.ifml` are the reference
+`examples/shop/ecommerce.ifml` and `examples/support/support.ifml` are the reference
 consumers.
 
 ---

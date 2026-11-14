@@ -44,6 +44,7 @@ pub mod navigation;
 pub(crate) mod pipeline;
 pub mod project;
 pub(crate) mod sigil;
+pub mod surface;
 pub(crate) mod usecases;
 pub mod workspace_imports;
 
@@ -84,4 +85,5 @@ pub use session::{
     parse_evt_query, parse_query, parse_usecase_query, Database, DeployParseOutput, DmnParseOutput,
     ParseOutput, SourceFile,
 };
+pub use surface::SurfaceKind;
 pub(crate) use union::import_matches;

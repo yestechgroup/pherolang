@@ -68,7 +68,7 @@ pins it).
   "kind": "verificationReceipt",            // closed: exactly this string
   "subject": "support",                     // --subject, else the inputs' common stem
   "generator": { "name": "rexlang", "version": "0.2.0" },   // provenance (CARGO_PKG_VERSION)
-  "inputs":  [ "examples/support.actor", … ],               // sorted, repo-relative
+  "inputs":  [ "examples/support/support.actor", … ],               // sorted, repo-relative
   "sources": [ { "path": "…", "sha256": "…" }, … ],         // sorted, repo-relative
   "artifacts": [
     { "kind": "dddDesign", "formatVersion": 1,
@@ -135,9 +135,9 @@ Beyond the vocabularies:
 
 ```sh
 # Emit: compile the surfaces, hash what was read and written, embed the register.
-rexlang verify examples/support.mox examples/support.actor examples/support.ddd \
-  examples/support.evt examples/support.uc examples/support.deploy \
-  examples/support.dmn examples/support.cmmn examples/support.ifml \
+rexlang verify examples/support/support.mox examples/support/support.actor examples/support/support.ddd \
+  examples/support/support.evt examples/support/support.uc examples/support/support.deploy \
+  examples/support/support.dmn examples/support/support.cmmn examples/support/support.ifml \
   -o examples/artifacts/support.receipt.json
 
 # Validate standalone (no register, no models, no toolchain, no network).
@@ -200,8 +200,8 @@ to accept blindly.
 sorted and repo-relative. For the flagship `support` receipt the closure is:
 
 ```
-examples/support.{actor,cmmn,ddd,deploy,dmn,evt,ifml,mox,uc}
-examples/tables/refund-authority.md      (support.dmn's `logic table`)
+examples/support/support.{actor,cmmn,ddd,deploy,dmn,evt,ifml,mox,uc}
+examples/support/tables/refund-authority.md      (support.dmn's `logic table`)
 patterns/ifml/{communication,workflow}.ifml          (support.ifml's imports)
 patterns/ifml/{collections,data,navigation}.ifml     (their transitive imports)
 docs/verification/register.json is provenance (register.source), not a source
@@ -225,9 +225,9 @@ Regenerate the artifacts and the receipt together when a golden moves:
 ```sh
 REX_UPDATE_FIXTURES=1 cargo test -p rex-driver --test examples_artifacts
 REX_UPDATE_FIXTURES=1 cargo test -p rex-ifml
-rexlang verify examples/support.actor examples/support.cmmn examples/support.ddd \
-  examples/support.deploy examples/support.dmn examples/support.evt \
-  examples/support.ifml examples/support.mox examples/support.uc \
+rexlang verify examples/support/support.actor examples/support/support.cmmn examples/support/support.ddd \
+  examples/support/support.deploy examples/support/support.dmn examples/support/support.evt \
+  examples/support/support.ifml examples/support/support.mox examples/support/support.uc \
   -o examples/artifacts/support.receipt.json
 ```
 

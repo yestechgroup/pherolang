@@ -3,7 +3,7 @@
 use rex_syntax::ast::*;
 use rex_syntax::{parse, Span};
 
-const LIBRARY: &str = include_str!("../../../examples/library.mox");
+const LIBRARY: &str = include_str!("../../../examples/library/library.mox");
 
 fn span_text(source: &str, span: Span) -> &str {
     &source[span.start..span.end]

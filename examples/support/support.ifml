@@ -6,8 +6,8 @@
 
 import "support.mox";
 import "support.dmn";
-import "../patterns/ifml/communication.ifml";
-import "../patterns/ifml/workflow.ifml";
+import "../../patterns/ifml/communication.ifml";
+import "../../patterns/ifml/workflow.ifml";
 
 view "Inbox" {
     params { tickets: Ticket, folders: Ticket };

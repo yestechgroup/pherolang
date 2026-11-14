@@ -4,6 +4,7 @@
 mod support;
 
 mod actor;
+mod applications;
 mod batch;
 mod cmmn;
 mod completions;

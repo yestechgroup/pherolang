@@ -894,7 +894,7 @@ fn snake_case_dmn_keys_are_reported_with_the_camel_case_spelling() {
 
 #[test]
 fn the_graph_golden_artifact_classifies_as_graph_model() {
-    // The real emitter output (`rexlang graph examples/`): it carries
+    // The real emitter output (`rexlang graph build examples/`): it carries
     // `applications`, `nodes`, and `edges` — the deploy rule's
     // `applications` lookalike included — so only the graph rule (which
     // runs first) may claim it.

@@ -12,8 +12,9 @@
 # (the dsntk disk-budget tweak, workflow env block), and the Tests step
 # runs under TMPDIR=$PWD/target/tmp with --jobs 2 (the doctest SIGBUS
 # remedy — the AGENTS.md testing-quirks gotcha). Small-machine guardrails:
-# nice, orphaned rustc/lld killed between steps. On a beefier machine you
-# can drop the nice and the job cap.
+# nice, orphaned rustc/lld killed between steps, plus the informational
+# disk-budget print/warning before the build (issue #261). On a beefier
+# machine you can drop the nice and the job cap.
 #
 # Usage: scripts/ci-local.sh [all|build|test|clippy|fmt|receipt|docs|audit]
 #        (default: all — the full sequence; ~30-60 min cold)
@@ -30,6 +31,34 @@ kill_orphans() {
   pkill -f "[r]ustc" 2>/dev/null
   pkill -f "[r]ust-lld" 2>/dev/null
   sleep 1
+}
+
+# Disk budget (issue #261): cargo never collects the old hashes under
+# target/debug/build/<pkg>/<hash>/out/, and with the workspace default
+# debuginfo=2 one worktree has reached 100+ GB. When the filesystem fills,
+# doctest linking dies with `ld terminated with signal 7 [Bus error]` — the
+# #87-class failure, disk-induced (see the AGENTS.md operational bullet).
+# Informational only: this warns, and never changes a gate's pass/fail
+# semantics. Override the floor with REX_DISK_MIN_GB.
+REX_DISK_MIN_GB="${REX_DISK_MIN_GB:-20}"
+case "$REX_DISK_MIN_GB" in
+  '' | *[!0-9]*) REX_DISK_MIN_GB=20 ;;
+esac
+disk_budget() {
+  echo "--- disk budget (warn only; floor ${REX_DISK_MIN_GB} GB, REX_DISK_MIN_GB) ---"
+  df -h .
+  if [ -d target ]; then
+    du -sh target
+  else
+    echo "target: absent (cold build)"
+  fi
+  free_gb=$(df -Pk . | awk 'NR == 2 { printf "%d", $4 / 1024 / 1024 }')
+  if [ "${free_gb:-0}" -lt "$REX_DISK_MIN_GB" ]; then
+    echo "WARNING: ${free_gb} GB free on this filesystem, below the ${REX_DISK_MIN_GB} GB floor."
+    echo "  Reclaim safely (workspace crates only; external deps survive):"
+    echo "    rm -rf target/debug/build/rex-*"
+    echo "  Never delete target/debug/build wholesale: it is the live build cache."
+  fi
 }
 
 # The `rexlang fmt --check` fixture gate — the one copy of the list.
@@ -68,12 +97,18 @@ FIXTURE_FORMAT_GLOBS=(
 
 step_build() {
   step "CI 1/6: cargo build --workspace --all-targets"
+  disk_budget
   nice -n 19 cargo build --workspace --all-targets && echo "BUILD-OK" || echo "BUILD-FAIL"
   kill_orphans
 }
 
 step_test() {
   step "CI 2/6: TMPDIR=\$PWD/target/tmp cargo test --workspace --jobs 2"
+  # Issue #261: the test step recreates target/tmp, so clear the previous
+  # run's leftovers first (doctest linking writes there; a stale pile of
+  # scratch artifacts is exactly the disk pressure this budgets).
+  rm -rf target/tmp/* 2>/dev/null
+  mkdir -p target/tmp
   test_log=target/tmp/ci-local-tests.log
   if nice -n 19 cargo test --workspace --jobs 2 > "$test_log" 2>&1; then
     grep "test result:" "$test_log" | tail -20
@@ -113,9 +148,11 @@ step_receipt() {
     echo "RECEIPT-FAIL"
     echo "Regenerate the flagship receipt (and read the diff — it is the spec):"
     echo "  cargo run -q -p rex-cli -- verify \\"
-    echo "    examples/support.actor examples/support.cmmn examples/support.ddd \\"
-    echo "    examples/support.deploy examples/support.dmn examples/support.evt \\"
-    echo "    examples/support.ifml examples/support.mox examples/support.uc \\"
+    echo "    examples/support/support.actor examples/support/support.cmmn \\"
+    echo "    examples/support/support.ddd examples/support/support.deploy \\"
+    echo "    examples/support/support.dmn examples/support/support.evt \\"
+    echo "    examples/support/support.ifml examples/support/support.mox \\"
+    echo "    examples/support/support.uc \\"
     echo "    -o examples/artifacts/support.receipt.json"
   fi
   kill_orphans

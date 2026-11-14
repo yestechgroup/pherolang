@@ -1,4 +1,6 @@
-//! `rexlang` CLI tests: the semantic graph command (`rexlang graph`).
+//! `rexlang` CLI tests: the semantic graph commands (`rexlang graph build` /
+//! `rexlang graph query`). `graph` is a pure namespace — one of the two verbs
+//! is always required, so an input path can never collide with a verb name.
 //!
 //! The committed golden `examples/artifacts/examples.graph.json` pins the
 //! whole `examples/` tree — every surface, the support stack, and the
@@ -19,14 +21,14 @@
 //! graph_analytics`), and `--fail-on-findings` gates on a definite finding.
 //!
 //! Directory mode compiles each file independently against the project
-//! snapshot, exactly like `check`/`build` — including the union-wide
-//! capability join. `examples/` therefore keeps one pre-existing phase-1
-//! failure (`orders.ddd`'s `PlaceOrder` capability against the pooled
-//! `support.actor` capabilities, the same finding `check examples/`
-//! renders), and the graph command exits `1` while still writing the
-//! artifact over the compiling subset — the `build` precedent these golden
-//! tests pin (the issue's verification compares the file with `diff`, not by
-//! exit status).
+//! snapshot, exactly like `check`/`build` — including the capability join
+//! scoped to each file's import-connected application (rexlang#249). Every
+//! file under `examples/` compiles and every application is coherent
+//! (rexlang#258): `orders.ddd` no longer resolves `PlaceOrder` against the
+//! unrelated `support.actor` pool, so the capability join stays silent there
+//! and both `graph build examples/` and `check examples/` exit `0`. The
+//! `build`-precedent best-effort path is still pinned by
+//! `graph_still_writes_when_a_file_fails`.
 //!
 //! Regenerate with:
 //!
@@ -42,7 +44,7 @@ use crate::support::*;
 use rex_ir::graph::GraphModel;
 
 /// The capability the exit-gate impact query starts from.
-const CAPABILITY: &str = "capability:support.actor#Support.RaiseRefund";
+const CAPABILITY: &str = "capability:support/support.actor#Support.RaiseRefund";
 
 fn examples_dir() -> PathBuf {
     workspace_root().join("examples")
@@ -65,12 +67,12 @@ fn golden_of(json: &str) -> String {
         .expect("read examples graph golden — regenerate with REX_UPDATE_FIXTURES=1")
 }
 
-fn run_graph(arguments: &[&str]) -> std::process::Output {
+fn run_build(arguments: &[&str]) -> std::process::Output {
     rexlang()
-        .arg("graph")
+        .args(["graph", "build"])
         .args(arguments)
         .output()
-        .expect("run rexlang graph")
+        .expect("run rexlang graph build")
 }
 
 fn stderr(output: &std::process::Output) -> String {
@@ -95,20 +97,21 @@ fn graph_prints_the_examples_golden_to_stdout() {
     // Regenerate through `-o`: the file bytes carry no trailing newline and
     // the stdout contract is that golden plus exactly one newline.
     let out = scratch_dir().join("examples.graph.json");
-    let written = run_graph(&[dir, "-o", out.to_str().expect("utf-8 output path")]);
-    // `examples/` inherits one pre-existing phase-1 failure from its
-    // union-wide capability join (`orders.ddd`, see the module docs), so the
-    // command exits `1` by design; the artifact over the compiling subset is
-    // still the contract.
+    let written = run_build(&[dir, "-o", out.to_str().expect("utf-8 output path")]);
     assert!(
         String::from_utf8_lossy(&written.stdout).is_empty(),
         "`-o` writes no stdout"
+    );
+    assert!(
+        written.status.success(),
+        "every example compiles under application-scoped joins: {}",
+        stderr(&written)
     );
     let json = std::fs::read_to_string(&out)
         .unwrap_or_else(|error| panic!("read graph output {}: {error}", out.display()));
     let golden = golden_of(&json);
 
-    let printed = run_graph(&[dir]);
+    let printed = run_build(&[dir]);
     assert_eq!(
         String::from_utf8_lossy(&printed.stdout),
         format!("{golden}\n"),
@@ -120,7 +123,7 @@ fn graph_prints_the_examples_golden_to_stdout() {
 fn graph_writes_the_golden_to_an_output_file() {
     let directory = examples_dir();
     let out = scratch_dir().join("examples.graph.json");
-    let output = run_graph(&[
+    let output = run_build(&[
         directory.to_str().expect("utf-8 examples path"),
         "-o",
         out.to_str().expect("utf-8 output path"),
@@ -137,8 +140,8 @@ fn graph_writes_the_golden_to_an_output_file() {
 #[test]
 fn graph_is_deterministic_across_invocations() {
     let path = write_source("support.mox", GOOD);
-    let first = run_graph(&[path.to_str().expect("utf-8 source path")]);
-    let second = run_graph(&[path.to_str().expect("utf-8 source path")]);
+    let first = run_build(&[path.to_str().expect("utf-8 source path")]);
+    let second = run_build(&[path.to_str().expect("utf-8 source path")]);
     assert_eq!(
         String::from_utf8_lossy(&first.stdout),
         String::from_utf8_lossy(&second.stdout),
@@ -150,7 +153,7 @@ fn graph_is_deterministic_across_invocations() {
 #[test]
 fn graph_paths_are_root_relative() {
     let out = scratch_dir().join("examples.graph.json");
-    let _ = run_graph(&[
+    let _ = run_build(&[
         examples_dir().to_str().expect("utf-8 examples path"),
         "-o",
         out.to_str().expect("utf-8 output path"),
@@ -163,14 +166,14 @@ fn graph_paths_are_root_relative() {
     assert_eq!(json, golden);
     let graph = GraphModel::from_json(&json).expect("versioned graph");
     assert!(
-        graph
-            .applications
+        graph.applications.iter().any(|application| application
+            .files
             .iter()
-            .any(|application| application.files.iter().any(|file| file == "support.mox")),
-        "support.mox is a member of the examples tree"
+            .any(|file| file == "support/support.mox")),
+        "support/support.mox is a member of the examples tree"
     );
     assert!(
-        json.contains("\"file\": \"support.mox\""),
+        json.contains("\"file\": \"support/support.mox\""),
         "node attribution is the root-relative display path"
     );
     let root = workspace_root().display().to_string();
@@ -192,7 +195,7 @@ fn graph_still_writes_when_a_file_fails() {
     let broken = write_source("broken.mox", BAD);
     let directory = good.parent().expect("scratch dir").to_path_buf();
     let out = directory.join("failed.graph.json");
-    let output = run_graph(&[
+    let output = run_build(&[
         directory.to_str().expect("utf-8 scratch path"),
         "-o",
         out.to_str().expect("utf-8 output path"),
@@ -225,7 +228,7 @@ fn graph_uses_the_directory_argument_as_base() {
     let nested = root.join("nested");
     std::fs::create_dir_all(&nested).expect("create nested dir");
     std::fs::write(nested.join("support.mox"), GOOD).expect("write nested source");
-    let output = run_graph(&[nested.to_str().expect("utf-8 nested path")]);
+    let output = run_build(&[nested.to_str().expect("utf-8 nested path")]);
     let graph = read_graph(&output);
     assert!(
         graph
@@ -245,12 +248,60 @@ fn graph_uses_the_directory_argument_as_base() {
 
 #[test]
 fn graph_with_no_inputs_errors() {
-    let output = run_graph(&[]);
+    let output = run_build(&[]);
     assert_eq!(output.status.code(), Some(1));
     let rendered = stderr(&output);
     assert!(
         rendered.starts_with("error: no model files found"),
         "clean clap-style error: {rendered}"
+    );
+}
+
+/// `graph` is a pure namespace: the verb is required, so the bare command is
+/// a clap usage error naming both verbs (issue rexlang#257).
+#[test]
+fn graph_without_a_verb_is_a_clap_usage_error() {
+    let output = rexlang().arg("graph").output().expect("run rexlang graph");
+    assert_eq!(output.status.code(), Some(2), "clap usage error");
+    let rendered = stderr(&output);
+    assert!(
+        rendered.contains("build") && rendered.contains("query"),
+        "the usage error names both verbs: {rendered}"
+    );
+}
+
+/// A directory literally named `query` is an ordinary `build` input — the
+/// positional/subcommand ambiguity the old overloaded `graph` shape had is
+/// structurally gone (issue rexlang#257).
+#[test]
+fn graph_build_accepts_a_directory_named_query() {
+    let root = scratch_dir();
+    let query = root.join("query");
+    std::fs::create_dir_all(&query).expect("create the query directory");
+    std::fs::write(query.join("a.mox"), "package q\n\nclass A { String x }\n")
+        .expect("write the model in the query directory");
+    let out = root.join("query.graph.json");
+    let output = run_build(&[
+        query.to_str().expect("utf-8 query path"),
+        "-o",
+        out.to_str().expect("utf-8 output path"),
+    ]);
+    assert!(
+        output.status.success(),
+        "a directory named `query` must build: {}",
+        stderr(&output)
+    );
+    let graph = GraphModel::from_json(
+        &std::fs::read_to_string(&out).expect("read the graph written next to the query directory"),
+    )
+    .expect("the output is a versioned graph artifact");
+    assert!(
+        graph
+            .nodes
+            .iter()
+            .any(|node| node.kind == "class" && node.name == "q.A" && node.file == "a.mox"),
+        "the class from <dir>/query/a.mox is a node: {:#?}",
+        graph.nodes
     );
 }
 
@@ -261,7 +312,7 @@ fn graph_skips_formatter_goldens() {
     let root = scratch_dir();
     write_source("support.mox", GOOD);
     std::fs::write(root.join("broken.fmt.ddd"), "not a design\n").expect("write formatter golden");
-    let output = run_graph(&[root.to_str().expect("utf-8 scratch path")]);
+    let output = run_build(&[root.to_str().expect("utf-8 scratch path")]);
     assert!(
         output.status.success(),
         "the formatter golden must not be compiled: {}",
@@ -278,7 +329,7 @@ fn graph_skips_formatter_goldens() {
 fn graph_rebuild_round_trips_through_from_json() {
     let path = write_source("support.mox", GOOD);
     let out = scratch_dir().join("round-trip.graph.json");
-    let output = run_graph(&[
+    let output = run_build(&[
         path.to_str().expect("utf-8 source path"),
         "-o",
         out.to_str().expect("utf-8 output path"),
@@ -362,8 +413,8 @@ fn query_node_prints_the_golden() {
     assert_eq!(envelope["query"], "node");
     assert_eq!(envelope["resolved"], CAPABILITY);
     assert_eq!(envelope["results"][0]["id"], CAPABILITY);
-    assert_eq!(envelope["results"][0]["file"], "support.actor");
-    assert_eq!(envelope["results"][0]["application"], "cli.ifml");
+    assert_eq!(envelope["results"][0]["file"], "support/support.actor");
+    assert_eq!(envelope["results"][0]["application"], "support/cli.ifml");
     let out = envelope["edges"]["out"].as_array().expect("out edges");
     let incoming = envelope["edges"]["in"].as_array().expect("in edges");
     assert!(!out.is_empty() && !incoming.is_empty(), "both directions");
@@ -401,25 +452,27 @@ fn query_list_filters_by_kind_file_application() {
         .all(|node| node["kind"] == "deployComponent"));
     assert_eq!(all["results"][0]["kind"], "action", "kinds are lowercase");
 
-    let designs = parsed(&query_examples(&["list", "--file", "support.ddd"]));
+    let designs = parsed(&query_examples(&["list", "--file", "support/support.ddd"]));
     let designs = designs["results"].as_array().expect("results");
     assert!(!designs.is_empty());
-    assert!(designs.iter().all(|node| node["file"] == "support.ddd"));
+    assert!(designs
+        .iter()
+        .all(|node| node["file"] == "support/support.ddd"));
 
     let capabilities = parsed(&query_examples(&[
         "list",
         "--application",
-        "cli.ifml",
+        "support/cli.ifml",
         "--kind",
         "capability",
     ]));
     assert_eq!(capabilities["kind"], "capability");
-    assert_eq!(capabilities["application"], "cli.ifml");
+    assert_eq!(capabilities["application"], "support/cli.ifml");
     let capabilities = capabilities["results"].as_array().expect("results");
     assert!(!capabilities.is_empty());
     assert!(capabilities
         .iter()
-        .all(|node| node["kind"] == "capability" && node["application"] == "cli.ifml"));
+        .all(|node| node["kind"] == "capability" && node["application"] == "support/cli.ifml"));
 }
 
 /// The exit-gate answer, pinned exactly (derived from the committed artifact,
@@ -446,38 +499,38 @@ fn query_affected_by_prints_the_golden() {
         .collect();
     let expected = [
         CAPABILITY,
-        "actor:support.actor#Support.Agent",
-        "capability:support.actor#Support.ApproveRefund",
-        "serviceOperation:support.ddd#SupportDesk.desk.TicketService.raiseRefund",
-        "useCase:support.uc#RaiseRefund",
-        "action:support.ifml#RaiseRefund",
-        "actor:support.actor#Support.Finance",
-        "actor:support.actor#Support.Manager",
-        "caseRole:support.cmmn#RefundDesk.triage",
-        "command:cli.ifml#tickets",
-        "planItem:support.cmmn#RefundDesk.AssessRefund",
-        "service:support.ddd#SupportDesk.desk.TicketService",
-        "serviceOperation:support.ddd#SupportDesk.desk.TicketService.approveRefund",
-        "useCase:support.uc#ApproveRefund",
-        "action:support.ifml#ApproveRefund",
-        "case:support.cmmn#RefundDesk",
-        "caseRole:support.cmmn#RefundDesk.escalation",
-        "caseRole:support.cmmn#RefundDesk.finance",
-        "component:support.ifml#Queue.intake",
-        "flow:cli.ifml#cli",
-        "flow:support.ifml#support",
-        "module:support.ddd#SupportDesk.desk",
-        "planItem:support.cmmn#RefundDesk.CloseTicket",
-        "planItem:support.cmmn#RefundDesk.ReviewTicket",
-        "component:support.ifml#Queue.refunds",
-        "deployComponent:support.deploy#SupportDesk.api",
-        "deployComponent:support.deploy#SupportDesk.web",
-        "designApplication:support.ddd#SupportDesk",
-        "planItem:support.cmmn#RefundDesk.ApproveRefund",
-        "planItem:support.cmmn#RefundDesk.Escalate",
-        "deployApplication:support.deploy#SupportDesk",
-        "deployment:support.deploy#SupportDesk.edgeLive",
-        "deployment:support.deploy#SupportDesk.production",
+        "actor:support/support.actor#Support.Agent",
+        "capability:support/support.actor#Support.ApproveRefund",
+        "serviceOperation:support/support.ddd#SupportDesk.desk.TicketService.raiseRefund",
+        "useCase:support/support.uc#RaiseRefund",
+        "action:support/support.ifml#RaiseRefund",
+        "actor:support/support.actor#Support.Finance",
+        "actor:support/support.actor#Support.Manager",
+        "caseRole:support/support.cmmn#RefundDesk.triage",
+        "command:support/cli.ifml#tickets",
+        "planItem:support/support.cmmn#RefundDesk.AssessRefund",
+        "service:support/support.ddd#SupportDesk.desk.TicketService",
+        "serviceOperation:support/support.ddd#SupportDesk.desk.TicketService.approveRefund",
+        "useCase:support/support.uc#ApproveRefund",
+        "action:support/support.ifml#ApproveRefund",
+        "case:support/support.cmmn#RefundDesk",
+        "caseRole:support/support.cmmn#RefundDesk.escalation",
+        "caseRole:support/support.cmmn#RefundDesk.finance",
+        "component:support/support.ifml#Queue.intake",
+        "flow:support/cli.ifml#cli",
+        "flow:support/support.ifml#support",
+        "module:support/support.ddd#SupportDesk.desk",
+        "planItem:support/support.cmmn#RefundDesk.CloseTicket",
+        "planItem:support/support.cmmn#RefundDesk.ReviewTicket",
+        "component:support/support.ifml#Queue.refunds",
+        "deployComponent:support/support.deploy#SupportDesk.api",
+        "deployComponent:support/support.deploy#SupportDesk.web",
+        "designApplication:support/support.ddd#SupportDesk",
+        "planItem:support/support.cmmn#RefundDesk.ApproveRefund",
+        "planItem:support/support.cmmn#RefundDesk.Escalate",
+        "deployApplication:support/support.deploy#SupportDesk",
+        "deployment:support/support.deploy#SupportDesk.edgeLive",
+        "deployment:support/support.deploy#SupportDesk.production",
     ];
     assert_eq!(actual_ids, expected);
     // Sorted by `(depth, id)` and deduplicated, the root at depth 0.
@@ -504,10 +557,13 @@ fn query_affected_by_prints_the_golden() {
     // The file-start case walks the `imports` graph instead.
     let dependents = parsed(&query_examples(&[
         "affected-by",
-        "file:support.mox#support.mox",
+        "file:support/support.mox#support/support.mox",
     ]));
     let dependents = dependents["results"].as_array().expect("results");
-    assert_eq!(dependents[0]["id"], "file:support.mox#support.mox");
+    assert_eq!(
+        dependents[0]["id"],
+        "file:support/support.mox#support/support.mox"
+    );
     assert!(
         dependents.iter().all(|node| node["kind"] == "file"),
         "a file start stays on the import graph: {dependents:?}"
@@ -550,7 +606,10 @@ fn query_reads_the_artifact_from_stdin() {
 /// stderr — never a guessed node.
 #[test]
 fn query_unknown_reference_exits_1_with_candidates() {
-    let output = query_examples(&["affected-by", "capability:support.actor#Support.RaiseRefnd"]);
+    let output = query_examples(&[
+        "affected-by",
+        "capability:support/support.actor#Support.RaiseRefnd",
+    ]);
     assert_eq!(output.status.code(), Some(1));
     let rendered = stderr(&output);
     assert!(
@@ -565,8 +624,8 @@ fn query_unknown_reference_exits_1_with_candidates() {
     assert_eq!(output.status.code(), Some(1));
     let rendered = stderr(&output);
     assert!(rendered.contains("ambiguous node reference"), "{rendered}");
-    let action = rendered.find("action:support.ifml#RaiseRefund");
-    let use_case = rendered.find("useCase:support.uc#RaiseRefund");
+    let action = rendered.find("action:support/support.ifml#RaiseRefund");
+    let use_case = rendered.find("useCase:support/support.uc#RaiseRefund");
     assert!(
         matches!((action, use_case), (Some(action), Some(use_case)) if action < use_case),
         "candidates are sorted: {rendered}"
@@ -582,7 +641,7 @@ fn query_is_byte_identical_across_runs() {
         vec!["list", "--kind", "serviceOperation"],
         vec!["affected-by", CAPABILITY],
         vec!["dependencies", CAPABILITY],
-        vec!["node", "file:support.mox#support.mox"],
+        vec!["node", "file:support/support.mox#support/support.mox"],
     ] {
         let first = query_examples(&arguments);
         let second = query_examples(&arguments);

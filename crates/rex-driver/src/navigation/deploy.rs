@@ -149,9 +149,10 @@ fn binding_reference(
 mod tests {
     use super::*;
     use crate::navigation::test_support;
+    use rex_testkit::fixtures;
 
-    const SUPPORT: &str = "examples/support.deploy";
-    const FIXTURE: &str = "tests/conformance/graph/app.deploy";
+    const SUPPORT: &str = fixtures::SUPPORT_DEPLOY;
+    const FIXTURE: &str = fixtures::APP_DEPLOY;
 
     #[test]
     fn deploy_definitions_are_the_graph_nodes() {

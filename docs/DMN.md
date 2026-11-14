@@ -118,6 +118,19 @@ Language-level rules:
   a view) are brace lists of bare names — inline when they fit comfortably,
   one name per line past the column budget.
 
+### Vocabulary
+
+Every `.dmn` word is a **contextual identifier** (the `.deploy`
+discipline): special only in its grammar position, an ordinary name
+everywhere else, escapable with `^` (`crates/rex-syntax/src/dmn.rs`).
+`version` is the surface's one real lexer keyword (the `.mox` vocabulary
+precedent); `import` is the shared one every surface has.
+
+One trap: `agent` is a real `.actor` lexer keyword, so it can never be a
+`.dmn` input, decision, or service name unescaped — `support.dmn` names its
+input `helper` for that reason. Element names share one namespace per model
+(rule 2 below), so the restriction reaches every section.
+
 ---
 
 ## Inputs
@@ -477,6 +490,11 @@ exactly the declared outputs, each name matching character-for-character
 so its one output column's header is a free label. Tables are plain data
 files: `rexlang fmt` formats the `.dmn`, never the markdown.
 
+`compile_dmn_str`'s `tables` parameter carries the contents **keyed by the
+path as written** — hosts resolve the path relative to the `.dmn` file, the
+driver never touches the filesystem (the sigil/`DomainImports`
+discipline).
+
 ---
 
 ## Resolution & validation
@@ -645,6 +663,12 @@ model demands it:
    architecture; execution is a backend/consumer concern (the table
    engine, the FEEL evaluator, are downstream choices — dsntk
    compatibility is the table format's north star, not a dependency).
+
+The dsntk crates the surface does use (`dsntk-recognizer` for table
+ingest, `dsntk-feel-parser`/`dsntk-feel` for syntax) are **rev-pinned in
+`[workspace.dependencies]`** to one fork revision — the sigil/restingstate
+discipline — so a compiler build never floats on an upstream release; the
+pin carries the dsntk-rs#14 conditional-expression fix.
 7. **`emits` names events, never payloads** — a decision maps its outcome
    to declared `.evt` events by bare name (the DMN → EVT edge); no
    payload wiring, no event-versioning or delivery contract crosses the
@@ -672,12 +696,12 @@ minimum: no imports, one input, one logic-less decision).
 The `examples/` side ships `support.dmn` (the support-desk refund
 decisions over `support.mox`: a domain-typed `Ticket`/`User` input pair,
 an expression decision, a table decision with its
-`examples/tables/refund-authority.md`, an invoked BKM composing the two,
+`examples/support/tables/refund-authority.md`, an invoked BKM composing the two,
 the `AssessRefund` service the design links to, and an `emits` block on
 `RefundAssessment` naming the `RefundApproved` event declared in
-`examples/support.evt`) and `lending.dmn`
+`examples/support/support.evt`) and `lending.dmn`
 (the architecture-first lending model with no imports: five decisions,
-two BKMs, three sources, two views, and `examples/tables/lvr.md`).
+two BKMs, three sources, two views, and `examples/lending/tables/lvr.md`).
 
 Regenerate the goldens with
 `REX_UPDATE_FIXTURES=1 cargo test -p rex-driver --test dmn_golden` (the

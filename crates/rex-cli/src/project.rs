@@ -15,6 +15,14 @@
 //! reader's side channel still renders its own
 //! `cannot read imported file … (imported by …)` text.
 //!
+//! The snapshot also owns the import-connected application relation
+//! (rexlang#249): every member's written import statements are parsed once
+//! at gather time (no compile) and clustered with
+//! [`rex_driver::applications::applications`], so the compile-time
+//! capability/design/decision joins pool **the file's application**, never
+//! its directory. A snapshot without an import edge between two files keeps
+//! them apart even when they share a directory.
+//!
 //! The snapshot also owns the artifact cache: every CLI-level compile of a
 //! project file lands in it under the file's resolved key, and consumers
 //! compile sibling imports **lookup-before-compute** — an `.ifml` flow
@@ -32,6 +40,11 @@
 
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
+
+use rex_driver::applications::{applications, ApplicationFile};
+use rex_driver::SurfaceKind;
+
+use crate::inputs::{read_actor_pair_in, read_ddd_design, read_dmn_pair};
 
 /// One compiled surface artifact — the same JSON `rexlang ir` emits for
 /// the surface, kept typed so consumers can pull the model they need.
@@ -84,6 +97,10 @@ pub(crate) struct Project {
     sources: BTreeMap<String, String>,
     /// Resolved key → compiled artifact (lookup-before-compute).
     artifacts: BTreeMap<String, Artifact>,
+    /// Resolved key → the member keys of its import-connected application,
+    /// itself included (rexlang#249). Built once by [`Project::gather`]; a
+    /// key outside the snapshot has no entry.
+    applications: BTreeMap<String, Vec<String>>,
     /// How many compiles the cache has performed — the hit/miss observer
     /// the unit tests pin.
     computes: usize,
@@ -101,6 +118,7 @@ impl Project {
                 project.sources.insert(file.display().to_string(), text);
             }
         }
+        project.applications = application_members(&project.sources);
         project
     }
 
@@ -143,14 +161,139 @@ impl Project {
     }
 
     /// The snapshot's keys ending in `extension` (with the leading dot),
-    /// sorted — the sibling enumeration the compile-time cross-surface
-    /// gathers (rexlang#128's capability joins) iterate.
+    /// sorted — the receipt generator's whole-snapshot enumeration
+    /// (`rexlang verify` passes `""`). The compile-time cross-surface
+    /// gathers no longer use it: they pool the file's **application**
+    /// ([`Project::application_of`], rexlang#249).
     pub(crate) fn keys_with_extension(&self, extension: &str) -> Vec<String> {
         self.sources
             .keys()
             .filter(|key| key.ends_with(extension))
             .cloned()
             .collect()
+    }
+
+    /// The member keys of `key`'s import-connected application, `key`
+    /// itself included (rexlang#249) — the pool the compile-time
+    /// capability/design/decision joins resolve against instead of the
+    /// directory. Empty when `key` is outside the gathered snapshot (or no
+    /// other file shares its component): the joins then receive an empty
+    /// sibling slice, which is exactly the plain `compile_*_str` behavior.
+    pub(crate) fn application_of(&self, key: &str) -> Vec<String> {
+        self.applications.get(key).cloned().unwrap_or_default()
+    }
+
+    /// The compiled `.actor` artifacts of `file`'s import-connected
+    /// application, the file itself excluded — the capability pool a
+    /// design's rule-10 check resolves against at compile time
+    /// (rexlang#128's J3). One gather per artifact kind; a sibling that
+    /// fails to compile contributes nothing (parity with the union pass,
+    /// which keeps only the successful artifacts).
+    pub(crate) fn sibling_actors(&mut self, file: &Path) -> Vec<rex_ir::ActorModel> {
+        let key = file.display().to_string();
+        let members = self.application_of(&key);
+        let mut models = Vec::new();
+        for member in members {
+            if member == key || SurfaceKind::of_path(Path::new(&member)) != Some(SurfaceKind::Actor)
+            {
+                continue;
+            }
+            match self.peek(&member) {
+                Some(Artifact::Actor(model)) => models.push(model),
+                Some(_) => {}
+                None => {
+                    let Ok(pair) = read_actor_pair_in(Path::new(&member), Some(self)) else {
+                        continue;
+                    };
+                    let compilation = rex_driver::compile_actors_str(
+                        &pair.path,
+                        &pair.source,
+                        &pair.domains,
+                        &pair.imports(),
+                    );
+                    if let Some(model) = compilation.model {
+                        self.store(&member, &Artifact::Actor(model.clone()));
+                        models.push(model);
+                    }
+                }
+            }
+        }
+        models
+    }
+
+    /// The compiled `.dmn` artifacts of `file`'s application
+    /// (rexlang#78) — the decision services a design's `invokes`/`inject
+    /// decision` links resolve against (rule 17). Gathered exactly like
+    /// [`Project::sibling_actors`].
+    pub(crate) fn sibling_decisions(
+        &mut self,
+        file: &Path,
+    ) -> Vec<(String, rex_ir::dmn::DmnModel)> {
+        let key = file.display().to_string();
+        let members = self.application_of(&key);
+        let mut models = Vec::new();
+        for member in members {
+            if member == key || SurfaceKind::of_path(Path::new(&member)) != Some(SurfaceKind::Dmn) {
+                continue;
+            }
+            match self.peek(&member) {
+                Some(Artifact::Decision(model)) => models.push((member.clone(), model)),
+                Some(_) => {}
+                None => {
+                    let Ok(pair) = read_dmn_pair(Path::new(&member), Some(self)) else {
+                        continue;
+                    };
+                    let compilation = rex_driver::compile_dmn_str(
+                        &pair.pair.path,
+                        &pair.pair.source,
+                        &pair.pair.domains,
+                        &pair.pair.imports(),
+                        &pair.tables,
+                        &pair.events,
+                    );
+                    if let Some(model) = compilation.model {
+                        self.store(&member, &Artifact::Decision(model.clone()));
+                        models.push((member, model));
+                    }
+                }
+            }
+        }
+        models
+    }
+
+    /// The compiled `.ddd` artifacts of `file`'s application (rexlang#249,
+    /// the file itself excluded) — the carrier set an actor policy's grant
+    /// coverage resolves against (rexlang#128's J4). Gathered exactly like
+    /// [`Project::sibling_actors`].
+    pub(crate) fn sibling_designs(&mut self, file: &Path) -> Vec<rex_ir::ddd::DddModel> {
+        let key = file.display().to_string();
+        let members = self.application_of(&key);
+        let mut models = Vec::new();
+        for member in members {
+            if member == key || SurfaceKind::of_path(Path::new(&member)) != Some(SurfaceKind::Ddd) {
+                continue;
+            }
+            match self.peek(&member) {
+                Some(Artifact::Design(model)) => models.push(model),
+                Some(_) => {}
+                None => {
+                    let Ok(design) = read_ddd_design(Path::new(&member), Some(self)) else {
+                        continue;
+                    };
+                    let compilation = rex_driver::compile_ddd_str(
+                        &design.path,
+                        &design.source,
+                        &design.domains,
+                        &design.imports(),
+                    );
+                    if let Some(model) = compilation.model {
+                        self.store(&member, &Artifact::Design(model.clone()));
+                        models.push(model);
+                    }
+                }
+            }
+        }
+        models
     }
 
     /// Lookup-before-compute: the cached artifact for `key`, or
@@ -175,6 +318,108 @@ impl Project {
     pub(crate) fn computes(&self) -> usize {
         self.computes
     }
+}
+
+/// The import-connected application of every snapshot member (rexlang#249):
+/// each member's written imports are parsed (no compile), resolved the way
+/// the readers resolve them — relative to the importing file's directory,
+/// canonicalized where the path exists — and clustered with
+/// [`rex_driver::applications::applications`].
+///
+/// Both sides of the relation are host-normalized identically (a member
+/// path and a resolved import target each go through [`normalize`]), so a
+/// member and the import naming it compare equal exactly when the
+/// filesystem agrees — the driver's precondition. An import that names no
+/// member contributes no edge (out-of-snapshot imports included, the CLI
+/// snapshot's "the set is the directory listing" rule), and a `.mox`
+/// member declares no surface imports: it is a node without out-edges, the
+/// bridge the other surfaces join through.
+fn application_members(sources: &BTreeMap<String, String>) -> BTreeMap<String, Vec<String>> {
+    let paths: Vec<String> = sources.keys().cloned().collect();
+    let files: Vec<ApplicationFile> = paths
+        .iter()
+        .map(|path| ApplicationFile {
+            path: normalize(Path::new(path)),
+            imports: written_imports(Path::new(path), &sources[path])
+                .into_iter()
+                .map(|import| resolve_import(Path::new(path), &import))
+                .collect(),
+        })
+        .collect();
+    let mut members = BTreeMap::new();
+    for component in applications(&files) {
+        let component: Vec<String> = component
+            .into_iter()
+            .map(|member| paths[member].clone())
+            .collect();
+        for key in &component {
+            members.insert(key.clone(), component.clone());
+        }
+    }
+    members
+}
+
+/// The `import "…"` strings one snapshot member writes, dispatched on the
+/// one surface table. `.mox` writes none (its `import schema`/`import
+/// sigil` targets are vocabulary content, not application files), and every
+/// other surface's written imports are its parse's `imports` list — the same
+/// strings the reader later resolves, so the clustering never invents an
+/// edge the compile would not follow.
+fn written_imports(path: &Path, text: &str) -> Vec<String> {
+    match SurfaceKind::of_path(path) {
+        Some(SurfaceKind::Actor) => rex_syntax::parse_actors(text)
+            .ast
+            .map(|ast| ast.imports.into_iter().map(|import| import.path).collect())
+            .unwrap_or_default(),
+        Some(SurfaceKind::Ddd) => rex_syntax::parse_ddd(text)
+            .ast
+            .map(|ast| ast.imports.into_iter().map(|import| import.path).collect())
+            .unwrap_or_default(),
+        Some(SurfaceKind::Evt) => rex_syntax::parse_evt(text)
+            .ast
+            .map(|ast| ast.imports.into_iter().map(|import| import.path).collect())
+            .unwrap_or_default(),
+        Some(SurfaceKind::Deploy) => rex_syntax::parse_deploy(text)
+            .ast
+            .map(|ast| ast.imports.into_iter().map(|import| import.path).collect())
+            .unwrap_or_default(),
+        Some(SurfaceKind::Uc) => rex_syntax::parse_usecases(text)
+            .ast
+            .map(|ast| ast.imports.into_iter().map(|import| import.path).collect())
+            .unwrap_or_default(),
+        Some(SurfaceKind::Cmmn) => rex_syntax::parse_cmmn(text)
+            .ast
+            .map(|ast| ast.imports.into_iter().map(|import| import.path).collect())
+            .unwrap_or_default(),
+        // `.dmn` imports are domains plus `.evt` contracts; both are
+        // surface files the snapshot may hold, so both are edges.
+        Some(SurfaceKind::Dmn) => rex_driver::project::dmn_import_paths(text),
+        Some(SurfaceKind::Ifml) => rex_ifml::parse_ifml(text)
+            .map(|model| model.imports)
+            .unwrap_or_default(),
+        // A `.mox` member declares no surface imports; an unknown extension
+        // is no application file at all.
+        Some(SurfaceKind::Mox) | None => Vec::new(),
+    }
+}
+
+/// One written import resolved the way the readers resolve it: relative to
+/// the importing file's own directory, then host-normalized.
+fn resolve_import(importer: &Path, import: &str) -> String {
+    let directory = importer
+        .parent()
+        .filter(|parent| !parent.as_os_str().is_empty())
+        .unwrap_or_else(|| Path::new("."));
+    normalize(&directory.join(import))
+}
+
+/// Host-normalizes one path: the canonical path where it exists, else the
+/// path as written. Both the members and the resolved import targets go
+/// through this, so the relation is plain string equality afterwards.
+fn normalize(path: &Path) -> String {
+    std::fs::canonicalize(path)
+        .map(|canonical| canonical.display().to_string())
+        .unwrap_or_else(|_| path.display().to_string())
 }
 
 #[cfg(test)]
@@ -300,5 +545,65 @@ mod tests {
             .artifact("a.mox", || Ok(domain_artifact()))
             .expect("a again");
         assert_eq!(project.computes(), 2, "a.mox stays cached");
+    }
+
+    #[test]
+    fn applications_cluster_by_resolved_imports_not_by_directory() {
+        let dir = scratch("applications");
+        // Two applications in one directory: desk's design and policy both
+        // import desk.mox (the bridge), shop's design imports shop.mox.
+        std::fs::write(dir.join("desk.mox"), MOX).expect("write desk mox");
+        std::fs::write(dir.join("shop.mox"), MOX).expect("write shop mox");
+        let design = dir.join("desk.ddd");
+        std::fs::write(
+            &design,
+            "import \"desk.mox\"\n\napplication Desk {\n    module desk {\n        value Book\n    }\n}\n",
+        )
+        .expect("write design");
+        let actor = dir.join("desk.actor");
+        std::fs::write(
+            &actor,
+            "import \"desk.mox\"\n\nactors DeskPolicy {\n    actor Agent\n}\n",
+        )
+        .expect("write policy");
+        let other = dir.join("shop.ddd");
+        std::fs::write(
+            &other,
+            "import \"shop.mox\"\n\napplication Shop {\n    module shop {\n        value Book\n    }\n}\n",
+        )
+        .expect("write other design");
+
+        let desk_mox = dir.join("desk.mox").display().to_string();
+        let shop_mox = dir.join("shop.mox").display().to_string();
+        let project = Project::gather(&[
+            dir.join("desk.mox"),
+            dir.join("shop.mox"),
+            design.clone(),
+            actor.clone(),
+            other.clone(),
+        ]);
+
+        let mut desk_app = vec![actor.display().to_string(), design.display().to_string()];
+        desk_app.insert(0, desk_mox.clone());
+        desk_app.sort();
+        assert_eq!(
+            project.application_of(&design.display().to_string()),
+            desk_app,
+            "the design's application is the imported domain plus its importers"
+        );
+        assert_eq!(
+            project.application_of(&actor.display().to_string()),
+            desk_app,
+            "the policy shares the design's application through the domain bridge"
+        );
+        assert_eq!(
+            project.application_of(&other.display().to_string()),
+            vec![other.display().to_string(), shop_mox],
+            "the unrelated design's application holds no desk member"
+        );
+        assert!(
+            project.application_of("not-in-the-snapshot.ddd").is_empty(),
+            "outside the snapshot there is no application, so the joins stay silent"
+        );
     }
 }

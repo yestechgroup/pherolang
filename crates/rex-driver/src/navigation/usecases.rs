@@ -112,9 +112,10 @@ pub fn uc_index(source: &str) -> SurfaceIndex {
 mod tests {
     use super::*;
     use crate::navigation::test_support;
+    use rex_testkit::fixtures;
 
-    const SUPPORT: &str = "examples/support.uc";
-    const FIXTURE: &str = "tests/conformance/graph/app.uc";
+    const SUPPORT: &str = fixtures::SUPPORT_UC;
+    const FIXTURE: &str = fixtures::APP_UC;
 
     #[test]
     fn uc_definitions_are_the_graph_nodes() {

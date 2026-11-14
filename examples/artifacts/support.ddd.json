@@ -13,6 +13,35 @@
           "description": "Triages and resolves support tickets.",
           "operations": [
             {
+              "name": "raise",
+              "returnType": {
+                "type": "class",
+                "value": {
+                  "package": "nz.example.support",
+                  "name": "Ticket"
+                }
+              },
+              "params": [
+                {
+                  "name": "title",
+                  "type": {
+                    "type": "primitive",
+                    "value": "string"
+                  }
+                },
+                {
+                  "name": "internal",
+                  "type": {
+                    "type": "primitive",
+                    "value": "boolean"
+                  }
+                }
+              ],
+              "emits": [
+                "TicketRaised"
+              ]
+            },
+            {
               "name": "raiseRefund",
               "returnType": {
                 "type": "primitive",
@@ -36,6 +65,9 @@
               ],
               "capabilities": [
                 "RaiseRefund"
+              ],
+              "emits": [
+                "RefundRequested"
               ]
             },
             {
@@ -72,6 +104,9 @@
               ],
               "capabilities": [
                 "ApproveRefund"
+              ],
+              "emits": [
+                "RefundApproved"
               ]
             },
             {
@@ -157,6 +192,92 @@
               ]
             },
             {
+              "name": "markRead",
+              "returnType": {
+                "type": "primitive",
+                "value": "boolean"
+              },
+              "params": [
+                {
+                  "name": "ticketNo",
+                  "type": {
+                    "type": "primitive",
+                    "value": "string"
+                  }
+                }
+              ],
+              "capabilities": [
+                "ReadTicket"
+              ]
+            },
+            {
+              "name": "assign",
+              "returnType": {
+                "type": "primitive",
+                "value": "boolean"
+              },
+              "params": [
+                {
+                  "name": "ticketNo",
+                  "type": {
+                    "type": "primitive",
+                    "value": "string"
+                  }
+                },
+                {
+                  "name": "assignee",
+                  "type": {
+                    "type": "class",
+                    "value": {
+                      "package": "nz.example.support",
+                      "name": "User"
+                    }
+                  }
+                }
+              ],
+              "capabilities": [
+                "UpdateTicket"
+              ]
+            },
+            {
+              "name": "approve",
+              "returnType": {
+                "type": "primitive",
+                "value": "boolean"
+              },
+              "params": [
+                {
+                  "name": "ticketNo",
+                  "type": {
+                    "type": "primitive",
+                    "value": "string"
+                  }
+                }
+              ],
+              "capabilities": [
+                "ResolveTicket"
+              ]
+            },
+            {
+              "name": "reject",
+              "returnType": {
+                "type": "primitive",
+                "value": "boolean"
+              },
+              "params": [
+                {
+                  "name": "ticketNo",
+                  "type": {
+                    "type": "primitive",
+                    "value": "string"
+                  }
+                }
+              ],
+              "capabilities": [
+                "UpdateTicket"
+              ]
+            },
+            {
               "name": "updateTicket",
               "returnType": {
                 "type": "primitive",
@@ -196,6 +317,9 @@
               ],
               "capabilities": [
                 "ResolveTicket"
+              ],
+              "emits": [
+                "TicketResolved"
               ]
             },
             {

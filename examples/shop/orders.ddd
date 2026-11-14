@@ -14,7 +14,11 @@ application Orders {
         service OrderService {
             inject OrderRepository;
             inject OrderSearch;
-            Order place(String orderNo, Customer forCustomer, Currency currency) capability PlaceOrder;
+            Order placeOrder(String orderNo, Customer forCustomer, Currency currency) capability PlaceOrder emits OrderPlaced;
+            boolean cancelOrder(String orderNo, String reason) emits OrderCancelled;
+            boolean shipLine(String orderNo, String sku, int quantity) emits OrderLineShipped;
+            boolean addToCart(String sku, int quantity);
+            Order completeWizard(String orderNo);
             saveOrder => OrderRepository.save;
             findOrders => OrderSearch.search;
         }
@@ -68,6 +72,7 @@ application Orders {
         service CustomerService {
             inject CustomerRepository;
             register => CustomerRepository.save;
+            save => CustomerRepository.save;
             protected Customer findByName(String name);
         }
         entity Customer repository CustomerRepository {

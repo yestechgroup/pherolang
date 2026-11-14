@@ -27,7 +27,21 @@ pub(crate) fn uri() -> Uri {
 /// Builds an initialized `(service, socket)` pair.
 pub(crate) async fn initialized_service() -> (LspService<RexBackend>, tower_lsp_server::ClientSocket)
 {
-    let (mut service, mut socket) = LspService::new(RexBackend::new);
+    let (service, socket, _compile_count) = initialized_service_counted().await;
+    (service, socket)
+}
+
+/// Builds an initialized pair whose backend reports how many snapshot
+/// candidates it has compiled (the incremental-snapshot tests, rexlang#254).
+pub(crate) async fn initialized_service_counted() -> (
+    LspService<RexBackend>,
+    tower_lsp_server::ClientSocket,
+    std::sync::Arc<std::sync::atomic::AtomicUsize>,
+) {
+    let compile_count = std::sync::Arc::new(std::sync::atomic::AtomicUsize::new(0));
+    let backend_count = compile_count.clone();
+    let (mut service, mut socket) =
+        LspService::new(move |client| RexBackend::new_counted(client, backend_count));
     let response = service
         .ready()
         .await
@@ -52,7 +66,7 @@ pub(crate) async fn initialized_service() -> (LspService<RexBackend>, tower_lsp_
         .unwrap();
     // Drain any notification produced during initialization.
     drain_socket(&mut socket).await;
-    (service, socket)
+    (service, socket, compile_count)
 }
 
 /// Reads and discards everything currently queued on the socket.

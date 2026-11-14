@@ -6,42 +6,35 @@
 //! Since rexlang#128 it also owns the capability joins (existence and
 //! coverage) as spanned compile-time errors. Phase 2 re-compiles each file
 //! standalone (no project context — the semantics the integrity contract
-//! is specified at) and gathers the compiled artifacts of every successful
-//! check into import-connected applications;
-//! [`rex_driver::check_integrity`] then diagnoses the dangling cross-layer
-//! wiring each: errors for the joins the compiler does not yet own, and
-//! the capability findings only as the lint channel — suppressed for files
-//! phase 1 already failed (their spanned compiler error rendered there).
-//! Per-file diagnostics are re-reported here only when the standalone
-//! compile disagrees with phase 1 (or a file was skipped there), so the
-//! union pass stays quiet in the common case.
+//! is specified at) through the one shared [`compile_one`] pipeline, and
+//! gathers the compiled artifacts of every successful check into
+//! import-connected applications; [`rex_driver::check_integrity`] then
+//! diagnoses the dangling cross-layer wiring each: errors for the joins the
+//! compiler does not yet own, and the capability findings only as the lint
+//! channel — suppressed for files phase 1 already failed (their spanned
+//! compiler error rendered there). Per-file diagnostics are re-reported here
+//! only when the standalone compile disagrees with phase 1 (or a file was
+//! skipped there), so the union pass stays quiet in the common case.
+//!
+//! There are no per-surface compile arms here: the standalone re-check is
+//! `CompileContext { project: None, reporting: OnFailure, serialize: false }`
+//! plus [`compile_one`], and this pass only classifies the returned
+//! artifact into its bucket.
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::{Path, PathBuf};
 
 use rex_driver::applications::{applications, ApplicationFile};
-use rex_driver::{
-    check_integrity, compile_actors_str, compile_cmmn_str, compile_ddd_str, compile_deploy_str,
-    compile_dmn_str, compile_evt_str, compile_usecase_str, Diagnostic,
-};
+use rex_driver::{check_integrity, Diagnostic, SurfaceKind};
 use rex_ir::ddd::DddModel;
 use rex_ir::deploy::DeployModel;
 use rex_ir::events::EventModel;
 use rex_ir::ifml::IfmlModel;
 use rex_ir::ActorModel;
 
-use crate::inputs::{
-    is_actor_file, is_cmmn_file, is_ddd_file, is_deploy_file, is_dmn_file, is_evt_file,
-    is_ifml_file, is_uc_file, read_actor_pair, read_cmmn_pair, read_ddd_design, read_deploy_pair,
-    read_dmn_pair, read_evt_pair, read_ifml_inputs, read_uc_pair,
-};
-use crate::report::{
-    report_actor_diagnostics, report_cmmn_diagnostics, report_ddd_diagnostics,
-    report_deploy_diagnostics, report_dmn_diagnostics, report_evt_diagnostics,
-    report_ifml_diagnostics, report_usecase_diagnostics,
-};
+use crate::project::Artifact;
 
-use super::pipeline::compile_reported_sources;
+use super::pipeline::{compile_one, CompileContext, Reporting};
 
 /// Runs the pass over the expanded directory inputs; returns the number of
 /// failing integrity diagnostics — error-severity always, plus the
@@ -56,7 +49,9 @@ pub(crate) fn run_union_pass(
 ) -> anyhow::Result<usize> {
     let mut contributions: Vec<Contribution> = Vec::new();
     for file in expanded {
-        contributions.extend(check_contribution(std::slice::from_ref(file))?);
+        if let Some(contribution) = check_contribution(file)? {
+            contributions.push(contribution);
+        }
     }
     Ok(report_union_integrity(
         &contributions,
@@ -73,7 +68,7 @@ struct Contribution {
     path: String,
     source: String,
     imports: Vec<ImportPath>,
-    artifact: Option<Artifact>,
+    artifact: Option<Bucket>,
 }
 
 /// One import of a contribution, in the form its reader produced: the
@@ -101,7 +96,7 @@ impl ImportPath {
 /// use case surfaces are consumers of the other buckets — but `.mox` files
 /// still join the clustering as bridges between the surfaces importing
 /// them.
-enum Artifact {
+enum Bucket {
     Design(DddModel),
     Actors(ActorModel),
     Events(EventModel),
@@ -109,203 +104,63 @@ enum Artifact {
     Flows(IfmlModel),
 }
 
-/// Standalone check of one input: diagnostics render on failure (the
-/// standalone resolution can disagree with phase 1's project reuse), a
-/// successful compile contributes its artifact. No `OK` printing — phase 1
-/// owns the per-file output.
-fn check_contribution(files: &[PathBuf]) -> anyhow::Result<Vec<Contribution>> {
-    let mut sink = Vec::new();
-    let files = files.to_vec();
-    if files.len() == 1 && is_ifml_file(&files[0]) {
-        let inputs = read_ifml_inputs(&files[0], None)?;
-        let sources = |compilation: &rex_ifml::IfmlCompilation| -> Vec<(String, String)> {
-            compilation
-                .index
-                .files
-                .iter()
-                .map(|file| (file.path.clone(), file.text.clone()))
-                .collect()
-        };
-        let compilation =
-            match rex_ifml::compile_ifml_str(&inputs.path, &inputs.source, &inputs.ifml_imports) {
-                Ok(compilation) => compilation,
-                Err(diagnostics) => {
-                    report_ifml_diagnostics(&inputs.sources, &diagnostics);
-                    return Ok(sink);
-                }
-            };
-        let binding = rex_ifml::check_ifml(&compilation, inputs.domains.as_ref());
-        // Only an error-severity finding disagrees with phase 1 (which
-        // owns the warnings' rendering, and the `--deny-warnings` call on
-        // them): a warning-only standalone re-check still contributes.
-        if binding
-            .iter()
-            .any(|diagnostic| diagnostic.severity.is_error())
-        {
-            report_ifml_diagnostics(&sources(&compilation), &binding);
-            return Ok(sink);
-        }
-        sink.push(Contribution {
-            path: inputs.path.clone(),
-            source: inputs.source,
-            imports: compilation
-                .model
+/// Standalone check of one input through the shared pipeline: no project
+/// snapshot (the union contract's resolution — no sibling joins, no cache),
+/// diagnostics rendered only when this re-check disagrees with phase 1, and
+/// no `OK` printing (phase 1 owns the per-file output). A successful compile
+/// contributes the bucket the graph's cross-layer wiring needs.
+fn check_contribution(file: &Path) -> anyhow::Result<Option<Contribution>> {
+    let kind = SurfaceKind::of_path(file).unwrap_or(SurfaceKind::Mox);
+    let mut ctx = CompileContext {
+        project: None,
+        expand: false,
+        serialize: false,
+        reporting: Reporting::OnFailure,
+    };
+    let Some(outcome) = compile_one(kind, file, &mut ctx)? else {
+        return Ok(None);
+    };
+    let Some(artifact) = outcome.artifact else {
+        return Ok(None);
+    };
+    // An `.ifml` contribution clusters through the imports **as written**
+    // (its artifact's own list); every other surface's reader already
+    // resolved them against the importing file's directory.
+    let (artifact, imports) = match artifact {
+        Artifact::Design(model) => (Some(Bucket::Design(model)), resolved(outcome.imports)),
+        Artifact::Actor(model) => (Some(Bucket::Actors(model)), resolved(outcome.imports)),
+        Artifact::Event(model) => (Some(Bucket::Events(model)), resolved(outcome.imports)),
+        Artifact::Deploy(model) => (Some(Bucket::Deploys(model)), resolved(outcome.imports)),
+        Artifact::Flow(model) => {
+            let imports = model
                 .imports
                 .iter()
-                .map(|import| ImportPath::AsWritten(import.clone()))
-                .collect(),
-            artifact: Some(Artifact::Flows(compilation.model)),
-        });
-    } else if files.len() == 1 && is_ddd_file(&files[0]) {
-        let design = read_ddd_design(&files[0], None)?;
-        let compilation = compile_ddd_str(
-            &design.path,
-            &design.source,
-            &design.domains,
-            &design.imports(),
-        );
-        if compilation.model.is_none() {
-            report_ddd_diagnostics(&design, &compilation);
-            return Ok(sink);
+                .cloned()
+                .map(ImportPath::AsWritten)
+                .collect();
+            (Some(Bucket::Flows(model)), imports)
         }
-        let model = compilation.model.expect("checked above");
-        sink.push(Contribution {
-            path: design.path.clone(),
-            source: design.source.clone(),
-            imports: design
-                .domains
-                .iter()
-                .map(|(path, _)| ImportPath::Resolved(path.clone()))
-                .collect(),
-            artifact: Some(Artifact::Design(model)),
-        });
-    } else if files.len() == 1 && is_actor_file(&files[0]) {
-        let pair = read_actor_pair(&files[0])?;
-        let compilation =
-            compile_actors_str(&pair.path, &pair.source, &pair.domains, &pair.imports());
-        if compilation.model.is_none() {
-            report_actor_diagnostics(&pair, &compilation);
-            return Ok(sink);
-        }
-        let model = compilation.model.expect("checked above");
-        sink.push(Contribution {
-            path: pair.path.clone(),
-            source: pair.source.clone(),
-            imports: pair
-                .domains
-                .iter()
-                .map(|(path, _)| ImportPath::Resolved(path.clone()))
-                .collect(),
-            artifact: Some(Artifact::Actors(model)),
-        });
-    } else if files.len() == 1 && is_evt_file(&files[0]) {
-        let pair = read_evt_pair(&files[0], None)?;
-        let compilation = compile_evt_str(&pair.path, &pair.source, &pair.domains, &pair.imports());
-        if compilation.model.is_none() {
-            report_evt_diagnostics(&pair, &compilation);
-            return Ok(sink);
-        }
-        let model = compilation.model.expect("checked above");
-        sink.push(Contribution {
-            path: pair.path.clone(),
-            source: pair.source.clone(),
-            imports: pair
-                .domains
-                .iter()
-                .map(|(path, _)| ImportPath::Resolved(path.clone()))
-                .collect(),
-            artifact: Some(Artifact::Events(model)),
-        });
-    } else if files.len() == 1 && is_deploy_file(&files[0]) {
-        let pair = read_deploy_pair(&files[0], None)?;
-        let compilation = compile_deploy_str(&pair.path, &pair.source, &pair.designs, &pair.flows);
-        if compilation.model.is_none() {
-            report_deploy_diagnostics(&pair, &compilation);
-            return Ok(sink);
-        }
-        let model = compilation.model.expect("checked above");
-        let mut imports: Vec<ImportPath> = pair
-            .designs
-            .iter()
-            .map(|(path, _)| ImportPath::Resolved(path.clone()))
-            .collect();
-        imports.extend(
-            pair.flows
-                .iter()
-                .map(|(path, _)| ImportPath::Resolved(path.clone())),
-        );
-        sink.push(Contribution {
-            path: pair.path.clone(),
-            source: pair.source.clone(),
-            imports,
-            artifact: Some(Artifact::Deploys(model)),
-        });
-    } else if files.len() == 1 && is_uc_file(&files[0]) {
-        let pair = read_uc_pair(&files[0], None)?;
-        let compilation = compile_usecase_str(
-            &pair.pair.path,
-            &pair.pair.source,
-            &pair.pair.domains,
-            &pair.pair.imports(),
-            &pair.designs,
-            &pair.actors,
-            &pair.events,
-        );
-        if compilation.model.is_none() {
-            report_usecase_diagnostics(&pair.pair, &compilation);
-        }
-    } else if files.len() == 1 && is_cmmn_file(&files[0]) {
-        let pair = read_cmmn_pair(&files[0], None)?;
-        let compilation = compile_cmmn_str(
-            &pair.pair.path,
-            &pair.pair.source,
-            &pair.pair.domains,
-            &pair.pair.imports(),
-            &pair.designs,
-            &pair.actors,
-            &pair.events,
-            &pair.decisions,
-        );
-        if compilation.model.is_none() {
-            report_cmmn_diagnostics(&pair.pair, &compilation);
-        }
-    } else if files.len() == 1 && is_dmn_file(&files[0]) {
-        // The decision-model surface contributes no bucket: the union pass
-        // diagnoses the design/actor/event/deploy/flow wiring, and a
-        // `.dmn` file is a consumer of domain types like the use case
-        // surfaces (the `.uc`/`.cmmn` precedent).
-        let pair = read_dmn_pair(&files[0], None)?;
-        let compilation = compile_dmn_str(
-            &pair.pair.path,
-            &pair.pair.source,
-            &pair.pair.domains,
-            &pair.pair.imports(),
-            &pair.tables,
-            &pair.events,
-        );
-        if compilation.model.is_none() {
-            report_dmn_diagnostics(&pair.pair, &compilation);
-        }
-    } else {
-        let (sources, compilation) = compile_reported_sources(&files)?;
-        if compilation.model.is_some() {
-            // A single `.mox` file joins the clustering as a bridge node
-            // (no artifact bucket); the multi-file explicit form is not a
-            // batch-mode shape and contributes nothing.
-            if files.len() == 1 && files[0].extension().and_then(|e| e.to_str()) == Some("mox") {
-                sink.push(Contribution {
-                    path: files[0].display().to_string(),
-                    source: sources
-                        .first()
-                        .map(|(_, source)| source.clone())
-                        .unwrap_or_default(),
-                    imports: Vec::new(),
-                    artifact: None,
-                });
-            }
-        }
-    }
-    Ok(sink)
+        // A `.mox` domain joins the clustering as a bridge node (no bucket):
+        // the surfaces importing it share one application through it.
+        Artifact::Domain(_) => (None, Vec::new()),
+        // The use case surfaces are consumers of the other buckets, not
+        // check inputs (the `.uc`/`.cmmn` precedent): they compile — so a
+        // failure still re-reports — and contribute nothing.
+        Artifact::UseCase(_) | Artifact::Case(_) | Artifact::Decision(_) => return Ok(None),
+    };
+    let source = std::fs::read_to_string(file)
+        .map_err(|error| anyhow::anyhow!("cannot read {}: {error}", file.display()))?;
+    Ok(Some(Contribution {
+        path: file.display().to_string(),
+        source,
+        imports,
+        artifact,
+    }))
+}
+
+/// The resolved import keys of an outcome in the contribution's terms.
+fn resolved(imports: Vec<String>) -> Vec<ImportPath> {
+    imports.into_iter().map(ImportPath::Resolved).collect()
 }
 
 /// Clusters the contributions into import-connected applications and runs
@@ -374,19 +229,19 @@ fn report_union_integrity(
         for &member in members {
             let contribution = &contributions[owners[member]];
             match &contribution.artifact {
-                Some(Artifact::Design(model)) => {
+                Some(Bucket::Design(model)) => {
                     designs.push((contribution.path.clone(), model.clone()))
                 }
-                Some(Artifact::Actors(model)) => {
+                Some(Bucket::Actors(model)) => {
                     actors.push((contribution.path.clone(), model.clone()))
                 }
-                Some(Artifact::Events(model)) => {
+                Some(Bucket::Events(model)) => {
                     events.push((contribution.path.clone(), model.clone()))
                 }
-                Some(Artifact::Deploys(model)) => {
+                Some(Bucket::Deploys(model)) => {
                     deploys.push((contribution.path.clone(), model.clone()))
                 }
-                Some(Artifact::Flows(model)) => {
+                Some(Bucket::Flows(model)) => {
                     flows.push((contribution.path.clone(), model.clone()))
                 }
                 None => {}

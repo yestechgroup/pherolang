@@ -5,6 +5,7 @@ use super::*;
 
 pub(crate) use harness::*;
 
+mod artifact_diagnostics;
 mod basics;
 mod capability_joins;
 mod code_action;
@@ -12,6 +13,7 @@ mod completion;
 mod definition;
 mod dmn;
 mod graph;
+mod graph_cache;
 mod harness;
 mod hover;
 mod ifml;

@@ -225,9 +225,10 @@ fn logic_reference(index: &mut SurfaceIndex, logic: &DmnLogic) {
 mod tests {
     use super::*;
     use crate::navigation::test_support;
+    use rex_testkit::fixtures;
 
-    const SUPPORT: &str = "examples/support.dmn";
-    const FIXTURE: &str = "tests/conformance/graph/app.dmn";
+    const SUPPORT: &str = fixtures::SUPPORT_DMN;
+    const FIXTURE: &str = fixtures::APP_DMN;
 
     #[test]
     fn dmn_definitions_are_the_graph_nodes() {
@@ -250,8 +251,8 @@ mod tests {
             .collect();
         assert_eq!(
             requirements.len(),
-            8,
-            "four requirement lines, two ends each"
+            10,
+            "five requirement lines (three information, one knowledge, one authority), two ends each"
         );
         assert!(requirements.iter().all(|reference| reference.target_kinds
             == [kinds::DECISION, kinds::BKM, kinds::KNOWLEDGE_SOURCE]));
@@ -429,7 +430,7 @@ mod tests {
 
     #[test]
     fn a_model_without_a_declared_name_takes_the_file_stem() {
-        let index = dmn_index("", "examples/support.dmn");
+        let index = dmn_index("", fixtures::SUPPORT_DMN);
         assert!(index.is_empty());
         // The name-derivation rule is the graph's own helper: the declared
         // name wins, the file stem is the artifact's fallback.

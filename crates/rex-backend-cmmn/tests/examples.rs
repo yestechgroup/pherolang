@@ -14,7 +14,7 @@ use rex_driver::{
 #[test]
 fn support_cmmn_lowers_to_the_engine_definition() {
     let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
-    let dir = root.join("examples");
+    let dir = root.join("examples/support");
     let read = |name: &str| std::fs::read_to_string(dir.join(name)).expect(name);
 
     let domain = [("support.mox".to_string(), read("support.mox"))];

@@ -13,7 +13,7 @@
           "description": "Places and prices orders across the catalogue.",
           "operations": [
             {
-              "name": "place",
+              "name": "placeOrder",
               "returnType": {
                 "type": "class",
                 "value": {
@@ -52,6 +52,110 @@
               ],
               "capabilities": [
                 "PlaceOrder"
+              ],
+              "emits": [
+                "OrderPlaced"
+              ]
+            },
+            {
+              "name": "cancelOrder",
+              "returnType": {
+                "type": "primitive",
+                "value": "boolean"
+              },
+              "params": [
+                {
+                  "name": "orderNo",
+                  "type": {
+                    "type": "primitive",
+                    "value": "string"
+                  }
+                },
+                {
+                  "name": "reason",
+                  "type": {
+                    "type": "primitive",
+                    "value": "string"
+                  }
+                }
+              ],
+              "emits": [
+                "OrderCancelled"
+              ]
+            },
+            {
+              "name": "shipLine",
+              "returnType": {
+                "type": "primitive",
+                "value": "boolean"
+              },
+              "params": [
+                {
+                  "name": "orderNo",
+                  "type": {
+                    "type": "primitive",
+                    "value": "string"
+                  }
+                },
+                {
+                  "name": "sku",
+                  "type": {
+                    "type": "primitive",
+                    "value": "string"
+                  }
+                },
+                {
+                  "name": "quantity",
+                  "type": {
+                    "type": "primitive",
+                    "value": "int"
+                  }
+                }
+              ],
+              "emits": [
+                "OrderLineShipped"
+              ]
+            },
+            {
+              "name": "addToCart",
+              "returnType": {
+                "type": "primitive",
+                "value": "boolean"
+              },
+              "params": [
+                {
+                  "name": "sku",
+                  "type": {
+                    "type": "primitive",
+                    "value": "string"
+                  }
+                },
+                {
+                  "name": "quantity",
+                  "type": {
+                    "type": "primitive",
+                    "value": "int"
+                  }
+                }
+              ]
+            },
+            {
+              "name": "completeWizard",
+              "returnType": {
+                "type": "class",
+                "value": {
+                  "package": "nz.example.shop",
+                  "name": "Order"
+                }
+              },
+              "params": [
+                {
+                  "name": "orderNo",
+                  "type": {
+                    "type": "primitive",
+                    "value": "string"
+                  }
+                }
               ]
             },
             {
@@ -290,6 +394,13 @@
           "operations": [
             {
               "name": "register",
+              "delegation": {
+                "target": "CustomerRepository",
+                "operation": "save"
+              }
+            },
+            {
+              "name": "save",
               "delegation": {
                 "target": "CustomerRepository",
                 "operation": "save"

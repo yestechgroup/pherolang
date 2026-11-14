@@ -135,8 +135,9 @@ mod tests {
     use super::*;
     use crate::navigation::test_support;
     use crate::navigation::IndexedReference;
+    use rex_testkit::fixtures;
 
-    const SUPPORT: &str = "examples/support.actor";
+    const SUPPORT: &str = fixtures::SUPPORT_ACTOR;
 
     fn support_index() -> (String, SurfaceIndex) {
         let source = test_support::fixture(SUPPORT);

@@ -12,10 +12,11 @@
 use rex_backend_dmn::DecisionEngine;
 use rex_ir::dmn::DmnModel;
 
-/// Reads an example-relative file.
+/// Reads a file relative to the support application directory
+/// (`examples/support/`, rexlang#258).
 fn example_file(relative: &str) -> String {
     let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
-    std::fs::read_to_string(root.join("examples").join(relative))
+    std::fs::read_to_string(root.join("examples/support").join(relative))
         .unwrap_or_else(|error| panic!("{relative}: {error}"))
 }
 
@@ -31,12 +32,12 @@ fn support_tables() -> Vec<(String, String)> {
 /// decision artifact.
 fn support_model() -> DmnModel {
     let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
-    let path = root.join("examples/support.dmn");
+    let path = root.join("examples/support/support.dmn");
     let path = path.to_str().expect("utf-8 example path");
     let domains = vec![("support.mox".to_string(), example_file("support.mox"))];
     // The example's `.evt` import resolves next to the file and compiles
     // into the events bucket (the CLI rule; the emits block joins it).
-    let events_path = root.join("examples/support.evt");
+    let events_path = root.join("examples/support/support.evt");
     let events_compilation = rex_driver::compile_evt_str(
         events_path.to_str().expect("utf-8 example path"),
         &example_file("support.evt"),

@@ -1,16 +1,19 @@
 //! Examples conformance harness (artifact surfaces): every canonical
-//! `.evt`, `.ddd`, `.uc`, `.deploy`, and `.cmmn` example under `examples/` must
-//! compile with zero diagnostics against its imports — resolved from disk
-//! exactly the way the CLI resolves them — and byte-match its committed
-//! golden artifact under `examples/artifacts/`, which must round-trip
-//! through the artifact's `from_json`.
+//! `.evt`, `.ddd`, `.uc`, `.deploy`, and `.cmmn` example under `examples/`
+//! must compile with zero diagnostics against its imports — resolved from
+//! disk exactly the way the CLI resolves them — and byte-match its
+//! committed golden artifact under `examples/artifacts/`, which must
+//! round-trip through the artifact's `from_json`.
 //!
 //! The lists are hardcoded (the house convention: a missing file fails
 //! loudly instead of being skipped) and a sync test pins each list against
-//! the directory, so a new example can never be added unlisted.
-//! `support.cmmn` compiles against all four buckets (the `.uc` rule), and
-//! `support.ddd` is additionally compiled through
-//! `compile_ddd_str_with_actors`, proving its service-operation
+//! the directory tree, so a new example can never be added unlisted. Each
+//! entry is `(name, app-relative stem)`: `name` is the file stem the golden
+//! artifact is named after (`examples/artifacts/<name>.<extension>.json`),
+//! `stem` is the example's path under `examples/` — one directory per
+//! application since rexlang#258. `support.cmmn` compiles against all four
+//! buckets (the `.uc` rule), and `support.ddd` is additionally compiled
+//! through `compile_ddd_str_with_actors`, proving its service-operation
 //! capabilities validate against the real `support.actor` policy.
 //!
 //! Regenerate the goldens with `REX_UPDATE_FIXTURES=1 cargo test -p
@@ -21,22 +24,28 @@ use std::path::{Path, PathBuf};
 use std::sync::OnceLock;
 
 /// The canonical `.evt` event-contract examples.
-const EVT_EXAMPLES: [&str; 2] = ["ecommerce", "support"];
+const EVT_EXAMPLES: [(&str, &str); 2] = [
+    ("ecommerce", "shop/ecommerce"),
+    ("support", "support/support"),
+];
 
 /// The canonical `.dmn` decision-model examples.
-const DMN_EXAMPLES: [&str; 2] = ["lending", "support"];
+const DMN_EXAMPLES: [(&str, &str); 2] = [
+    ("lending", "lending/lending"),
+    ("support", "support/support"),
+];
 
 /// The canonical `.ddd` design examples.
-const DDD_EXAMPLES: [&str; 2] = ["orders", "support"];
+const DDD_EXAMPLES: [(&str, &str); 2] = [("orders", "shop/orders"), ("support", "support/support")];
 
 /// The canonical `.uc` use-case examples.
-const UC_EXAMPLES: [&str; 1] = ["support"];
+const UC_EXAMPLES: [(&str, &str); 1] = [("support", "support/support")];
 
 /// The canonical `.deploy` deployment examples.
-const DEPLOY_EXAMPLES: [&str; 1] = ["support"];
+const DEPLOY_EXAMPLES: [(&str, &str); 1] = [("support", "support/support")];
 
 /// The canonical `.cmmn` case-management examples.
-const CMMN_EXAMPLES: [&str; 1] = ["support"];
+const CMMN_EXAMPLES: [(&str, &str); 1] = [("support", "support/support")];
 
 fn workspace_root() -> &'static Path {
     static ROOT: OnceLock<PathBuf> = OnceLock::new();
@@ -57,9 +66,10 @@ fn read(path: &Path) -> String {
         .unwrap_or_else(|error| panic!("missing canonical example {}: {error}", path.display()))
 }
 
-/// The example's path and source: `examples/<name>.<extension>`.
-fn example(name: &str, extension: &str) -> (PathBuf, String) {
-    let path = examples_dir().join(format!("{name}.{extension}"));
+/// The example's path and source: `examples/<stem>.<extension>`, where
+/// `stem` is the app-relative stem (`support/support`, `shop/orders`).
+fn example(stem: &str, extension: &str) -> (PathBuf, String) {
+    let path = examples_dir().join(format!("{stem}.{extension}"));
     let source = read(&path);
     (path, source)
 }
@@ -68,13 +78,17 @@ fn example(name: &str, extension: &str) -> (PathBuf, String) {
 /// declares), resolved next to the example the way the CLI resolves
 /// import paths (the driver matches the resolved path, so the key is the
 /// joined absolute path).
-fn domain_of(example_name: &str) -> (String, String) {
-    let stem = match example_name {
-        // orders.ddd designs the shop domain.
-        "orders" => "ecommerce",
-        other => other,
+fn domain_of(example_stem: &str) -> (String, String) {
+    let dir = match example_stem.rsplit_once('/') {
+        Some((dir, _)) => dir,
+        None => "",
     };
-    let path = examples_dir().join(format!("{stem}.mox"));
+    let stem = match example_stem {
+        // orders.ddd designs the shop domain.
+        "shop/orders" => "ecommerce",
+        other => other.rsplit('/').next().unwrap_or(other),
+    };
+    let path = examples_dir().join(dir).join(format!("{stem}.mox"));
     (path.display().to_string(), read(&path))
 }
 
@@ -110,42 +124,42 @@ fn assert_matches_golden(name: &str, extension: &str, json: &str) {
     );
 }
 
-fn compile_evt(name: &str) -> rex_ir::events::EventModel {
-    let (path, source) = example(name, "evt");
-    let (domain_path, domain) = domain_of(name);
+fn compile_evt(stem: &str) -> rex_ir::events::EventModel {
+    let (path, source) = example(stem, "evt");
+    let (domain_path, domain) = domain_of(stem);
     let compilation = rex_driver::compile_evt_str(
         path.to_str().expect("utf-8 example path"),
         &source,
         &[(domain_path, domain)],
         &rex_driver::DomainImports::default(),
     );
-    assert_clean(&format!("{name}.evt"), &compilation.diagnostics);
+    assert_clean(&format!("{stem}.evt"), &compilation.diagnostics);
     compilation
         .model
-        .unwrap_or_else(|| panic!("{name}.evt must lower to an event artifact"))
+        .unwrap_or_else(|| panic!("{stem}.evt must lower to an event artifact"))
 }
 
-fn compile_ddd(name: &str) -> rex_ir::ddd::DddModel {
-    let (path, source) = example(name, "ddd");
-    let (domain_path, domain) = domain_of(name);
+fn compile_ddd(stem: &str) -> rex_ir::ddd::DddModel {
+    let (path, source) = example(stem, "ddd");
+    let (domain_path, domain) = domain_of(stem);
     let compilation = rex_driver::compile_ddd_str(
         path.to_str().expect("utf-8 example path"),
         &source,
         &[(domain_path, domain)],
         &rex_driver::DomainImports::default(),
     );
-    assert_clean(&format!("{name}.ddd"), &compilation.diagnostics);
+    assert_clean(&format!("{stem}.ddd"), &compilation.diagnostics);
     compilation
         .model
-        .unwrap_or_else(|| panic!("{name}.ddd must lower to a design artifact"))
+        .unwrap_or_else(|| panic!("{stem}.ddd must lower to a design artifact"))
 }
 
 /// The `support.actor` policy, compiled as a pair against the domain it
 /// imports. The `.actor` import matching is by exact import string (the
 /// driver receives texts only), so the key is the path as written.
 fn support_actor_model() -> rex_ir::ActorModel {
-    let (path, source) = example("support", "actor");
-    let domain = read(&examples_dir().join("support.mox"));
+    let (path, source) = example("support/support", "actor");
+    let domain = read(&examples_dir().join("support/support.mox"));
     let compilation = rex_driver::compile_actors_str(
         path.to_str().expect("utf-8 example path"),
         &source,
@@ -161,7 +175,7 @@ fn support_actor_model() -> rex_ir::ActorModel {
 /// The `support.ifml` flow, compiled with its `.ifml` imports (the
 /// pattern library) gathered from disk through the shared traversal.
 fn support_ifml_model() -> rex_ir::ifml::IfmlModel {
-    let (path, source) = example("support", "ifml");
+    let (path, source) = example("support/support", "ifml");
     let path_string = path.display().to_string();
     let mut imports = rex_ifml::IfmlImports::default();
     let mut disk_paths = BTreeMap::new();
@@ -186,8 +200,8 @@ fn support_ifml_model() -> rex_ir::ifml::IfmlModel {
 
 #[test]
 fn evt_examples_match_golden_artifacts_and_round_trip() {
-    for name in EVT_EXAMPLES {
-        let model = compile_evt(name);
+    for (name, stem) in EVT_EXAMPLES {
+        let model = compile_evt(stem);
         assert_eq!(
             model.format_version,
             rex_ir::events::EVENT_MODEL_FORMAT_VERSION
@@ -206,8 +220,8 @@ fn evt_examples_match_golden_artifacts_and_round_trip() {
 
 #[test]
 fn ddd_examples_match_golden_artifacts_and_round_trip() {
-    for name in DDD_EXAMPLES {
-        let model = compile_ddd(name);
+    for (name, stem) in DDD_EXAMPLES {
+        let model = compile_ddd(stem);
         assert_eq!(model.format_version, rex_ir::ddd::DDD_MODEL_FORMAT_VERSION);
         let json = model.to_json_pretty().expect("serialize design artifact");
         assert_matches_golden(name, "ddd", &json);
@@ -226,8 +240,8 @@ fn ddd_examples_match_golden_artifacts_and_round_trip() {
 /// real `support.actor` capabilities.
 #[test]
 fn support_ddd_capabilities_validate_against_the_actor_model() {
-    let (path, source) = example("support", "ddd");
-    let (domain_path, domain) = domain_of("support");
+    let (path, source) = example("support/support", "ddd");
+    let (domain_path, domain) = domain_of("support/support");
     let actors = support_actor_model();
     let compilation = rex_driver::compile_ddd_str_with_actors(
         path.to_str().expect("utf-8 example path"),
@@ -245,13 +259,13 @@ fn support_ddd_capabilities_validate_against_the_actor_model() {
 
 #[test]
 fn uc_examples_match_golden_artifacts_and_round_trip() {
-    for name in UC_EXAMPLES {
-        let (path, source) = example(name, "uc");
-        let dir = examples_dir();
-        let domains = vec![domain_of(name)];
+    for (name, stem) in UC_EXAMPLES {
+        let (path, source) = example(stem, "uc");
+        let dir = examples_dir().join("support");
+        let domains = vec![domain_of(stem)];
         let designs = vec![(
             dir.join("support.ddd").display().to_string(),
-            compile_ddd("support"),
+            compile_ddd("support/support"),
         )];
         let actors = vec![(
             dir.join("support.actor").display().to_string(),
@@ -259,7 +273,7 @@ fn uc_examples_match_golden_artifacts_and_round_trip() {
         )];
         let events = vec![(
             dir.join("support.evt").display().to_string(),
-            compile_evt("support"),
+            compile_evt("support/support"),
         )];
         let compilation = rex_driver::compile_usecase_str(
             path.to_str().expect("utf-8 example path"),
@@ -292,13 +306,13 @@ fn uc_examples_match_golden_artifacts_and_round_trip() {
 
 #[test]
 fn dmn_examples_match_golden_artifacts_and_round_trip() {
-    for name in DMN_EXAMPLES {
-        let (path, source) = example(name, "dmn");
-        let dir = examples_dir();
+    for (name, stem) in DMN_EXAMPLES {
+        let (path, source) = example(stem, "dmn");
+        let dir = path.parent().expect("example directory").to_path_buf();
         // The example's domain imports resolve next to the file (the CLI
         // rule); `lending.dmn` imports nothing.
         let domains: Vec<(String, String)> = if source.contains("import \"") {
-            vec![domain_of(name)]
+            vec![domain_of(stem)]
         } else {
             Vec::new()
         };
@@ -310,7 +324,7 @@ fn dmn_examples_match_golden_artifacts_and_round_trip() {
             if !import.ends_with(".evt") || events.iter().any(|(key, _)| *key == import) {
                 continue;
             }
-            events.push((import, compile_evt(name)));
+            events.push((import, compile_evt("support/support")));
         }
         // The external markdown decision tables resolve relative to the
         // example file and are keyed by the paths the `logic table`
@@ -349,12 +363,12 @@ fn dmn_examples_match_golden_artifacts_and_round_trip() {
 
 #[test]
 fn deploy_examples_match_golden_artifacts_and_round_trip() {
-    for name in DEPLOY_EXAMPLES {
-        let (path, source) = example(name, "deploy");
-        let dir = examples_dir();
+    for (name, stem) in DEPLOY_EXAMPLES {
+        let (path, source) = example(stem, "deploy");
+        let dir = examples_dir().join("support");
         let designs = vec![(
             dir.join("support.ddd").display().to_string(),
-            compile_ddd("support"),
+            compile_ddd("support/support"),
         )];
         let flows = vec![(
             dir.join("support.ifml").display().to_string(),
@@ -392,13 +406,13 @@ fn deploy_examples_match_golden_artifacts_and_round_trip() {
 /// the way the CLI resolves them: absolute paths for the raw domain (the
 /// `.evt` rule) and for the pre-compiled event/actor/design artifacts (the
 /// four-bucket rule, `.uc` matching).
-fn compile_cmmn(name: &str) -> rex_ir::cmmn::CmmnModel {
-    let (path, source) = example(name, "cmmn");
-    let dir = examples_dir();
-    let domains = vec![domain_of(name)];
+fn compile_cmmn(stem: &str) -> rex_ir::cmmn::CmmnModel {
+    let (path, source) = example(stem, "cmmn");
+    let dir = examples_dir().join("support");
+    let domains = vec![domain_of(stem)];
     let designs = vec![(
         dir.join("support.ddd").display().to_string(),
-        compile_ddd("support"),
+        compile_ddd("support/support"),
     )];
     let actors = vec![(
         dir.join("support.actor").display().to_string(),
@@ -406,15 +420,15 @@ fn compile_cmmn(name: &str) -> rex_ir::cmmn::CmmnModel {
     )];
     let events = vec![(
         dir.join("support.evt").display().to_string(),
-        compile_evt("support"),
+        compile_evt("support/support"),
     )];
     // The sibling `.dmn` decision model, compiled the way the CLI compiles
     // it (its own domain import plus the decision tables its `logic table`
     // clauses name) — the decisions bucket a `decision` task's `invokes`
     // clause resolves against.
     let decisions = if source.contains("import \"support.dmn\"") {
-        let (dmn_path, dmn_source) = example("support", "dmn");
-        let dmn_domains = vec![domain_of("support")];
+        let (dmn_path, dmn_source) = example("support/support", "dmn");
+        let dmn_domains = vec![domain_of("support/support")];
         // The external markdown decision table resolves relative to the
         // example file and is keyed by the path the `logic table` clause
         // writes.
@@ -463,16 +477,16 @@ fn compile_cmmn(name: &str) -> rex_ir::cmmn::CmmnModel {
         &events,
         &decisions,
     );
-    assert_clean(&format!("{name}.cmmn"), &compilation.diagnostics);
+    assert_clean(&format!("{stem}.cmmn"), &compilation.diagnostics);
     compilation
         .model
-        .unwrap_or_else(|| panic!("{name}.cmmn must lower to a case artifact"))
+        .unwrap_or_else(|| panic!("{stem}.cmmn must lower to a case artifact"))
 }
 
 #[test]
 fn cmmn_examples_match_golden_artifacts_and_round_trip() {
-    for name in CMMN_EXAMPLES {
-        let model = compile_cmmn(name);
+    for (name, stem) in CMMN_EXAMPLES {
+        let model = compile_cmmn(stem);
         assert_eq!(
             model.format_version,
             rex_ir::cmmn::CMMN_MODEL_FORMAT_VERSION
@@ -489,35 +503,52 @@ fn cmmn_examples_match_golden_artifacts_and_round_trip() {
     }
 }
 
+/// Every example file of `extension` under the application directories,
+/// as app-relative stems (`support/support`, `shop/orders`) — the
+/// recursive sibling of the flat `examples/*.<extension>` scan. The
+/// `artifacts/` and `instances/` roots hold outputs, never examples, and
+/// are skipped.
+fn stems_on_disk(extension: &str) -> Vec<String> {
+    fn walk(dir: &Path, base: &Path, extension: &str, found: &mut Vec<String>) {
+        let mut entries: Vec<PathBuf> = std::fs::read_dir(dir)
+            .expect("readable examples directory")
+            .map(|entry| entry.expect("readable entry").path())
+            .collect();
+        entries.sort();
+        for path in entries {
+            if path.is_dir() {
+                let name = path.file_name().unwrap_or_default().to_string_lossy();
+                if base == Path::new("") && (name == "artifacts" || name == "instances") {
+                    continue;
+                }
+                walk(&path, &base.join(name.as_ref()), extension, found);
+            } else if path
+                .extension()
+                .is_some_and(|candidate| candidate == extension)
+            {
+                let stem = path.file_stem().expect("named file").to_string_lossy();
+                found.push(base.join(stem.as_ref()).to_string_lossy().into_owned());
+            }
+        }
+    }
+    let mut found = Vec::new();
+    walk(&examples_dir(), Path::new(""), extension, &mut found);
+    found.sort();
+    found
+}
+
 /// The house convention from `crates/rex-ifml/tests/examples.rs`: each
 /// hardcoded list must cover every file of its extension on disk, so a
 /// new example can never be added unlisted.
 #[test]
 fn the_example_lists_cover_every_artifact_file_on_disk() {
-    let assert_sync = |list: &[&str], extension: &str| {
-        let mut listed: Vec<String> = list
-            .iter()
-            .map(|name| format!("{name}.{extension}"))
-            .collect();
+    let assert_sync = |list: &[(&str, &str)], extension: &str| {
+        let mut listed: Vec<String> = list.iter().map(|(_, stem)| (*stem).to_string()).collect();
         listed.sort();
-        let mut on_disk: Vec<String> = std::fs::read_dir(examples_dir())
-            .expect("examples directory exists")
-            .map(|entry| entry.expect("readable entry").path())
-            .filter(|path| {
-                path.extension()
-                    .is_some_and(|candidate| candidate == extension)
-            })
-            .map(|path| {
-                path.file_name()
-                    .expect("named file")
-                    .to_string_lossy()
-                    .into_owned()
-            })
-            .collect();
-        on_disk.sort();
+        let on_disk = stems_on_disk(extension);
         assert_eq!(
             listed, on_disk,
-            "examples/*.{extension} and its hardcoded list must stay in sync"
+            "examples/**/*.{extension} and its hardcoded list must stay in sync"
         );
     };
     assert_sync(&EVT_EXAMPLES, "evt");
