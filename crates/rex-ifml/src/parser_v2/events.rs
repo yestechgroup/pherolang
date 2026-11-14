@@ -19,16 +19,24 @@ pub(super) fn event_handler<'src>() -> BoxedP<'src, EventHandler> {
             .then(word("if").ignore_then(expr::expr_parser()).or_not())
             .then_ignore(tok(Token::Arrow))
             .then(action)
-            .then_ignore(tok(Token::Semi))
-            .map_with(
-                |((((event, params), requires), condition), action), e| EventHandler {
-                    event_type: event.0,
-                    type_span: event.1,
-                    params: params.unwrap_or_default(),
-                    requires: requires.unwrap_or_default(),
-                    condition,
-                    action,
-                    span: e.span(),
+            .then(tok(Token::Semi).or_not())
+            .validate(
+                |(((((event, params), requires), condition), action), semi), e, emitter| {
+                    if semi.is_none() {
+                        emitter.emit(Rich::custom(
+                            event.1,
+                            format!("expected ';' after the '{}' event handler", event.0),
+                        ));
+                    }
+                    EventHandler {
+                        event_type: event.0,
+                        type_span: event.1,
+                        params: params.unwrap_or_default(),
+                        requires: requires.unwrap_or_default(),
+                        condition,
+                        action,
+                        span: e.span(),
+                    }
                 },
             )
     })
@@ -142,23 +150,66 @@ fn parameter_binding<'src>() -> impl Parser<'src, Input<'src>, ParameterBinding,
 }
 
 /// `{ property* event* }` — an inline action body.
+fn stop_at_action_body_member(token: &Token<'_>) -> bool {
+    matches!(token, Token::RBrace)
+        || is_top_introducer(token)
+        || matches!(token, Token::Ident(text) if *text == "on")
+}
+
+enum ActionBodyItem {
+    Property(Property),
+    Event(EventHandler),
+    Junk,
+}
+
+/// `{ property* event* }` — an inline action body, recovered in any order.
 fn action_body<'src, P>(
     handler: P,
 ) -> impl Parser<'src, Input<'src>, ActionBody, Extra<'src>> + Clone
 where
     P: Parser<'src, Input<'src>, EventHandler, Extra<'src>> + Clone + 'src,
 {
+    let item = choice((
+        property().map(ActionBodyItem::Property),
+        handler.map(ActionBodyItem::Event),
+        junk_member(stop_at_action_body_member, "expected an action body member")
+            .map(|()| ActionBodyItem::Junk),
+    ));
     tok(Token::LBrace)
-        .ignore_then(
-            property()
-                .repeated()
-                .collect::<Vec<_>>()
-                .then(handler.repeated().collect::<Vec<_>>()),
-        )
-        .then_ignore(tok(Token::RBrace))
-        .map_with(|(properties, events), e| ActionBody {
-            properties,
-            events,
-            span: e.span(),
+        .ignore_then(item.repeated().collect::<Vec<_>>())
+        .then(tok(Token::RBrace).or_not())
+        .validate(|(items, close), e, emitter| {
+            let mut properties = Vec::new();
+            let mut events = Vec::new();
+            let mut seen_event = false;
+            for item in items {
+                match item {
+                    ActionBodyItem::Property(property) => {
+                        if seen_event {
+                            emitter.emit(Rich::custom(
+                                property.span,
+                                "property assignments must precede the action body's event handlers",
+                            ));
+                        }
+                        properties.push(property);
+                    }
+                    ActionBodyItem::Event(event) => {
+                        seen_event = true;
+                        events.push(event);
+                    }
+                    ActionBodyItem::Junk => {}
+                }
+            }
+            if close.is_none() {
+                emitter.emit(Rich::custom(
+                    (e.span().end..e.span().end).into(),
+                    "expected '}' to close the action body",
+                ));
+            }
+            ActionBody {
+                properties,
+                events,
+                span: e.span(),
+            }
         })
 }

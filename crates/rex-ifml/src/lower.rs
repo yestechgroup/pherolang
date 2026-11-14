@@ -43,7 +43,8 @@ pub(crate) fn lower(
     file: &IfmlFile,
     path: &str,
     text: &str,
-) -> Result<(ir::IfmlModel, IfmlIndex), LowerError> {
+) -> (ir::IfmlModel, IfmlIndex, Vec<LowerError>) {
+    let mut errors = Vec::new();
     let mut index = IfmlIndex::single_file(path, text);
     let mut views = Vec::new();
     let mut actions = Vec::new();
@@ -66,7 +67,7 @@ pub(crate) fn lower(
                 index
                     .views
                     .push(named_site(&view.name, view.name_span, view.span));
-                views.push(lower_view(view, text, &mut index)?);
+                views.push(lower_view(view, text, &mut index, &mut errors));
             }
             Declaration::Action(action) => {
                 index
@@ -75,12 +76,12 @@ pub(crate) fn lower(
                 actions.push(ir::ActionDeclaration {
                     name: action.name.clone(),
                     properties: lower_properties(&action.properties),
-                    events: lower_events(&action.events, &mut index)?,
+                    events: lower_events(&action.events, &mut index),
                 });
             }
             Declaration::Module(module) => {
                 index.module_decls.push(module_site(module));
-                modules.push(lower_module(module, text, &mut index)?);
+                modules.push(lower_module(module, text, &mut index, &mut errors));
             }
             Declaration::Actor(actor) => {
                 index
@@ -92,7 +93,7 @@ pub(crate) fn lower(
                 });
             }
             Declaration::Command(command) => {
-                commands.push(lower_command(command, &mut index)?);
+                commands.push(lower_command(command, &mut index));
             }
         }
     }
@@ -102,10 +103,11 @@ pub(crate) fn lower(
         .iter()
         .map(|import| import.path.clone())
         .collect();
-    Ok((
+    (
         ir::IfmlModel::new(domains, views, actions, modules, actors, commands, imports),
         index,
-    ))
+        errors,
+    )
 }
 
 // ── Views / containers / bodies ─────────────────────────────────────────
@@ -123,13 +125,14 @@ fn lower_view(
     view: &ast::ViewDecl,
     text: &str,
     index: &mut IfmlIndex,
-) -> Result<ir::ViewDeclaration, LowerError> {
+    errors: &mut Vec<LowerError>,
+) -> ir::ViewDeclaration {
     // The Pest index captured view-level `roles:`/`requires:` before walking
     // the body; keep that order.
     for property in &view.body.properties {
         capture_view_auth(property, index);
     }
-    let body = lower_body(&view.body, text, index)?;
+    let body = lower_body(&view.body, text, index, errors);
     let is_landmark = extract_bool_property(&body.properties, "landmark");
     let is_xor = extract_bool_property(&body.properties, "xor");
     let is_modal = extract_bool_property(&body.properties, "modal");
@@ -142,7 +145,7 @@ fn lower_view(
         .filter(|property| property.key != "roles" && property.key != "requires")
         .collect();
 
-    Ok(ir::ViewDeclaration {
+    ir::ViewDeclaration {
         name: view.name.clone(),
         label: body.label,
         is_landmark,
@@ -158,17 +161,18 @@ fn lower_view(
         requires,
         condition: body.condition,
         position,
-    })
+    }
 }
 
 fn lower_container(
     container: &ast::ContainerDecl,
     text: &str,
     index: &mut IfmlIndex,
-) -> Result<ir::ContainerDeclaration, LowerError> {
-    let body = lower_body(&container.body, text, index)?;
+    errors: &mut Vec<LowerError>,
+) -> ir::ContainerDeclaration {
+    let body = lower_body(&container.body, text, index, errors);
     let position = extract_position_property(&body.properties);
-    Ok(ir::ContainerDeclaration {
+    ir::ContainerDeclaration {
         name: container.name.clone(),
         label: body.label,
         is_default: extract_bool_property(&body.properties, "default"),
@@ -181,7 +185,7 @@ fn lower_container(
         module_uses: body.module_uses,
         condition: body.condition,
         position,
-    })
+    }
 }
 
 /// A body lowered into the IR lists the declaration needs.
@@ -196,7 +200,12 @@ struct LoweredBody {
     condition: Option<ir::Expression>,
 }
 
-fn lower_body(body: &Body, text: &str, index: &mut IfmlIndex) -> Result<LoweredBody, LowerError> {
+fn lower_body(
+    body: &Body,
+    text: &str,
+    index: &mut IfmlIndex,
+    errors: &mut Vec<LowerError>,
+) -> LoweredBody {
     let mut lowered = LoweredBody {
         params: body
             .params
@@ -222,7 +231,7 @@ fn lower_body(body: &Body, text: &str, index: &mut IfmlIndex) -> Result<LoweredB
                 ));
                 lowered
                     .containers
-                    .push(lower_container(container, text, index)?);
+                    .push(lower_container(container, text, index, errors));
             }
             BodyItem::Component(component) => {
                 index.components.push(named_site(
@@ -233,10 +242,10 @@ fn lower_body(body: &Body, text: &str, index: &mut IfmlIndex) -> Result<LoweredB
                 capture_component_data(component, index);
                 lowered
                     .components
-                    .push(lower_component(component, text, index)?);
+                    .push(lower_component(component, text, index, errors));
             }
             BodyItem::Event(event) => {
-                lowered.events.push(lower_event(event, index)?);
+                lowered.events.push(lower_event(event, index));
             }
             BodyItem::Use(use_decl) => {
                 index.module_uses.push(module_use_site(use_decl));
@@ -247,7 +256,7 @@ fn lower_body(body: &Body, text: &str, index: &mut IfmlIndex) -> Result<LoweredB
             }
         }
     }
-    Ok(lowered)
+    lowered
 }
 
 // ── Components ──────────────────────────────────────────────────────────
@@ -256,7 +265,8 @@ fn lower_component(
     component: &ast::ComponentDecl,
     text: &str,
     index: &mut IfmlIndex,
-) -> Result<ir::ComponentDeclaration, LowerError> {
+    errors: &mut Vec<LowerError>,
+) -> ir::ComponentDeclaration {
     let mut properties = lower_properties(&component.body.properties);
     let mut columns = Vec::new();
     let mut fields = Vec::new();
@@ -268,11 +278,13 @@ fn lower_component(
         match member {
             ComponentMember::Column(column) => columns.push(lower_column(column)),
             ComponentMember::Field(field) => fields.push(lower_field(field, text)),
-            ComponentMember::Chart(chart) => chart_spec = Some(lower_chart(chart)?),
+            ComponentMember::Chart(chart) => {
+                chart_spec = Some(lower_chart(chart, errors));
+            }
             ComponentMember::Condition(statement) => {
                 condition = Some(lower_expr(&statement.expr));
             }
-            ComponentMember::Event(event) => events.push(lower_event(event, index)?),
+            ComponentMember::Event(event) => events.push(lower_event(event, index)),
         }
     }
 
@@ -306,13 +318,14 @@ fn lower_component(
         component_type.is_none() || component_type == Some(ir::ComponentType::Chart);
     if let Some(reference) = chart_ref {
         if chart_spec.is_some() {
-            return Err(LowerError::new(
+            errors.push(LowerError::new(
                 component.span,
                 format!(
                     "component \"{}\": `chart: \"{}\"` cannot be combined with an inline chart declaration",
                     component.name, reference
                 ),
             ));
+            chart_spec = None;
         }
         if chart_allowed {
             if component_type.is_none() {
@@ -332,14 +345,14 @@ fn lower_component(
         }
     }
 
-    Ok(ir::ComponentDeclaration {
+    ir::ComponentDeclaration {
         name: component.name.clone(),
         component_type,
         spec,
         properties,
         events,
         condition,
-    })
+    }
 }
 
 fn lower_column(column: &ast::ColumnDecl) -> ir::ColumnDef {
@@ -491,7 +504,7 @@ fn chart_aggregate(word: &str) -> Option<ir::ChartAggregate> {
     }
 }
 
-fn lower_chart(chart: &ast::ChartDecl) -> Result<ir::ChartSpec, LowerError> {
+fn lower_chart(chart: &ast::ChartDecl, errors: &mut Vec<LowerError>) -> ir::ChartSpec {
     let mut spec = ir::ChartSpec {
         kind: chart_kind(&chart.kind),
         label_field: None,
@@ -535,38 +548,32 @@ fn lower_chart(chart: &ast::ChartDecl) -> Result<ir::ChartSpec, LowerError> {
                 spec.max_depth = Some(number.max(0.0) as u32);
             }
             (ast::ValueExprKind::Ident(identifier), "aggregate") => {
-                let aggregate = chart_aggregate(identifier).ok_or_else(|| {
-                    LowerError::new(
+                match chart_aggregate(identifier) {
+                    Some(aggregate) => spec.aggregate = Some(aggregate),
+                    None => errors.push(LowerError::new(
                         property.span,
                         format!(
                             "unknown aggregate `{identifier}` (expected sum | avg | count | min | max)"
                         ),
-                    )
-                })?;
-                spec.aggregate = Some(aggregate);
+                    )),
+                }
             }
             _ => {}
         }
     }
-    Ok(spec)
+    spec
 }
 
 // ── Events ──────────────────────────────────────────────────────────────
 
-fn lower_events(
-    events: &[ast::EventHandler],
-    index: &mut IfmlIndex,
-) -> Result<Vec<ir::EventHandler>, LowerError> {
+fn lower_events(events: &[ast::EventHandler], index: &mut IfmlIndex) -> Vec<ir::EventHandler> {
     events
         .iter()
         .map(|event| lower_event(event, index))
         .collect()
 }
 
-fn lower_event(
-    event: &ast::EventHandler,
-    index: &mut IfmlIndex,
-) -> Result<ir::EventHandler, LowerError> {
+fn lower_event(event: &ast::EventHandler, index: &mut IfmlIndex) -> ir::EventHandler {
     for required in &event.requires {
         index.auth_sites.push(AuthSite {
             file: 0,
@@ -619,13 +626,10 @@ fn lower_event(
                 action: "action".to_string(),
                 name_span: pair(*name_span),
             });
-            let body = match body {
-                Some(body) => Some(ir::ActionBody {
-                    properties: lower_properties(&body.properties),
-                    handlers: lower_events(&body.events, index)?,
-                }),
-                None => None,
-            };
+            let body = body.as_ref().map(|body| ir::ActionBody {
+                properties: lower_properties(&body.properties),
+                handlers: lower_events(&body.events, index),
+            });
             ir::EventAction::ActionInvocation {
                 name: name.clone(),
                 body,
@@ -634,7 +638,7 @@ fn lower_event(
         ast::EventAction::Stay => ir::EventAction::Stay,
     };
 
-    Ok(ir::EventHandler {
+    ir::EventHandler {
         event_type: event_type(&event.event_type),
         params: event.params.clone(),
         requires: event
@@ -644,7 +648,7 @@ fn lower_event(
             .collect(),
         condition: event.condition.as_ref().map(lower_expr),
         action,
-    })
+    }
 }
 
 fn event_type(event: &str) -> ir::EventType {
@@ -742,7 +746,8 @@ fn lower_module(
     module: &ast::ModuleDecl,
     text: &str,
     index: &mut IfmlIndex,
-) -> Result<ir::ModuleDeclaration, LowerError> {
+    errors: &mut Vec<LowerError>,
+) -> ir::ModuleDeclaration {
     let mut containers = Vec::new();
     let mut components = Vec::new();
     let mut events = Vec::new();
@@ -755,7 +760,7 @@ fn lower_module(
                     container.name_span,
                     container.span,
                 ));
-                containers.push(lower_container(container, text, index)?);
+                containers.push(lower_container(container, text, index, errors));
             }
             ast::ModuleItem::Component(component) => {
                 index.components.push(named_site(
@@ -764,16 +769,16 @@ fn lower_module(
                     component.span,
                 ));
                 capture_component_data(component, index);
-                components.push(lower_component(component, text, index)?);
+                components.push(lower_component(component, text, index, errors));
             }
-            ast::ModuleItem::Event(event) => events.push(lower_event(event, index)?),
+            ast::ModuleItem::Event(event) => events.push(lower_event(event, index)),
             ast::ModuleItem::Use(use_decl) => {
                 index.module_uses.push(module_use_site(use_decl));
                 module_uses.push(lower_use(use_decl));
             }
         }
     }
-    Ok(ir::ModuleDeclaration {
+    ir::ModuleDeclaration {
         name: module.name.clone(),
         input_params: lower_params(&module.input.decls),
         output_params: lower_params(&module.output.decls),
@@ -782,13 +787,10 @@ fn lower_module(
         components,
         events,
         module_uses,
-    })
+    }
 }
 
-fn lower_command(
-    command: &ast::CommandDecl,
-    index: &mut IfmlIndex,
-) -> Result<ir::CommandDeclaration, LowerError> {
+fn lower_command(command: &ast::CommandDecl, index: &mut IfmlIndex) -> ir::CommandDeclaration {
     index
         .commands
         .push(named_site(&command.name, command.name_span, command.span));
@@ -823,7 +825,7 @@ fn lower_command(
                 kind: ir::PromptKind::from(prompt.kind.as_str()),
                 default: prompt.default.as_ref().map(lower_default),
             }),
-            ast::CommandMember::Event(event) => events.push(lower_event(event, index)?),
+            ast::CommandMember::Event(event) => events.push(lower_event(event, index)),
             ast::CommandMember::Use(use_decl) => {
                 index.module_uses.push(module_use_site(use_decl));
                 module_uses.push(lower_use(use_decl));
@@ -832,7 +834,7 @@ fn lower_command(
                 condition = Some(lower_expr(&statement.expr));
             }
             ast::CommandMember::Command(subcommand) => {
-                subcommands.push(lower_command(subcommand, index)?);
+                subcommands.push(lower_command(subcommand, index));
             }
         }
     }
@@ -841,7 +843,7 @@ fn lower_command(
     let requires = extract_requires_property(&properties);
     properties.retain(|property| property.key != "description" && property.key != "requires");
 
-    Ok(ir::CommandDeclaration {
+    ir::CommandDeclaration {
         name: command.name.clone(),
         description,
         arguments,
@@ -853,7 +855,7 @@ fn lower_command(
         properties,
         requires,
         condition,
-    })
+    }
 }
 
 // ── Values / expressions ────────────────────────────────────────────────

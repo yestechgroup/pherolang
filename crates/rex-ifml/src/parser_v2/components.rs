@@ -2,48 +2,138 @@
 
 use super::*;
 
-/// `component "name" { ... }`.
+/// Tokens that can begin the next component member (and therefore end a junk
+/// region).
+fn stop_at_component_member(token: &Token<'_>) -> bool {
+    matches!(token, Token::RBrace)
+        || is_top_introducer(token)
+        || matches!(
+            token,
+            Token::Ident(text)
+                if matches!(*text, "column" | "field" | "chart" | "if" | "on")
+        )
+}
+
+fn empty_component_body(position: usize) -> ComponentBody {
+    ComponentBody {
+        properties: Vec::new(),
+        members: Vec::new(),
+        span: (position..position).into(),
+    }
+}
+
+enum ComponentItem {
+    Property(Property),
+    Member(ComponentMember),
+    Junk,
+}
+
+/// `component "name" { ... }`. The header commits once the name matched.
 pub(super) fn component_decl<'src>(
 ) -> impl Parser<'src, Input<'src>, ComponentDecl, Extra<'src>> + Clone {
     word("component")
         .ignore_then(string_lit())
-        .then(component_body())
-        .map_with(|(name, body), e| ComponentDecl {
-            name: name.0,
-            name_span: name.1,
-            body,
-            span: e.span(),
+        .then(component_body().or_not())
+        .validate(|(name, body), e, emitter| {
+            let body = body.unwrap_or_else(|| {
+                emitter.emit(Rich::custom(
+                    (name.1.end..name.1.end).into(),
+                    "expected '{' after the component name",
+                ));
+                empty_component_body(name.1.end)
+            });
+            ComponentDecl {
+                name: name.0,
+                name_span: name.1,
+                body,
+                span: e.span(),
+            }
         })
 }
 
-/// The component body's exact PEG phases:
+/// The component body, recovered in any order and phase-checked afterwards:
 /// `property* (column|field|chart|condition)* (event|condition)*`.
 fn component_body<'src>() -> impl Parser<'src, Input<'src>, ComponentBody, Extra<'src>> + Clone {
-    let typed = choice((
+    let member = choice((
         column_decl().map(ComponentMember::Column),
         field_decl().map(ComponentMember::Field),
         chart_decl().map(ComponentMember::Chart),
         condition().map(ComponentMember::Condition),
-    ));
-    let tail = choice((
         events::event_handler().map(ComponentMember::Event),
-        condition().map(ComponentMember::Condition),
+    ));
+    let item = choice((
+        property().map(ComponentItem::Property),
+        member.map(ComponentItem::Member),
+        junk_member(stop_at_component_member, "expected a component body member")
+            .map(|()| ComponentItem::Junk),
     ));
 
     tok(Token::LBrace)
-        .ignore_then(
-            property()
-                .repeated()
-                .collect::<Vec<_>>()
-                .then(typed.repeated().collect::<Vec<_>>())
-                .then(tail.repeated().collect::<Vec<_>>()),
-        )
-        .then_ignore(tok(Token::RBrace))
-        .map_with(|((properties, typed), tail), e| ComponentBody {
-            properties,
-            members: typed.into_iter().chain(tail).collect(),
-            span: e.span(),
+        .ignore_then(item.repeated().collect::<Vec<_>>())
+        .then(tok(Token::RBrace).or_not())
+        .validate(|(items, close), e, emitter| {
+            let mut properties = Vec::new();
+            let mut members = Vec::new();
+            // 0 = properties, 1 = typed members/conditions, 2 = events/conditions.
+            let mut phase = 0u8;
+            for item in items {
+                match item {
+                    ComponentItem::Property(property) => {
+                        if phase > 0 {
+                            emitter.emit(Rich::custom(
+                                property.span,
+                                "property assignments must precede the component's typed/event members",
+                            ));
+                        }
+                        properties.push(property);
+                    }
+                    ComponentItem::Member(ComponentMember::Condition(condition)) => {
+                        if phase == 0 {
+                            phase = 1;
+                        }
+                        members.push(ComponentMember::Condition(condition));
+                    }
+                    ComponentItem::Member(member @ (ComponentMember::Column(_)
+                    | ComponentMember::Field(_)
+                    | ComponentMember::Chart(_))) => {
+                        if phase == 2 {
+                            emitter.emit(Rich::custom(
+                                member_span(&member),
+                                "typed component members must precede event handlers",
+                            ));
+                        }
+                        phase = phase.max(1);
+                        members.push(member);
+                    }
+                    ComponentItem::Member(member @ ComponentMember::Event(_)) => {
+                        phase = 2;
+                        members.push(member);
+                    }
+                    ComponentItem::Junk => {}
+                }
+            }
+            if close.is_none() {
+                emitter.emit(Rich::custom(
+                    (e.span().end..e.span().end).into(),
+                    "expected '}' to close the component body",
+                ));
+            }
+            ComponentBody {
+                properties,
+                members,
+                span: e.span(),
+            }
         })
+}
+
+fn member_span(member: &ComponentMember) -> Span {
+    match member {
+        ComponentMember::Column(column) => column.span,
+        ComponentMember::Field(field) => field.span,
+        ComponentMember::Chart(chart) => chart.span,
+        ComponentMember::Condition(condition) => condition.span,
+        ComponentMember::Event(event) => event.span,
+    }
 }
 
 /// `column "Label" -> lookup Entity.Prop via op | field Entity.Prop | expr e ;`

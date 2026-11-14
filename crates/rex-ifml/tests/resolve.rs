@@ -495,11 +495,15 @@ fn parse_error_in_import_is_a_diagnostic() {
     let imports = bundle(&[("app.ifml", "broken.ifml", "module \"Oops\" {")]);
     let diags = compile_ifml_str("app.ifml", "import \"broken.ifml\";", &imports)
         .expect_err("unparseable import must be a diagnostic");
-    assert_eq!(diags.len(), 1);
-    assert_eq!(diags[0].code, E_PARSE);
-    assert_eq!(diags[0].span, (0, 0));
-    assert_eq!(diags[0].file, "broken.ifml");
-    assert!(diags[0].message.contains("Parse error"), "{:?}", diags[0]);
+    assert!(!diags.is_empty(), "a broken import must report");
+    assert!(diags.iter().all(|diag| diag.code == E_PARSE), "{diags:?}");
+    assert!(diags.iter().all(|diag| diag.file == "broken.ifml"));
+    // Recovered parse errors point at real byte positions, never (0, 0).
+    assert!(diags.iter().all(|diag| diag.span != (0, 0)), "{diags:?}");
+    assert!(
+        diags.iter().any(|diag| diag.message.contains("expected")),
+        "{diags:?}"
+    );
 }
 
 #[test]

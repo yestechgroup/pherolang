@@ -1309,3 +1309,216 @@ async fn ifml_prepare_rename_rejects_junk_names_early() {
         "invalid names are rejected as invalid params: {body:?}"
     );
 }
+
+// --- Broken-code navigation (phase 2 of the chumsky migration) --------------
+
+/// A flow with a missing property semicolon plus a navigate target that does
+/// not exist: the document has a live E0002 and an E0104 while completing.
+const BROKEN_FLOW: &str = r#"import "pager.ifml";
+
+view "Catalogue" {
+    component "grid" {
+        type: list
+        on select(row) -> navigate("", { id: row.id });
+    }
+}
+
+view "Detail" {
+    component "detail" {
+        type: details;
+    }
+}
+"#;
+
+/// The same broken property, but with a `use` site so cross-file navigation
+/// and rename have something to follow.
+const BROKEN_USE_FLOW: &str = r#"import "pager.ifml";
+
+view "Catalogue" {
+    use "Pager" as pager { pageSize: 10; };
+
+    component "grid" {
+        type: list
+        data: Item;
+    }
+}
+"#;
+
+#[tokio::test]
+async fn ifml_broken_document_still_completes_navigate_targets() {
+    let (mut service, mut socket) = initialized_service().await;
+    open_at(&mut service, &ifml_uri("pager.ifml"), PAGER_IFML).await;
+    drain_socket(&mut socket).await;
+    let flow = ifml_uri("broken.ifml");
+    open_at(&mut service, &flow, BROKEN_FLOW).await;
+    drain_socket(&mut socket).await;
+
+    let (line, character) = pos_of(BROKEN_FLOW, "navigate(\"\"", 0);
+    let labels = ifml_completion_labels(&mut service, &flow, line, character + 10).await;
+    assert!(
+        labels.contains(&"Detail".to_string()) && labels.contains(&"Catalogue".to_string()),
+        "completions survive the syntax error: {labels:?}"
+    );
+}
+
+#[tokio::test]
+async fn ifml_broken_document_still_completes_use_targets() {
+    let (mut service, mut socket) = initialized_service().await;
+    open_at(&mut service, &ifml_uri("pager.ifml"), PAGER_IFML).await;
+    drain_socket(&mut socket).await;
+    let source = r#"import "pager.ifml";
+
+view "Catalogue" {
+    use "" as pager { };
+    component "grid" {
+        type: list
+        data: Item;
+    }
+}
+"#;
+    let flow = ifml_uri("broken-use.ifml");
+    open_at(&mut service, &flow, source).await;
+    drain_socket(&mut socket).await;
+
+    let (line, character) = pos_of(source, "use \"\"", 0);
+    let labels = ifml_completion_labels(&mut service, &flow, line, character + 5).await;
+    assert!(
+        labels.contains(&"Pager".to_string()),
+        "use-name completions survive the syntax error: {labels:?}"
+    );
+}
+
+#[tokio::test]
+async fn ifml_broken_document_still_completes_entity_features() {
+    let (mut service, mut socket) = initialized_service().await;
+    open_at(&mut service, &ifml_uri("shop.mox"), SHOP_MOX).await;
+    drain_socket(&mut socket).await;
+    let source = r#"import "shop.mox";
+
+view "Catalogue" {
+    params { product: Product };
+
+    component "grid" {
+        type: list
+        data: Product;
+        filter: product.;
+    }
+}
+"#;
+    let flow = ifml_uri("broken-features.ifml");
+    open_at(&mut service, &flow, source).await;
+    drain_socket(&mut socket).await;
+
+    let (line, character) = pos_of(source, "product.;", 0);
+    let labels = ifml_completion_labels(&mut service, &flow, line, character + 8).await;
+    assert!(
+        labels.contains(&"name".to_string()) && labels.contains(&"price".to_string()),
+        "feature completions survive the syntax error: {labels:?}"
+    );
+}
+
+#[tokio::test]
+async fn ifml_goto_definition_survives_a_later_syntax_error() {
+    let (mut service, mut socket) = initialized_service().await;
+    open_at(&mut service, &ifml_uri("pager.ifml"), PAGER_IFML).await;
+    drain_socket(&mut socket).await;
+    open_at(&mut service, &ifml_uri("broken-goto.ifml"), BROKEN_USE_FLOW).await;
+    drain_socket(&mut socket).await;
+
+    let (line, character) = pos_of(BROKEN_USE_FLOW, "use \"Pager\"", 0);
+    let response = service
+        .call(
+            jsonrpc::Request::build("textDocument/definition")
+                .params(json!({
+                    "textDocument": {"uri": ifml_uri("broken-goto.ifml").as_str()},
+                    "position": {"line": line, "character": character + 10},
+                }))
+                .id(150)
+                .finish(),
+        )
+        .await
+        .unwrap()
+        .unwrap();
+    let (_, body) = response.into_parts();
+    let value = body.expect("definition must not error");
+    let location: Location = serde_json::from_value(value).expect("a Location");
+    assert_eq!(location.uri.as_str(), ifml_uri("pager.ifml").as_str());
+}
+
+#[tokio::test]
+async fn ifml_rename_across_files_survives_a_broken_document() {
+    let (mut service, mut socket) = initialized_service().await;
+    open_at(&mut service, &ifml_uri("pager.ifml"), PAGER_IFML).await;
+    drain_socket(&mut socket).await;
+    open_at(
+        &mut service,
+        &ifml_uri("broken-rename.ifml"),
+        BROKEN_USE_FLOW,
+    )
+    .await;
+    drain_socket(&mut socket).await;
+
+    let response = service
+        .call(
+            jsonrpc::Request::build("textDocument/rename")
+                .params(json!({
+                    "textDocument": {"uri": ifml_uri("pager.ifml").as_str()},
+                    "position": {"line": 0, "character": 10},
+                    "newName": "Paginator",
+                }))
+                .id(151)
+                .finish(),
+        )
+        .await
+        .unwrap()
+        .unwrap();
+    let (_, body) = response.into_parts();
+    let value = body.expect("rename must not error");
+    let changes = value["changes"].as_object().expect("per-file changes");
+    assert_eq!(
+        changes.len(),
+        2,
+        "the broken dependent still receives the use edit: {value}"
+    );
+    assert_eq!(
+        changes[ifml_uri("broken-rename.ifml").as_str()][0]["newText"],
+        "Paginator"
+    );
+}
+
+#[tokio::test]
+async fn ifml_broken_document_publishes_span_accurate_parse_diagnostics() {
+    let (mut service, mut socket) = initialized_service().await;
+    let source = r#"view "V" {
+    component "c" {
+        type: list
+        data: Item
+    }
+}
+"#;
+    let flow = ifml_uri("broken-diags.ifml");
+    open_at(&mut service, &flow, source).await;
+    let publish = next_publish(&mut socket, &flow)
+        .await
+        .expect("publishDiagnostics for the broken document");
+    let parse_errors: Vec<&Diagnostic> = publish
+        .diagnostics
+        .iter()
+        .filter(|diagnostic| diagnostic.code == Some(NumberOrString::String("E0002".to_string())))
+        .collect();
+    assert!(
+        parse_errors.len() >= 2,
+        "one parse error per missing semicolon: {publish:?}"
+    );
+    let mut starts: Vec<u32> = parse_errors
+        .iter()
+        .map(|diagnostic| diagnostic.range.start.line)
+        .collect();
+    starts.sort_unstable();
+    assert!(
+        parse_errors.iter().all(|diagnostic| {
+            diagnostic.range.start != diagnostic.range.end || diagnostic.range.start.character > 0
+        }),
+        "recovered ranges are never the (0,0) placeholder: {publish:?}"
+    );
+}

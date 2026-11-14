@@ -2,8 +2,21 @@
 
 use super::*;
 
-/// `command "name" { (property | argument | option | prompt | event |
-/// condition | use | command)* }`.
+fn stop_at_command_member(token: &Token<'_>) -> bool {
+    matches!(token, Token::RBrace)
+        || is_top_introducer(token)
+        || matches!(
+            token,
+            Token::Ident(text)
+                if matches!(
+                    *text,
+                    "argument" | "option" | "prompt" | "on" | "if" | "use" | "command"
+                )
+        )
+}
+
+/// `command "name" { ... }`. The header commits once the name matched, and
+/// subcommands recurse through the same parser.
 pub(crate) fn command_decl<'src>() -> BoxedP<'src, CommandDecl> {
     recursive(|command| {
         let member = choice((
@@ -18,17 +31,40 @@ pub(crate) fn command_decl<'src>() -> BoxedP<'src, CommandDecl> {
                 .clone()
                 .map(|decl| CommandMember::Command(Box::new(decl))),
         ));
+        let item = choice((
+            member.map(Some),
+            junk_member(stop_at_command_member, "expected a command body member").map(|()| None),
+        ));
+        let body = tok(Token::LBrace)
+            .ignore_then(item.repeated().collect::<Vec<_>>())
+            .then(tok(Token::RBrace).or_not())
+            .validate(|(items, close), e, emitter| {
+                if close.is_none() {
+                    emitter.emit(Rich::custom(
+                        (e.span().end..e.span().end).into(),
+                        "expected '}' to close the command body",
+                    ));
+                }
+                items.into_iter().flatten().collect::<Vec<_>>()
+            });
 
         word("command")
             .ignore_then(string_lit())
-            .then_ignore(tok(Token::LBrace))
-            .then(member.repeated().collect::<Vec<_>>())
-            .then_ignore(tok(Token::RBrace))
-            .map_with(|(name, members), e| CommandDecl {
-                name: name.0,
-                name_span: name.1,
-                members,
-                span: e.span(),
+            .then(body.or_not())
+            .validate(|(name, members), e, emitter| {
+                let members = members.unwrap_or_else(|| {
+                    emitter.emit(Rich::custom(
+                        (name.1.end..name.1.end).into(),
+                        "expected '{' after the command name",
+                    ));
+                    Vec::new()
+                });
+                CommandDecl {
+                    name: name.0,
+                    name_span: name.1,
+                    members,
+                    span: e.span(),
+                }
             })
     })
     .boxed()
