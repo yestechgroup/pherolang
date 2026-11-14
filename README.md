@@ -69,6 +69,8 @@ rexlang check model/              # batch: every supported surface under a direc
 rexlang fmt model/                # format every supported surface under a directory
 rexlang fmt --check model/        # gate: exit 1 naming any unformatted file (formatter-golden X.fmt.<ext> outputs are skipped, like check's)
 rexlang ir model.mox -o model.rex.json
+rexlang graph build examples/ -o graph.json   # one semantic graph across every surface (`graph` needs a verb: build|query)
+rexlang graph query graph.json node Support.RaiseRefund   # artifact-only: node/list/affected-by/dependencies + cross-policy analytics
 rexlang artifact check model.rex.json   # validate any serialized artifact
 rexlang gen rust model.mox -o src-gen/
 rexlang gen json-schema model.mox --profile wire -o schemas/

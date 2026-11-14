@@ -53,7 +53,7 @@ byte moves.
   the graph builder's node key — pinned by the anti-drift equality test
   over all nine surfaces. The `.mox` index moved verbatim into
   `navigation/mox.rs` (behavior frozen).
-- **`rexlang graph`** (issue #240, the semantic-graph slice 3/8): compile a
+- **`rexlang graph build`** (issue #240, the semantic-graph slice 3/8): compile a
   tree of model files into **one** deterministic, versioned
   `rex_ir::graph::GraphModel` — the import-connected applications, the full
   node/edge vocabulary, and the semantic edges between every surface —
@@ -130,6 +130,16 @@ byte moves.
 
 ### Changed
 
+- **`rexlang graph` is now a pure namespace with two verbs** (issue #257):
+  `rexlang graph build <paths>... [-o <file>]` compiles sources into one
+  artifact, and `rexlang graph query <graph.json|-> …` answers from a
+  committed artifact. The previous shape overloaded a positional `PATHS`
+  list with an optional `query` subcommand, and clap matches the subcommand
+  first, so a directory literally named `query` could not be passed
+  directly. **Breaking for the unreleased command only**: `rexlang graph
+  <paths>` becomes `rexlang graph build <paths>`, and bare `rexlang graph`
+  is now a clap usage error. The artifact bytes and the query envelopes are
+  unchanged — no golden moves.
 - The `#[trusted]` register gate (issue #89) is now the full **register
   drift gate** (#203): a dead evidence pointer, a status outside the closed
   vocabulary (`"verified"` is rejected by name), an `argued`/`assumed`/

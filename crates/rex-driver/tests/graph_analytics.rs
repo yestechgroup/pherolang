@@ -107,7 +107,7 @@ fn imports_of(display: &str) -> Vec<String> {
 
 /// One fixture file as the builder sees it: the **base-relative** display
 /// path (the fixture directory is the graph's base, exactly as the CLI's
-/// `rexlang graph tests/conformance/graph` emits it) and the normalized
+/// `rexlang graph build tests/conformance/graph` emits it) and the normalized
 /// absolute matching key.
 fn graph_file<M>(name: &str, model: M) -> GraphFile<M> {
     let display = format!("tests/conformance/graph/{name}");

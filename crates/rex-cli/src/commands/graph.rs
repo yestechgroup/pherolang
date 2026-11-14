@@ -1,5 +1,9 @@
-//! `rexlang graph`: compile every input and emit **one** semantic graph
+//! `rexlang graph build`: compile every input and emit **one** semantic graph
 //! artifact (`rex_ir::graph::GraphModel`) spanning the whole tree.
+//!
+//! `graph` is a pure namespace — `build` compiles, `query` (the artifact-only
+//! surface below) answers from a committed artifact — so a verb is always
+//! required and an input path can never be mistaken for one (issue #257).
 //!
 //! Inputs expand exactly like `check`/`build`: directories enter project mode
 //! (one snapshot, per-file pipeline, sibling artifacts reused compile-once,
@@ -40,11 +44,27 @@ use crate::project::{Artifact, Project};
 
 use super::pipeline::{compile_surface, emit_json};
 
-/// The `rexlang graph` subcommand tree — today only the artifact-only query
-/// surface. Clap matches a subcommand before the `PATHS` positional, so a
-/// directory literally named `query` is passed as `./query`.
+/// The `rexlang graph` verb tree: `build` compiles sources into one artifact,
+/// `query` answers from a committed artifact. `graph` itself is a pure
+/// namespace — one verb is always required, so no input path can ever collide
+/// with a verb name (a directory literally named `query` is an ordinary
+/// `build` input; issue rexlang#257).
 #[derive(Debug, clap::Subcommand)]
 pub(crate) enum GraphCommand {
+    /// Compile every input and emit one semantic graph artifact spanning the
+    /// whole tree: the import-connected applications, every surface's nodes,
+    /// and the semantic edges between them (see docs/GRAPH.md). Directories
+    /// enter project mode like `check`/`build`, and display paths are
+    /// relative to the input roots' common ancestor. Exits `1` when any file
+    /// fails; the compiling subset still emits.
+    Build {
+        /// Files or directories to compile.
+        #[arg(value_name = "PATHS")]
+        paths: Vec<PathBuf>,
+        /// Write the graph JSON to this path instead of stdout.
+        #[arg(short, long, value_name = "FILE")]
+        out: Option<PathBuf>,
+    },
     /// Query a committed semantic graph artifact (`-` reads stdin): no
     /// sources, no recompile. Every answer is one versioned JSON envelope
     /// (see docs/GRAPH.md). An unknown or ambiguous reference exits `1` with
@@ -189,17 +209,25 @@ impl SessionArg {
     }
 }
 
+/// Runs `rexlang graph <verb>`: `build` compiles the inputs, `query` answers
+/// from a committed artifact.
+pub(crate) fn run(command: GraphCommand) -> anyhow::Result<ExitCode> {
+    match command {
+        GraphCommand::Build { paths, out } => build_graph(paths, out),
+        GraphCommand::Query {
+            graph,
+            pretty,
+            query: action,
+        } => query(graph, pretty, action),
+    }
+}
+
 /// Runs `rexlang graph query <graph> <subcommand>`: loads the artifact,
 /// resolves references against it, and prints one query envelope.
-pub(crate) fn query(command: GraphCommand) -> anyhow::Result<ExitCode> {
-    let GraphCommand::Query {
-        graph,
-        pretty,
-        query,
-    } = command;
+fn query(graph: String, pretty: bool, query: QueryCommand) -> anyhow::Result<ExitCode> {
     let text = read_artifact(&graph)?;
     let model = GraphModel::from_json(&text).with_context(|| {
-        format!("{graph}: not a semantic graph artifact (see `rexlang graph <paths>`)")
+        format!("{graph}: not a semantic graph artifact (see `rexlang graph build`)")
     })?;
     let index = GraphIndex::new(&model);
 
@@ -361,10 +389,10 @@ fn read_artifact(input: &str) -> anyhow::Result<String> {
     std::fs::read_to_string(input).with_context(|| format!("cannot read {input}"))
 }
 
-/// Runs `rexlang graph`: compiles the inputs, builds the semantic graph, and
-/// writes it as pretty JSON to `out` (or stdout), exiting `1` when any input
-/// failed to compile.
-pub(crate) fn run(files: Vec<PathBuf>, out: Option<PathBuf>) -> anyhow::Result<ExitCode> {
+/// Runs `rexlang graph build`: compiles the inputs, builds the semantic graph,
+/// and writes it as pretty JSON to `out` (or stdout), exiting `1` when any
+/// input failed to compile.
+fn build_graph(files: Vec<PathBuf>, out: Option<PathBuf>) -> anyhow::Result<ExitCode> {
     if files.is_empty() {
         anyhow::bail!("no model files found in the given paths");
     }
