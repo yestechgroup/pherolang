@@ -130,6 +130,27 @@ byte moves.
 
 ### Changed
 
+- **Compile-time cross-surface joins are scoped to the application** (issue
+  #249): the `.ddd` capability pool, the `.ddd` decision bucket, and the
+  `.actor` grant-coverage carrier set pool the checked file's
+  **import-connected application** (`rex_driver::applications`) — the same
+  relation the union integrity pass already used — instead of every sibling
+  in the directory. A design in one application is no longer validated
+  against a policy in another; an application with no counterpart surface
+  keeps the joins silent (the documented opt-in behavior). `check examples/`
+  no longer rejects `orders.ddd`'s `PlaceOrder` against `support.actor`, and
+  `graph examples/` exits `0` with the full tree.
+- **`examples/` is split into per-application directories** (issue #258):
+  `examples/{support,shop,library,org,iot,shapes,pricing,lending}/`, each a
+  complete vertical slice; `artifacts/`, `instances/`, and the README stay
+  at the root. The support and shop designs now emit the events their
+  `.evt` contracts declare and carry the service operations their `.ifml`
+  actions bind to, so every application is wired end to end and
+  `check examples/` exits `0`. Graph display paths (and the graph, query,
+  and receipt goldens) carry the application directory. The union pass's
+  phase-2 `.ifml` re-check now keeps the decision and actor dimensions
+  phase 1 uses, so a `data:` binding to a decision output is no longer
+  re-reported as a disagreement.
 - **`rexlang graph` is now a pure namespace with two verbs** (issue #257):
   `rexlang graph build <paths>... [-o <file>]` compiles sources into one
   artifact, and `rexlang graph query <graph.json|-> …` answers from a
