@@ -1,4 +1,4 @@
-package rex.conformance.import_schema
+package phero.conformance.import_schema
 
 import schema "import_schema/todo_item.json" as TodoItem
 import schema "import_schema/todo_list.json"

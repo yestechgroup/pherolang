@@ -3,7 +3,7 @@
 ## Overview
 
 A standalone decision-modeling surface implementing the DMN decision
-architecture in the rexlang spirit: a `.dmn` file declares one **decision
+architecture in the Phero Lang spirit: a `.dmn` file declares one **decision
 model** whose central semantic structure is the **Decision Requirements
 Graph** — the **input data** (the `inputs` block), the **decisions**, the
 **business knowledge models** (reusable functions, the `model` declarations),
@@ -14,19 +14,19 @@ table, a FEEL expression, an invocation of a business knowledge model — is
 an implementation detail **attached to a node**, never the node itself: a
 decision with no `logic` clause at all is a valid, first-class declaration
 (the architecture-first reading of DMN, which `minimal.dmn` pins). Parsed by
-**rex-syntax** (`parse_dmn`, the chumsky parser) at compile time, lowered
-and validated by **rex-driver** (`compile_dmn_str`) against the imported
-`.mox` domains, and emitted as the versioned `rex_ir::dmn::DmnModel`
-artifact (the rex-ir crate).
+**phero-syntax** (`parse_dmn`, the chumsky parser) at compile time, lowered
+and validated by **phero-driver** (`compile_dmn_str`) against the imported
+`.mox` domains, and emitted as the versioned `phero_ir::dmn::DmnModel`
+artifact (the phero-ir crate).
 
 **No in-tree backend exists yet**: downstream consumers ingest the artifact
 exactly like the `DddModel`, `EventModel`, and `UseCaseModel` artifacts.
 
 The normative grammar lives exactly once — the *`.dmn` decision-model
 sources* section of the parser module docs
-(`crates/rex-syntax/src/parser/mod.rs`); the normative compile contract —
+(`crates/phero-syntax/src/parser/mod.rs`); the normative compile contract —
 entry points, resolution semantics, and validation rules — is documented on
-`rex_driver::compile_dmn_str` (`crates/rex-driver/src/lib.rs`). This page is
+`phero_driver::compile_dmn_str` (`crates/phero-driver/src/lib.rs`). This page is
 the language reference; when prose and either authority disagree, they win.
 
 ---
@@ -82,8 +82,8 @@ decision_model Approval {
 
 The normative EBNF for the `.dmn` surface lives exactly once, in the parser
 module docs under [*`.dmn` decision-model
-sources*](https://docs.rs/rex-syntax/latest/rex_syntax/parser/index.html)
-(`crates/rex-syntax/src/parser/mod.rs`) — the single authority for
+sources*](https://docs.rs/phero-syntax/latest/phero_syntax/parser/index.html)
+(`crates/phero-syntax/src/parser/mod.rs`) — the single authority for
 `dmn_import`, `decision_model_decl`, `model_member`, and every nested
 production; this page keeps only the language-level rules.
 
@@ -113,7 +113,7 @@ Language-level rules:
 - **Doc comments**: a `///` line directly above a `decision`, `model`,
   `source`, `service`, or `view` header becomes that element's
   description, carried in the artifact. Plain `//` comments are preserved
-  verbatim by `rexlang fmt`.
+  verbatim by `pherolang fmt`.
 - **Name lists** (`inputs`/`outputs`/`encapsulates` of a service, `show` of
   a view) are brace lists of bare names — inline when they fit comfortably,
   one name per line past the column budget.
@@ -122,7 +122,7 @@ Language-level rules:
 
 Every `.dmn` word is a **contextual identifier** (the `.deploy`
 discipline): special only in its grammar position, an ordinary name
-everywhere else, escapable with `^` (`crates/rex-syntax/src/dmn.rs`).
+everywhere else, escapable with `^` (`crates/phero-syntax/src/dmn.rs`).
 `version` is the surface's one real lexer keyword (the `.mox` vocabulary
 precedent); `import` is the shared one every surface has.
 
@@ -245,7 +245,7 @@ exact); the format itself is the next section.
 ### `logic expression "<FEEL>"`
 
 The decision's value is the FEEL expression text, stored **verbatim**
-(interior spacing is never normalized, so `rexlang fmt` round-trips it
+(interior spacing is never normalized, so `pherolang fmt` round-trips it
 byte-identically). The driver syntax-checks the text (rule 12) and stops
 there — no deep typing at compile time (see Deviations). Conditional
 (`if`) expressions gate like every other expression: the rev-pinned
@@ -414,8 +414,8 @@ already declares (see Deviations).
 
 ## Artifact wire format
 
-`DmnModel` is a standalone, versioned wire artifact following the rex-ir
-[wire format contract](BACKENDS.md) (see also the `rex_ir::dmn` module
+`DmnModel` is a standalone, versioned wire artifact following the phero-ir
+[wire format contract](BACKENDS.md) (see also the `phero_ir::dmn` module
 docs):
 
 - Versioned via **`DMN_MODEL_FORMAT_VERSION`** (= 1), the `ActorModel`
@@ -431,7 +431,7 @@ docs):
   never a wire concern.
 - A logic-less decision serializes with no `logic` key at all, and every
   collection field is `#[serde(default)]` and omitted when empty — a
-  model reduced to metadata serializes as exactly `{"formatVersion":1}`,
+  model reduced to metadata serializes as exactly `{"formatVersion":2}`,
   byte-identical no matter what is added later. Unknown fields are ignored
   on deserialize.
 
@@ -441,7 +441,7 @@ the logic-less decision (key order follows the emitter's canonical order):
 
 ```json
 {
-  "formatVersion": 1,
+  "formatVersion": 2,
   "name": "Minimal",
   "namespace": "nz.example.minimal",
   "inputs": [
@@ -488,7 +488,7 @@ exactly the decision's information-required inputs and its output columns
 exactly the declared outputs, each name matching character-for-character
 (column names are FEEL names). A single-output decision names no output,
 so its one output column's header is a free label. Tables are plain data
-files: `rexlang fmt` formats the `.dmn`, never the markdown.
+files: `pherolang fmt` formats the `.dmn`, never the markdown.
 
 `compile_dmn_str`'s `tables` parameter carries the contents **keyed by the
 path as written** — hosts resolve the path relative to the `.dmn` file, the
@@ -502,7 +502,7 @@ discipline).
 Any error-severity diagnostic anywhere (the `.dmn` file, an imported
 domain, a referenced table) drops the artifact; warnings do not. The
 authoritative, numbered contract is the *Validation rules* section of
-`compile_dmn_str` (`crates/rex-driver/src/lib.rs`); the same fourteen in
+`compile_dmn_str` (`crates/phero-driver/src/lib.rs`); the same fourteen in
 brief:
 
 1. **Imports** — every import names a provided `.mox` domain (matched by
@@ -559,8 +559,8 @@ Every `.dmn` diagnostic carries a stable code in the **`dmn.check` band**:
 `E0200`-`E0215` are the surface codes (typing through table signature and
 emitted events, rule by rule as above), and `E0250`/`E0251` are the
 **`.ddd` decision-link codes** fired on the design side of the
-integration below. Run `rexlang explain E0205` for one entry,
-`rexlang explain --list` for the ledger; the registry lives in
+integration below. Run `pherolang explain E0205` for one entry,
+`pherolang explain --list` for the ledger; the registry lives in
 [docs/DIAGNOSTICS.md](DIAGNOSTICS.md).
 
 ---
@@ -605,16 +605,16 @@ touching the decisions it calls.
 ## CLI usage
 
 ```
-rexlang check kiwisaver.dmn                  # validate + imported domains + tables
-rexlang ir kiwisaver.dmn -o kiwisaver.dmn.json  # emit the DmnModel artifact
-rexlang fmt --check kiwisaver.dmn            # canonical formatting gate
+pherolang check kiwisaver.dmn                  # validate + imported domains + tables
+pherolang ir kiwisaver.dmn -o kiwisaver.dmn.json  # emit the DmnModel artifact
+pherolang fmt --check kiwisaver.dmn            # canonical formatting gate
 ```
 
 Try it on the canonical fixtures from the repository root:
 
 ```
-cargo run -p rex-cli -- check tests/conformance/dmn/kiwisaver.dmn
-cargo run -p rex-cli -- ir tests/conformance/dmn/minimal.dmn -o minimal.dmn.json
+cargo run -p phero-cli -- check tests/conformance/dmn/kiwisaver.dmn
+cargo run -p phero-cli -- ir tests/conformance/dmn/minimal.dmn -o minimal.dmn.json
 ```
 
 - Import paths and table paths resolve **relative to the `.dmn` file's
@@ -626,11 +626,11 @@ cargo run -p rex-cli -- ir tests/conformance/dmn/minimal.dmn -o minimal.dmn.json
 - Diagnostics come from every file involved (the `.dmn` file, its imported
   domains, its tables) and render grouped per file, the way `.evt` compiles
   render them.
-- Directory batch mode (`rexlang check <dir>`, `rexlang build <dir>`) picks
+- Directory batch mode (`pherolang check <dir>`, `pherolang build <dir>`) picks
   `.dmn` files up like every other surface: each model compiles
   independently, imports resolved relative to it, and `build` emits one
   `<input path>.json` artifact per file under the out directory.
-- `rexlang fmt` formats `.dmn` files with the canonical layout: imports
+- `pherolang fmt` formats `.dmn` files with the canonical layout: imports
   hoisted into a tight first section, then the `decision_model` with
   members in the canonical order above, canonical `;` on every statement
   line, `logic` clauses without one, name lists inline when they fit
@@ -643,14 +643,14 @@ cargo run -p rex-cli -- ir tests/conformance/dmn/minimal.dmn -o minimal.dmn.json
 ## Deviations from OMG DMN 1.6
 
 The surface follows the DMN decision architecture (DRG, the three
-requirement kinds, hit policies) and deviates deliberately where rexlang's
+requirement kinds, hit policies) and deviates deliberately where Phero Lang's
 model demands it:
 
 1. **A text surface, not XML** — one `decision_model` per file, no DMN XML
    schema, no model interchange between files.
 2. **FEEL is stored, not executed** — expression texts are strings,
    syntax-checked at compile time and never deeply typed; the type
-   discipline rexlang applies to its own expression surfaces (`when`
+   discipline Phero Lang applies to its own expression surfaces (`when`
    guards, policies) is not imposed on FEEL.
 3. **Decision tables are external markdown** — the dsntk shape, one table
    per file, not boxed expressions inside the model; the `.dmn` carries
@@ -704,8 +704,8 @@ the `AssessRefund` service the design links to, and an `emits` block on
 two BKMs, three sources, two views, and `examples/lending/tables/lvr.md`).
 
 Regenerate the goldens with
-`REX_UPDATE_FIXTURES=1 cargo test -p rex-driver --test dmn_golden` (the
+`PHERO_UPDATE_FIXTURES=1 cargo test -p phero-driver --test dmn_golden` (the
 fixture artifacts `kiwisaver.dmn.json` and `minimal.dmn.json`) and
-`REX_UPDATE_FIXTURES=1 cargo test -p rex-driver --test examples_artifacts`
+`PHERO_UPDATE_FIXTURES=1 cargo test -p phero-driver --test examples_artifacts`
 (the example artifacts `examples/artifacts/support.dmn.json` and
 `examples/artifacts/lending.dmn.json`).

@@ -1,0 +1,1875 @@
+//! Integration tests for the phero-syntax lexer and parser.
+
+use phero_syntax::ast::*;
+use phero_syntax::{parse, Span};
+
+const LIBRARY: &str = include_str!("../../../examples/library/library.mox");
+
+fn span_text(source: &str, span: Span) -> &str {
+    &source[span.start..span.end]
+}
+
+fn expect_class<'a>(decl: &'a Decl, name: &str) -> &'a ClassDecl {
+    match decl {
+        Decl::Class(class) => {
+            assert_eq!(class.name.text, name, "unexpected class declaration");
+            class
+        }
+        other => panic!("expected class `{name}`, found {other:?}"),
+    }
+}
+
+fn expect_feature<'a, F>(
+    features: &'a [FeatureDecl],
+    index: usize,
+    kind: &str,
+    name: &str,
+    check: F,
+) where
+    F: FnOnce(&'a FeatureDecl),
+{
+    let feature = &features[index];
+    assert_eq!(feature.kind(), kind, "unexpected feature kind at {index}");
+    assert_eq!(
+        feature.name().text,
+        name,
+        "unexpected feature name at {index}"
+    );
+    check(feature);
+}
+
+fn expect_attribute(
+    feature: &FeatureDecl,
+) -> (&TypeRef, Option<&Multiplicity>, Option<&DefaultValue>) {
+    match feature {
+        FeatureDecl::Attribute {
+            type_ref,
+            multiplicity,
+            default,
+            ..
+        } => (type_ref, multiplicity.as_ref(), default.as_ref()),
+        other => panic!("expected attribute, found {other:?}"),
+    }
+}
+
+#[test]
+fn library_example_parses_without_errors() {
+    let result = parse(LIBRARY);
+    assert!(
+        result.errors.is_empty(),
+        "unexpected errors: {:?}",
+        result.errors
+    );
+    let model = result.ast.expect("expected an AST");
+
+    let package = model.package.expect("expected a package declaration");
+    assert_eq!(package.name.full_name(), "nz.example.library");
+    assert_eq!(package.name.segments.len(), 3);
+
+    assert_eq!(model.declarations.len(), 5);
+
+    // enum BookCategory { Mystery as "M" = 0, ScienceFiction as "S" = 1 }
+    let Decl::Enum(category) = &model.declarations[0] else {
+        panic!("expected enum, found {:?}", model.declarations[0]);
+    };
+    assert_eq!(category.name.text, "BookCategory");
+    assert_eq!(category.literals.len(), 2);
+    assert_eq!(category.literals[0].name.text, "Mystery");
+    assert_eq!(category.literals[0].label.as_deref(), Some("M"));
+    assert_eq!(category.literals[0].value, Some(0));
+    assert_eq!(category.literals[1].name.text, "ScienceFiction");
+    assert_eq!(category.literals[1].label.as_deref(), Some("S"));
+    assert_eq!(category.literals[1].value, Some(1));
+    assert!(span_text(LIBRARY, category.span).starts_with("enum BookCategory"));
+
+    // type Date wraps opaque { rust ... csharp ... java ... }
+    let Decl::Datatype(date) = &model.declarations[1] else {
+        panic!("expected datatype, found {:?}", model.declarations[1]);
+    };
+    assert_eq!(date.name.text, "Date");
+    assert!(matches!(date.wraps, Some(Wraps::Opaque(_))));
+    assert_eq!(date.bindings.len(), 3);
+    let bindings: Vec<(&str, &str)> = date
+        .bindings
+        .iter()
+        .map(|binding| (binding.key.text.as_str(), binding.value.as_str()))
+        .collect();
+    assert_eq!(
+        bindings,
+        vec![
+            ("rust", "chrono::NaiveDate"),
+            ("csharp", "System.DateOnly"),
+            ("java", "java.time.LocalDate"),
+        ]
+    );
+
+    // class Library { ... }
+    let library = expect_class(&model.declarations[2], "Library");
+    assert!(library.extends.is_empty());
+    assert_eq!(library.features.len(), 3);
+
+    expect_feature(&library.features, 0, "attribute", "name", |feature| {
+        let (type_ref, multiplicity, default) = expect_attribute(feature);
+        assert_eq!(type_ref.name.full_name(), "String");
+        assert!(multiplicity.is_none());
+        match default {
+            Some(DefaultValue::Str { value, .. }) => assert_eq!(value, "Default Name"),
+            other => panic!("expected string default, found {other:?}"),
+        }
+    });
+    expect_feature(&library.features, 1, "containment", "books", |feature| {
+        let FeatureDecl::Containment {
+            type_ref,
+            multiplicity,
+            opposite,
+            ..
+        } = feature
+        else {
+            panic!("expected containment");
+        };
+        assert_eq!(type_ref.name.full_name(), "Book");
+        assert_eq!(
+            multiplicity.as_ref().map(|m| &m.kind),
+            Some(&MultiplicityKind::Unbounded)
+        );
+        assert_eq!(opposite.as_ref().map(|n| n.text.as_str()), Some("library"));
+    });
+    expect_feature(&library.features, 2, "op", "getBook", |feature| {
+        let FeatureDecl::Op {
+            return_type,
+            params,
+            body,
+            bodies,
+            ..
+        } = feature
+        else {
+            panic!("expected op");
+        };
+        assert_eq!(return_type.name.full_name(), "Book");
+        assert_eq!(params.len(), 1);
+        assert_eq!(params[0].type_ref.name.full_name(), "String");
+        assert_eq!(params[0].name.text, "title");
+        // The flagship now carries a tagged `expr { ... }` body: the outer
+        // span is present and exactly one target block is captured.
+        assert!(body.is_some(), "tagged body sets the outer span");
+        assert_eq!(bodies.len(), 1);
+        assert_eq!(bodies[0].target.text, "expr");
+    });
+
+    // class Book { ... }
+    let book = expect_class(&model.declarations[3], "Book");
+    assert!(book.extends.is_empty());
+    assert_eq!(book.features.len(), 7);
+    assert!(span_text(LIBRARY, book.span).starts_with("class Book"));
+
+    expect_feature(&book.features, 0, "container", "library", |feature| {
+        let FeatureDecl::Container {
+            type_ref, opposite, ..
+        } = feature
+        else {
+            panic!("expected container");
+        };
+        assert_eq!(type_ref.name.full_name(), "Library");
+        assert_eq!(opposite.as_ref().map(|n| n.text.as_str()), Some("books"));
+    });
+    expect_feature(&book.features, 1, "attribute", "title", |feature| {
+        let (type_ref, multiplicity, default) = expect_attribute(feature);
+        assert_eq!(type_ref.name.full_name(), "String");
+        assert!(multiplicity.is_none());
+        assert!(default.is_none());
+    });
+    expect_feature(&book.features, 2, "attribute", "pages", |feature| {
+        let (type_ref, ..) = expect_attribute(feature);
+        assert_eq!(type_ref.name.full_name(), "int");
+    });
+    expect_feature(&book.features, 3, "attribute", "copyright", |feature| {
+        let (type_ref, ..) = expect_attribute(feature);
+        assert_eq!(type_ref.name.full_name(), "Date");
+    });
+    expect_feature(&book.features, 4, "attribute", "category", |feature| {
+        let (type_ref, ..) = expect_attribute(feature);
+        assert_eq!(type_ref.name.full_name(), "BookCategory");
+    });
+    expect_feature(&book.features, 5, "reference", "authors", |feature| {
+        let FeatureDecl::Reference {
+            type_ref,
+            multiplicity,
+            opposite,
+            ..
+        } = feature
+        else {
+            panic!("expected reference");
+        };
+        assert_eq!(type_ref.name.full_name(), "Writer");
+        assert_eq!(
+            multiplicity.as_ref().map(|m| &m.kind),
+            Some(&MultiplicityKind::Unbounded)
+        );
+        assert_eq!(opposite.as_ref().map(|n| n.text.as_str()), Some("books"));
+    });
+    expect_feature(&book.features, 6, "derived", "citation", |feature| {
+        let FeatureDecl::Derived {
+            type_ref,
+            multiplicity,
+            body,
+            bodies,
+            ..
+        } = feature
+        else {
+            panic!("expected derived");
+        };
+        assert_eq!(type_ref.name.full_name(), "String");
+        assert!(multiplicity.is_none());
+        // The derived body is a single tagged `expr { ... }` block.
+        assert!(body.is_some(), "tagged body sets the outer span");
+        assert_eq!(bodies.len(), 1);
+        assert_eq!(bodies[0].target.text, "expr");
+    });
+
+    // class Writer { ... }
+    let writer = expect_class(&model.declarations[4], "Writer");
+    assert_eq!(writer.features.len(), 2);
+    expect_feature(&writer.features, 0, "attribute", "name", |_| {});
+    expect_feature(&writer.features, 1, "reference", "books", |feature| {
+        let FeatureDecl::Reference {
+            type_ref,
+            multiplicity,
+            opposite,
+            ..
+        } = feature
+        else {
+            panic!("expected reference");
+        };
+        assert_eq!(type_ref.name.full_name(), "Book");
+        assert_eq!(
+            multiplicity.as_ref().map(|m| &m.kind),
+            Some(&MultiplicityKind::Unbounded)
+        );
+        assert_eq!(opposite.as_ref().map(|n| n.text.as_str()), Some("authors"));
+    });
+}
+
+#[test]
+fn multiplicity_variants() {
+    let source = r#"
+        class M {
+            String[] a
+            String[2] b
+            String[0..1] c
+            String[1..*] d
+            String[3..5] e
+        }
+    "#;
+    let result = parse(source);
+    assert!(
+        result.errors.is_empty(),
+        "unexpected errors: {:?}",
+        result.errors
+    );
+    let model = result.ast.unwrap();
+    let class = expect_class(&model.declarations[0], "M");
+    assert_eq!(class.features.len(), 5);
+
+    let kinds: Vec<MultiplicityKind> = class
+        .features
+        .iter()
+        .map(|feature| match feature {
+            FeatureDecl::Attribute { multiplicity, .. } => {
+                multiplicity.as_ref().unwrap().kind.clone()
+            }
+            other => panic!("expected attribute, found {other:?}"),
+        })
+        .collect();
+
+    assert_eq!(kinds[0], MultiplicityKind::Unbounded);
+    assert_eq!(kinds[1], MultiplicityKind::Exact(2));
+    assert_eq!(kinds[2], MultiplicityKind::Range(0, MultBound::Int(1)));
+    assert_eq!(kinds[3], MultiplicityKind::Range(1, MultBound::Star));
+    assert_eq!(kinds[4], MultiplicityKind::Range(3, MultBound::Int(5)));
+}
+
+#[test]
+fn escaped_keyword_identifiers() {
+    let source = "class ^class { String ^op }";
+    let result = parse(source);
+    assert!(
+        result.errors.is_empty(),
+        "unexpected errors: {:?}",
+        result.errors
+    );
+    let model = result.ast.unwrap();
+
+    let class = expect_class(&model.declarations[0], "class");
+    assert!(class.name.escaped);
+    assert_eq!(span_text(source, class.name.span), "^class");
+
+    assert_eq!(class.features.len(), 1);
+    expect_feature(&class.features, 0, "attribute", "op", |feature| {
+        let (type_ref, multiplicity, default) = expect_attribute(feature);
+        assert_eq!(type_ref.name.full_name(), "String");
+        assert!(multiplicity.is_none());
+        assert!(default.is_none());
+        assert!(feature.name().escaped);
+        assert_eq!(span_text(source, feature.name().span), "^op");
+    });
+}
+
+#[test]
+fn op_raw_body_span_is_captured() {
+    let source =
+        "class C { op Book getBook(String title) { self.books.first(b => b.title == title) } }";
+    let result = parse(source);
+    assert!(
+        result.errors.is_empty(),
+        "unexpected errors: {:?}",
+        result.errors
+    );
+    let model = result.ast.unwrap();
+
+    let class = expect_class(&model.declarations[0], "C");
+    assert_eq!(class.features.len(), 1);
+    let FeatureDecl::Op { params, body, .. } = &class.features[0] else {
+        panic!("expected op");
+    };
+    assert_eq!(params.len(), 1);
+    let body = body.expect("expected a raw body span");
+    assert_eq!(
+        span_text(source, body),
+        "{ self.books.first(b => b.title == title) }"
+    );
+}
+
+#[test]
+fn raw_bodies_may_contain_nested_braces() {
+    let source = "class C { op int f() { { a } { {} } } op int g() derived String x { [1, 2] } }";
+    let result = parse(source);
+    assert!(
+        result.errors.is_empty(),
+        "unexpected errors: {:?}",
+        result.errors
+    );
+    let model = result.ast.unwrap();
+
+    let class = expect_class(&model.declarations[0], "C");
+    assert_eq!(class.features.len(), 3);
+
+    let FeatureDecl::Op { body, .. } = &class.features[0] else {
+        panic!("expected op");
+    };
+    assert_eq!(span_text(source, body.unwrap()), "{ { a } { {} } }");
+
+    let FeatureDecl::Op { body, .. } = &class.features[1] else {
+        panic!("expected op");
+    };
+    assert!(body.is_none());
+
+    let FeatureDecl::Derived { body, .. } = &class.features[2] else {
+        panic!("expected derived");
+    };
+    assert_eq!(span_text(source, body.unwrap()), "{ [1, 2] }");
+}
+
+#[test]
+fn comments_are_skipped() {
+    let source = "// leading line comment\n/* block\ncomment */ class /* mid */ A {\n// inner\n} // trailing";
+    let result = parse(source);
+    assert!(
+        result.errors.is_empty(),
+        "unexpected errors: {:?}",
+        result.errors
+    );
+    let model = result.ast.unwrap();
+    assert!(model.declarations.len() == 1);
+    assert_eq!(expect_class(&model.declarations[0], "A").features.len(), 0);
+}
+
+#[test]
+fn error_recovery_keeps_valid_declarations() {
+    let source = r#"
+        class Broken {
+            String = "oops"
+        }
+
+        enum Color { Red }
+
+        class Ok {
+            String name
+        }
+    "#;
+    let result = parse(source);
+    assert!(!result.errors.is_empty(), "expected at least one error");
+    let model = result.ast.expect("expected a recovered AST");
+
+    assert_eq!(model.declarations.len(), 3);
+    let broken = expect_class(&model.declarations[0], "Broken");
+    assert!(broken.features.is_empty());
+
+    let Decl::Enum(color) = &model.declarations[1] else {
+        panic!("expected enum after broken class");
+    };
+    assert_eq!(color.name.text, "Color");
+    assert_eq!(color.literals.len(), 1);
+    assert_eq!(color.literals[0].name.text, "Red");
+
+    let ok = expect_class(&model.declarations[2], "Ok");
+    assert_eq!(ok.features.len(), 1);
+}
+
+#[test]
+fn garbage_input_yields_errors_without_panic() {
+    let result = parse("@@@");
+    assert!(!result.errors.is_empty());
+
+    let nasty = [
+        "",
+        "   \n\t ",
+        "}}}",
+        "class",
+        "class A",
+        "class A {",
+        "class A { String }",
+        "@@@ !!! ###",
+        "package",
+        "package .",
+        "enum E { }",
+        "type T",
+        "type T wraps",
+        "interface I {",
+        "annotation",
+        "annotation \"a\" as",
+        "\"unterminated",
+        "/* unterminated",
+        "^ ^^ ^class",
+        "class A { contains } class B { refers } enum E { X as = }",
+        "999999999999999999999999",
+        "class A { op int f( }",
+    ];
+    for input in nasty {
+        let result = parse(input);
+        let _ = format!("{result:?}"); // must be debuggable and must not panic
+    }
+}
+
+/// Deterministic pseudo-random soak test: parsing must never panic.
+#[test]
+fn random_inputs_never_panic() {
+    // Simple LCG so the test is reproducible without external crates.
+    let mut state: u64 = 0x5EED_5EED_5EED_5EED;
+    let mut next = move || {
+        state = state
+            .wrapping_mul(6364136223846793005)
+            .wrapping_add(1442695040888963407);
+        (state >> 33) as usize
+    };
+    let alphabet: Vec<char> = "abcAZ019 \t\n{}[]().,*=^\"-+;:@#/?\\<>!~%&|$`'é§"
+        .chars()
+        .collect();
+    let keywords = [
+        "class", "enum", "type", "package", "op", "opposite", "extends",
+    ];
+    for _ in 0..2000 {
+        let len = next() % 120;
+        let mut input = String::new();
+        while input.chars().count() < len {
+            if next() % 8 == 0 {
+                input.push_str(keywords[next() % keywords.len()]);
+                input.push(' ');
+            } else {
+                input.push(alphabet[next() % alphabet.len()]);
+            }
+        }
+        let result = parse(&input);
+        let _ = format!("{result:?}");
+    }
+}
+
+#[test]
+fn empty_input_parses_to_empty_model() {
+    let result = parse("");
+    assert!(result.errors.is_empty());
+    let model = result.ast.unwrap();
+    assert!(model.package.is_none());
+    assert!(model.declarations.is_empty());
+}
+
+#[test]
+fn interface_annotation_extends_and_qualified_names() {
+    let source = r#"
+        annotation "Deprecated" as ^class
+
+        interface Printable {
+            rust "std::fmt::Display"
+            csharp "System.IFormattable"
+        }
+
+        class Reference extends nz.example.Entity, Printable {
+            String id = "unknown"
+        }
+    "#;
+    let result = parse(source);
+    assert!(
+        result.errors.is_empty(),
+        "unexpected errors: {:?}",
+        result.errors
+    );
+    let model = result.ast.unwrap();
+    assert!(model.package.is_none());
+    assert_eq!(model.declarations.len(), 3);
+
+    let Decl::Annotation(annotation) = &model.declarations[0] else {
+        panic!("expected annotation");
+    };
+    assert_eq!(annotation.value, "Deprecated");
+    let target = annotation.name.as_ref().unwrap();
+    assert_eq!(target.text, "class");
+    assert!(target.escaped);
+
+    let Decl::Interface(printable) = &model.declarations[1] else {
+        panic!("expected interface");
+    };
+    assert_eq!(printable.name.text, "Printable");
+    assert_eq!(printable.bindings.len(), 2);
+    assert_eq!(printable.bindings[0].key.text, "rust");
+    assert_eq!(printable.bindings[0].value, "std::fmt::Display");
+    assert_eq!(printable.bindings[1].key.text, "csharp");
+    assert_eq!(printable.bindings[1].value, "System.IFormattable");
+
+    let reference = expect_class(&model.declarations[2], "Reference");
+    assert_eq!(reference.extends.len(), 2);
+    assert_eq!(reference.extends[0].name.full_name(), "nz.example.Entity");
+    assert_eq!(reference.extends[1].name.full_name(), "Printable");
+    expect_feature(&reference.features, 0, "attribute", "id", |feature| {
+        let (.., default) = expect_attribute(feature);
+        match default {
+            Some(DefaultValue::Str { value, .. }) => assert_eq!(value, "unknown"),
+            other => panic!("expected string default, found {other:?}"),
+        }
+    });
+}
+
+#[test]
+fn feature_level_recovery_resyncs_inside_class_body() {
+    let source = r#"
+        class A {
+            String x;
+            = "broken"
+            contains B[] bs opposite a
+            String tail
+        }
+    "#;
+    let result = parse(source);
+    assert!(!result.errors.is_empty(), "expected errors");
+    let model = result.ast.expect("expected a recovered AST");
+    let class = expect_class(&model.declarations[0], "A");
+
+    let names: Vec<&str> = class
+        .features
+        .iter()
+        .map(|f| f.name().text.as_str())
+        .collect();
+    assert_eq!(names, vec!["x", "bs", "tail"]);
+}
+
+fn expect_modifiers(feature: &FeatureDecl, id: bool, read_only: bool) {
+    let modifiers = feature.modifiers();
+    assert_eq!(
+        modifiers.is_id(),
+        id,
+        "unexpected `id` on {}",
+        feature.name().text
+    );
+    assert_eq!(
+        modifiers.is_read_only(),
+        read_only,
+        "unexpected `readonly` on {}",
+        feature.name().text
+    );
+}
+
+#[test]
+fn modifiers_parse_on_every_feature_kind() {
+    let source = r#"
+        class Person {
+            id String email
+            readonly String name
+            readonly id String handle
+            contains Book[] books opposite shelf
+            refers Writer[] friends opposite books
+            readonly op Book find(String title)
+            id derived String label
+            id container Shelf shelf opposite people
+        }
+        class Book {}
+        class Writer {}
+        class Shelf {}
+    "#;
+    let result = parse(source);
+    assert!(
+        result.errors.is_empty(),
+        "unexpected errors: {:?}",
+        result.errors
+    );
+    let model = result.ast.unwrap();
+    let person = expect_class(&model.declarations[0], "Person");
+    assert_eq!(person.features.len(), 8);
+
+    expect_modifiers(&person.features[0], true, false); // id String email
+    expect_modifiers(&person.features[1], false, true); // readonly String name
+    expect_modifiers(&person.features[2], true, true); // readonly id String handle
+    expect_modifiers(&person.features[3], false, false); // contains Book[] books
+    expect_modifiers(&person.features[4], false, false); // refers Writer[] friends
+    expect_modifiers(&person.features[5], false, true); // readonly op Book find
+    expect_modifiers(&person.features[6], true, false); // id derived String label
+    expect_modifiers(&person.features[7], true, false); // id container Shelf shelf
+
+    // Modifiers must not disturb the parsed shape of the features themselves.
+    expect_feature(&person.features, 2, "attribute", "handle", |feature| {
+        let (type_ref, ..) = expect_attribute(feature);
+        assert_eq!(type_ref.name.full_name(), "String");
+    });
+    expect_feature(&person.features, 5, "op", "find", |feature| {
+        let FeatureDecl::Op {
+            return_type,
+            params,
+            body,
+            ..
+        } = feature
+        else {
+            panic!("expected op");
+        };
+        assert_eq!(return_type.name.full_name(), "Book");
+        assert_eq!(params.len(), 1);
+        assert!(body.is_none());
+    });
+    expect_feature(&person.features, 6, "derived", "label", |_| {});
+    expect_feature(&person.features, 7, "container", "shelf", |feature| {
+        let FeatureDecl::Container {
+            type_ref, opposite, ..
+        } = feature
+        else {
+            panic!("expected container");
+        };
+        assert_eq!(type_ref.name.full_name(), "Shelf");
+        assert_eq!(opposite.as_ref().map(|n| n.text.as_str()), Some("people"));
+    });
+}
+
+#[test]
+fn modifiers_are_order_free_and_repeats_are_idempotent() {
+    let source = r#"
+        class A {
+            readonly id String a
+            id readonly String b
+            id id String c
+            readonly readonly String d
+        }
+    "#;
+    let result = parse(source);
+    assert!(
+        result.errors.is_empty(),
+        "unexpected errors: {:?}",
+        result.errors
+    );
+    let model = result.ast.unwrap();
+    let class = expect_class(&model.declarations[0], "A");
+    assert_eq!(class.features.len(), 4);
+    expect_modifiers(&class.features[0], true, true); // readonly id String a
+    expect_modifiers(&class.features[1], true, true); // id readonly String b
+    expect_modifiers(&class.features[2], true, false); // id id String c
+    expect_modifiers(&class.features[3], false, true); // readonly readonly String d
+}
+
+#[test]
+fn modifier_spans_point_at_their_keywords_and_the_feature_spans_the_whole_line() {
+    let source = "class C { readonly id String handle }";
+    let result = parse(source);
+    assert!(
+        result.errors.is_empty(),
+        "unexpected errors: {:?}",
+        result.errors
+    );
+    let model = result.ast.unwrap();
+    let class = expect_class(&model.declarations[0], "C");
+    let feature = &class.features[0];
+    let modifiers = feature.modifiers();
+    assert_eq!(span_text(source, modifiers.read_only.unwrap()), "readonly");
+    assert_eq!(span_text(source, modifiers.id.unwrap()), "id");
+    // The feature span covers the whole declaration, modifiers included.
+    assert_eq!(
+        span_text(source, feature.span()),
+        "readonly id String handle"
+    );
+}
+
+#[test]
+fn escaped_readonly_is_a_type_or_name_never_a_modifier() {
+    // `^readonly` in modifier position starts the *type*; it is never a
+    // modifier. The trailing unescaped `readonly` is the feature name.
+    let source = "class C { ^readonly ^readonly }";
+    let result = parse(source);
+    assert!(
+        result.errors.is_empty(),
+        "unexpected errors: {:?}",
+        result.errors
+    );
+    let model = result.ast.unwrap();
+    let class = expect_class(&model.declarations[0], "C");
+    assert_eq!(class.features.len(), 1);
+    expect_feature(&class.features, 0, "attribute", "readonly", |feature| {
+        assert!(feature.modifiers().is_empty());
+        let (type_ref, ..) = expect_attribute(feature);
+        assert_eq!(type_ref.name.full_name(), "readonly");
+        assert!(type_ref.name.segments[0].escaped);
+        assert!(feature.name().escaped);
+    });
+
+    // A real modifier may precede an escaped type; an escaped keyword is
+    // still a legal feature name.
+    let source = "class C { readonly String ^readonly }";
+    let result = parse(source);
+    assert!(
+        result.errors.is_empty(),
+        "unexpected errors: {:?}",
+        result.errors
+    );
+    let model = result.ast.unwrap();
+    let class = expect_class(&model.declarations[0], "C");
+    assert_eq!(class.features.len(), 1);
+    expect_feature(&class.features, 0, "attribute", "readonly", |feature| {
+        assert!(feature.modifiers().is_read_only());
+        let (type_ref, ..) = expect_attribute(feature);
+        assert_eq!(type_ref.name.full_name(), "String");
+        assert!(feature.name().escaped);
+    });
+}
+
+#[test]
+fn modifier_before_escaped_type_still_parses() {
+    let source = "class C { id ^id handle }";
+    let result = parse(source);
+    assert!(
+        result.errors.is_empty(),
+        "unexpected errors: {:?}",
+        result.errors
+    );
+    let model = result.ast.unwrap();
+    let class = expect_class(&model.declarations[0], "C");
+    expect_feature(&class.features, 0, "attribute", "handle", |feature| {
+        assert!(feature.modifiers().is_id());
+        let (type_ref, ..) = expect_attribute(feature);
+        assert_eq!(type_ref.name.full_name(), "id");
+        assert!(type_ref.name.segments[0].escaped);
+    });
+}
+
+#[test]
+fn readonly_and_id_remain_usable_as_unescaped_feature_names() {
+    let source = "class C { String readonly\n String id }";
+    let result = parse(source);
+    assert!(
+        result.errors.is_empty(),
+        "unexpected errors: {:?}",
+        result.errors
+    );
+    let model = result.ast.unwrap();
+    let class = expect_class(&model.declarations[0], "C");
+    assert_eq!(class.features.len(), 2);
+    expect_feature(&class.features, 0, "attribute", "readonly", |feature| {
+        assert!(feature.modifiers().is_empty());
+    });
+    expect_feature(&class.features, 1, "attribute", "id", |feature| {
+        assert!(feature.modifiers().is_empty());
+    });
+}
+
+#[test]
+fn modifier_before_a_broken_feature_recovers_to_the_next_feature() {
+    let source = r#"
+        class A {
+            readonly = "oops"
+            String tail
+        }
+    "#;
+    let result = parse(source);
+    assert!(!result.errors.is_empty(), "expected errors");
+    let model = result.ast.expect("expected a recovered AST");
+    let class = expect_class(&model.declarations[0], "A");
+    let names: Vec<&str> = class
+        .features
+        .iter()
+        .map(|f| f.name().text.as_str())
+        .collect();
+    assert_eq!(names, vec!["tail"]);
+}
+
+// --- Tier 1: target-tagged op bodies and datatype create/convert blocks ------
+
+#[test]
+fn op_target_bodies_are_captured_verbatim() {
+    let source = "class Library {\n\
+                  \x20   op Book getBook(String title) {\n\
+                  \x20       rust { res.books.iter().find_map(|b| { (b.title == *title).then_some(*b) }) }\n\
+                  \x20       java { return books.stream().filter(b => b.title.equals(title)).findFirst(); }\n\
+                  \x20   }\n\
+                  }";
+    let result = parse(source);
+    assert!(
+        result.errors.is_empty(),
+        "unexpected errors: {:?}",
+        result.errors
+    );
+    let model = result.ast.unwrap();
+    let class = expect_class(&model.declarations[0], "Library");
+    assert_eq!(class.features.len(), 1);
+    let FeatureDecl::Op { body, bodies, .. } = &class.features[0] else {
+        panic!("expected op");
+    };
+    // The whole-body span (braces inclusive) is still captured.
+    assert_eq!(span_text(source, body.expect("body span")), "{\n\
+                  \x20       rust { res.books.iter().find_map(|b| { (b.title == *title).then_some(*b) }) }\n\
+                  \x20       java { return books.stream().filter(b => b.title.equals(title)).findFirst(); }\n\
+                  \x20   }");
+    // Two target bodies, in source order, with verbatim inner text.
+    assert_eq!(bodies.len(), 2);
+    assert_eq!(bodies[0].target.text, "rust");
+    assert!(!bodies[0].target.escaped);
+    assert_eq!(
+        span_text(source, bodies[0].span),
+        "{ res.books.iter().find_map(|b| { (b.title == *title).then_some(*b) }) }"
+    );
+    assert_eq!(bodies[1].target.text, "java");
+    assert_eq!(
+        span_text(source, bodies[1].span),
+        "{ return books.stream().filter(b => b.title.equals(title)).findFirst(); }"
+    );
+}
+
+#[test]
+fn bare_op_body_captures_span_without_targets() {
+    let source = "class C { op int f() { { a } { {} } } }";
+    let result = parse(source);
+    assert!(
+        result.errors.is_empty(),
+        "unexpected errors: {:?}",
+        result.errors
+    );
+    let model = result.ast.unwrap();
+    let class = expect_class(&model.declarations[0], "C");
+    let FeatureDecl::Op { body, bodies, .. } = &class.features[0] else {
+        panic!("expected op");
+    };
+    assert_eq!(
+        span_text(source, body.expect("body span")),
+        "{ { a } { {} } }"
+    );
+    // A bare body has no target-tagged entries; the driver rejects it.
+    assert!(bodies.is_empty());
+}
+
+#[test]
+fn datatype_create_convert_blocks_are_captured() {
+    let source = "type Date wraps opaque {\n\
+                  \x20   rust \"chrono::NaiveDate\"\n\
+                  \x20   create { rust { Date(it) } }\n\
+                  \x20   convert { rust { self.0.clone() } }\n\
+                  }";
+    let result = parse(source);
+    assert!(
+        result.errors.is_empty(),
+        "unexpected errors: {:?}",
+        result.errors
+    );
+    let model = result.ast.unwrap();
+    let Decl::Datatype(date) = &model.declarations[0] else {
+        panic!("expected datatype")
+    };
+    assert_eq!(date.bindings.len(), 1);
+    assert_eq!(date.create.len(), 1);
+    assert_eq!(date.create[0].target.text, "rust");
+    assert_eq!(span_text(source, date.create[0].span), "{ Date(it) }");
+    assert_eq!(date.convert.len(), 1);
+    assert_eq!(date.convert[0].target.text, "rust");
+    assert_eq!(
+        span_text(source, date.convert[0].span),
+        "{ self.0.clone() }"
+    );
+}
+
+#[test]
+fn datatype_blocks_and_bindings_are_order_free() {
+    let source = "type D wraps opaque {\n\
+                  \x20   create { csharp { new D(it) } }\n\
+                  \x20   java \"java.time.D\"\n\
+                  \x20   convert { java { self.inner } }\n\
+                  }";
+    let result = parse(source);
+    assert!(
+        result.errors.is_empty(),
+        "unexpected errors: {:?}",
+        result.errors
+    );
+    let model = result.ast.unwrap();
+    let Decl::Datatype(decl) = &model.declarations[0] else {
+        panic!("expected datatype")
+    };
+    assert_eq!(decl.bindings.len(), 1);
+    assert_eq!(decl.bindings[0].key.text, "java");
+    assert_eq!(decl.create.len(), 1);
+    assert_eq!(decl.create[0].target.text, "csharp");
+    assert_eq!(decl.convert.len(), 1);
+    assert_eq!(decl.convert[0].target.text, "java");
+}
+
+#[test]
+fn duplicate_create_or_convert_block_is_a_syntax_error() {
+    for keyword in ["create", "convert"] {
+        let source = format!(
+            "type D wraps opaque {{\n    {k} {{ rust {{ a }} }}\n    {k} {{ rust {{ b }} }}\n}}",
+            k = keyword
+        );
+        let result = parse(&source);
+        assert!(
+            result
+                .errors
+                .iter()
+                .any(|e| e.message.contains(&format!("duplicate `{keyword}` block"))),
+            "expected a duplicate `{keyword}` block error, got {:?}",
+            result.errors
+        );
+    }
+}
+
+#[test]
+fn datatype_wraps_named_target_and_bare_bindings() {
+    let source = r#"
+        type Uuid wraps opaque
+        type Money wraps java.math.BigDecimal {
+            rust "rust_decimal::Decimal"
+        }
+        type Timestamp wraps {
+            rust "chrono::DateTime"
+        }
+    "#;
+    let result = parse(source);
+    assert!(
+        result.errors.is_empty(),
+        "unexpected errors: {:?}",
+        result.errors
+    );
+    let model = result.ast.unwrap();
+    assert_eq!(model.declarations.len(), 3);
+
+    let Decl::Datatype(uuid) = &model.declarations[0] else {
+        panic!("expected datatype")
+    };
+    assert!(matches!(uuid.wraps, Some(Wraps::Opaque(_))));
+    assert!(uuid.bindings.is_empty());
+
+    let Decl::Datatype(money) = &model.declarations[1] else {
+        panic!("expected datatype")
+    };
+    match &money.wraps {
+        Some(Wraps::Named(name)) => assert_eq!(name.full_name(), "java.math.BigDecimal"),
+        other => panic!("expected named wraps target, found {other:?}"),
+    }
+    assert_eq!(money.bindings.len(), 1);
+    assert_eq!(money.bindings[0].value, "rust_decimal::Decimal");
+
+    let Decl::Datatype(timestamp) = &model.declarations[2] else {
+        panic!("expected datatype")
+    };
+    assert!(timestamp.wraps.is_none());
+    assert_eq!(timestamp.bindings[0].key.text, "rust");
+}
+
+// ---------------------------------------------------------------------------
+// Tier 2: derived-feature bodies
+// ---------------------------------------------------------------------------
+
+#[test]
+fn derived_accepts_a_target_tagged_expr_body() {
+    let source = "class C { derived String citation { expr { title } } }";
+    let result = parse(source);
+    assert!(result.errors.is_empty(), "{:?}", result.errors);
+    let binding = result.ast.expect("ast");
+    let class = match &binding.declarations[0] {
+        Decl::Class(class) => class,
+        other => panic!("expected class, got {other:?}"),
+    };
+    let FeatureDecl::Derived { body, bodies, .. } = &class.features[0] else {
+        panic!("expected derived");
+    };
+    // The tagged shape carries the outer-brace span and the `expr` block;
+    // `TargetBody::span` covers only the target's inner braces (the exact
+    // text `body_text` slices).
+    assert_eq!(bodies.len(), 1);
+    assert_eq!(bodies[0].target.text, "expr");
+    assert_eq!(
+        &source[bodies[0].span.start..bodies[0].span.end],
+        "{ title }"
+    );
+    let outer = body.expect("outer span");
+    assert_eq!(&source[outer.start..outer.end], "{ expr { title } }");
+}
+
+#[test]
+fn derived_bare_body_still_parses_as_a_raw_body() {
+    // Parsing is permissive (balanced braces); the DRIVER rejects the bare
+    // shape with the Tier-2 guidance.
+    let source = "class C { derived int total { 42 } }";
+    let result = parse(source);
+    assert!(result.errors.is_empty(), "{:?}", result.errors);
+    let binding = result.ast.expect("ast");
+    let class = match &binding.declarations[0] {
+        Decl::Class(class) => class,
+        other => panic!("expected class, got {other:?}"),
+    };
+    let FeatureDecl::Derived { body, bodies, .. } = &class.features[0] else {
+        panic!("expected derived");
+    };
+    assert!(bodies.is_empty(), "a bare body has no tagged targets");
+    let bare = body.expect("bare span");
+    assert_eq!(&source[bare.start..bare.end], "{ 42 }");
+}
+
+// ---------------------------------------------------------------------------
+// Doc comments (descriptions)
+// ---------------------------------------------------------------------------
+
+#[test]
+fn doc_comments_attach_to_declarations_features_and_literals() {
+    let source = "\
+/// A book in the library.
+class Book {
+    /// The title.
+    String title
+    /// The category.
+    BookCategory category
+}
+
+/// How books are shelved.
+enum BookCategory {
+    /// Whodunits.
+    Mystery = 0
+    ScienceFiction = 1
+}
+
+/// An external reference.
+interface Named {}
+
+/// A calendar day.
+type Date wraps opaque {}
+
+/// ISO currencies.
+vocabulary Currency from \"iso:4217\" { key alpha3 }
+";
+    let result = parse(source);
+    assert!(result.errors.is_empty(), "{:?}", result.errors);
+    let model = result.ast.expect("ast");
+
+    let Decl::Class(class) = &model.declarations[0] else {
+        panic!("expected class")
+    };
+    assert_eq!(class.doc.as_deref(), Some("A book in the library."));
+    assert_eq!(class.features[0].doc(), Some("The title."), "attribute doc");
+    let FeatureDecl::Attribute { constraints, .. } = &class.features[0] else {
+        panic!("expected attribute")
+    };
+    assert!(constraints.is_empty());
+    let Decl::Enum(decl) = &model.declarations[1] else {
+        panic!("expected enum")
+    };
+    assert_eq!(decl.doc.as_deref(), Some("How books are shelved."));
+    assert_eq!(decl.literals[0].doc.as_deref(), Some("Whodunits."));
+    assert_eq!(decl.literals[1].doc, None, "no doc on second literal");
+    let Decl::Interface(interface) = &model.declarations[2] else {
+        panic!("expected interface")
+    };
+    assert_eq!(interface.doc.as_deref(), Some("An external reference."));
+    let Decl::Datatype(datatype) = &model.declarations[3] else {
+        panic!("expected datatype")
+    };
+    assert_eq!(datatype.doc.as_deref(), Some("A calendar day."));
+    let Decl::Vocabulary(vocabulary) = &model.declarations[4] else {
+        panic!("expected vocabulary")
+    };
+    assert_eq!(vocabulary.doc.as_deref(), Some("ISO currencies."));
+}
+
+#[test]
+fn contiguous_doc_line_comments_join_into_one_description() {
+    let source = "\
+/// First line.
+/// Second line.
+class Book {}
+";
+    let result = parse(source);
+    assert!(result.errors.is_empty(), "{:?}", result.errors);
+    let Decl::Class(class) = &result.ast.expect("ast").declarations[0] else {
+        panic!("expected class")
+    };
+    assert_eq!(
+        class.doc.as_deref(),
+        Some("First line.\nSecond line."),
+        "contiguous doc lines join with a newline"
+    );
+}
+
+#[test]
+fn block_doc_comments_normalize_their_delimiters() {
+    let source = "/** A calendar day. */\ntype Date wraps opaque\n";
+    let result = parse(source);
+    assert!(result.errors.is_empty(), "{:?}", result.errors);
+    let Decl::Datatype(datatype) = &result.ast.expect("ast").declarations[0] else {
+        panic!("expected datatype")
+    };
+    assert_eq!(datatype.doc.as_deref(), Some("A calendar day."));
+}
+
+#[test]
+fn ordinary_comments_and_detached_docs_do_not_attach() {
+    let source = "\
+// An ordinary comment.
+class Book {}
+
+/// Separated by a blank line.
+
+class Shelf {}
+";
+    let result = parse(source);
+    assert!(result.errors.is_empty(), "{:?}", result.errors);
+    let model = result.ast.expect("ast");
+    let Decl::Class(class) = &model.declarations[0] else {
+        panic!("expected class")
+    };
+    assert_eq!(class.doc, None, "plain `//` is not a doc comment");
+    let Decl::Class(shelf) = &model.declarations[1] else {
+        panic!("expected class")
+    };
+    assert_eq!(shelf.doc, None, "a blank line detaches the doc run");
+}
+
+#[test]
+fn trailing_doc_comment_attaches_to_nothing() {
+    // A `///` after code on the same line is a trailing comment, not a doc
+    // for the next declaration.
+    let source = "class Book {} /// trailing\nclass Shelf {}\n";
+    let result = parse(source);
+    assert!(result.errors.is_empty(), "{:?}", result.errors);
+    let Decl::Class(shelf) = &result.ast.expect("ast").declarations[1] else {
+        panic!("expected class")
+    };
+    assert_eq!(shelf.doc, None);
+}
+
+#[test]
+fn doc_comment_attaches_to_package() {
+    let source = "\
+/// A library model.
+package nz.example.library
+";
+    let result = parse(source);
+    assert!(result.errors.is_empty(), "{:?}", result.errors);
+    let package = result.ast.expect("ast").package.expect("package");
+    assert_eq!(package.name.full_name(), "nz.example.library");
+    assert_eq!(package.doc.as_deref(), Some("A library model."));
+}
+
+#[test]
+fn package_without_doc_comment_has_none() {
+    let source = "package demo\n";
+    let result = parse(source);
+    assert!(result.errors.is_empty(), "{:?}", result.errors);
+    let package = result.ast.expect("ast").package.expect("package");
+    assert_eq!(package.doc, None);
+}
+
+#[test]
+fn contiguous_package_doc_lines_join_and_block_form_attaches() {
+    let multi = "\
+/// First line.
+/// Second line.
+package demo
+";
+    let result = parse(multi);
+    assert!(result.errors.is_empty(), "{:?}", result.errors);
+    let package = result.ast.expect("ast").package.expect("package");
+    assert_eq!(
+        package.doc.as_deref(),
+        Some("First line.\nSecond line."),
+        "contiguous doc lines join with a newline"
+    );
+
+    let block = "/** A calendar day. */\npackage demo\n";
+    let result = parse(block);
+    assert!(result.errors.is_empty(), "{:?}", result.errors);
+    let package = result.ast.expect("ast").package.expect("package");
+    assert_eq!(package.doc.as_deref(), Some("A calendar day."));
+}
+
+#[test]
+fn detached_package_doc_runs_do_not_attach() {
+    let blank = "\
+/// Separated by a blank line.
+
+package demo
+";
+    let result = parse(blank);
+    assert!(result.errors.is_empty(), "{:?}", result.errors);
+    let package = result.ast.expect("ast").package.expect("package");
+    assert_eq!(package.doc, None, "a blank line detaches the doc run");
+
+    let commented = "\
+/// Detached by an ordinary comment.
+// not a doc comment
+package demo
+";
+    let result = parse(commented);
+    assert!(result.errors.is_empty(), "{:?}", result.errors);
+    let package = result.ast.expect("ast").package.expect("package");
+    assert_eq!(
+        package.doc, None,
+        "an intervening non-doc comment detaches the doc run"
+    );
+}
+
+// ---------------------------------------------------------------------------
+// Attribute constraint blocks
+// ---------------------------------------------------------------------------
+
+#[test]
+fn attributes_accept_a_constraint_block() {
+    let source = "class Product { String sku { pattern \"[A-Z]{3}\" minLength 3 maxLength 12 } }";
+    let result = parse(source);
+    assert!(result.errors.is_empty(), "{:?}", result.errors);
+    let Decl::Class(class) = &result.ast.expect("ast").declarations[0] else {
+        panic!("expected class")
+    };
+    let FeatureDecl::Attribute {
+        constraints,
+        default,
+        ..
+    } = &class.features[0]
+    else {
+        panic!("expected attribute")
+    };
+    assert!(default.is_none());
+    assert_eq!(constraints.len(), 3);
+    assert_eq!(constraints[0].name.text, "pattern");
+    match &constraints[0].value {
+        ConstraintValue::Str { value, .. } => assert_eq!(value, "[A-Z]{3}"),
+        other => panic!("expected string value, got {other:?}"),
+    }
+    assert_eq!(constraints[1].name.text, "minLength");
+    assert!(matches!(
+        constraints[1].value,
+        ConstraintValue::Int { value: 3, .. }
+    ));
+    assert_eq!(constraints[2].name.text, "maxLength");
+}
+
+#[test]
+fn constraints_combine_with_defaults_and_multiplicities() {
+    let source = "class Product { int[0..*] ratings = 5 { minimum 0 maximum 10 } }";
+    let result = parse(source);
+    assert!(result.errors.is_empty(), "{:?}", result.errors);
+    let Decl::Class(class) = &result.ast.expect("ast").declarations[0] else {
+        panic!("expected class")
+    };
+    let FeatureDecl::Attribute {
+        constraints,
+        default,
+        ..
+    } = &class.features[0]
+    else {
+        panic!("expected attribute")
+    };
+    assert!(matches!(default, Some(DefaultValue::Int { value: 5, .. })));
+    assert_eq!(constraints.len(), 2);
+}
+
+#[test]
+fn unknown_constraint_keywords_do_not_enter_the_block() {
+    // `bogus` is not a constraint keyword: the block parse fails and the
+    // whole feature falls into junk recovery (one error, feature lost).
+    let source = "class Product { String sku { bogus 1 } }";
+    let result = parse(source);
+    assert!(!result.errors.is_empty(), "unknown constraints must error");
+}
+
+#[test]
+fn duplicate_constraints_are_a_syntax_error() {
+    let source = "class Product { String sku { minLength 3 minLength 5 } }";
+    let result = parse(source);
+    assert!(
+        !result.errors.is_empty(),
+        "duplicate constraints must error"
+    );
+}
+
+#[test]
+fn constraint_values_must_be_literals() {
+    let source = "class Product { String sku { pattern title } }";
+    let result = parse(source);
+    assert!(
+        !result.errors.is_empty(),
+        "a constraint value must be a string or int literal"
+    );
+}
+
+// ---------------------------------------------------------------------------
+// Datatype format declarations
+// ---------------------------------------------------------------------------
+
+#[test]
+fn datatype_accepts_a_format_entry() {
+    let source = "type Email wraps String { format \"email\" }";
+    let result = parse(source);
+    assert!(result.errors.is_empty(), "{:?}", result.errors);
+    let Decl::Datatype(datatype) = &result.ast.expect("ast").declarations[0] else {
+        panic!("expected datatype")
+    };
+    assert!(
+        datatype.bindings.is_empty(),
+        "`format` must not become a target binding"
+    );
+    assert_eq!(datatype.format.as_deref(), Some("email"));
+}
+
+#[test]
+fn format_entry_coexists_with_bindings() {
+    let source = "type Date wraps opaque { format \"date\" rust \"chrono::NaiveDate\" }";
+    let result = parse(source);
+    assert!(result.errors.is_empty(), "{:?}", result.errors);
+    let Decl::Datatype(datatype) = &result.ast.expect("ast").declarations[0] else {
+        panic!("expected datatype")
+    };
+    assert_eq!(datatype.format.as_deref(), Some("date"));
+    assert_eq!(datatype.bindings.len(), 1);
+    assert_eq!(datatype.bindings[0].key.text, "rust");
+}
+
+#[test]
+fn duplicate_format_entries_are_a_syntax_error() {
+    let source = "type Email wraps String { format \"a\" format \"b\" }";
+    let result = parse(source);
+    assert!(
+        !result.errors.is_empty(),
+        "a second `format` entry must error, like a second create/convert block"
+    );
+}
+
+#[test]
+fn format_is_a_reserved_binding_target() {
+    // The escaped `^format` tries to declare a binding target literally
+    // named `format`; the word is reserved inside datatype blocks.
+    let source = "type Email wraps String { ^format \"a::B\" }";
+    let result = parse(source);
+    assert!(
+        !result.errors.is_empty(),
+        "a binding target named `format` must be a compile error naming the reserved word"
+    );
+}
+
+// ---------------------------------------------------------------------------
+// The `unique` constraint (value-less)
+// ---------------------------------------------------------------------------
+
+#[test]
+fn unique_constraint_parses_without_a_value() {
+    let source = "class P { String[] tags { unique } }";
+    let result = parse(source);
+    assert!(result.errors.is_empty(), "{:?}", result.errors);
+    let Decl::Class(class) = &result.ast.expect("ast").declarations[0] else {
+        panic!("expected class")
+    };
+    let FeatureDecl::Attribute { constraints, .. } = &class.features[0] else {
+        panic!("expected attribute")
+    };
+    assert_eq!(constraints.len(), 1);
+    assert_eq!(constraints[0].name.text, "unique");
+    assert!(
+        matches!(constraints[0].value, ConstraintValue::Flag { .. }),
+        "`unique` takes no value, got {:?}",
+        constraints[0].value
+    );
+}
+
+#[test]
+fn unique_combines_with_valued_constraints() {
+    let source = "class P { String[] tags { unique minLength 1 } }";
+    let result = parse(source);
+    assert!(result.errors.is_empty(), "{:?}", result.errors);
+    let Decl::Class(class) = &result.ast.expect("ast").declarations[0] else {
+        panic!("expected class")
+    };
+    let FeatureDecl::Attribute { constraints, .. } = &class.features[0] else {
+        panic!("expected attribute")
+    };
+    assert_eq!(constraints.len(), 2);
+    assert_eq!(constraints[0].name.text, "unique");
+    assert_eq!(constraints[1].name.text, "minLength");
+}
+
+#[test]
+fn unique_takes_no_value() {
+    let source = "class P { String[] tags { unique 3 } }";
+    let result = parse(source);
+    assert!(
+        !result.errors.is_empty(),
+        "`unique` must not accept a value"
+    );
+}
+
+// ---------------------------------------------------------------------------
+// `import schema` declarations
+// ---------------------------------------------------------------------------
+
+#[test]
+fn import_schema_with_alias_parses_top_level() {
+    let source = "package demo\n\nimport schema \"../schemas/todo_item.json\" as TodoItem";
+    let result = parse(source);
+    assert!(result.errors.is_empty(), "{:?}", result.errors);
+    let model = result.ast.expect("ast");
+    let Decl::ImportSchema(import) = &model.declarations[0] else {
+        panic!("expected import schema, found {:?}", model.declarations[0]);
+    };
+    assert_eq!(import.path, "../schemas/todo_item.json");
+    let alias = import.alias.as_ref().expect("alias");
+    assert_eq!(alias.text, "TodoItem");
+    assert!(span_text(source, import.span).starts_with("import schema"));
+}
+
+#[test]
+fn import_schema_without_alias_parses() {
+    let source = "import schema \"../x.json\"";
+    let result = parse(source);
+    assert!(result.errors.is_empty(), "{:?}", result.errors);
+    let Decl::ImportSchema(import) = &result.ast.expect("ast").declarations[0] else {
+        panic!("expected import schema");
+    };
+    assert_eq!(import.path, "../x.json");
+    assert!(import.alias.is_none(), "alias is optional");
+}
+
+#[test]
+fn import_schemas_sit_alongside_other_declarations() {
+    let source = concat!(
+        "package demo\n\n",
+        "import schema \"a.json\" as A\n",
+        "import schema \"b.json\"\n\n",
+        "enum Color { Red = 0 }\n\n",
+        "class Book { refers A a refers b.B b }"
+    );
+    let result = parse(source);
+    assert!(result.errors.is_empty(), "{:?}", result.errors);
+    let declarations = &result.ast.expect("ast").declarations;
+    assert_eq!(declarations.len(), 4);
+    assert!(matches!(&declarations[0], Decl::ImportSchema(_)));
+    assert!(matches!(&declarations[1], Decl::ImportSchema(_)));
+    assert!(matches!(&declarations[2], Decl::Enum(_)));
+    assert!(matches!(&declarations[3], Decl::Class(_)));
+}
+
+#[test]
+fn schema_stays_a_contextual_keyword() {
+    // Regression guard: an existing model may use `schema` as a class name,
+    // a feature name, and a plain identifier — adding `import schema` must
+    // not reserve the word.
+    let source = concat!(
+        "package demo\n\n",
+        "class schema { String schema int schema2 }\n\n",
+        "class Other { refers schema[] schema }"
+    );
+    let result = parse(source);
+    assert!(
+        result.errors.is_empty(),
+        "`schema` must remain usable as an identifier: {:?}",
+        result.errors
+    );
+    let declarations = &result.ast.expect("ast").declarations;
+    let Decl::Class(class) = &declarations[0] else {
+        panic!("expected class named schema")
+    };
+    assert_eq!(class.name.text, "schema");
+}
+
+#[test]
+fn escaped_schema_is_an_ordinary_identifier() {
+    let source = "package demo\n\nclass ^schema { String ^schema }";
+    let result = parse(source);
+    assert!(result.errors.is_empty(), "{:?}", result.errors);
+}
+
+#[test]
+fn import_schema_requires_a_string_literal() {
+    let result = parse("package demo\n\nimport schema");
+    assert!(
+        !result.errors.is_empty(),
+        "`import schema` without a path must error"
+    );
+    assert!(
+        result
+            .errors
+            .iter()
+            .any(|error| error.message.contains("string")),
+        "the diagnostic must mention the missing string literal: {:?}",
+        result.errors
+    );
+}
+
+#[test]
+fn import_schema_alias_must_be_a_name() {
+    let result = parse("import schema \"a.json\" as");
+    assert!(!result.errors.is_empty(), "`as` without a name must error");
+    assert!(
+        result
+            .errors
+            .iter()
+            .any(|error| error.message.contains("`as`")),
+        "the diagnostic must mention the alias clause: {:?}",
+        result.errors
+    );
+}
+
+#[test]
+fn import_without_schema_stays_an_error() {
+    // The plain `.actor` import surface does not exist in `.mox` files.
+    let result = parse("package demo\n\nimport \"other.mox\"");
+    assert!(
+        !result.errors.is_empty(),
+        "a plain `import` in a .mox file must error"
+    );
+}
+
+#[test]
+fn import_sigil_parses_top_level() {
+    let source = "package demo\n\nimport sigil \"cdm.rosetta\"";
+    let result = parse(source);
+    assert!(result.errors.is_empty(), "{:?}", result.errors);
+    let model = result.ast.expect("ast");
+    let Decl::ImportSchema(import) = &model.declarations[0] else {
+        panic!("expected import sigil, found {:?}", model.declarations[0]);
+    };
+    assert_eq!(import.kind, ImportKind::Sigil);
+    assert_eq!(import.path, "cdm.rosetta");
+    assert!(import.alias.is_none(), "a sigil import has no alias");
+    assert!(span_text(source, import.span).starts_with("import sigil"));
+}
+
+#[test]
+fn import_sigil_rejects_an_alias() {
+    let result = parse("package demo\n\nimport sigil \"x.rosetta\" as X");
+    assert!(
+        !result.errors.is_empty(),
+        "`import sigil ... as` must error"
+    );
+    assert!(
+        result
+            .errors
+            .iter()
+            .any(|error| error.message.contains("does not take an alias")),
+        "the diagnostic must mention the alias clause: {:?}",
+        result.errors
+    );
+    assert!(
+        result.ast.is_some(),
+        "the committed declaration must still recover an AST"
+    );
+}
+
+#[test]
+fn import_sigil_requires_a_string_literal() {
+    let result = parse("package demo\n\nimport sigil");
+    assert!(
+        !result.errors.is_empty(),
+        "`import sigil` without a path must error"
+    );
+    assert!(
+        result
+            .errors
+            .iter()
+            .any(|error| error.message.contains("string")),
+        "the diagnostic must mention the missing string literal: {:?}",
+        result.errors
+    );
+}
+
+#[test]
+fn import_schema_and_import_sigil_coexist_in_source_order() {
+    let source = concat!(
+        "package demo\n\n",
+        "import schema \"a.json\" as A\n",
+        "import sigil \"sigils/b.rosetta\"\n",
+        "import schema \"c.json\"\n\n",
+        "enum Color { Red = 0 }\n\n",
+        "class Book { refers A a }"
+    );
+    let result = parse(source);
+    assert!(result.errors.is_empty(), "{:?}", result.errors);
+    let declarations = &result.ast.expect("ast").declarations;
+    assert_eq!(declarations.len(), 5);
+    let kinds: Vec<_> = declarations[0..3]
+        .iter()
+        .map(|decl| match decl {
+            Decl::ImportSchema(import) => import.kind,
+            other => panic!("expected an import, found {other:?}"),
+        })
+        .collect();
+    assert_eq!(
+        kinds,
+        vec![ImportKind::Schema, ImportKind::Sigil, ImportKind::Schema]
+    );
+    assert!(matches!(&declarations[3], Decl::Enum(_)));
+    assert!(matches!(&declarations[4], Decl::Class(_)));
+}
+
+#[test]
+fn sigil_stays_a_contextual_keyword() {
+    // Regression guard: an existing model may use `sigil` as a class name,
+    // a feature name, and a plain identifier — adding `import sigil` must
+    // not reserve the word.
+    let source = concat!(
+        "package demo\n\n",
+        "class sigil { String sigil int sigil2 }\n\n",
+        "class Other { refers sigil[] sigil }"
+    );
+    let result = parse(source);
+    assert!(
+        result.errors.is_empty(),
+        "`sigil` must remain usable as an identifier: {:?}",
+        result.errors
+    );
+    let declarations = &result.ast.expect("ast").declarations;
+    let Decl::Class(class) = &declarations[0] else {
+        panic!("expected class named sigil")
+    };
+    assert_eq!(class.name.text, "sigil");
+}
+
+#[test]
+fn escaped_sigil_is_an_ordinary_identifier() {
+    let source = "package demo\n\nclass ^sigil { String ^sigil }";
+    let result = parse(source);
+    assert!(result.errors.is_empty(), "{:?}", result.errors);
+}
+
+#[test]
+fn a_class_may_declare_a_table_annotation() {
+    let source = "package demo\n\nclass PayRunType table \"pay_run_type\" { String name }";
+    let result = parse(source);
+    assert!(result.errors.is_empty(), "{:?}", result.errors);
+    let declarations = &result.ast.expect("ast").declarations;
+    let class = expect_class(&declarations[0], "PayRunType");
+    assert_eq!(class.table.as_deref(), Some("pay_run_type"));
+
+    // The annotation sits before `extends` and stays optional.
+    let source = "package demo\n\nclass A table \"a_table\" extends B { int n }";
+    let result = parse(source);
+    assert!(result.errors.is_empty(), "{:?}", result.errors);
+    let model = result.ast.expect("ast");
+    let class = expect_class(&model.declarations[0], "A");
+    assert_eq!(class.table.as_deref(), Some("a_table"));
+    assert_eq!(class.extends.len(), 1);
+
+    // Without the annotation the field stays `None`.
+    let source = "package demo\n\nclass A { int n }";
+    let result = parse(source);
+    let model = result.ast.expect("ast");
+    let class = expect_class(&model.declarations[0], "A");
+    assert_eq!(class.table, None);
+}
+
+#[test]
+fn table_stays_a_contextual_identifier() {
+    // The annotation is recognized only directly after the class name —
+    // `table` remains usable as a class name, a feature name, and an
+    // extends target (the `id`/`readonly` contextual precedent).
+    let source = "package demo\n\nclass table { String table }";
+    let result = parse(source);
+    assert!(
+        result.errors.is_empty(),
+        "`table` must remain usable as an identifier: {:?}",
+        result.errors
+    );
+    let declarations = &result.ast.expect("ast").declarations;
+    let class = expect_class(&declarations[0], "table");
+    assert_eq!(class.table, None, "no annotation without a string");
+    assert_eq!(class.features.len(), 1);
+
+    // An escaped `^table` is an ordinary identifier, never the annotation.
+    let source = "package demo\n\nclass ^table { int n }";
+    let result = parse(source);
+    assert!(result.errors.is_empty(), "{:?}", result.errors);
+    let model = result.ast.expect("ast");
+    expect_class(&model.declarations[0], "table");
+}
+
+#[test]
+fn a_table_annotation_is_class_grammar_only() {
+    // Enums have no table: `table` after the enum name is a syntax error.
+    let source = "package demo\n\nenum E table \"x\" { A = 0 }";
+    let result = parse(source);
+    assert!(
+        !result.errors.is_empty(),
+        "`table` must not parse on an enum declaration"
+    );
+}
+
+// --- `register` declarations (issue pherolang#181, part A) ---------------------
+
+const REGISTER_MODEL: &str = "package nz.example.org\n\n/// A role in the organisation.\nregister Role {\n    /// The role's display name.\n    String display_name\n    CostCenter cost_center\n    String[0..1] badge = \"none\"\n    String code { pattern \"[A-Z]{2,8}\" minLength 2 }\n}\n";
+
+fn expect_register<'a>(decl: &'a Decl, name: &str) -> &'a RegisterDecl {
+    match decl {
+        Decl::Register(register) => {
+            assert_eq!(register.name.text, name, "unexpected register declaration");
+            register
+        }
+        other => panic!("expected register `{name}`, found {other:?}"),
+    }
+}
+
+#[test]
+fn register_decl_parses_attributes_docs_defaults_and_constraints() {
+    let result = parse(REGISTER_MODEL);
+    assert!(
+        result.errors.is_empty(),
+        "unexpected errors: {:?}",
+        result.errors
+    );
+    let model = result.ast.expect("ast");
+    assert_eq!(model.declarations.len(), 1);
+
+    let register = expect_register(&model.declarations[0], "Role");
+    // The doc comment above the declaration becomes its description.
+    assert_eq!(register.doc.as_deref(), Some("A role in the organisation."));
+    assert_eq!(register.attributes.len(), 4);
+
+    // The doc comment above the first attribute attaches to it.
+    let FeatureDecl::Attribute { doc, name, .. } = &register.attributes[0] else {
+        panic!("expected an attribute, found {:?}", register.attributes[0]);
+    };
+    assert_eq!(name.text, "display_name");
+    assert_eq!(doc.as_deref(), Some("The role's display name."));
+
+    // A plain class-typed attribute parses (resolution is the driver's job).
+    let (type_ref, multiplicity, default) = expect_attribute(&register.attributes[1]);
+    assert_eq!(type_ref.name.full_name(), "CostCenter");
+    assert_eq!(name_text(&register.attributes[1]), "cost_center");
+    assert_eq!(multiplicity, None);
+    assert_eq!(default, None);
+
+    // Multiplicity and default value.
+    let (type_ref, multiplicity, default) = expect_attribute(&register.attributes[2]);
+    assert_eq!(type_ref.name.full_name(), "String");
+    let Some(multiplicity) = multiplicity else {
+        panic!("expected the declared multiplicity");
+    };
+    assert!(matches!(
+        multiplicity.kind,
+        MultiplicityKind::Range(0, MultBound::Int(1))
+    ));
+    assert!(matches!(
+        default,
+        Some(DefaultValue::Str { value, .. }) if value == "none"
+    ));
+
+    // A constraint block rides on the last attribute.
+    let FeatureDecl::Attribute { constraints, .. } = &register.attributes[3] else {
+        panic!("expected an attribute, found {:?}", register.attributes[3]);
+    };
+    assert_eq!(constraints.len(), 2);
+    assert_eq!(constraints[0].name.text, "pattern");
+    assert_eq!(constraints[1].name.text, "minLength");
+}
+
+fn name_text(feature: &FeatureDecl) -> &str {
+    feature.name().text.as_str()
+}
+
+#[test]
+fn register_decl_empty_body_parses() {
+    let result = parse("package demo\n\nregister Empty {}");
+    assert!(result.errors.is_empty(), "{:?}", result.errors);
+    let model = result.ast.expect("ast");
+    let register = expect_register(&model.declarations[0], "Empty");
+    assert!(register.attributes.is_empty());
+}
+
+#[test]
+fn register_body_rejects_class_only_grammar() {
+    // The register body is the `attribute` production only: containment,
+    // references, ops, derived features, `extends`, and the `table`
+    // annotation are parse errors here — no recovery shapeshifting.
+    let bodies = [
+        ("contains Part[0..*] parts", "contains"),
+        ("refers Tag[0..1] tag", "refers"),
+        ("container Group group", "container"),
+        ("op int size(String unit)", "op"),
+        ("derived String label", "derived"),
+        ("extends Base", "extends"),
+        ("table \"roles\"", "table"),
+    ];
+    for (body, word) in bodies {
+        let source = format!("package demo\n\nregister R {{\n    {body}\n}}");
+        let result = parse(&source);
+        assert!(
+            !result.errors.is_empty(),
+            "`{word}` must be a parse error inside a register body"
+        );
+    }
+}
+
+#[test]
+fn register_stays_a_contextual_identifier() {
+    // `register` is special only at the top-level item position. A class,
+    // an enum, and features may still be named `register`, and the word may
+    // appear inside class bodies as a feature's type or name.
+
+    // A class named `register`.
+    let result = parse("package demo\n\nclass register { int n }");
+    assert!(
+        result.errors.is_empty(),
+        "`class register` must still parse: {:?}",
+        result.errors
+    );
+    let model = result.ast.expect("ast");
+    expect_class(&model.declarations[0], "register");
+
+    // An enum named `register`.
+    let result = parse("package demo\n\nenum register { A = 0 }");
+    assert!(
+        result.errors.is_empty(),
+        "`enum register` must still parse: {:?}",
+        result.errors
+    );
+    let model = result.ast.expect("ast");
+    let Decl::Enum(enum_decl) = &model.declarations[0] else {
+        panic!("expected enum, found {:?}", model.declarations[0]);
+    };
+    assert_eq!(enum_decl.name.text, "register");
+
+    // A feature named `register`, and `register` as a feature's type.
+    let result = parse("package demo\n\nclass C { String register\n    register badge }");
+    assert!(
+        result.errors.is_empty(),
+        "a feature named `register` must still parse: {:?}",
+        result.errors
+    );
+    let model = result.ast.expect("ast");
+    let class = expect_class(&model.declarations[0], "C");
+    assert_eq!(class.features.len(), 2);
+    assert_eq!(class.features[0].name().text, "register");
+    assert_eq!(class.features[1].name().text, "badge");
+
+    // An escaped `^register` is an ordinary identifier, never the item.
+    let result = parse("package demo\n\nregister ^register { int n }");
+    assert!(
+        result.errors.is_empty(),
+        "an escaped `^register` must parse as the register's name: {:?}",
+        result.errors
+    );
+    let model = result.ast.expect("ast");
+    expect_register(&model.declarations[0], "register");
+}

@@ -1,5 +1,0 @@
-package rexlang.auth
-
-class Customer {
-    String name
-}

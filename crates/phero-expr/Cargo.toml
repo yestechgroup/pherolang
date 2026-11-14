@@ -1,0 +1,25 @@
+[package]
+name = "phero-expr"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description.workspace = true
+repository.workspace = true
+
+[lints]
+workspace = true
+
+[dependencies]
+logos = { workspace = true }
+chumsky = { workspace = true }
+phero-parser = { workspace = true }
+phero-diagnostics = { workspace = true }
+phero-ir = { workspace = true }
+phero-dates = { workspace = true }
+serde = { workspace = true }
+thiserror = { workspace = true }
+phero-strings = { workspace = true }
+
+[dev-dependencies]
+serde_json = { workspace = true }
+phero-runtime = { workspace = true }

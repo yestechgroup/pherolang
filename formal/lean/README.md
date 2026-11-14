@@ -1,16 +1,16 @@
-# Lean spike: a paper semantics for the rex-expr fragment R1–R4
+# Lean spike: a paper semantics for the phero-expr fragment R1–R4
 
-Issue [#96](https://github.com/yestechgroup/rexlang/issues/96) (phase 7 of
-[#83](https://github.com/yestechgroup/rexlang/issues/83)): evaluate whether
+Issue [#96](https://github.com/yestechgroup/pherolang/issues/96) (phase 7 of
+[#83](https://github.com/yestechgroup/pherolang/issues/83)): evaluate whether
 a second theorem prover — the issue names Lean — earns its place next to
 Creusot, by writing the formal semantics of one small, closed fragment and
 proving a few of its rules.
 
-This directory is the spike. **`RexExpr.lean`** defines the evaluation
+This directory is the spike. **`PheroExpr.lean`** defines the evaluation
 semantics of the `docs/EXPRESSIONS.md` fragment R1–R4 (checked arithmetic,
 null-safe equality, option propagation, division) as a total Lean
 function into `Option Value` — `none` being the R1/R4 trap — and states
-twelve theorems mirroring the rules. `lean RexExpr.lean` checks the file;
+twelve theorems mirroring the rules. `lean PheroExpr.lean` checks the file;
 every theorem depends only on Lean's standard axioms (`propext`,
 `Classical.choice`, `Quot.sound`) — **no `sorry`**. Pin:
 `lean-toolchain` (Lean 4.35.0, no Mathlib — core only).
@@ -37,7 +37,7 @@ lowering can silently swallow them; only the `int` width is modeled
 R1/R4 (constant folding, zero-divisor rejection) are type-checker
 contracts outside a runtime semantics, and the theorems carry the
 fragment's well-typedness as hypotheses — mismatched shapes are exactly
-the type errors rex-expr's checker rejects before evaluation.
+the type errors phero-expr's checker rejects before evaluation.
 
 ## The spike's three questions
 
@@ -48,10 +48,10 @@ The semantics took roughly a day of elapsed effort including the
 toolchain install and Lean-syntax ramp-up (pattern-match normalization,
 `induction ... using f.induct` for nested inductives, `LawfulBEq`
 arithmetic). The twelve theorems were a few hours. The equivalent as
-Creusot contracts over the rex-expr interpreter would need: creusot-std
-to translate `rex-expr` (currently blocked by the same wire-type
-derives that keep V10/V15/V16 as spec mirrors — `rex_expr` depends on
-`rex-ir`), plus loop invariants for every recursive evaluator walk, plus
+Creusot contracts over the phero-expr interpreter would need: creusot-std
+to translate `phero-expr` (currently blocked by the same wire-type
+derives that keep V10/V15/V16 as spec mirrors — `phero_expr` depends on
+`phero-ir`), plus loop invariants for every recursive evaluator walk, plus
 trigger management. For *trap-freedom-shaped* statements (this
 fragment), Creusot contracts would be comparable or slightly cheaper
 once unblocked, because the interpreter is already typed and Creusot
@@ -65,7 +65,7 @@ struggle with.
 One thing, and it is real but modest: writing `eval` as a total function
 forces every combination of operand shapes to be *decided* — the catch
 here was that `?.`/`?:` on non-optional receivers and arithmetic on
-non-integers must be explicitly ruled out, which is exactly rex-expr's
+non-integers must be explicitly ruled out, which is exactly phero-expr's
 static-typing precondition written down where the semantics can see it.
 The executable specs in `docs/EXPRESSIONS.md` encode the same rules as
 test-citable behavior, and the Creusot kernel already proved a false
@@ -80,13 +80,13 @@ semantics *corroborated* rather than corrected.
 Non-trivial and continuous: the Lean file pins an exact toolchain
 (`lean-toolchain`, here 4.35.0); every toolchain bump re-checks the file
 (cheap — no Mathlib, but `simp`/equation-lemma churn across a major
-version is plausible); the semantics drifts the moment rex-expr grows a
+version is plausible); the semantics drifts the moment phero-expr grows a
 feature outside the fragment (each new rule is a new table row *and* a
 new Lean definition + theorems), and nothing enforces that drift — the
 Lean file and the Rust interpreter share no types, so the correspondence
 is maintained by review (the same spec-mirror honesty V10/V15/V16
 already practice). CI would need a Lean job or a scheduled re-check
-(`lean RexExpr.lean` is a one-command gate, ~seconds here).
+(`lean PheroExpr.lean` is a one-command gate, ~seconds here).
 
 ## Recommendation: **down** — do not adopt a second prover now
 
@@ -97,7 +97,7 @@ already practice). CI would need a Lean job or a scheduled re-check
   DMN/CMMN decisioning — is explicitly out of the spike's scope and
   carries the whole maintenance burden of question 3 without a proving
   consumer.
-- Revisit when (a) creusot-std can translate `rex-ir`/`rex-expr` in
+- Revisit when (a) creusot-std can translate `phero-ir`/`phero-expr` in
   crate (which would collapse the spec-mirror pattern and free the
   proof effort), or (b) a real defect class appears that executable
   specs plus Creusot demonstrably cannot state. Until then this file

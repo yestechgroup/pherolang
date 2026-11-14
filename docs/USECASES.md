@@ -3,15 +3,15 @@
 ## Overview
 
 A standalone use-case modeling surface implementing the SysML v2 use case
-patterns in the rexlang spirit: a use case declares a **subject** (the
+patterns in the Phero Lang spirit: a use case declares a **subject** (the
 classifier whose behavior is specified), the **actors** participating, the
 **messages** exchanged between anchored points of their behavior, the
 **successions** ordering that behavior, and the domain **service operations**
-the use case realizes. Parsed by **rex-syntax** (`parse_usecases`, the
-chumsky parser) at compile time, lowered and validated by **rex-driver**
+the use case realizes. Parsed by **phero-syntax** (`parse_usecases`, the
+chumsky parser) at compile time, lowered and validated by **phero-driver**
 (`compile_usecase_str`) against its imported domains and the pre-compiled
 design, actor, and event artifacts its imports resolve to, and emitted as
-the versioned `rex_ir::usecases::UseCaseModel` artifact (the rex-ir crate).
+the versioned `phero_ir::usecases::UseCaseModel` artifact (the phero-ir crate).
 
 One abstraction note up front, because the name invites the wrong reading:
 an `occurrence` is a **scenario-local lifetime point** of one participant —
@@ -24,10 +24,10 @@ ever declares, publishes, or subscribes to anything.
 exactly like the `DddModel`, `EventModel`, and `IfmlModel` artifacts.
 
 The normative grammar lives exactly once — the *`.uc` use case sources*
-section of the parser module docs (`crates/rex-syntax/src/parser/mod.rs`); the
+section of the parser module docs (`crates/phero-syntax/src/parser/mod.rs`); the
 normative compile contract — entry points, resolution semantics, and
-validation rules — is documented on `rex_driver::compile_usecase_str`
-(`crates/rex-driver/src/lib.rs`). This page is the language reference; when
+validation rules — is documented on `phero_driver::compile_usecase_str`
+(`crates/phero-driver/src/lib.rs`). This page is the language reference; when
 prose and either authority disagree, they win.
 
 ---
@@ -209,7 +209,7 @@ failure, unknown name, or non-boolean type is an error naming the step
 (help `in the \`when\` of step '<step>' in use case '<uc>'`), and any of
 them drops the artifact — but the condition text still lowers, as the
 **verbatim trimmed paren interior** (interior spacing is never normalized,
-so `rexlang fmt` round-trips it byte-identically; guards are never wrapped
+so `pherolang fmt` round-trips it byte-identically; guards are never wrapped
 and may exceed the column budget). Guards are unreachable for sigil-typed
 subjects: those error on the step itself, and the guard adds no diagnostic
 of its own. The normative grammar is the `perform_decl` production of the
@@ -266,8 +266,8 @@ list, driver-resolved and validated but not rewritten.
 ## Artifact wire format
 
 `UseCaseModel` is a standalone, versioned wire artifact following the
-rex-ir [wire format contract](BACKENDS.md) (see also the
-`rex_ir::usecases` module docs):
+phero-ir [wire format contract](BACKENDS.md) (see also the
+`phero_ir::usecases` module docs):
 
 - Versioned via **`USE_CASE_MODEL_FORMAT_VERSION`** (= 1), the
   `ActorModel` precedent. `UseCaseModel::from_json` rejects absent/wrong
@@ -287,10 +287,10 @@ rex-ir [wire format contract](BACKENDS.md) (see also the
   only participant types are stored resolved.
 - Empty = minimal: every collection field is `#[serde(default)]` and
   omitted when empty — an empty artifact serializes as exactly
-  `{"formatVersion":1}`, byte-identical no matter what is added later.
+  `{"formatVersion":2}`, byte-identical no matter what is added later.
   Unknown fields are ignored on deserialize.
 
-Semantics consumers can rely on (from the `rex_ir::usecases` module docs):
+Semantics consumers can rely on (from the `phero_ir::usecases` module docs):
 the message timing rule above; an `Anchor::MessageEnd` denotes a
 message-owned end *of the containing message*; a participant with no
 `typeName` is a bare policy principal, not a domain class instance.
@@ -330,7 +330,7 @@ Any error-severity diagnostic anywhere (the `.uc` file or an imported
 domain) drops the artifact; warnings do not. The authoritative, numbered
 contract — one rule per concern, with the exact diagnostic wording — is
 the *Validation rules* section of `compile_usecase_str`
-(`crates/rex-driver/src/lib.rs`); the same thirteen in brief:
+(`crates/phero-driver/src/lib.rs`); the same thirteen in brief:
 
 1. **Imports** — every import names a provided entry in one of the four
    buckets; aliases are design-only.
@@ -446,16 +446,16 @@ pinned non-goal behind rule 3).
 ## CLI usage
 
 ```
-rexlang check delivery.uc                  # validate + imported domains/artifacts
-rexlang ir delivery.uc -o delivery.uc.json # emit the UseCaseModel artifact
-rexlang fmt --check delivery.uc            # canonical formatting gate
+pherolang check delivery.uc                  # validate + imported domains/artifacts
+pherolang ir delivery.uc -o delivery.uc.json # emit the UseCaseModel artifact
+pherolang fmt --check delivery.uc            # canonical formatting gate
 ```
 
 Try it on the canonical fixture from the repository root:
 
 ```
-cargo run -p rex-cli -- check tests/conformance/usecases/delivery.uc
-cargo run -p rex-cli -- ir tests/conformance/usecases/delivery.uc -o delivery.uc.json
+cargo run -p phero-cli -- check tests/conformance/usecases/delivery.uc
+cargo run -p phero-cli -- ir tests/conformance/usecases/delivery.uc -o delivery.uc.json
 ```
 
 - Import paths resolve **relative to the `.uc` file's directory**; each
@@ -467,7 +467,7 @@ cargo run -p rex-cli -- ir tests/conformance/usecases/delivery.uc -o delivery.uc
 - Diagnostics come from every file involved (the `.uc` file, its imported
   domains) and render grouped per file, the way `.evt` compiles render
   them.
-- `rexlang fmt` formats `.uc` files with the canonical layout: imports
+- `pherolang fmt` formats `.uc` files with the canonical layout: imports
   hoisted into a tight first section, then `usecase` declarations with
   exactly one blank line between them, bodies regrouped subject → actors
   → messages → successions → realizes, canonical `;` on every statement
@@ -480,7 +480,7 @@ cargo run -p rex-cli -- ir tests/conformance/usecases/delivery.uc -o delivery.uc
 
 The surface follows the MBSE4U use-case-pattern progression (subject and
 actors → anchored messages → message-owned ends → performed steps with
-successions) and deviates deliberately where rexlang's model demands it:
+successions) and deviates deliberately where Phero Lang's model demands it:
 
 1. **Occurrences are scenario-local lifetime points** — a named moment a
    participant witnesses, or a message end it owns. None of SysML's
@@ -519,19 +519,19 @@ progress through the pattern article's stages, plus the
 actors-only `MonitorHandover`. `delivery.uc` is formatter-canonical and
 covered by the CI `fmt --check` gate over `tests/conformance/usecases/`.
 
-The driver golden test (`crates/rex-driver/tests/usecase_golden.rs`)
+The driver golden test (`crates/phero-driver/tests/usecase_golden.rs`)
 byte-compares the compiled artifact, round-trips it through `from_json`,
 pins the formatter fixpoint of `delivery.uc`, and pins the negative
 diagnostics; the wire shape is pinned by
-`crates/rex-ir/tests/usecase_model.rs`; the formatter golden
+`crates/phero-ir/tests/usecase_model.rs`; the formatter golden
 `tests/conformance/fmt/usecases.fmt.uc` is byte-compared by
-`crates/rex-syntax/tests/fmt.rs` against the deliberately **non-canonical**
+`crates/phero-syntax/tests/fmt.rs` against the deliberately **non-canonical**
 source `tests/conformance/models/usecases.uc` — don't cite that file as a
 canonical model or "fix" its spacing (the `.evt`/`.deploy` pattern).
-Regenerate goldens with `REX_UPDATE_FIXTURES=1 cargo test --workspace`.
+Regenerate goldens with `PHERO_UPDATE_FIXTURES=1 cargo test --workspace`.
 
 The `examples/` side ships `support.uc` — the full-stack example whose
 imports span all four buckets (`support.mox`, the aliased `support.ddd`
 design, `support.actor`, `support.evt`) and whose `RaiseRefund` /
 `ApproveRefund` split respects the `never_both` pair — byte-pinned against
-`examples/artifacts/` by `crates/rex-driver/tests/examples_artifacts.rs`.
+`examples/artifacts/` by `crates/phero-driver/tests/examples_artifacts.rs`.

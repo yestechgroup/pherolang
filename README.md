@@ -1,6 +1,9 @@
-# rexlang
+# Phero Lang
 
-A multi-target modeling language inspired by [Eclipse Xcore](https://eclipse.dev/Xtext/documentation/305_xbase.html#xcore).
+Phero Lang — Verifiable Model-Driven Engineering.
+
+**Phero Lang** is a multi-target modeling language inspired by
+[Eclipse Xcore](https://eclipse.dev/Xtext/documentation/305_xbase.html#xcore).
 
 `.mox` sources compile to a **Core IR** (an Ecore-like structural metamodel) that is
 serialized as a stable artifact. Code generators for multiple target languages
@@ -11,17 +14,21 @@ backend. The language reference lives in
 consumes the IR — in or out of tree — start with
 [docs/BACKENDS.md](docs/BACKENDS.md). Releases and compatibility promises
 are documented in [docs/VERSIONING.md](docs/VERSIONING.md) and
-[CHANGELOG.md](CHANGELOG.md).
+[CHANGELOG.md](CHANGELOG.md); the spelling contract for the product and
+every identifier that carries its name is
+[docs/NAMING.md](docs/NAMING.md).
+[CONTRIBUTING.md](CONTRIBUTING.md) covers the contribution workflow, and
+[SECURITY.md](SECURITY.md) covers private vulnerability reports.
 
 ```
-.mox source  -> lexer/parser -> AST -> resolve & validate -> Core IR (.rex.json)
+.mox source  -> lexer/parser -> AST -> resolve & validate -> Core IR (.phero.json)
    ^                                                              |
    |                                   +----------------+--------+-----------+
    |                                   v                v                     v
    |                              rust backend   json-schema backend      cedar backend
    |                                                                      ^
    +-- import schema "x.json"    .actor policy file -> resolve & check ---+-+
-   +-- import sigil "x.rosetta"                       -> ActorModel (.actors.rex.json)
+   +-- import sigil "x.rosetta"                       -> ActorModel (.actors.phero.json)
                                     .ddd design file  -> resolve & validate
                                                     -> DddModel (.ddd.json) --xstate-ir--> machines
                                     .evt contract file -> resolve & validate
@@ -37,7 +44,7 @@ are documented in [docs/VERSIONING.md](docs/VERSIONING.md) and
                                     .ifml flow file   -> parse
                                                     -> IfmlModel (.ifml.json)
                                                                         |
-                                                        cmmn backend (rex-backend-cmmn)
+                                                        cmmn backend (phero-backend-cmmn)
                                                                         v
                                               cmmn-rs CaseDefinition JSON -- the
                                               cmmn-rs engine executes cases
@@ -64,28 +71,28 @@ are future work.
 ## Usage
 
 ```
-rexlang check model.mox           # validate, render diagnostics
-rexlang check model/              # batch: every supported surface under a directory
-rexlang fmt model/                # format every supported surface under a directory
-rexlang fmt --check model/        # gate: exit 1 naming any unformatted file (formatter-golden X.fmt.<ext> outputs are skipped, like check's)
-rexlang ir model.mox -o model.rex.json
-rexlang graph build examples/ -o graph.json   # one semantic graph across every surface (`graph` needs a verb: build|query)
-rexlang graph query graph.json node Support.RaiseRefund   # artifact-only: node/list/affected-by/dependencies + cross-policy analytics
-rexlang artifact check model.rex.json   # validate any serialized artifact
-rexlang gen rust model.mox -o src-gen/
-rexlang gen json-schema model.mox --profile wire -o schemas/
-rexlang gen cedar model.mox -o policies/      # from inline actors blocks
-rexlang gen cedar policy.actor -o policies/   # from a standalone actor file
-rexlang ir usecase.uc -o usecase.uc.json      # every artifact surface: .ddd/.evt/.dmn/.deploy/.uc/.cmmn
-rexlang artifact check usecase.uc.json        # lint any serialized artifact, no toolchain needed
-rexlang vocab fetch model.mox --provider file:vocab-sources/
-rexlang explain E0104              # explain any diagnostic code (--list: the allocation ledger)
-rexlang completions bash           # shell completion script (zsh, fish, powershell, elvish too)
-rexlang man                        # the man page (roff, to stdout or --out FILE)
-rexlang lsp                       # start the language server (stdio)
+pherolang check model.mox           # validate, render diagnostics
+pherolang check model/              # batch: every supported surface under a directory
+pherolang fmt model/                # format every supported surface under a directory
+pherolang fmt --check model/        # gate: exit 1 naming any unformatted file (formatter-golden X.fmt.<ext> outputs are skipped, like check's)
+pherolang ir model.mox -o model.phero.json
+pherolang graph build examples/ -o graph.json   # one semantic graph across every surface (`graph` needs a verb: build|query)
+pherolang graph query graph.json node Support.RaiseRefund   # artifact-only: node/list/affected-by/dependencies + cross-policy analytics
+pherolang artifact check model.phero.json   # validate any serialized artifact
+pherolang gen rust model.mox -o src-gen/
+pherolang gen json-schema model.mox --profile wire -o schemas/
+pherolang gen cedar model.mox -o policies/      # from inline actors blocks
+pherolang gen cedar policy.actor -o policies/   # from a standalone actor file
+pherolang ir usecase.uc -o usecase.uc.json      # every artifact surface: .ddd/.evt/.dmn/.deploy/.uc/.cmmn
+pherolang artifact check usecase.uc.json        # lint any serialized artifact, no toolchain needed
+pherolang vocab fetch model.mox --provider file:vocab-sources/
+pherolang explain E0104              # explain any diagnostic code (--list: the allocation ledger)
+pherolang completions bash           # shell completion script (zsh, fish, powershell, elvish too)
+pherolang man                        # the man page (roff, to stdout or --out FILE)
+pherolang lsp                       # start the language server (stdio)
 ```
 
-## Consuming rexlang from other projects
+## Consuming Phero Lang from other projects
 
 There are two supported integration styles; both are consumed in anger by
 sibling projects today.
@@ -93,15 +100,15 @@ sibling projects today.
 **Style A — artifacts through the CLI (language-agnostic).** Each surface
 compiles to a versioned JSON artifact with a stable wire contract (camelCase
 keys, a `formatVersion` gate, additive-only evolution):
-`rexlang ir model.mox -o model.rex.json` (Core IR), `policy.actor` →
+`pherolang ir model.mox -o model.phero.json` (Core IR), `policy.actor` →
 `ActorModel`, `design.ddd` → `DddModel`, `flow.ifml` → `IfmlModel`,
 `contract.evt` → `EventModel`, `usecase.uc` → `UseCaseModel`,
 `svc.deploy` → `DeployModel`, `case.cmmn` → `CmmnModel` — and
-`rex-backend-cmmn` lowers a `CmmnModel` plus its domain model to the
+`phero-backend-cmmn` lowers a `CmmnModel` plus its domain model to the
 [cmmn-rs](https://github.com/yestechgroup/cmmn-rs) engine's
-`CaseDefinition` JSON: rexlang authors and validates the case, cmmn-rs
+`CaseDefinition` JSON: Phero Lang authors and validates the case, cmmn-rs
 executes it.
-`rexlang artifact check <files>` validates any serialized artifact without
+`pherolang artifact check <files>` validates any serialized artifact without
 the toolchain. Treat the artifact as the interface and any Rust version
 becomes an implementation detail.
 
@@ -111,54 +118,54 @@ a git dependency pinned to a revision:
 
 ```toml
 [dependencies]
-rex-ir     = { git = "https://github.com/yestechgroup/rexlang.git", rev = "<rev>" }
-rex-driver = { git = "https://github.com/yestechgroup/rexlang.git", rev = "<rev>" }
-rex-expr   = { git = "https://github.com/yestechgroup/rexlang.git", rev = "<rev>" }
-rex-ifml   = { git = "https://github.com/yestechgroup/rexlang.git", rev = "<rev>" }
+phero-ir     = { git = "https://github.com/yestechgroup/pherolang.git", rev = "<rev>" }
+phero-driver = { git = "https://github.com/yestechgroup/pherolang.git", rev = "<rev>" }
+phero-expr   = { git = "https://github.com/yestechgroup/pherolang.git", rev = "<rev>" }
+phero-ifml   = { git = "https://github.com/yestechgroup/pherolang.git", rev = "<rev>" }
 ```
 
 The crates are the compatibility boundary:
 
 | Crate | Role for a consumer |
 |---|---|
-| `rex-ir` | The artifacts (`Model`, `ActorModel`, `ddd::DddModel`, `ifml::IfmlModel`, `events::EventModel`, `deploy::DeployModel`, `usecases::UseCaseModel`, `cmmn::CmmnModel`) with `from_json`/`to_json` and their version gates — the type-level boundary |
-| `rex-driver` | Compilation: one call per surface, rich byte-span diagnostics, ariadne `render` |
-| `rex-expr` | The neutral expression language (parser, type checker) behind `when` conditions and `expr` bodies |
-| `rex-ifml` | The `.ifml` parser (`parse_ifml`/`parse_ifml_file` → `IfmlModel`) |
+| `phero-ir` | The artifacts (`Model`, `ActorModel`, `ddd::DddModel`, `ifml::IfmlModel`, `events::EventModel`, `deploy::DeployModel`, `usecases::UseCaseModel`, `cmmn::CmmnModel`) with `from_json`/`to_json` and their version gates — the type-level boundary |
+| `phero-driver` | Compilation: one call per surface, rich byte-span diagnostics, ariadne `render` |
+| `phero-expr` | The neutral expression language (parser, type checker) behind `when` conditions and `expr` bodies |
+| `phero-ifml` | The `.ifml` parser (`parse_ifml`/`parse_ifml_file` → `IfmlModel`) |
 
-Everything else (`rex-syntax`, the backends, `rex-vocab`, `rex-lsp`,
-`rex-runtime`) is implementation detail for the compiler itself.
+Everything else (`phero-syntax`, the backends, `phero-vocab`, `phero-lsp`,
+`phero-runtime`) is implementation detail for the compiler itself.
 
 Entry points per surface — the driver is filesystem-free: sources and any
 import content arrive as text:
 
 ```rust
 // .mox (multi-package): import content provided by the host
-let compilation = rex_driver::compile_files(
+let compilation = phero_driver::compile_files(
     &sources,                                   // (path, source) pairs
     &imports,                                   // DomainImports: schema JSON + sigil rosetta
 );
 // .actor — policy artifact + union domain model; imports bundle for the domains
-let actor = rex_driver::compile_actors_str("policy.actor", &source, &domains, &imports);
+let actor = phero_driver::compile_actors_str("policy.actor", &source, &domains, &imports);
 // .ddd — design artifact; the _with_actors variant also validates capabilities
-let design = rex_driver::compile_ddd_str_with_actors("design.ddd", &source, &domains, &imports, &actors);
+let design = phero_driver::compile_ddd_str_with_actors("design.ddd", &source, &domains, &imports, &actors);
 // .evt — event-contract artifact over the imported domains
-let events = rex_driver::compile_evt_str("orders.evt", &source, &domains, &imports);
+let events = phero_driver::compile_evt_str("orders.evt", &source, &domains, &imports);
 // .deploy — deployment projections over compiled designs + flows
-let deploy = rex_driver::compile_deploy_str("svc.deploy", &source, &designs, &flows);
+let deploy = phero_driver::compile_deploy_str("svc.deploy", &source, &designs, &flows);
 // .uc — use case patterns over all four buckets (domains, designs, actors, events)
-let uc = rex_driver::compile_usecase_str("support.uc", &source, &domains, &imports, &designs, &actors, &events);
+let uc = phero_driver::compile_usecase_str("support.uc", &source, &domains, &imports, &designs, &actors, &events);
 // .cmmn — case management over the same four buckets
-let cmmn = rex_driver::compile_cmmn_str("support.cmmn", &source, &domains, &imports, &designs, &actors, &events);
+let cmmn = phero_driver::compile_cmmn_str("support.cmmn", &source, &domains, &imports, &designs, &actors, &events);
 // .ifml — parses directly, no domain needed
-let ifml = rex_ifml::parse_ifml(&source)?;
+let ifml = phero_ifml::parse_ifml(&source)?;
 ```
 
 `Compilation`/`ActorCompilation`/`DddCompilation`/`EventCompilation`/
 `DeployCompilation`/`UseCaseCompilation`/`CmmnCompilation` carry every
 file's
 diagnostics tagged with its path (`sigil` content errors are tagged with the
-rosetta path); `rex_driver::render(path, source, &diagnostics)` produces
+rosetta path); `phero_driver::render(path, source, &diagnostics)` produces
 ariadne output, and every diagnostic span is a byte offset into its file.
 Hosts read `import schema` JSON, `import sigil` rosetta, and imported
 domains from disk themselves — relative to the declaring file — and thread
@@ -220,7 +227,7 @@ the fenced blocks in these docs are compiled by CI.)
   inline `actors` blocks in the imported domain models: separation of duty
   (`never_both`), inheritance cycles, and self-narrowing are caught across
   files.
-- `rexlang gen cedar` emits a Cedar policy set plus a Cedar entity schema;
+- `pherolang gen cedar` emits a Cedar policy set plus a Cedar entity schema;
   generated policies are validated against the real `cedar-policy` crate in
   CI (strict mode). Obligations become Cedar annotations; `never_both`
   groups become review evidence comments.
@@ -230,7 +237,7 @@ the fenced blocks in these docs are compiled by CI.)
 
 ## Language server
 
-`rexlang lsp` speaks LSP 3.x over stdio (tower-lsp). Any LSP client works;
+`pherolang lsp` speaks LSP 3.x over stdio (tower-lsp). Any LSP client works;
 capabilities:
 
 - **Diagnostics** — full-document compile on open/change, incremental
@@ -251,7 +258,7 @@ Example client config (VS Code `settings.json`):
 
 ```json
 {
-  "mox.server.path": "/path/to/rexlang",
+  "mox.server.path": "/path/to/pherolang",
   "mox.server.args": ["lsp"],
   "mox.server.languages": ["mox"]
 }
@@ -271,7 +278,7 @@ vocabulary Currency from "iso:4217" {
 }
 ```
 
-- `rexlang vocab fetch` is the ONLY command that fetches: it writes
+- `pherolang vocab fetch` is the ONLY command that fetches: it writes
   `vocab/<source>@<version>.json` and pins `sha256` digests in `model.lock`.
 - Compilation is **hermetic**: it reads only the vendored snapshot and verifies
   the lockfile digest; a missing or tampered snapshot is a diagnostic, never a
@@ -286,8 +293,8 @@ Model instances exchange through a cross-language JSON contract:
 
 ```json
 {
-  "$type": "rex.instance",
-  "formatVersion": 1,
+  "$type": "phero.instance",
+  "formatVersion": 2,
   "model": "nz.example.library",
   "objects": [
     {
@@ -323,7 +330,7 @@ Model instances exchange through a cross-language JSON contract:
 
 `tests/conformance/` holds the flagship model plus its golden artifacts (Core
 IR JSON and canonical instance JSON). Every backend must round-trip them.
-Regenerate goldens with `REX_UPDATE_FIXTURES=1 cargo test --workspace`.
+Regenerate goldens with `PHERO_UPDATE_FIXTURES=1 cargo test --workspace`.
 
 When running tests locally, prefer the wrappers: `scripts/dev-test.sh [args]`
 runs `cargo test` with the CI env (`debuginfo=0`, no incremental compilation,
@@ -332,6 +339,6 @@ sequence. A bare `cargo test --workspace` leaves the default `debuginfo=2` on,
 and cargo never collects old hashes under `target/debug/build/<pkg>/<hash>/out/`
 — repeated builds can fill the disk, which surfaces as
 `ld terminated with signal 7 [Bus error]` during doctest linking. Reclaim with
-`rm -rf target/debug/build/rex-*` (workspace crates only); the full rationale
+`rm -rf target/debug/build/phero-*` (workspace crates only); the full rationale
 is the AGENTS.md operational bullet (issue #261).
 

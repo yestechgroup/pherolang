@@ -7,10 +7,10 @@ domain model defines the data (entities, features, constraints); the `.ddd`
 design defines the application architecture on top of it: the application,
 its modules, the application services with their use-case operations, and
 per-class design decisions (stereotype, flags, repository, state machine,
-delegation targets). Parsed by **rex-syntax** (`parse_ddd`, the chumsky parser) at
-compile time, lowered and validated by **rex-driver**
+delegation targets). Parsed by **phero-syntax** (`parse_ddd`, the chumsky parser) at
+compile time, lowered and validated by **phero-driver**
 (`compile_ddd_str`) against the imported domains, and emitted as the
-versioned `rex_ir::ddd::DddModel` artifact (the rex-ir crate).
+versioned `phero_ir::ddd::DddModel` artifact (the phero-ir crate).
 
 The `.ddd` DSL lives alongside the `.mox` domain model as a *complementary*
 input: a design never declares classes or features — it references the
@@ -20,15 +20,15 @@ of them. Downstream consumers ingest the artifact exactly like the
 
 The normative contract — entry points, resolution semantics, the validation
 rules, the aggregate-derivation rule, and the capabilities
-contract — is documented on `rex_driver::compile_ddd_str`; this page is the
+contract — is documented on `phero_driver::compile_ddd_str`; this page is the
 language reference.
 
 ---
 
 ## Artifact wire format
 
-`DddModel` is a standalone, versioned wire artifact following the rex-ir
-[wire format contract](BACKENDS.md) (see also the `rex_ir::ddd` module
+`DddModel` is a standalone, versioned wire artifact following the phero-ir
+[wire format contract](BACKENDS.md) (see also the `phero_ir::ddd` module
 docs):
 
 - Versioned independently of the domain-model marker via
@@ -45,23 +45,23 @@ docs):
   (`{"name": ..., "type": ...}`) — there are no parallel wire-level
   signature types.
 - Unknown fields are ignored on deserialize; every field added after v1
-  must keep the `#[serde(default)]` + skip discipline. The rexlang#176/#180
+  must keep the `#[serde(default)]` + skip discipline. The pherolang#176/#180
   additions ride that rule: an operation's `transition` binding
   (`TransitionRef`) and its resolved guard paths (`conditionPaths`,
   `ConditionPath` rows with adjacently tagged scopes) are absent from every
   artifact that does not declare them — body-less and machine-less models
-  stay byte-identical, `DDD_MODEL_FORMAT_VERSION` stays 1. The rexlang#179
+  stay byte-identical, `DDD_MODEL_FORMAT_VERSION` stays 1. The pherolang#179
   additions follow the same discipline: a design's `childOperations`
   (ordinary `ServiceOperation` rows declared by `extend` blocks) and an
   operation's `childScope` (`ChildRef { feature, class, action }` — the
   root's child feature, the child class's full name, the `Delegation.target`
   convention, and the validated action `"add" | "remove" | "save"`) appear
   only when authored.
-- Executable operation bodies (issue [#178](https://github.com/yestechgroup/rexlang/issues/178))
+- Executable operation bodies (issue [#178](https://github.com/yestechgroup/pherolang/issues/178))
   ride the same additive fields: a service or repository operation's
   `bodies` map holds the checked body under the `"stmt"` target — the
-  canonical JSON of `rex_expr::stmt::StmtBody` (an opaque string: rex-ir
-  never depends on rex-expr, the `Operation.bodies`/`"rune"` discipline) —
+  canonical JSON of `phero_expr::stmt::StmtBody` (an opaque string: phero-ir
+  never depends on phero-expr, the `Operation.bodies`/`"rune"` discipline) —
   and a service body written `name(...) => <Repository> { ... }` also
   carries `bodyReceiver` (the primary repository bound as `self`). A
   repository body binds its own design's repository, so it records no
@@ -69,12 +69,12 @@ docs):
 - A repository operation carries **exactly one** of a built-in op
   (`"builtin"`) or a declared signature (`returnType`/`params`).
 
-Minimal artifact: an empty model serializes as exactly `{"formatVersion":1}`.
+Minimal artifact: an empty model serializes as exactly `{"formatVersion":2}`.
 
 ```rust
-let compilation = rex_driver::compile_ddd_str("library.ddd", source, &domains, &rex_driver::DomainImports::default());
+let compilation = phero_driver::compile_ddd_str("library.ddd", source, &domains, &phero_driver::DomainImports::default());
 let json = compilation.model.unwrap().to_json_pretty()?; // versioned artifact
-let model = rex_ir::ddd::DddModel::from_json(&json)?;    // version-gated reload
+let model = phero_ir::ddd::DddModel::from_json(&json)?;    // version-gated reload
 ```
 
 ---
@@ -99,12 +99,12 @@ let model = rex_ir::ddd::DddModel::from_json(&json)?;    // version-gated reload
 
 The normative EBNF for the `.ddd` surface lives exactly once, in the parser
 module docs under [*`.ddd` design
-sources*](https://docs.rs/rex-syntax/latest/rex_syntax/parser/index.html)
-(`crates/rex-syntax/src/parser/mod.rs`) — the single authority for `ddd_file`,
+sources*](https://docs.rs/phero-syntax/latest/phero_syntax/parser/index.html)
+(`crates/phero-syntax/src/parser/mod.rs`) — the single authority for `ddd_file`,
 `application_decl`, `module_decl`, `service_decl`, `design_decl`,
 `repository_decl`, `machine_decl`, `search_decl`, and `extend_decl`; this
 page keeps only the language-level rules. The `.ddd` keyword tables in
-`crates/rex-syntax/src/ddd.rs` are the keyword authority the parser and the
+`crates/phero-syntax/src/ddd.rs` are the keyword authority the parser and the
 formatter share.
 
 Lexical and structural rules:
@@ -142,7 +142,7 @@ Lexical and structural rules:
   `^decision` escapes; `invokes` is special only in the clause position,
   `^invokes` escapes).
 - **Transition binding** (issue
-  [#176](https://github.com/yestechgroup/rexlang/issues/176)) — a
+  [#176](https://github.com/yestechgroup/pherolang/issues/176)) — a
   *delegated* operation may carry `transition <Trigger>`, the explicit
   declaration of the machine-bound transition the delegation fires
   (replacing the consumer's per-state inference):
@@ -160,7 +160,7 @@ Lexical and structural rules:
   `via` name or a bare arrow's derived name (the lowerCamel of the target
   state), never a name that is both (that binding is ambiguous and
   refused). The qualified spelling names the machine by its **enum type
-  name** — `PayRunStatus.Reverse`, not a machine name, because rexlang
+  name** — `PayRunStatus.Reverse`, not a machine name, because Phero Lang
   machine declarations are field-named (`machine status: PayRunStatus`) so
   a machine-name qualifier does not exist as authored. A module carrying
   more than one machine-bearing design **requires** the qualifier (E0352);
@@ -168,17 +168,17 @@ Lexical and structural rules:
   repository `save`, is refused (E0351); an unknown trigger is E0350 with
   the declared trigger vocabulary (did-you-mean included). The artifact
   carries the binding as authored — `TransitionRef { trigger, machine }`
-  on the operation (issue [#143](https://github.com/yestechgroup/rexlang/issues/143)'s
+  on the operation (issue [#143](https://github.com/yestechgroup/pherolang/issues/143)'s
   lowering contract; see "The lowering contract" below). A binding that
   resolves also pins the machine's class as the operation's own-record
   condition scope — the multi-machine guard shape of issue
-  [#180](https://github.com/yestechgroup/rexlang/issues/180).
+  [#180](https://github.com/yestechgroup/pherolang/issues/180).
 - A service or repository operation may carry a leading `protected`
   modifier (Sculptor's visibility): the operation stays off the public
   interface. `protected` is contextual — in leading position it is the
   modifier, anywhere else an ordinary name (`^protected` escapes).
 - **Child-scoped operations** (issue
-  [#179](https://github.com/yestechgroup/rexlang/issues/179)) — a
+  [#179](https://github.com/yestechgroup/pherolang/issues/179)) — a
   module-level `extend <Class> { ... }` block declares operations that act
   on the aggregate root's contained children (the root-side counterpart of
   a child aggregate's own lifecycle):
@@ -203,7 +203,7 @@ Lexical and structural rules:
   rest, and the block stays in the module holding the root's design (the
   same-module coupling rule searches follow).
 - **Executable operation bodies** (issue
-  [#178](https://github.com/yestechgroup/rexlang/issues/178)) — a service
+  [#178](https://github.com/yestechgroup/pherolang/issues/178)) — a service
   operation may replace its signature-only body with a closed procedural
   statement block, naming its primary repository after `=>`:
 
@@ -294,7 +294,7 @@ consumers resolve against the domain model.
 6. **Aggregate boundary** — see the derivation rule below; an entity design
    derived as a non-root may not declare a repository.
 7. **Signature type-check** — declared service and repository operation
-   signatures type-check against the domain model: the `rex-syntax`
+   signatures type-check against the domain model: the `phero-syntax`
    primitives resolve everywhere, every other reference resolves through
    the bare/qualified rules above (any declared kind — class, enum,
    datatype, interface, vocabulary). A multiplicity annotation on a return
@@ -378,7 +378,7 @@ consumers resolve against the domain model.
     path when a non-empty decisions bucket is supplied, else
     `imported decision model "<path>" was not provided`; `.dmn` imports
     are not domains and never lower as `.mox` sources — a plain compile
-    (rexlang#154).
+    (pherolang#154).
 18. **Version pins** — an `invokes` entry or an `inject decision` line
     may declare `version compatible` or `version "X.Y.Z"` (an exact
     semver). The pin narrows rule 17's resolution against the models'
@@ -412,7 +412,7 @@ consumers resolve against the domain model.
 19. **Executable operation bodies** — a body is typed against the
     operation's declared parameters and output (absent for a void
     operation) and the repository receivers described above. The statement
-    subset is closed; every expression slot is rex-expr source checked under
+    subset is closed; every expression slot is phero-expr source checked under
     the same typing rules as a `when` guard. The failure contract is hard:
     an unknown feature or operation, a type mismatch, a non-boolean `guard`
     or `if` condition, an unknown raise variant or arity, and a
@@ -436,7 +436,7 @@ block (the formatter's canonical order; one per design). `machine`,
 `initial`, `terminal`, and `via` are contextual words like every `.ddd`
 word. The normative grammar (`machine_decl`, `machine_member`,
 `transition`, `guard_clause`) lives in the parser module docs
-(`crates/rex-syntax/src/parser/mod.rs`); the canonical fixture's machine gives
+(`crates/phero-syntax/src/parser/mod.rs`); the canonical fixture's machine gives
 the shape:
 
 ```
@@ -454,8 +454,8 @@ machine status: PayRunStatus {
 ```
 
 The driver validates the machine before it lowers (`lower_design_machine`
-in `crates/rex-driver/src/ddd.rs`; behavior pinned by
-`crates/rex-driver/tests/ddd_machines.rs`):
+in `crates/phero-driver/src/ddd.rs`; behavior pinned by
+`crates/phero-driver/tests/ddd_machines.rs`):
 
 - Only an **entity** design carries a machine — a value object is
   immutable and a dto is a transfer record; neither moves through states.
@@ -480,7 +480,7 @@ in `crates/rex-driver/src/ddd.rs`; behavior pinned by
 - **Reachability** — every state is reachable from the initial state
   (breadth-first over the edges).
 - Edge guards and operation `when` conditions type-check through the shared
-  expression language (rex-expr) with the designed class as the implicit
+  expression language (phero-expr) with the designed class as the implicit
   `self` — and guard literals against the machine field must be machine
   states: only the declared states bind as names, so a member of the bound
   enum that the machine never declares is a type error (it can never hold
@@ -496,7 +496,7 @@ against other features are not machine-checked: their name operands
 resolve as features.
 
 **Condition scoping** (issue
-[#180](https://github.com/yestechgroup/rexlang/issues/180)) — a service
+[#180](https://github.com/yestechgroup/pherolang/issues/180)) — a service
 operation's `when` guard is not single-entity. Three scoping regimes, by
 the module's machine count:
 
@@ -548,7 +548,7 @@ consumers build on the resolved form (issue #143's lowering contract)
 instead of re-parsing guards.
 
 **Artifact shape.** The machine lowers to `machine` on the design (a
-`rex_ir::ddd::StateMachine`): the bound `field`, the enum `TypeRef`, the
+`phero_ir::ddd::StateMachine`): the bound `field`, the enum `TypeRef`, the
 `initial` state, the `terminals`, and the `transitions` — the `via` trigger
 (`None` for a bare arrow) and the guard as the verbatim source text between
 the parentheses (the `when`-condition rule). The state set is **derived**,
@@ -556,7 +556,7 @@ never serialized as a separate list: `StateMachine::states()` is the
 initial state, then the terminals, then the remaining transition endpoints
 in first-appearance order; terminalness is membership in `terminals`.
 
-**xstate-ir lowering.** `rex_driver::machines::lower_design_machines` maps
+**xstate-ir lowering.** `phero_driver::machines::lower_design_machines` maps
 every designed machine onto the
 [restingstate](https://github.com/yestechgroup/restingstate) toolchain's
 language-neutral `xstate_ir::Machine` (rev-pinned as `xstate-ir` in the
@@ -571,11 +571,11 @@ of the target state (`Posted` → `posted`, `AwaitingApproval` →
 `awaitingApproval`). The committed goldens pin both forms —
 `tests/conformance/ddd/payrun.ddd.json` (the design artifact) and
 `tests/conformance/ddd/payrun.xstate.json` (the lowered machine);
-regenerate with `REX_UPDATE_FIXTURES=1 cargo test -p rex-driver --test
+regenerate with `PHERO_UPDATE_FIXTURES=1 cargo test -p phero-driver --test
 ddd_machine_golden`.
 
 **Derived events.** Every designed machine derives the `state_changed` event
-contract (entity + field — `rex_driver::machines::derived_events`), which
+contract (entity + field — `phero_driver::machines::derived_events`), which
 is what makes the push plane's `state_changed` vocabulary reachable for a
 plain CRUD model once its lifecycle is modeled.
 
@@ -624,14 +624,14 @@ entry point over it, and the aggregate boundary stays intact.
 
 ## The lowering contract (issue #143)
 
- rexlang aligns with
-[codegraph#590](https://github.com/magick93/codegraph): **public service
-operations lower to capability-gated routes downstream** — the generator
-emits one route per public operation, guarded by the operation's declared
-capabilities, with server-side `when`/`never_both` enforcement. rexlang's
-role is to make the surface the route is built from *declarative*, which
-issues [#176](https://github.com/yestechgroup/rexlang/issues/176) and
-[#180](https://github.com/yestechgroup/rexlang/issues/180) complete:
+Phero Lang aligns with [codegraph#590](https://github.com/magick93/codegraph):
+**public service operations lower to capability-gated routes downstream** —
+the generator emits one route per public operation, guarded by the
+operation's declared capabilities, with server-side `when`/`never_both`
+enforcement. Phero Lang's role is to make the surface the route is built
+from *declarative*, which issues
+[#176](https://github.com/yestechgroup/pherolang/issues/176) and
+[#180](https://github.com/yestechgroup/pherolang/issues/180) complete:
 
 - the declared `transition` (`TransitionRef`) is the lowering contract for
   the machine-bound transition a delegated `save` fires — the consumer
@@ -644,7 +644,7 @@ issues [#176](https://github.com/yestechgroup/rexlang/issues/176) and
   through the bound entity — a closed subset the refusal of which names
   the construct;
 - the checked statement body (`bodies["stmt"]`, issue
-  [#178](https://github.com/yestechgroup/rexlang/issues/178)) is the
+  [#178](https://github.com/yestechgroup/pherolang/issues/178)) is the
   lowering contract for the operation's behavior: the consumer decodes the
   `StmtBody`, maps `self`/bare-name receivers through `bodyReceiver` and the
   service's injections, and lowers the typed expressions with the shared
@@ -657,7 +657,7 @@ consumer owns the route emission. A `protected` operation stays legal but
 off the public interface — a capability or transition carried only by
 `protected` operations reads as dead to the coverage pass, whose
 warning-severity lint (`grantedCapabilityUncarried`, the
-[rexlang#128](https://github.com/yestechgroup/rexlang/issues/128)
+[pherolang#128](https://github.com/yestechgroup/pherolang/issues/128)
 asymmetry) is the existing dead-trigger WARN; no new diagnostic bridges
 the gap.
 
@@ -668,7 +668,7 @@ the library entry point `compile_ddd_str_with_actors` validates the names
 against a caller-provided actor-model **slice**; capability names pool
 across every model, so a host passes all of the application's `.actor`
 artifacts. An empty slice is the plain `compile_ddd_str` behavior (the
-records-unvalidated loose-mapping contract). Since rexlang#128 the CLI
+records-unvalidated loose-mapping contract). Since pherolang#128 the CLI
 project pipeline and the LSP pass the sibling artifacts, so the check is a
 compile-time language error — spanned on the capability clause, with the
 `unknownCapability` code carrying the did-you-mean closest declared name
@@ -678,25 +678,25 @@ authorization remains the `.actor` dimension's job (see the actor-policy
 section of the language reference).
 
 Both directions of the design↔actor wiring resolve at **compile time**
-(rexlang#128): the CLI project pipeline and the LSP resolve every
+(pherolang#128): the CLI project pipeline and the LSP resolve every
 capability clause against the pooled actor artifacts (existence, rule 10
 above) and every grant against the pooled design artifacts (coverage —
 `compile_actors_str_with_designs`, the actor engine's coverage pass
 diagnosing `capability 'X' is granted but no operation or search carries
 it` spanned on the grant entry, code `grantedCapabilityUncarried`). The
-union integrity pass (`rex_driver::check_integrity`, register row
+union integrity pass (`phero_driver::check_integrity`, register row
 **V12**) keeps both findings as its **lint channel** (warning severity)
 for hosts that gather artifacts without compiling — the compiler's
-diagnostics are the errors; `rexlang check <dir>` prints the lint only
+diagnostics are the errors; `pherolang check <dir>` prints the lint only
 for files phase 1 checked clean. Checking a design or policy alone stays
 per-surface and silent.
 
-### Capability nouns on aggregate members (rexlang#144)
+### Capability nouns on aggregate members (pherolang#144)
 
 A capability is granted on a class (`capability X on <Class>`), and the
 class's place in the aggregate machinery decides whether that noun is a
 sound grant. With designs provided, `NounClassification`
-(`crates/rex-driver/src/ddd/graph.rs`) — a pure table over the union model
+(`crates/phero-driver/src/ddd/graph.rs`) — a pure table over the union model
 and the designs, exactly rule 6's predicate — classifies every resolved
 design class:
 
@@ -742,7 +742,7 @@ Like `capability` names, emitted event names are **loosely coupled**: the
 names lower into the artifact exactly as authored, and a plain
 `compile_ddd_str` never validates them — the `.ddd` compile has no `.evt`
 bucket. Both directions of the design↔event wiring are enforced by the
-union integrity pass (`rex_driver::check_integrity`, register row
+union integrity pass (`phero_driver::check_integrity`, register row
 **V12**):
 
 - **Emission existence** — every emitted event name on every service
@@ -759,13 +759,13 @@ Checking a design alone (or a contract alone) stays per-surface and
 silent: an `emits` clause in a cluster without `.evt` artifacts is not an
 error, and a contract in a cluster without designs is not either — the
 checks fire only when the counterpart surface is present in the checked
-union (`rexlang check <dir>`).
+union (`pherolang check <dir>`).
 
 ## Decisions and the decision dimension
 
 A service declares which decision services it relies on without knowing
 how the decisions are computed — the `.ddd` side of the `.dmn` decision
-surface (issue rexlang#78). Two forms, in the positions the grammar fixes:
+surface (issue pherolang#78). Two forms, in the positions the grammar fixes:
 
 ```
 service LoanService {
@@ -798,10 +798,10 @@ nothing into the domain union.
 ## CLI usage
 
 ```
-rexlang check library.ddd                  # validate design + imported domains
-rexlang ir library.ddd -o library.ddd.json # emit the DddModel artifact
-rexlang fmt --check library.ddd            # canonical formatting gate
-rexlang artifact check library.ddd.json    # validate the serialized artifact
+pherolang check library.ddd                  # validate design + imported domains
+pherolang ir library.ddd -o library.ddd.json # emit the DddModel artifact
+pherolang fmt --check library.ddd            # canonical formatting gate
+pherolang artifact check library.ddd.json    # validate the serialized artifact
 ```
 
 - Import paths resolve **relative to the `.ddd` file's directory**; each
@@ -813,9 +813,9 @@ rexlang artifact check library.ddd.json    # validate the serialized artifact
   [Importing Rune models](LANGUAGE.md#importing-rune-models)).
 - Diagnostics come from every file involved and render grouped per file,
   the way `.actor` compiles render them.
-- `rexlang ir` on a `.ddd` file emits only the design artifact; the domain
+- `pherolang ir` on a `.ddd` file emits only the design artifact; the domain
   IR is emitted by running `ir` on the `.mox` files themselves.
-- `rexlang fmt` formats `.ddd` files with the canonical layout rules:
+- `pherolang fmt` formats `.ddd` files with the canonical layout rules:
   imports hoisted into a tight first section (each ending in `;`), then
   the `application` block; `base` first, design flags canonicalized to
   `scaffold auditable optimisticLocking nonPersistent cache`, search
@@ -827,7 +827,7 @@ rexlang artifact check library.ddd.json    # validate the serialized artifact
   canonical line — `boolean addLine(PayRunLineDraft line) => lines.add;`,
   with an optional leading `protected` and the trailing `when (...)` in
   the service-operation order.
-- Directory batch mode (`rexlang check <dir>`) picks `.ddd` files up like
+- Directory batch mode (`pherolang check <dir>`) picks `.ddd` files up like
   every other surface: each design in the directory compiles independently,
   imports resolved relative to it.
 
@@ -835,7 +835,7 @@ rexlang artifact check library.ddd.json    # validate the serialized artifact
 
 ## Sculptor concept mapping
 
-| Sculptor | rexlang `.ddd` |
+| Sculptor | Phero Lang `.ddd` |
 |---|---|
 | Entity | `entity` design |
 | ValueObject | `value` design |
@@ -845,14 +845,14 @@ rexlang artifact check library.ddd.json    # validate the serialized artifact
 | `scaffold` / `auditable` / `optimisticLocking` / `!aggregateRoot`-style negations | design flags (entity-only; `auditable`/`optimisticLocking` default on for entities, `!flag` opts out) |
 | `belongsTo` / `!aggregateRoot` | derived from the domain model's containment graph (see aggregate derivation) |
 | Module | `module` label grouping services and designs |
-| child-scoped aggregate operations | `extend <Root> { ... }` block (issue [#179](https://github.com/yestechgroup/rexlang/issues/179)) |
+| child-scoped aggregate operations | `extend <Root> { ... }` block (issue [#179](https://github.com/yestechgroup/pherolang/issues/179)) |
 | DTO | `dto` design |
 | `findByQuery` / `findByCondition` finders | `search` projection (intent only: text fields with boosts, filters, sorts, ranking, pagination, document projections) — the backend chooses the engine (Postgres FTS, Tantivy, OpenSearch, ...) |
 | generated `GET /things/search?q=` endpoints | consumer concern — the artifact is backend-independent |
 
 ## Deliberate divergences
 
-Sculptor concepts rexlang intentionally does not carry, and why:
+Sculptor concepts Phero Lang intentionally does not carry, and why:
 
 - **Composite natural keys** — expressible already: several `id` features on
   one class lower with `isId`, and the composite key is that set; the
@@ -863,26 +863,26 @@ Sculptor concepts rexlang intentionally does not carry, and why:
   backend already lowers to `minItems`/`maxItems`; a constraint-block
   spelling would duplicate it.
 - **Ordered collections (`orderby` / `orderColumn`, Set/List/Bag)** —
-  persistence-engine metadata (JPA `@OrderBy`/`@OrderColumn`); rexlang
+  persistence-engine metadata (JPA `@OrderBy`/`@OrderColumn`); Phero Lang
   features keep declaration order, and a backend that needs a different
   ordering derives it from its own configuration, not from the artifact.
 - **Fetch / cascade** — JPA persistence knobs with aggregate-derived
   defaults in Sculptor's generator; the artifact is backend-independent,
   so persistence behavior belongs to the backend that owns the storage.
 - **Date validation (`past` / `future`) and custom validators** — runtime
-  validation semantics; rexlang's constraint system is deliberately
+  validation semantics; Phero Lang's constraint system is deliberately
   schema-only (the `unique` precedent), and there is no runtime validator
   hook to hang them on.
 - **Gap classes** — Sculptor's generated-base/handwritten-subclass split is
-  a generation strategy; rexlang generates whole files, and a body-less
+  a generation strategy; Phero Lang generates whole files, and a body-less
   `op` stays an abstract hook implemented by hand in target code — the
   same separation without a second class.
 - **Traits** — a mixin composition feature of Sculptor's Java generation;
-  no rexlang surface carries it yet. If a need lands, it belongs in the
+  no Phero Lang surface carries it yet. If a need lands, it belongs in the
   `.mox` domain model (interface `extends` covers the signature-sharing
   half today).
 - **Composite value types (BasicType)** — Sculptor's `BasicType` is a
-  multi-attribute embeddable (`Money{currency, amount}`); rexlang
+  multi-attribute embeddable (`Money{currency, amount}`); Phero Lang
   datatypes wrap a single platform type opaquely. Model the composite as
   a class designed `value` (rule 12 then requires its features
   `readonly`); a true embeddable datatype awaits a deliberate `.mox`
@@ -1029,36 +1029,36 @@ delegates across modules to `PersonService` (service → service, allowed).
 (the domain), `library.ddd` (the design, formatter-canonical), and
 `library.ddd.json` (the committed artifact). The driver golden test
 byte-compares the compiled artifact, the CLI fmt gate enforces the
-canonical formatting, and `rexlang artifact check` classifies the artifact
-as a DDD design. Regenerate goldens with `REX_UPDATE_FIXTURES=1 cargo test
+canonical formatting, and `pherolang artifact check` classifies the artifact
+as a DDD design. Regenerate goldens with `PHERO_UPDATE_FIXTURES=1 cargo test
 --workspace`.
 
 The machine-bearing pair `payrun.mox`/`payrun.ddd` (formatter-canonical)
 commits two goldens: `payrun.ddd.json` (the design artifact) and
 `payrun.xstate.json` (the lowered xstate-ir machine), byte-compared by
-`crates/rex-driver/tests/ddd_machine_golden.rs`; the machine validation
-rules are pinned by `crates/rex-driver/tests/ddd_machines.rs`.
+`crates/phero-driver/tests/ddd_machine_golden.rs`; the machine validation
+rules are pinned by `crates/phero-driver/tests/ddd_machines.rs`.
 
 The multi-machine pair `timesheet.mox`/`timesheet.ddd` (formatter-canonical)
 is the transition-binding and condition-scoping fixture (issues
-rexlang#176/#180): two machine-bearing designs in one module, qualified
+pherolang#176/#180): two machine-bearing designs in one module, qualified
 transition bindings, an injected-repository SoD guard, and the enum
 -derived own-record spelling. Its committed golden `timesheet.ddd.json`
 carries the `transition` and `conditionPaths` fields; the acceptance rules
-are pinned by `crates/rex-driver/tests/ddd_transitions.rs` and
-`crates/rex-driver/tests/ddd_conditions.rs`.
+are pinned by `crates/phero-driver/tests/ddd_transitions.rs` and
+`crates/phero-driver/tests/ddd_conditions.rs`.
 
 The child-operation pair `childops.mox`/`childops.ddd` (formatter-canonical)
-is the rexlang#179 fixture: a `PayRun` aggregate root with a contained
+is the pherolang#179 fixture: a `PayRun` aggregate root with a contained
 `PayRunLine[] lines` collection and a single-valued `PayRunNote` child, a
 `dto PayRunLineDraft` parameter type, and an `extend PayRun` block with
 `add`/`remove`/`save` child operations (one guarded by a parameter field and
 one by a child feature). Its committed golden `childops.ddd.json` carries
 the design's `childOperations` with each operation's `childScope`; the
-acceptance rules are pinned by `crates/rex-driver/tests/ddd_child_ops.rs`.
+acceptance rules are pinned by `crates/phero-driver/tests/ddd_child_ops.rs`.
 
 The executable-body pair `bodies.mox`/`bodies.ddd` (formatter-canonical)
-is the rexlang#178 fixture: a void service body over the full statement
+is the pherolang#178 fixture: a void service body over the full statement
 subset (let-else, guard, assignment, `sum`/`size`/`any`/`all` reductions,
 `self.findById`/`self.save`, and a bare-name injected-repository call), a
 value-returning `if`/`else` body with `capability`/`when` clauses, a
@@ -1066,12 +1066,12 @@ repository-operation body guarded by `when`, and an injected secondary
 repository. Its committed golden `bodies.ddd.json` carries each operation's
 `bodies` `"stmt"` target and the service bodies' `bodyReceiver`; the
 acceptance and failure rules are pinned by
-`crates/rex-driver/tests/ddd_bodies.rs`.
+`crates/phero-driver/tests/ddd_bodies.rs`.
 
 The `examples/` side ships `support.ddd` (entity/value/dto designs,
 searches, capabilities validated against `support.actor` through
 `compile_ddd_str_with_actors`) and `orders.ddd` (the aggregate-derivation
 rule over `ecommerce.mox`), byte-pinned against `examples/artifacts/` by
-`crates/rex-driver/tests/examples_artifacts.rs`. Note that
+`crates/phero-driver/tests/examples_artifacts.rs`. Note that
 `examples/library/library.mox` itself is *not* designable: its `Writer.books`
 cross reference escapes the Library aggregate (rule 13).

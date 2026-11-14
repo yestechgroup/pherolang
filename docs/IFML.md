@@ -4,33 +4,33 @@
 
 A Domain-Specific Language that is semantically aligned with [OMG IFML 1.0](https://www.omg.org/spec/IFML/) but uses a modern, C-like expression-heavy syntax instead of XML/XMI. Lexed by a **logos** lexer and parsed by **chumsky** into a spanned syntax tree, then lowered into a versioned `IfmlModel` artifact; the same parser and byte-offset spans back the language server.
 
-The IFML DSL lives alongside the `.mox` domain model as a *complementary* input: the domain model defines the data (entities, fields, constraints), the IFML DSL defines the interaction model (views, navigation, events, data binding). The parser crate is **`rex-ifml`**; the artifact types live in **`rex_ir::ifml`** (the rex-ir crate). Downstream consumers — today the [codegraph](https://github.com/magick93/codegraph) UI generators — ingest the artifact and emit running applications.
+The IFML DSL lives alongside the `.mox` domain model as a *complementary* input: the domain model defines the data (entities, fields, constraints), the IFML DSL defines the interaction model (views, navigation, events, data binding). The parser crate is **`phero-ifml`**; the artifact types live in **`phero_ir::ifml`** (the phero-ir crate). Downstream consumers — today the [codegraph](https://github.com/magick93/codegraph) UI generators — ingest the artifact and emit running applications.
 
 ---
 
 ## Artifact wire format
 
-`IfmlModel` is a standalone, versioned wire artifact following the rex-ir [wire format contract](BACKENDS.md) (see also the `rex_ir::ifml` module docs):
+`IfmlModel` is a standalone, versioned wire artifact following the phero-ir [wire format contract](BACKENDS.md) (see also the `phero_ir::ifml` module docs):
 
 - Versioned independently of the domain-model marker via **`IFML_MODEL_FORMAT_VERSION`** (= 1), the `ActorModel` precedent. `IfmlModel::from_json` rejects absent/wrong versions with `IrError::UnsupportedFormatVersion`.
 - All struct field names serialize as `camelCase` (`formatVersion`, `eventType`, `moduleUses`, ...).
 - Enums with payloads are *adjacently* tagged: `{"type": "<variant>", "value": <payload>}` (tags camelCase: `"navigate"`, `"stringLit"`, `"fieldExpr"`, `"bar"`). Unit-only enums serialize as bare camelCase strings (`"eq"`, `"regexMatch"`).
 - Unknown fields are ignored on deserialize; `PropertyAssignment::span` is parse-only and never serialized.
 
-Minimal artifact: an empty model serializes as exactly `{"formatVersion":1}` — every struct `Vec` field is `#[serde(default, skip_serializing_if = "Vec::is_empty")]` (the `ActorModel`/`DddModel` discipline), so empty vecs are omitted on write and absent vecs read back as empty.
+Minimal artifact: an empty model serializes as exactly `{"formatVersion":2}` — every struct `Vec` field is `#[serde(default, skip_serializing_if = "Vec::is_empty")]` (the `ActorModel`/`DddModel` discipline), so empty vecs are omitted on write and absent vecs read back as empty.
 
-`rexlang artifact check` classifies a non-empty IFML artifact by its
+`pherolang artifact check` classifies a non-empty IFML artifact by its
 `views`/`domains`/`actions`/`commands`/`imports` keys (rule 3 of the
 classifier's precedence list — ahead of the DDD `modules` shape, so a
 view-and-module model classifies as an IfmlModel). Two shape-sniffing
 limitations are documented and pinned: the **empty** IFML model
-serializes as exactly `{"formatVersion":1}` and classifies as an
+serializes as exactly `{"formatVersion":2}` and classifies as an
 ActorModel, and a **module-only** model (no other IFML key) shape-matches
 the DDD design keys and classifies as a DddModel (see the classification
 rules in the CLI's `artifact_check` module).
 
 ```rust
-let model = rex_ifml::parse_ifml(source)?;
+let model = phero_ifml::parse_ifml(source)?;
 let json = model.to_json_pretty()?;      // versioned artifact
 let model = IfmlModel::from_json(&json)?; // version-gated reload
 ```
@@ -327,7 +327,7 @@ generation, TUI constructs) are tracked in the follow-up issue.
 ## Grammar
 
 **The normative grammar is the EBNF in the parser module docs:**
-[`crates/rex-ifml/src/parser/mod.rs`](../crates/rex-ifml/src/parser/mod.rs).
+[`crates/phero-ifml/src/parser/mod.rs`](../crates/phero-ifml/src/parser/mod.rs).
 That module is the single grammar authority for the surface — the
 grammar-doc tests fail when a word table and the EBNF drift — so this page
 does not restate it. What follows is a non-normative orientation:
@@ -356,7 +356,7 @@ does not restate it. What follows is a non-normative orientation:
 
 ## Artifact Types (Rust)
 
-The chumsky parser produces the spanned syntax tree in `ast.rs`; `lower.rs` performs the one traversal that emits both the `rex_ir::ifml` types and the span index. The root artifact:
+The chumsky parser produces the spanned syntax tree in `ast.rs`; `lower.rs` performs the one traversal that emits both the `phero_ir::ifml` types and the span index. The root artifact:
 
 ```rust
 pub struct IfmlModel {
@@ -425,17 +425,17 @@ Every payload field beyond `kind` is `#[serde(default)]` +
 `skip_serializing_if` — charts that do not use the new vocabulary serialize
 byte-identically to the pre-#80 shape.
 
-`rex_ifml::render_expression(&expr)` renders an expression back to its deterministic DSL source form.
+`phero_ifml::render_expression(&expr)` renders an expression back to its deterministic DSL source form.
 
 ---
 
 ## Downstream Consumption
 
-The `rexlang` language server supports the surface: diagnostics (resolver
+The Phero Lang language server supports the surface: diagnostics (resolver
 `E0001`–`E0009` + typed-binding `E0100`–`E0111`, authorization and
 decision data included —
 the code table is
-[docs/DIAGNOSTICS.md](DIAGNOSTICS.md), rendered by `rexlang explain`),
+[docs/DIAGNOSTICS.md](DIAGNOSTICS.md), rendered by `pherolang explain`),
 document symbols, hover
 (module signatures), go-to-definition on `use` sites (cross-file), and
 `textDocument/formatting` backed by the canonical formatter. Imports fetch
@@ -461,22 +461,22 @@ Expression evaluation is **deferred to generation time** — the artifact stores
 ## Crate Structure
 
 ```
-crates/rex-ifml/
+crates/phero-ifml/
 ├── Cargo.toml
 ├── src/
-│   ├── lib.rs            # Public API: parse_ifml, parse_ifml_file, parse_ifml_indexed, compile_ifml_str, check_ifml(+_with_actors/+_with_decisions), expand_ifml, manifest_ifml, format_ifml + re-exports of rex_ir::ifml
+│   ├── lib.rs            # Public API: parse_ifml, parse_ifml_file, parse_ifml_indexed, compile_ifml_str, check_ifml(+_with_actors/+_with_decisions), expand_ifml, manifest_ifml, format_ifml + re-exports of phero_ir::ifml
 │   ├── ast.rs            # Spanned syntax tree (file → declarations/members/expressions)
 │   ├── lexer.rs          # logos lexer: no keyword tokens, total error tokens
 │   ├── parser/           # chumsky parsers; mod.rs carries the normative EBNF
 │   ├── lower.rs          # AST → (IfmlModel, IfmlIndex) in one traversal
 │   ├── index.rs          # Span side-table (IfmlIndex): module decls/uses, views, containers, actions, actors, components, commands, auth sites — never serialized
 │   ├── resolve.rs        # Cross-file module resolution: IfmlImports bundle, compile_ifml_str, IfmlDiagnostic (E0001–E0009)
-│   ├── check/           # Typed expression checking against a domain Model, via rex_expr::DomainTypes; interaction cross-reference, authorization, decision, and lint passes over instantiated-module sites (code table: docs/DIAGNOSTICS.md)
+│   ├── check/           # Typed expression checking against a domain Model, via phero_expr::DomainTypes; interaction cross-reference, authorization, decision, and lint passes over instantiated-module sites (code table: docs/DIAGNOSTICS.md)
 │   ├── expand.rs         # Module-use expansion (opt-in for the IR artifact; the manifest always derives from it)
-│   ├── manifest.rs       # The control/route manifest emitter: IfmlCompilation (+ imports, + optional domain union) → rex_ir::ifml_manifest::IfmlManifest
+│   ├── manifest.rs       # The control/route manifest emitter: IfmlCompilation (+ imports, + optional domain union) → phero_ir::ifml_manifest::IfmlManifest
 │   └── fmt.rs            # Token-based canonical formatter (the lexer drops comments)
 └── tests/
-    ├── golden.rs         # Conformance goldens — IR artifacts and manifests (REX_UPDATE_FIXTURES=1 regenerates)
+    ├── golden.rs         # Conformance goldens — IR artifacts and manifests (PHERO_UPDATE_FIXTURES=1 regenerates)
     ├── manifest.rs       # The manifest emitter's derivation contract
     ├── resolve.rs        # Resolver conformance tests
     ├── patterns.rs       # patterns/ifml library compiles clean; composition + negative cases
@@ -497,7 +497,7 @@ views, containers, and module bodies — is resolved and its overrides
 validated against the target module's inputs and properties. Results live
 in the `IfmlIndex` side-table (`ModuleUseSite::resolved_module`); the
 returned `IfmlModel` is the main file's own parse, unchanged, so wire
-artifacts stay byte-identical. See `crates/rex-ifml/src/resolve.rs` for the
+artifacts stay byte-identical. See `crates/phero-ifml/src/resolve.rs` for the
 diagnostic-code table.
 
 Goldens live next to the other conformance fixtures: `tests/conformance/ifml/app.ifml` (canonical source) and `tests/conformance/ifml/app.ifml.json` (committed artifact).
@@ -506,9 +506,9 @@ Goldens live next to the other conformance fixtures: `tests/conformance/ifml/app
 
 `check_ifml(&compilation, Option<&domain_model>)` type-checks every
 type-checkable expression in a compiled model against a domain model —
-the union `rex_ir::Model` every domain surface lowers into (`.mox`
+the union `phero_ir::Model` every domain surface lowers into (`.mox`
 declarations, `import sigil` packages, `import schema` classes). It
-reuses `rex_expr`'s `DomainTypes`/`TypeChecker` — the same checker that
+reuses `phero_expr`'s `DomainTypes`/`TypeChecker` — the same checker that
 validates `.mox` operation bodies — so navigation, operations, and the
 typing rules of `docs/EXPRESSIONS.md` behave identically.
 
@@ -535,7 +535,7 @@ binding wins. The record exists for view/container/module bodies; command
 expressions bind their arguments and options as bare names.
 
 `type_ref` mapping for checking (one shared alias table in
-`crates/rex-ifml/src/check/domains.rs`, used by both the checker and the
+`crates/phero-ifml/src/check/domains.rs`, used by both the checker and the
 resolver's override check): `String`/`Uuid` → string, `Int` → int,
 `Float` → float, `Boolean` → boolean, `DateTime` → the expression
 language's calendar `date` (a checking alias — no time-of-day
@@ -601,7 +601,7 @@ of the actor models the host provides:
 An empty actor slice skips the pass entirely — the same contract as
 `domains: None` for expressions. Hosts gather the flow's `.actor`
 imports when they exist: the CLI resolves them relative to the
-importing file and compiles them like `rexlang check` on the policy (a
+importing file and compiles them like `pherolang check` on the policy (a
 missing or non-compiling policy is a clean error naming the resolved
 path), the LSP does the same with open documents winning over disk and
 degrades to no authorization checking in incomplete workspaces. The
@@ -611,8 +611,8 @@ surface; uninstantiated modules keep their names to their own
 compilation's report. Spans land on the name tokens, and a view gated
 on a capability no policy declares can no longer compile clean — the
 #112 defect class one level up. The conformance fixture pair
-`tests/conformance/ifml/rexlang/auth.{mox,actor}` makes `app.ifml`'s
-`import "rexlang/auth.actor"` load-bearing.
+`tests/conformance/ifml/phero/auth.{mox,actor}` makes `app.ifml`'s
+`import "phero/auth.actor"` load-bearing.
 
 ### Decision Data
 
@@ -651,8 +651,8 @@ policies: the CLI resolves them relative to the importing file, gathers
 each model's own `.mox` imports and `logic table` markdown contents, and
 hard-errors on a missing or non-compiling model; the LSP degrades to no
 decision checking in incomplete workspaces. The conformance fixture
-`tests/conformance/ifml/rexlang/decisions.dmn` makes `app.ifml`'s
-`import "rexlang/decisions.dmn"` load-bearing, and
+`tests/conformance/ifml/phero/decisions.dmn` makes `app.ifml`'s
+`import "phero/decisions.dmn"` load-bearing, and
 `examples/support/support.ifml` binds `data: AssessRefund` to the service
 `examples/support/support.dmn` declares.
 
@@ -660,11 +660,11 @@ decision checking in incomplete workspaces. The conformance fixture
 
 Every diagnostic carries a severity class. The resolver and checker
 bands (`E0001`–`E0009`, `E0100`–`E0111`) are **errors**: they fail
-`rexlang check`/`ir`/`build`/`manifest` and the LSP publishes them as
+`pherolang check`/`ir`/`build`/`manifest` and the LSP publishes them as
 errors. The lint pass (`check_ifml_with_actors`, after the
 authorization pass) adds the `ifml.lints` band — **warnings**
 (`W0150`–`W0199`) that render but never fail a compilation; the carrier
-decides what they mean (`rexlang check --deny-warnings` turns them into
+decides what they mean (`pherolang check --deny-warnings` turns them into
 failures, per-file and in the union integrity pass whose lint channel
 they join). Every lint judges **only the main file's** declarations —
 imported pattern libraries declare unused modules and actions by
@@ -680,14 +680,14 @@ uninstantiated module's `action("X")` is still live intent):
 | `W0154` | a main-file view with no domain tie at all — no `data:` binding or explicit entity columns in its body, no `params`, no module composition, no event handlers, no `roles:`/`requires:` gate |
 
 The canonical fixtures, examples, and pattern library are all
-warning-silent (`rexlang check` on them renders nothing); `rexlang
+warning-silent (`pherolang check` on them renders nothing); `pherolang
 explain W0150` renders one entry, and `docs/DIAGNOSTICS.md` is the
 generated code table.
 
 ### Control/Route Manifest
 
-`rexlang manifest <file.ifml> [-o out.json]` exports the **control/route
-manifest** (`rex_ir::ifml_manifest::IfmlManifest`, versioned
+`pherolang manifest <file.ifml> [-o out.json]` exports the **control/route
+manifest** (`phero_ir::ifml_manifest::IfmlManifest`, versioned
 independently via `IFML_MANIFEST_FORMAT_VERSION`) — the positive artifact
 for what the interaction model lowers to, derived from the compilation
 *after* resolution and checking:
@@ -726,13 +726,13 @@ impossible at this boundary; verification row **V11** names it as
 enforcement). Emission is deterministic (source order throughout) and
 the wire follows the house discipline: camelCase, adjacent tagging,
 `#[serde(default)]` + `skip_serializing_if` everywhere — an empty model
-serializes as exactly `{"formatVersion":1}`. Golden manifests pin the
+serializes as exactly `{"formatVersion":2}`. Golden manifests pin the
 semantic product: `tests/conformance/ifml/{app,cli}.manifest.json` and
 `examples/artifacts/{cli,ecommerce,support}.manifest.json` (the
 `examples_artifacts` precedent).
 
-Declarations resolve one step further, across surfaces: `rexlang check
-<dir>` runs the union integrity pass (`rex_driver::check_integrity`,
+Declarations resolve one step further, across surfaces: `pherolang check
+<dir>` runs the union integrity pass (`phero_driver::check_integrity`,
 register row **V12**) over the import-connected application and errors
 when a declared action's name binds to no service operation
 (ASCII-case-insensitive verb equality — `ApproveRefund` ↔
@@ -826,7 +826,7 @@ The `domain "sales" { schema "sales"; }` declaration at the top of an `.ifml` fi
 ## Grammar Authority
 
 The EBNF in
-[`crates/rex-ifml/src/parser/mod.rs`](../crates/rex-ifml/src/parser/mod.rs)
+[`crates/phero-ifml/src/parser/mod.rs`](../crates/phero-ifml/src/parser/mod.rs)
 is the sole grammar authority for `.ifml`. The parser, the lowering, the
 formatter, and the language server all consume the same lexer/parser stack;
 no second grammar ships in this repository (there is no Tree-sitter grammar),
@@ -840,15 +840,15 @@ reverse) fails the suite.
 ## Crate Dependency Graph
 
 ```
-rex-ifml
+phero-ifml
   ├── logos (lexer)
   ├── chumsky (parser)
-  ├── rex-parser (byte-span token input + recovery combinators)
-  ├── rex-expr (typed expression checking)
-  └── rex-ir (IfmlModel artifact types, versioned wire format)
+  ├── phero-parser (byte-span token input + recovery combinators)
+  ├── phero-expr (typed expression checking)
+  └── phero-ir (IfmlModel artifact types, versioned wire format)
 ```
 
-`rex-ifml` is dependency-clean: no consumer-specific dependencies, so any backend can parse `.ifml` sources or consume `IfmlModel` artifacts directly.
+`phero-ifml` is dependency-clean: no consumer-specific dependencies, so any backend can parse `.ifml` sources or consume `IfmlModel` artifacts directly.
 
 ---
 
@@ -862,5 +862,5 @@ rex-ifml
 | Recovery | Broken documents keep a partial model and index | `tests/recovery.rs` + proptest |
 | Artifact | Parse → `to_json_pretty` → golden byte-compare | `tests/conformance/ifml/` golden |
 | Artifact | `to_json_pretty` → `from_json` round trip | Golden + unit tests |
-| Wire format | `formatVersion` gate, unknown-field tolerance | Unit tests (`rex_ir::ifml`) |
+| Wire format | `formatVersion` gate, unknown-field tolerance | Unit tests (`phero_ir::ifml`) |
 | Expression parsing | C-like expressions produce correct trees | Unit test |

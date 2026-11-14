@@ -1,6 +1,6 @@
-# The rexlang expression language (Tier 2)
+# The Phero Lang expression language (Tier 2)
 
-rexlang's expression sublanguage is the deliberate replacement for Eclipse
+Phero Lang's expression sublanguage is the deliberate replacement for Eclipse
 Xbase inside `.mox` bodies and derived-feature expressions. It is deliberately
 small: literals (including `date("YYYY-MM-DD")` date constants), field/feature
 access, method calls on model-declared operations, comparison and arithmetic,
@@ -12,8 +12,8 @@ that is the discipline that keeps expressions portable across backends — and
 values as operation parameters or attributes. `datetime` does not exist in
 this milestone; `date` is timezone-less and time-less by construction.
 
-The pipeline is: parse (`rex-expr`) → type-check once in Rust against the Core
-IR (`rex-expr`, over a `rex_ir::Model`) → each backend lowers the **typed**
+The pipeline is: parse (`phero-expr`) → type-check once in Rust against the Core
+IR (`phero-expr`, over a `phero_ir::Model`) → each backend lowers the **typed**
 expression tree to idiomatic target code. Because backends see typed trees,
 semantics must be pinned down explicitly where target languages disagree —
 integer overflow, string equality, string concatenation, null/`Option`,
@@ -120,11 +120,11 @@ expressions.
 Types (`Ty`):
 
 - **Primitives**: `string int long short float double boolean byte char date`
-  (mirroring `rex_ir::PrimitiveType`). A `date` is a timezone-less calendar
+  (mirroring `phero_ir::PrimitiveType`). A `date` is a timezone-less calendar
   day (`YYYY-MM-DD`); it has no time-of-day component and no timezone.
 - **Named types**: class, enum, datatype, interface, vocabulary — always
   package-qualified in the checker (`Named { kind, package, name }`), because
-  they come from a resolved `rex_ir::Model`.
+  they come from a resolved `phero_ir::Model`.
 - `List<T>` — a to-many feature value or algebra result.
 - `Option<T>` — an optional (0..1) feature value; also the result of `?.`
   chains and `first`.
@@ -194,14 +194,14 @@ false-positive. Vocabulary members stay unchecked: no dotted namespace, no
 membership check.
 
 **C1 (`.ddd` service-guard condition scope).** A `.ddd` service
-operation's `when` guard (issue rexlang#180) types under a scope the
+operation's `when` guard (issue pherolang#180) types under a scope the
 *driver* assembles, not the checker alone; the rule is test-citable so
-`crates/rex-driver/tests/ddd_conditions.rs` can cite it. The scope's
+`crates/phero-driver/tests/ddd_conditions.rs` can cite it. The scope's
 bindings, in shadowing order (later wins):
 
 1. the implicit-`self` features — the module's unique machine-bearing
    class, or the class a resolved `transition` binding pins (issue
-   rexlang#176); absent in a multi-machine module without a pin;
+   pherolang#176); absent in a multi-machine module without a pin;
 2. in a multi-machine module, each machine's bound field as an
    enum-typed name — by its authored field name when that name is unique
    across the module's machines, and always by the enum-derived spelling
@@ -256,7 +256,7 @@ and no literal adaptation. The `if` expression's type is that type.
 
 **Function calls.** The bare form `name(args)` (no receiver) resolves
 against the sigil-lowered package functions of the domain union
-(`rex_ir::Package::functions`), indexed by bare name across every package.
+(`phero_ir::Package::functions`), indexed by bare name across every package.
 A name declared by several packages is a type error naming them all; an
 unknown name is a type error at the name span (with a did-you-mean hint when
 exactly one indexed function is within edit distance 2). Each parameter
@@ -412,7 +412,7 @@ Compile-time half: a `date("…")` literal whose day number does not fit the
 `i32` scale is rejected at compile time under R6, so a checked literal can
 never fail to construct downstream.
 
-**Rust lowering.** The runtime type `rex_runtime::Date` implements the
+**Rust lowering.** The runtime type `phero_runtime::Date` implements the
 arithmetic with `checked_add`/`checked_sub` and panics with an `R5`-citing
 message on overflow:
 
@@ -440,7 +440,7 @@ date type directly). Two halves, both compile-time:
 validity already proven, so the `expect` documents an invariant:
 
 ```rust
-rex_runtime::Date::from_str("2026-09-17").expect("R6-checked date literal")
+phero_runtime::Date::from_str("2026-09-17").expect("R6-checked date literal")
 ```
 
 ### R7 — DATE ORDERING AND EQUALITY
@@ -456,7 +456,7 @@ The six comparison operators are total on `date`:
 A date and a non-date are a type error for all six, per L2/L1 (no implicit
 conversions, no literal adaptation — the `date("…")` form is its own type).
 
-**Rust lowering.** Plain operators: `rex_runtime::Date` derives `PartialEq`
+**Rust lowering.** Plain operators: `phero_runtime::Date` derives `PartialEq`
 and `Ord` over the day number, so `==`/`<`/… are integer comparisons:
 
 ```rust
@@ -474,7 +474,7 @@ month = Mar 28. `plus_days` and `diff_days` are plain day arithmetic and
 never clamp. R5's panic contract applies when the result leaves the `i32`
 scale.
 
-**Rust lowering.** Implemented once, in `rex_runtime::Date::plus_months`
+**Rust lowering.** Implemented once, in `phero_runtime::Date::plus_months`
 (month arithmetic in `i64`, day clamped with `min(days_in_month)`, R5 panic
 on overflow); lowered calls are plain method calls:
 
@@ -528,7 +528,7 @@ self.citation(res).zip(Some(self.title.clone()))
 A sigil-lowered Rune function body (the `"rune"` target, wire contract
 rule 15) is a statement layer above this expression language — not a second
 semantics: every expression slot in it (guards, `alias` bindings,
-`set`/`add` steps) is a rex-expr program, checked and lowered by the same
+`set`/`add` steps) is a phero-expr program, checked and lowered by the same
 checker and lowerings as any `expr` body, so the rules above apply inside
 those slots unchanged. Nothing Rune-specific re-derives overflow, equality,
 `Option`, or division semantics — the carry-over is a pinned contract, not
@@ -567,9 +567,9 @@ error.
 
 ## Rust lowering
 
-The Rust backend (`rex-backend-rust`) lowers the typed tree with
+The Rust backend (`phero-backend-rust`) lowers the typed tree with
 `expr_lower::lower_expr`. The shapes below are normative for the Rust target
-and pinned by `crates/rex-backend-rust/tests/expr_lower.rs`.
+and pinned by `crates/phero-backend-rust/tests/expr_lower.rs`.
 
 **Values, names, and `self`.** Class-typed values are their typed ids
 (`BookId`, always `Copy`); every other type is its Rust value. The implicit
@@ -616,7 +616,7 @@ actually selected (for A2, only the matches). A6 sums by shared borrow (`iter`
 plain `+`, keeping the R1 contract. An A1 result is naturally `Option`; the
 remaining forms yield plain values, so their `?.` forms wrap in `Some(..)`.
 
-**Dates in Rust.** The `date` primitive maps to `rex_runtime::Date`, the
+**Dates in Rust.** The `date` primitive maps to `phero_runtime::Date`, the
 runtime support crate's `Copy` newtype over the R5 day number. A literal
 lowers to the strict-parse-plus-`expect` shape of R6; the calendar algebra
 lowers to plain method calls (`plus_days`/`plus_months`/`diff_days`), and `?.`
@@ -624,7 +624,7 @@ over an optional date propagates with `map`:
 
 ```rust
 (self.effective_date.plus_months(6i32))
-(self.maturity_date.map(|__rex_date| __rex_date.plus_days(1i32)))
+(self.maturity_date.map(|__phero_date| __phero_date.plus_days(1i32)))
 ```
 
 ## Scoping and evaluation shape
@@ -638,8 +638,8 @@ over an optional date propagates with `map`:
 
 ## Errors
 
-`rex_expr::parse` never panics and performs best-effort recovery like
-`rex-syntax`: it returns the recovered expression (if any) plus every error
+`phero_expr::parse` never panics and performs best-effort recovery like
+`phero-syntax`: it returns the recovered expression (if any) plus every error
 with byte spans. `TypeChecker::type_of` collects **all** type errors in one
 pass (subexpression errors do not cascade into spurious operator errors).
 The guard lint of rule L3 is a separate opt-in pass

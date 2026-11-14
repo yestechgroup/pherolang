@@ -1,5 +1,5 @@
 // The regulated lending assessment at version 1.5.0: the service
-// contract the design and case surfaces pin against (rexlang#154). The
+// contract the design and case surfaces pin against (pherolang#154). The
 // same contract lives at 2.0.0 in lending-2.dmn — the major bump — so a
 // `compatible` pin tracks forward and an exact pin holds this model.
 decision_model Lending {

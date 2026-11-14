@@ -1,36 +1,36 @@
 [workspace]
 resolver = "2"
 members = [
-    "crates/rex-syntax",
-    "crates/rex-parser",
-    "crates/rex-ir",
-    "crates/rex-expr",
-    "crates/rex-ifml",
-    "crates/rex-driver",
-    "crates/rex-backend-rust",
-    "crates/rex-backend-jsonschema",
-    "crates/rex-backend-cedar",
-    "crates/rex-backend-cmmn",
-    "crates/rex-backend-dmn",
-    "crates/rex-backend-common",
-    "crates/rex-vocab",
-    "crates/rex-lsp",
-    "crates/rex-runtime",
-    "crates/rex-cli",
-    "crates/rex-verify",
-    "crates/rex-diagnostics",
-    "crates/rex-evidence",
-    "crates/rex-strings",
-    "crates/rex-dates",
-    "crates/rex-testkit",
+    "crates/phero-syntax",
+    "crates/phero-parser",
+    "crates/phero-ir",
+    "crates/phero-expr",
+    "crates/phero-ifml",
+    "crates/phero-driver",
+    "crates/phero-backend-rust",
+    "crates/phero-backend-jsonschema",
+    "crates/phero-backend-cedar",
+    "crates/phero-backend-cmmn",
+    "crates/phero-backend-dmn",
+    "crates/phero-backend-common",
+    "crates/phero-vocab",
+    "crates/phero-lsp",
+    "crates/phero-runtime",
+    "crates/phero-cli",
+    "crates/phero-verify",
+    "crates/phero-diagnostics",
+    "crates/phero-evidence",
+    "crates/phero-strings",
+    "crates/phero-dates",
+    "crates/phero-testkit",
 ]
 
 [workspace.package]
-version = "0.2.0"
+version = "0.3.0"
 edition = "2021"
 license = "Apache-2.0"
-description = "rexlang: a multi-target modeling language inspired by Eclipse Xcore"
-repository = "https://github.com/yestechgroup/rexlang"
+description = "Phero Lang: a verifiable, multi-target modeling language inspired by Eclipse Xcore"
+repository = "https://github.com/yestechgroup/pherolang"
 readme = "README.md"
 
 [workspace.lints.rust]
@@ -40,26 +40,26 @@ unsafe_code = "forbid"
 all = "warn"
 
 [workspace.dependencies]
-rex-syntax = { path = "crates/rex-syntax" }
-rex-parser = { path = "crates/rex-parser" }
-rex-ir = { path = "crates/rex-ir" }
-rex-expr = { path = "crates/rex-expr" }
-rex-ifml = { path = "crates/rex-ifml" }
-rex-driver = { path = "crates/rex-driver" }
-rex-backend-rust = { path = "crates/rex-backend-rust" }
-rex-backend-jsonschema = { path = "crates/rex-backend-jsonschema" }
-rex-backend-cedar = { path = "crates/rex-backend-cedar" }
-rex-backend-common = { path = "crates/rex-backend-common" }
-rex-vocab = { path = "crates/rex-vocab" }
-rex-lsp = { path = "crates/rex-lsp" }
-rex-runtime = { path = "crates/rex-runtime" }
-rex-verify = { path = "crates/rex-verify" }
-rex-diagnostics = { path = "crates/rex-diagnostics" }
-rex-evidence = { path = "crates/rex-evidence" }
-rex-strings = { path = "crates/rex-strings" }
-rex-dates = { path = "crates/rex-dates" }
-# Dev-only shared test fixtures (issue rexlang#260): never a production dependency.
-rex-testkit = { path = "crates/rex-testkit" }
+phero-syntax = { path = "crates/phero-syntax" }
+phero-parser = { path = "crates/phero-parser" }
+phero-ir = { path = "crates/phero-ir" }
+phero-expr = { path = "crates/phero-expr" }
+phero-ifml = { path = "crates/phero-ifml" }
+phero-driver = { path = "crates/phero-driver" }
+phero-backend-rust = { path = "crates/phero-backend-rust" }
+phero-backend-jsonschema = { path = "crates/phero-backend-jsonschema" }
+phero-backend-cedar = { path = "crates/phero-backend-cedar" }
+phero-backend-common = { path = "crates/phero-backend-common" }
+phero-vocab = { path = "crates/phero-vocab" }
+phero-lsp = { path = "crates/phero-lsp" }
+phero-runtime = { path = "crates/phero-runtime" }
+phero-verify = { path = "crates/phero-verify" }
+phero-diagnostics = { path = "crates/phero-diagnostics" }
+phero-evidence = { path = "crates/phero-evidence" }
+phero-strings = { path = "crates/phero-strings" }
+phero-dates = { path = "crates/phero-dates" }
+# Dev-only shared test fixtures (issue pherolang#260): never a production dependency.
+phero-testkit = { path = "crates/phero-testkit" }
 
 # The Rune DSL (`.rosetta`) toolchain, pinned by rev — the embedding
 # contract is documented in sigil's docs/api-stability.md (sigil-model is
@@ -72,20 +72,21 @@ sigil-syntax = { git = "https://github.com/yestechgroup/sigil.git", rev = "69115
 # The restingstate statechart toolchain, pinned by rev — `.ddd` state
 # machines lower into its language-neutral Machine IR (xstate-ir is the
 # compatibility boundary; the lowering contract lives in docs/DDD.md).
-# NOTE: restingstate is a private repo; CI needs credentials to fetch it.
+# The repository is public, so a clean checkout (and `cargo install --git`)
+# fetches it without credentials.
 xstate-ir = { git = "https://github.com/yestechgroup/restingstate.git", rev = "380580b6407f6530c6fb89e1ce87621567f009c5" }
 
 # The dsntk decision-table toolchain (yestechgroup fork of DecisionToolkit/dsntk),
 # pinned by rev — the `.dmn` surface validates external markdown decision tables
 # through dsntk-recognizer (`from_markdown`) and FEEL expression syntax through
-# dsntk-feel-parser. The validation contract lives in `crates/rex-driver/src/dmn.rs`
+# dsntk-feel-parser. The validation contract lives in `crates/phero-driver/src/dmn.rs`
 # and `docs/DMN.md`; the recognizer's decision-table type is the
-# compatibility boundary (rex-ir stays ours).
+# compatibility boundary (phero-ir stays ours).
 dsntk-recognizer = { git = "https://github.com/yestechgroup/dsntk-rs.git", rev = "b926458c089085fb59e9178d549f27a8119e45ff" }
 dsntk-model = { git = "https://github.com/yestechgroup/dsntk-rs.git", rev = "b926458c089085fb59e9178d549f27a8119e45ff" }
 dsntk-model-evaluator = { git = "https://github.com/yestechgroup/dsntk-rs.git", rev = "b926458c089085fb59e9178d549f27a8119e45ff" }
 dsntk-common = { git = "https://github.com/yestechgroup/dsntk-rs.git", rev = "b926458c089085fb59e9178d549f27a8119e45ff" }
-rex-backend-dmn = { path = "crates/rex-backend-dmn" }
+phero-backend-dmn = { path = "crates/phero-backend-dmn" }
 dsntk-feel = { git = "https://github.com/yestechgroup/dsntk-rs.git", rev = "b926458c089085fb59e9178d549f27a8119e45ff" }
 dsntk-feel-parser = { git = "https://github.com/yestechgroup/dsntk-rs.git", rev = "b926458c089085fb59e9178d549f27a8119e45ff" }
 dsntk-feel-evaluator = { git = "https://github.com/yestechgroup/dsntk-rs.git", rev = "b926458c089085fb59e9178d549f27a8119e45ff" }

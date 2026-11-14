@@ -127,14 +127,14 @@
       "unevaluatedProperties": false
     }
   },
-  "$id": "urn:rex:model:nz.example.library:wire",
+  "$id": "urn:phero:model:nz.example.library:wire",
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "properties": {
     "$type": {
-      "const": "rex.instance"
+      "const": "phero.instance"
     },
     "formatVersion": {
-      "const": 1
+      "const": 2
     },
     "model": {
       "const": "nz.example.library"

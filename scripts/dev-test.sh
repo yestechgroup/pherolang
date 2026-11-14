@@ -14,8 +14,8 @@
 #
 # Usage: scripts/dev-test.sh [cargo test args...]
 #   scripts/dev-test.sh                                  # the workspace
-#   scripts/dev-test.sh -p rex-driver --test navigation   # one suite
-#   REX_UPDATE_FIXTURES=1 scripts/dev-test.sh             # regenerate goldens
+#   scripts/dev-test.sh -p phero-driver --test navigation   # one suite
+#   PHERO_UPDATE_FIXTURES=1 scripts/dev-test.sh             # regenerate goldens
 set -u
 cd "$(dirname "$0")/.." || exit 1
 export CARGO_INCREMENTAL=0

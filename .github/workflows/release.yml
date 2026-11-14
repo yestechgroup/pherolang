@@ -39,9 +39,9 @@ jobs:
         #   pherolang-<version>-<target>.tar.gz  (unix)
         #   pherolang-<version>-<target>.zip     (windows)
         #   SHA256SUMS                           (one line per archive)
-        # site.yml's PHEROLANG_ASSET must match
-        # `pherolang-<version>-x86_64-unknown-linux-gnu.tar.gz`; if the naming
-        # here changes, that file changes in the same commit or the site's
+        # site.yml's PHEROLANG_ASSET_PATTERN must match
+        # `pherolang-*-x86_64-unknown-linux-gnu.tar.gz`; if the naming here
+        # changes, that pattern changes in the same commit or the site's
         # binary download silently 404s.
         #
         # Every leg runs on a native or standard runner, so no leg needs an

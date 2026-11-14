@@ -1,11 +1,11 @@
-package rex.conformance.sigil
+package phero.conformance.sigil
 
 import sigil "basic.rosetta"
 
 /// A portfolio over the lowered sigil types: a class reference, an enum
 /// attribute, and a datatype attribute.
 class Portfolio {
-    refers rex.sigil.fixture.Bond[] bonds
-    rex.sigil.fixture.InstrumentStatus status
-    rex.sigil.fixture.InstrumentCode code
+    refers phero.sigil.fixture.Bond[] bonds
+    phero.sigil.fixture.InstrumentStatus status
+    phero.sigil.fixture.InstrumentCode code
 }

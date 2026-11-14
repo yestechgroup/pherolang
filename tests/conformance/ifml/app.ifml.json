@@ -1,5 +1,5 @@
 {
-  "formatVersion": 1,
+  "formatVersion": 2,
   "domains": [
     {
       "name": "sales",
@@ -849,7 +849,7 @@
     }
   ],
   "imports": [
-    "rexlang/auth.actor",
-    "rexlang/decisions.dmn"
+    "phero/auth.actor",
+    "phero/decisions.dmn"
   ]
 }

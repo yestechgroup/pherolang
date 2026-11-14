@@ -9,7 +9,7 @@ pointers, and this file carries what the register cannot — the composition
 story: which judgments combine, into what theorem, under which assumptions.
 
 The standing non-goal, restated so it cannot be lost: **this program is not
-"rexlang is formally verified"** and no claim below may be read as one. What
+"Phero Lang is formally verified"** and no claim below may be read as one. What
 exists is a proved kernel, a tested integrity pass, and a set of stated
 obligations with named assumptions. "Stated, not proved" is a legal and
 preferred status; an unstated claim is the only forbidden one.
@@ -22,12 +22,12 @@ the pointers. Phase is the epic's phase numbering.
 
 | Claim | Statement | Surface | Evidence today | Phase |
 |---|---|---|---|---|
-| **C1** Structural soundness | the kernel's invariants survive every mutation | `rex-verify`, `rex-ir`, driver | proved + tested (V1–V10, V17), with the declared residues: V3 argued (its hard residue is open), V8/V9 carry the register's `#[trusted]` assumptions | P6 |
+| **C1** Structural soundness | the kernel's invariants survive every mutation | `phero-verify`, `phero-ir`, driver | proved + tested (V1–V10, V17), with the declared residues: V3 argued (its hard residue is open), V8/V9 carry the register's `#[trusted]` assumptions | P6 |
 | **C2** Declaration integrity | no reference resolves to a non-declaration; the integrity rules are deterministic, disjoint, cluster-independent | union pass; #194 graph substrate (pending) | tested (V11–V14) — the rules run; the *relation* and its metaproperties are stated, machine-checked in P2, not proved | P2 |
 | **C3** Compositional consistency | WF(domain) ∧ WT(design) ∧ Secure(policy) ∧ Consistent ⇒ Correct(system) | `.mox`+`.ddd`+`.actor` slice | stated only (this file: [Judgment forms](#judgment-forms), [Theorem S](#theorem-s)); zero antecedents proved | P4 |
 | **C4a** Preservation | every wire rule survives IR → artifact → backend without silent loss | JSON Schema, Rust, DMN backends | one proved mirror (V16) | P3 |
 | **C4b** Behavioural refinement | the engine refines the model's operational semantics | `.cmmn` / cmmn-rs | unclaimed (external engine; no operational semantics stated to refine) | P5 |
-| **C5** Expression soundness | progress + preservation for the `rex-expr` fragment | `rex-expr` | argued — the compile-time halves of R1–R4 are tested and one component is a proved mirror (V15, the domain-type index); the Lean spike proved a paper semantics for R1–R4 and its verdict is **down** ([../formal/lean/README.md](../formal/lean/README.md)) | P5 |
+| **C5** Expression soundness | progress + preservation for the `phero-expr` fragment | `phero-expr` | argued — the compile-time halves of R1–R4 are tested and one component is a proved mirror (V15, the domain-type index); the Lean spike proved a paper semantics for R1–R4 and its verdict is **down** ([../formal/lean/README.md](../formal/lean/README.md)) | P5 |
 
 C1's evidence classes differ per row, deliberately: most of V1–V10 is
 SMT-discharged, V3's functional residue is argued and pinned by tests, and the
@@ -77,7 +77,7 @@ generated code. It is a statement about the sequence of accepted requests,
 not about program equality with the model.
 
 **Assumptions** (numbered; per the epic's P4 exit gate, the receipt and
-`rexlang verify --compose` must list exactly this set):
+`pherolang verify --compose` must list exactly this set):
 
 | # | Assumption | Anchor |
 |---|---|---|
@@ -109,7 +109,7 @@ Each: what it is, why not now, and what would change the answer.
 **Full abstraction.** A translation is fully abstract when it preserves and
 reflects observational equivalence: source terms indistinguishable in the
 source exactly when their translations are indistinguishable in the target.
-Rexlang's backends are deliberately partial views — a JSON Schema artifact
+Phero Lang's backends are deliberately partial views — a JSON Schema artifact
 cannot express a design's behaviour, and generated Rust exposes target-level
 behaviour the model never stated — so the reflection half fails by
 construction. The working substitute is C4a's per-rule preservation. A
@@ -145,7 +145,7 @@ classification, or a concrete confidentiality requirement from the re-scoped
 
 **Three-dimensional refinement algebra (POPL 2025).** Refinement composed
 across modules, abstraction levels, and state components — a general algebra
-for exactly the shape of rexlang's stack. The in-tree need is enumerated, not
+for exactly the shape of Phero Lang's stack. The in-tree need is enumerated, not
 general: C4a's contract table (P3) covers the wire rules one row at a time,
 and a finite table beats an algebra with no consumer. A P3 table that stops
 staying finite — rule families resisting row-wise treatment, or a second
@@ -153,7 +153,7 @@ backend family needing the same algebra twice — is the trigger.
 
 **PolyVer-style SMT-heavy MDE verification.** Composing per-language
 verification tools through abstraction and synthesis for polyglot systems.
-Rexlang's surfaces share one IR and one expression language, so the polyglot
+Phero Lang's surfaces share one IR and one expression language, so the polyglot
 problem does not arise; the composition point is the union pass, not a
 synthesis layer. Surfaces whose engines are genuinely external (cmmn-rs, the
 dsntk fork) needing cross-engine verification is the trigger — that is C4b
@@ -180,7 +180,7 @@ silently lost; where a section genuinely makes no claim, the row says why.
 | #189 section | Resolves to |
 |---|---|
 | Preamble — the umbrella research question and the seven touched areas | **C3** — the composition question is the ladder's apex; the "reusable theories, not a verified implementation" stance is this file's purpose plus the standing non-goal |
-| §1 What I see in the Rexlang project (the inventory) | no claim — descriptive; the per-surface guarantees live in the per-surface docs and the register owns the evidence |
+| §1 What I see in the Phero Lang project (the inventory) | no claim — descriptive; the per-surface guarantees live in the per-surface docs and the register owns the evidence |
 | §1.1 A — multiple languages, semantic consistency across them | **C2** (+ `Consistent` above) |
 | §1.1 B — the IR architecture; structural validity vs faithful meaning | **C1** (structural) and **C4a** (faithful preservation) — the section's distinction is exactly the C1/C4a split |
 | §1.1 C — generated software behaves consistently with its models | **C3** (`Correct`) + **C4b** (the engine leg) |
@@ -213,11 +213,11 @@ silently lost; where a section genuinely makes no claim, the row says why.
 | §7 Lean 4 as the formal foundation | Lean non-goal (verdict down) |
 | §7 technology table (TLA+/Alloy model checking; Proptest) | Proptest → register rows (the proptest suites are register evidence); TLA+/Alloy → no claim — model checking needs an operational semantics first (**C4b** territory, gated) |
 | §7 caveat — a Lean spec needs a separate correspondence proof to bind the Rust implementation | register rows V10/V15/V16 — the spec-mirror honesty is this caveat practiced, with the migration trigger recorded |
-| §8 Stage 1 — formalise rex-expr | **C5** (the Lean spike executed Stage 1's first half as a paper artifact) |
-| §8 Stage 2 — formalise the Core IR | **C1** — done as the `rex-verify` kernel (V1–V10); the open residue rows are the register's declared items |
+| §8 Stage 1 — formalise phero-expr | **C5** (the Lean spike executed Stage 1's first half as a paper artifact) |
+| §8 Stage 2 — formalise the Core IR | **C1** — done as the `phero-verify` kernel (V1–V10); the open residue rows are the register's declared items |
 | §8 Stage 3 — formalise composition (.mox/.ddd/.actor) | **C3** — exactly the P4 slice; the support stack is the slice |
 | §8 Stage 4 — verify model transformation | **C4a** — V16 is the first correspondence (JSON Schema boundary); P3 widens rule-by-rule |
 | §8 Stage 5 — behavioural verification (.cmmn / cmmn-rs) | **C4b** — gated as R2 |
 | §9 Potential PhD publications (four papers) | paper 1 → **C3**; paper 2 → **C4a**; paper 3 → **C3**+**C4b**; paper 4 → the program overall; the publication goal itself → no claim — research outputs retired with the thesis framing |
 | §10 Supervisor questions (eight) | Q1 → **C3** (chosen); Q3 → **C3**+**C4a** (chosen: per-surface judgments plus verified boundary contracts); Q4 → **C4a** (elevated to a ladder row); Q5 → the Lean non-goal (answered: verdict down); Q6 → **C3**'s slice (the support stack is the structural+behavioural+security case study); Q2, Q7, Q8 → no claim — literature-survey and academic-metre questions, retired with the framing |
-| §11 The compositional correctness theorem (the recommendation) | **C3** / Theorem S above — stated with assumptions and the two deliberate narrowings (`Valid(Decisions)` dropped; workflow consistency narrowed); the final framing ("formal foundations, demonstrated through rexlang") is this file's purpose |
+| §11 The compositional correctness theorem (the recommendation) | **C3** / Theorem S above — stated with assumptions and the two deliberate narrowings (`Valid(Decisions)` dropped; workflow consistency narrowed); the final framing ("formal foundations, demonstrated through Phero Lang") is this file's purpose |

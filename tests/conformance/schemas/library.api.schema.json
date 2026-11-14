@@ -81,6 +81,6 @@
       "type": "object"
     }
   },
-  "$id": "urn:rex:model:nz.example.library:api",
+  "$id": "urn:phero:model:nz.example.library:api",
   "$schema": "https://json-schema.org/draft/2020-12/schema"
 }

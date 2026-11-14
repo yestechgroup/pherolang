@@ -1,9 +1,9 @@
 {
-  "formatVersion": 1,
-  "rexVersion": "0.2.0",
+  "formatVersion": 2,
+  "pheroVersion": "0.3.0",
   "packages": [
     {
-      "name": "rex.conformance.funcs",
+      "name": "phero.conformance.funcs",
       "annotations": [],
       "enums": [],
       "datatypes": [],
@@ -21,7 +21,7 @@
               "type": {
                 "type": "class",
                 "value": {
-                  "package": "rex.sigil.funcs",
+                  "package": "phero.sigil.funcs",
                   "name": "Underlier"
                 }
               },
@@ -40,7 +40,7 @@
               "type": {
                 "type": "enum",
                 "value": {
-                  "package": "rex.sigil.funcs",
+                  "package": "phero.sigil.funcs",
                   "name": "RateType"
                 }
               },
@@ -68,7 +68,7 @@
                   "type": {
                     "type": "class",
                     "value": {
-                      "package": "rex.sigil.funcs",
+                      "package": "phero.sigil.funcs",
                       "name": "Underlier"
                     }
                   }
@@ -83,7 +83,7 @@
       ]
     },
     {
-      "name": "rex.sigil.funcs",
+      "name": "phero.sigil.funcs",
       "annotations": [],
       "enums": [
         {

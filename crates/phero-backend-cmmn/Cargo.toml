@@ -1,0 +1,20 @@
+[package]
+name = "phero-backend-cmmn"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description.workspace = true
+repository.workspace = true
+
+[lints]
+workspace = true
+
+[dependencies]
+phero-ir = { workspace = true }
+phero-expr = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+thiserror = { workspace = true }
+
+[dev-dependencies]
+phero-driver = { workspace = true }

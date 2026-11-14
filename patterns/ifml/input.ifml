@@ -1,4 +1,4 @@
-// rexlang reference pattern library — input.
+// Phero Lang reference pattern library — input.
 // Write-side patterns: form panels, reference pickers, and uploads.
 
 import "data.ifml";
