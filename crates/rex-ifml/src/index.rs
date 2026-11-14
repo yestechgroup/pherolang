@@ -1,6 +1,7 @@
 //! The parse span index: a side-table of byte-offset sites (module
-//! declarations, module uses, views, actions, actors) collected while
-//! walking the same Pest parse tree the lowering walks.
+//! declarations, module uses, views, actions, actors) collected by the
+//! syntax-tree lowering ([`crate::lower`]), so the index and the IR can
+//! never disagree about what was written.
 //!
 //! [`crate::parse_ifml`] discards spans; [`parse_ifml_indexed`] returns the
 //! **same** [`IfmlModel`] plus an [`IfmlIndex`] so tooling (LSP navigation,
@@ -19,9 +20,6 @@
 //! reference back to the site.
 
 use rex_ir::ifml::IfmlModel;
-
-use crate::parser::{parse_ifml_top_pair, parse_string, Rule};
-use pest::iterators::Pair;
 
 /// A file in the compilation: path and full source text.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -239,6 +237,20 @@ pub struct IfmlIndex {
     pub commands: Vec<NamedSite>,
 }
 
+/// `at`'s merge step: keeps the narrowest containing span.
+fn consider_site<'a>(
+    best: &mut Option<AtSite<'a>>,
+    best_width: &mut usize,
+    site: AtSite<'a>,
+    span: (usize, usize),
+    offset: usize,
+) {
+    if span.0 <= offset && offset < span.1 && span.1 - span.0 < *best_width {
+        *best = Some(site);
+        *best_width = span.1 - span.0;
+    }
+}
+
 impl IfmlIndex {
     /// An index holding exactly one file with no sites.
     pub(crate) fn single_file(path: &str, text: &str) -> Self {
@@ -390,410 +402,7 @@ impl IfmlIndex {
 /// [`IfmlIndex`] side-table. The single file is recorded with an empty
 /// path; [`crate::compile_ifml_str`] is the path-aware entry point.
 pub fn parse_ifml_indexed(text: &str) -> Result<(IfmlModel, IfmlIndex), crate::IfmlParseError> {
-    parse_ifml_indexed_with_path("", text)
-}
-
-/// Path-aware index parse: the compilation's one file is recorded under
-/// `path`. Used by [`crate::compile_ifml_str`] for the main file and every
-/// imported file.
-pub(crate) fn parse_ifml_indexed_with_path(
-    path: &str,
-    text: &str,
-) -> Result<(IfmlModel, IfmlIndex), crate::IfmlParseError> {
-    let top = parse_ifml_top_pair(text)?;
-    let Some(top) = top else {
-        return Ok((IfmlModel::default(), IfmlIndex::single_file(path, text)));
-    };
-    let model = crate::parser::parse_ifml_model(top.clone().into_inner())?;
-    let mut index = IfmlIndex::single_file(path, text);
-    index_top_pair(&top, 0, &mut index);
-    Ok((model, index))
-}
-
-/// Walks the `ifml_model` parse tree, collecting declaration and use sites
-/// into `index`. A parallel walk (not woven into the lowering) keeps the
-/// lowering untouched.
-fn index_top_pair(top: &Pair<'_, Rule>, file: usize, index: &mut IfmlIndex) {
-    for child in top.clone().into_inner() {
-        index_pair(&child, file, index);
-    }
-}
-
-fn index_pair(pair: &Pair<'_, Rule>, file: usize, index: &mut IfmlIndex) {
-    let span = pair_span(pair);
-    match pair.as_rule() {
-        Rule::navigate_action | Rule::refresh_action | Rule::action_invocation => {
-            let action = pair
-                .as_str()
-                .split('(')
-                .next()
-                .unwrap_or_default()
-                .to_string();
-            if let Some((target, name_span)) = first_string_site(pair) {
-                index.action_targets.push(TargetSite {
-                    file,
-                    target,
-                    action,
-                    name_span,
-                });
-            }
-            recurse(pair, file, index);
-        }
-        Rule::view_declaration => {
-            if let Some((name, name_span)) = first_string_site(pair) {
-                index.views.push(NamedSite {
-                    file,
-                    name,
-                    name_span,
-                    span,
-                });
-            }
-            recurse(pair, file, index);
-        }
-        Rule::action_declaration | Rule::actor_declaration => {
-            if let Some((name, name_span)) = first_string_site(pair) {
-                let site = NamedSite {
-                    file,
-                    name,
-                    name_span,
-                    span,
-                };
-                if pair.as_rule() == Rule::action_declaration {
-                    index.actions.push(site);
-                } else {
-                    index.actors.push(site);
-                }
-            }
-            recurse(pair, file, index);
-        }
-        Rule::component_declaration => {
-            if let Some((name, name_span)) = first_string_site(pair) {
-                index.components.push(NamedSite {
-                    file,
-                    name,
-                    name_span,
-                    span,
-                });
-            }
-            capture_component_data_property(pair, file, index);
-            recurse(pair, file, index);
-        }
-        Rule::container_declaration => {
-            if let Some((name, name_span)) = first_string_site(pair) {
-                index.containers.push(NamedSite {
-                    file,
-                    name,
-                    name_span,
-                    span,
-                });
-            }
-            recurse(pair, file, index);
-        }
-        Rule::command_declaration => {
-            if let Some((name, name_span)) = first_string_site(pair) {
-                index.commands.push(NamedSite {
-                    file,
-                    name,
-                    name_span,
-                    span,
-                });
-            }
-            recurse(pair, file, index);
-        }
-        Rule::module_declaration => {
-            let (name, name_span) = first_string_site(pair).unwrap_or_default();
-            let input_params = first_parameter_block(pair);
-            let properties: Vec<String> = pair
-                .clone()
-                .into_inner()
-                .filter(|child| child.as_rule() == Rule::property_assignment)
-                .filter_map(|child| child.clone().into_inner().next())
-                .map(|key| key.as_str().to_string())
-                .collect();
-            index.module_decls.push(ModuleDeclSite {
-                file,
-                name,
-                name_span,
-                span,
-                input_params,
-                properties,
-            });
-            recurse(pair, file, index);
-        }
-        Rule::module_use_statement => {
-            let (target, name_span) = first_string_site(pair).unwrap_or_default();
-            let alias = pair
-                .clone()
-                .into_inner()
-                .find(|child| child.as_rule() == Rule::identifier)
-                .map(|child| child.as_str().to_string());
-            let overrides = pair
-                .clone()
-                .into_inner()
-                .find(|child| child.as_rule() == Rule::module_use_body)
-                .map(|body| {
-                    body.clone()
-                        .into_inner()
-                        .filter(|child| child.as_rule() == Rule::property_assignment)
-                        .map(|assignment| {
-                            let mut inner = assignment.clone().into_inner();
-                            let name = inner
-                                .next()
-                                .map(|key| key.as_str().to_string())
-                                .unwrap_or_default();
-                            let literal = inner.next().and_then(|value| literal_kind(&value));
-                            UseOverride {
-                                name,
-                                span: pair_span(&assignment),
-                                literal,
-                            }
-                        })
-                        .collect()
-                })
-                .unwrap_or_default();
-            index.module_uses.push(ModuleUseSite {
-                file,
-                target,
-                name_span,
-                alias,
-                span,
-                overrides,
-                resolved_module: None,
-            });
-        }
-        Rule::view_body => {
-            // View-level `roles:`/`requires:` properties — the parser
-            // extracts exactly these (direct property assignments of the
-            // view body, array form) into the IR; capture their names with
-            // spans before the generic walk strips the properties away.
-            for child in pair.clone().into_inner() {
-                if child.as_rule() == Rule::property_assignment {
-                    capture_view_auth_property(&child, file, index);
-                }
-            }
-            recurse(pair, file, index);
-        }
-        Rule::event_requires => {
-            for child in pair.clone().into_inner() {
-                if child.as_rule() == Rule::identifier {
-                    index.auth_sites.push(AuthSite {
-                        file,
-                        kind: AuthKind::Capability,
-                        name: child.as_str().to_string(),
-                        name_span: pair_span(&child),
-                    });
-                }
-            }
-        }
-        _ => recurse(pair, file, index),
-    }
-}
-
-/// Captures one view-level `roles:`/`requires:` property assignment as
-/// authorization sites. Only the array form counts — the lowering
-/// extracts exactly that shape (`ValueExpression::Array`), so the index
-/// and the IR can never disagree about what is an authorization site.
-fn capture_view_auth_property(pair: &Pair<'_, Rule>, file: usize, index: &mut IfmlIndex) {
-    let mut inner = pair.clone().into_inner();
-    let kind = match inner.next().map(|key| key.as_str()) {
-        Some("requires") => AuthKind::Capability,
-        Some("roles") => AuthKind::Role,
-        _ => return,
-    };
-    let Some(value) = inner.next() else {
-        return;
-    };
-    let Some(array) = descendants(&value, Rule::array_literal).into_iter().next() else {
-        return;
-    };
-    for identifier in descendants(&array, Rule::identifier) {
-        index.auth_sites.push(AuthSite {
-            file,
-            kind,
-            name: identifier.as_str().to_string(),
-            name_span: pair_span(&identifier),
-        });
-    }
-}
-
-/// Captures one component body's `data:` binding as a [`DataSite`]: only
-/// the bare-identifier form (`data: Customer`) — exactly the values that
-/// lower to `ValueExpression::Identifier`, the shape the checker's
-/// `data:` resolution reads. Only direct property assignments of the
-/// component body count (nested components are captured by the walk's
-/// own recursion).
-fn capture_component_data_property(pair: &Pair<'_, Rule>, file: usize, index: &mut IfmlIndex) {
-    for child in pair.clone().into_inner() {
-        if child.as_rule() != Rule::component_body {
-            continue;
-        }
-        for grandchild in child.clone().into_inner() {
-            if grandchild.as_rule() != Rule::property_assignment {
-                continue;
-            }
-            let mut inner = grandchild.clone().into_inner();
-            let key = inner.next().map(|part| part.as_str().to_string());
-            if key.as_deref() != Some("data") {
-                continue;
-            }
-            let Some(value) = inner.next() else {
-                continue;
-            };
-            if let Some((name, name_span)) = bare_identifier(&value) {
-                index.data_sites.push(DataSite {
-                    file,
-                    name,
-                    name_span,
-                });
-            }
-        }
-    }
-}
-
-/// The bare identifier a value spells, when it spells one: the
-/// single-child descent the lowering applies (operator chains collapse to
-/// their leaf), stopping at every primary leaf. Returns exactly the
-/// values that lower to `ValueExpression::Identifier` — compound values,
-/// literals, calls, field access, and groups are `None`.
-fn bare_identifier(pair: &Pair<'_, Rule>) -> Option<(String, (usize, usize))> {
-    let mut current = pair.clone();
-    loop {
-        match current.as_rule() {
-            Rule::identifier => {
-                return Some((current.as_str().to_string(), pair_span(&current)));
-            }
-            Rule::call_expr
-            | Rule::field_expr
-            | Rule::string
-            | Rule::number
-            | Rule::boolean
-            | Rule::array_literal
-            | Rule::object_literal
-            | Rule::group_expr => return None,
-            _ => {}
-        }
-        let mut inner = current.clone().into_inner();
-        let single = inner.next()?;
-        if inner.next().is_some() {
-            // An operator chain with operands — not a bare identifier.
-            return None;
-        }
-        current = single;
-    }
-}
-
-/// Every descendant of `pair` whose rule is `rule`, depth-first in
-/// source order.
-fn descendants<'i>(pair: &Pair<'i, Rule>, rule: Rule) -> Vec<Pair<'i, Rule>> {
-    let mut found = Vec::new();
-    for child in pair.clone().into_inner() {
-        if child.as_rule() == rule {
-            found.push(child);
-        } else {
-            found.extend(descendants(&child, rule));
-        }
-    }
-    found
-}
-
-/// `at`'s merge step: keeps the narrowest containing span.
-fn consider_site<'a>(
-    best: &mut Option<AtSite<'a>>,
-    best_width: &mut usize,
-    site: AtSite<'a>,
-    span: (usize, usize),
-    offset: usize,
-) {
-    if span.0 <= offset && offset < span.1 && span.1 - span.0 < *best_width {
-        *best = Some(site);
-        *best_width = span.1 - span.0;
-    }
-}
-
-fn recurse(pair: &Pair<'_, Rule>, file: usize, index: &mut IfmlIndex) {
-    for child in pair.clone().into_inner() {
-        index_pair(&child, file, index);
-    }
-}
-
-fn pair_span(pair: &Pair<'_, Rule>) -> (usize, usize) {
-    let span = pair.as_span();
-    (span.start(), span.end())
-}
-
-/// The first `string` child as `(unescaped text, byte span of the token)`.
-fn first_string_site(pair: &Pair<'_, Rule>) -> Option<(String, (usize, usize))> {
-    pair.clone()
-        .into_inner()
-        .find(|child| child.as_rule() == Rule::string)
-        .map(|child| (parse_string(&child), pair_span(&child)))
-}
-
-/// The module's first (input) `parameter_block`, lowered to [`IndexParam`]s.
-fn first_parameter_block(pair: &Pair<'_, Rule>) -> Vec<IndexParam> {
-    pair.clone()
-        .into_inner()
-        .find(|child| child.as_rule() == Rule::parameter_block)
-        .map(|block| {
-            block
-                .clone()
-                .into_inner()
-                .filter(|decl| decl.as_rule() == Rule::parameter_decl)
-                .map(|decl| {
-                    let mut inner = decl.clone().into_inner();
-                    let name = inner
-                        .next()
-                        .map(|part| part.as_str().to_string())
-                        .unwrap_or_default();
-                    let type_ref = inner
-                        .next()
-                        .map(|part| part.as_str().to_string())
-                        .unwrap_or_default();
-                    let has_default = inner
-                        .next()
-                        .is_some_and(|part| part.as_rule() == Rule::param_default);
-                    IndexParam {
-                        name,
-                        type_ref,
-                        span: pair_span(&decl),
-                        has_default,
-                    }
-                })
-                .collect()
-        })
-        .unwrap_or_default()
-}
-
-/// The structural literal kind of a value expression: descend the operator
-/// chain while it has exactly one child; recognize bare (optionally
-/// negated) string/number/boolean leaves. Containers (arrays, objects) and
-/// non-literals (identifiers, calls, field access) are `None`.
-fn literal_kind(pair: &Pair<'_, Rule>) -> Option<LiteralKind> {
-    match pair.as_rule() {
-        Rule::string => Some(LiteralKind::Str),
-        Rule::number => Some(LiteralKind::Num),
-        Rule::boolean => Some(LiteralKind::Bool),
-        Rule::value_expression
-        | Rule::expression
-        | Rule::logical_or
-        | Rule::logical_and
-        | Rule::comparison
-        | Rule::addition
-        | Rule::multiplication
-        | Rule::unary
-        | Rule::unary_not
-        | Rule::unary_neg
-        | Rule::primary
-        | Rule::group_expr => {
-            let mut inner = pair.clone().into_inner();
-            let single = inner.next()?;
-            if inner.next().is_some() {
-                return None;
-            }
-            literal_kind(&single)
-        }
-        _ => None,
-    }
+    crate::parser::parse_model_with_path("", text)
 }
 
 #[cfg(test)]
@@ -965,19 +574,25 @@ module "Pagination" {
         assert_eq!(index.module_uses[2].target, "Footer");
         assert_eq!(index.module_uses[2].alias.as_deref(), Some("foot"));
 
-        // spans are byte offsets that slice back to the expected source
-        for site in &index.module_uses {
-            let slice = &text[site.span.0..site.span.1];
-            assert!(slice.starts_with("use "), "{slice:?}");
-        }
-        let decl_slice = &text[decl.span.0..decl.span.1];
-        assert!(
-            decl_slice.starts_with("module \"Pagination\""),
-            "{decl_slice:?}"
+        // spans are byte offsets that slice back to the exact source text
+        assert_eq!(
+            &text[index.module_uses[0].span.0..index.module_uses[0].span.1],
+            "use \"Pagination\" as pager { page_size: 25; };"
         );
+        assert_eq!(
+            &text[index.module_uses[1].span.0..index.module_uses[1].span.1],
+            "use \"Footer\";"
+        );
+        assert_eq!(
+            &text[index.module_uses[2].span.0..index.module_uses[2].span.1],
+            "use \"Footer\" as foot;"
+        );
+        let decl_slice = &text[decl.span.0..decl.span.1];
+        assert_eq!(decl_slice.lines().next(), Some("module \"Pagination\" {"));
+        assert_eq!(decl_slice.lines().last(), Some("}"));
         let param = &decl.input_params[1];
-        // pest spans absorb trailing inter-token whitespace
-        assert_eq!(text[param.span.0..param.span.1].trim_end(), "pageSize: Int");
+        // v2 spans are exact: no trailing inter-token whitespace.
+        assert_eq!(&text[param.span.0..param.span.1], "pageSize: Int");
 
         // overrides record literal kinds; non-literals record None
         let overrides = &index.module_uses[0].overrides;

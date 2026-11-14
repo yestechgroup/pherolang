@@ -16,10 +16,9 @@
 //! the EBNF below is derived from the parsers in this file, and the docs
 //! (`docs/LANGUAGE.md`, `docs/DDD.md`) link here instead of restating it.
 //! When any prose and this EBNF disagree, the parsers in this file win;
-//! change both in the same commit. The grammar of the fourth surface,
-//! `.ifml`, is normatively defined by its Pest grammar file
-//! (`crates/rex-ifml/src/grammar/ifml.pest`), which is machine-checked at
-//! build time — it is not duplicated here.
+//! change both in the same commit. The grammar of the `.ifml` surface is
+//! normatively defined by the EBNF in `crates/rex-ifml/src/parser/mod.rs`;
+//! it is not duplicated here.
 //!
 //! The unit tests at the bottom of this file spot-check the EBNF against the
 //! lexer and the `.ddd` keyword tables (every real keyword must appear as a

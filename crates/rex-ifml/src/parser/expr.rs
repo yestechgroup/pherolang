@@ -176,11 +176,13 @@ pub(crate) fn value_parser<'src>() -> BoxedP<'src, ValueExpr> {
             kind: ValueExprKind::Ident(text),
             span,
         });
+        // The PEG's `group_expr` contains an *expression*, not a value:
+        // parentheses cannot smuggle an array/object into expression position.
         let group = tok(Token::LParen)
-            .ignore_then(value.clone())
+            .ignore_then(expr_parser())
             .then_ignore(tok(Token::RParen))
             .map_with(|inner, e| ValueExpr {
-                kind: ValueExprKind::Group(Box::new(inner)),
+                kind: ValueExprKind::Group(Box::new(expr_to_value(inner))),
                 span: e.span(),
             });
 
@@ -265,6 +267,46 @@ pub(crate) fn value_parser<'src>() -> BoxedP<'src, ValueExpr> {
         choice((logical_or, array, object)).boxed()
     })
     .boxed()
+}
+
+/// Convert an expression node to the value surface (never arrays/objects).
+fn expr_to_value(expr: Expr) -> ValueExpr {
+    let span = expr.span;
+    let kind = match expr.kind {
+        ExprKind::Ident(text) => ValueExprKind::Ident(text),
+        ExprKind::StringLit(text) => ValueExprKind::String(text),
+        ExprKind::NumLit(number) => ValueExprKind::Number(number),
+        ExprKind::BoolLit(value) => ValueExprKind::Bool(value),
+        ExprKind::Field {
+            object,
+            field,
+            field_span,
+        } => ValueExprKind::Field {
+            object: Box::new(expr_to_value(*object)),
+            field,
+            field_span,
+        },
+        ExprKind::Binary { left, op, right } => ValueExprKind::Binary {
+            left: Box::new(expr_to_value(*left)),
+            op,
+            right: Box::new(expr_to_value(*right)),
+        },
+        ExprKind::Unary { op, operand } => ValueExprKind::Unary {
+            op,
+            operand: Box::new(expr_to_value(*operand)),
+        },
+        ExprKind::Group(inner) => ValueExprKind::Group(Box::new(expr_to_value(*inner))),
+        ExprKind::Call {
+            name,
+            name_span,
+            args,
+        } => ValueExprKind::Call {
+            name,
+            name_span,
+            args,
+        },
+    };
+    ValueExpr { kind, span }
 }
 
 /// `identifier ("." identifier)+` on the value surface, folded left.
@@ -472,6 +514,14 @@ mod tests {
             ValueExprKind::Object(_)
         ));
         let tokens = lex("{ x: { y: 1 } }");
+        let (out, errors) = value_parser()
+            .parse(Input::new(&tokens))
+            .into_output_errors();
+        assert!(out.is_none());
+        assert!(!errors.is_empty());
+
+        // Parentheses carry the expression surface, which has no arrays.
+        let tokens = lex("([1])");
         let (out, errors) = value_parser()
             .parse(Input::new(&tokens))
             .into_output_errors();

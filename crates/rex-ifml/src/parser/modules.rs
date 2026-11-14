@@ -1,83 +1,199 @@
-//! Module declarations (`module "M" { input/output … }`) and the `use`
-//! statements that compose them into views, containers, and commands.
+//! Module declarations (`module "M" { input/output ... }`) and `use`
+//! statements.
 
-use super::IfmlParseError;
-use super::Rule;
-use pest::iterators::Pair;
+use super::*;
 
-use rex_ir::ifml::*;
+fn stop_at_module_member(token: &Token<'_>) -> bool {
+    matches!(token, Token::RBrace)
+        || is_top_introducer(token)
+        || matches!(
+            token,
+            Token::Ident(text)
+                if matches!(*text, "input" | "output" | "container" | "component" | "on" | "use")
+        )
+}
 
-use crate::parser::components::parse_component_declaration;
-use crate::parser::events::parse_event_handler;
-use crate::parser::expressions::parse_property_assignment;
-use crate::parser::utils::{parse_parameter_block, parse_string};
-use crate::parser::views::parse_container_declaration;
-
-pub(crate) fn parse_module_use_statement(pair: Pair<Rule>) -> ModuleUse {
-    let mut module = String::new();
-    let mut alias = None;
-    let mut properties = Vec::new();
-    for child in pair.into_inner() {
-        match child.as_rule() {
-            Rule::string => module = parse_string(&child),
-            Rule::identifier => alias = Some(child.as_str().to_string()),
-            Rule::module_use_body => {
-                for body_child in child.into_inner() {
-                    if body_child.as_rule() == Rule::property_assignment {
-                        properties.push(parse_property_assignment(body_child));
-                    }
-                }
-            }
-            _ => {}
-        }
-    }
-    ModuleUse {
-        module,
-        alias,
-        properties,
+fn empty_params(position: usize) -> Params {
+    Params {
+        decls: Vec::new(),
+        span: (position..position).into(),
     }
 }
 
-pub(crate) fn parse_module_declaration(
-    pair: Pair<Rule>,
-) -> Result<ModuleDeclaration, IfmlParseError> {
-    let mut inner = pair.clone().into_inner();
-    let name = inner.next().map(|p| parse_string(&p)).unwrap_or_default();
+enum ModuleAstItem {
+    Input(Params),
+    Output(Params),
+    Property(Property),
+    Item(ModuleItem),
+    Junk,
+}
 
-    let mut input_params = Vec::new();
-    let mut output_params = Vec::new();
-    let mut properties = Vec::new();
-    let mut containers = Vec::new();
-    let mut components = Vec::new();
-    let mut events = Vec::new();
-    let mut module_uses = Vec::new();
+/// `use "Module" as alias? { overrides } ;?` or `use "Module";`.
+pub(crate) fn module_use<'src>() -> impl Parser<'src, Input<'src>, ModuleUse, Extra<'src>> + Clone {
+    let body = tok(Token::LBrace)
+        .ignore_then(property().repeated().collect::<Vec<_>>())
+        .then_ignore(tok(Token::RBrace))
+        .then_ignore(tok(Token::Semi).or_not());
+    let bare = tok(Token::Semi).to(Vec::new());
 
-    for child in inner {
-        match child.as_rule() {
-            Rule::parameter_block => {
-                if input_params.is_empty() {
-                    input_params = parse_parameter_block(child);
-                } else {
-                    output_params = parse_parameter_block(child);
+    word("use")
+        .ignore_then(string_lit())
+        .then(word("as").ignore_then(ident()).or_not())
+        .then(choice((body, bare)))
+        .map_with(|((module, alias), properties), e| ModuleUse {
+            module: module.0,
+            target_span: module.1,
+            alias: alias.map(|(alias, _)| alias),
+            properties,
+            span: e.span(),
+        })
+}
+
+/// `module "name" { ... }`. The header commits once the name matched.
+pub(crate) fn module_decl<'src>() -> impl Parser<'src, Input<'src>, ModuleDecl, Extra<'src>> + Clone
+{
+    word("module")
+        .ignore_then(string_lit())
+        .then(module_body().or_not())
+        .validate(|(name, body), e, emitter| {
+            let (input, output, properties, items) = body.unwrap_or_else(|| {
+                emitter.emit(Rich::custom(
+                    (name.1.end..name.1.end).into(),
+                    "expected '{' after the module name",
+                ));
+                (
+                    empty_params(name.1.end),
+                    empty_params(name.1.end),
+                    Vec::new(),
+                    Vec::new(),
+                )
+            });
+            ModuleDecl {
+                name: name.0,
+                name_span: name.1,
+                input,
+                output,
+                properties,
+                items,
+                span: e.span(),
+            }
+        })
+}
+
+/// The module body: `input { ... } output { ... } property* (container |
+/// component | event | use)*`, recovered in any order and phase-checked.
+fn module_body<'src>(
+) -> impl Parser<'src, Input<'src>, (Params, Params, Vec<Property>, Vec<ModuleItem>), Extra<'src>> + Clone
+{
+    let item = choice((
+        word("input")
+            .ignore_then(braced_params())
+            .map(ModuleAstItem::Input),
+        word("output")
+            .ignore_then(braced_params())
+            .map(ModuleAstItem::Output),
+        property().map(ModuleAstItem::Property),
+        views::container_decl()
+            .map(|container| ModuleAstItem::Item(ModuleItem::Container(Box::new(container)))),
+        components::component_decl()
+            .map(|component| ModuleAstItem::Item(ModuleItem::Component(Box::new(component)))),
+        events::event_handler().map(|event| ModuleAstItem::Item(ModuleItem::Event(event))),
+        module_use().map(|use_decl| ModuleAstItem::Item(ModuleItem::Use(use_decl))),
+        junk_member(stop_at_module_member, "expected a module body member")
+            .map(|()| ModuleAstItem::Junk),
+    ));
+
+    tok(Token::LBrace)
+        .ignore_then(item.repeated().collect::<Vec<_>>())
+        .then(tok(Token::RBrace).or_not())
+        .validate(|(items, close), e, emitter| {
+            let mut input = None;
+            let mut output = None;
+            let mut properties = Vec::new();
+            let mut module_items = Vec::new();
+            // 0 = input, 1 = output, 2 = properties, 3 = members.
+            let mut phase = 0u8;
+            for item in items {
+                match item {
+                    ModuleAstItem::Input(params) => {
+                        if input.is_some() {
+                            emitter.emit(Rich::custom(
+                                params.span,
+                                "duplicate `input` parameter block",
+                            ));
+                        } else if phase > 0 {
+                            emitter.emit(Rich::custom(
+                                params.span,
+                                "`input` must be the first module body member",
+                            ));
+                        }
+                        input = Some(params);
+                        phase = 0;
+                    }
+                    ModuleAstItem::Output(params) => {
+                        if output.is_some() {
+                            emitter.emit(Rich::custom(
+                                params.span,
+                                "duplicate `output` parameter block",
+                            ));
+                        } else if phase > 1 {
+                            emitter.emit(Rich::custom(
+                                params.span,
+                                "`output` must follow `input` and precede the body's other members",
+                            ));
+                        }
+                        if input.is_none() {
+                            emitter.emit(Rich::custom(
+                                params.span,
+                                "expected an `input` parameter block before `output`",
+                            ));
+                        }
+                        output = Some(params);
+                        phase = 1;
+                    }
+                    ModuleAstItem::Property(property) => {
+                        if phase > 2 {
+                            emitter.emit(Rich::custom(
+                                property.span,
+                                "property assignments must precede the module's members",
+                            ));
+                        }
+                        phase = 2;
+                        properties.push(property);
+                    }
+                    ModuleAstItem::Item(item) => {
+                        phase = 3;
+                        module_items.push(item);
+                    }
+                    ModuleAstItem::Junk => {}
                 }
             }
-            Rule::property_assignment => properties.push(parse_property_assignment(child)),
-            Rule::container_declaration => containers.push(parse_container_declaration(child)?),
-            Rule::component_declaration => components.push(parse_component_declaration(child)?),
-            Rule::event_handler => events.push(parse_event_handler(child)),
-            Rule::module_use_statement => module_uses.push(parse_module_use_statement(child)),
-            _ => {}
-        }
-    }
-
-    Ok(ModuleDeclaration {
-        name,
-        input_params,
-        output_params,
-        properties,
-        containers,
-        components,
-        events,
-        module_uses,
-    })
+            let input = match input {
+                Some(input) => input,
+                None => {
+                    emitter.emit(Rich::custom(
+                        e.span(),
+                        "expected an `input` parameter block",
+                    ));
+                    empty_params(e.span().end)
+                }
+            };
+            let output = match output {
+                Some(output) => output,
+                None => {
+                    emitter.emit(Rich::custom(
+                        e.span(),
+                        "expected an `output` parameter block",
+                    ));
+                    empty_params(e.span().end)
+                }
+            };
+            if close.is_none() {
+                emitter.emit(Rich::custom(
+                    (e.span().end..e.span().end).into(),
+                    "expected '}' to close the module body",
+                ));
+            }
+            (input, output, properties, module_items)
+        })
 }

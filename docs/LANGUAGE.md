@@ -15,8 +15,8 @@ policy files*, *`.ddd` design sources*, *`.evt` event-contract sources*,
 case management sources*).
 The sections below link to it
 instead of restating the grammar; when this page and the parser disagree,
-the parser wins. The `.ifml` surface's authority is its Pest grammar file
-(`crates/rex-ifml/src/grammar/ifml.pest`, see [docs/IFML.md](IFML.md)); the
+the parser wins. The `.ifml` surface's authority is the EBNF in
+`crates/rex-ifml/src/parser/mod.rs` (see [docs/IFML.md](IFML.md)); the
 expression language is normative in [`docs/EXPRESSIONS.md`](EXPRESSIONS.md).
 
 [Eclipse Xcore]: https://eclipse.dev/Xtext/documentation/305_xbase.html

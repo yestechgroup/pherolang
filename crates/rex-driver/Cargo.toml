@@ -25,7 +25,6 @@ rex-vocab = { workspace = true }
 salsa = { workspace = true }
 ariadne = { workspace = true }
 serde = { workspace = true }
-thiserror = { workspace = true }
 serde_json = { workspace = true }
 xstate-ir = { workspace = true }
 dsntk-recognizer = { workspace = true }

@@ -258,7 +258,7 @@ fn walk_file(
     active.push(identity.to_string());
     walk.sources
         .push((identity.to_string(), source.to_string()));
-    let imports = match crate::parser_v2::parse_file_recovering(source).0 {
+    let imports = match crate::parser::parse_file_recovering(source).0 {
         Some(file) => file
             .imports
             .iter()
@@ -315,8 +315,7 @@ pub fn compile_ifml_lenient(
     imports: &IfmlImports,
 ) -> (IfmlCompilation, Vec<IfmlDiagnostic>) {
     let mut diags = Vec::new();
-    let ((model, mut index), issues) =
-        crate::parser_v2::parse_model_recovering_with_path(path, text);
+    let ((model, mut index), issues) = crate::parser::parse_model_recovering_with_path(path, text);
     for issue in issues {
         diags.push(IfmlDiagnostic::error(
             E_PARSE,
@@ -382,7 +381,7 @@ fn resolve_imports(
             continue;
         };
         let ((import_model, import_index), issues) =
-            crate::parser_v2::parse_model_recovering_with_path(import_path, import_text);
+            crate::parser::parse_model_recovering_with_path(import_path, import_text);
         for issue in issues {
             diags.push(IfmlDiagnostic::error(
                 E_PARSE,

@@ -2,13 +2,14 @@
 //!
 //! One traversal builds the wire model and the span index together, so the
 //! two can never disagree about what was written. The behaviour is moved from
-//! the Pest walkers rather than redesigned: property-bag extraction, component
+//! the historical parser walkers rather than redesigned: property-bag extraction, component
 //! type promotion, chart validation, module/container/view body assembly, and
 //! the index's site collection are all the same rules.
 
 use rex_ir::ifml as ir;
 use rex_ir::ifml::Float;
 use rex_parser::Span;
+use std::str::FromStr;
 
 use crate::ast;
 use crate::ast::{Body, BodyItem, ComponentMember, Declaration, DefaultValue, IfmlFile, Property};
@@ -127,7 +128,7 @@ fn lower_view(
     index: &mut IfmlIndex,
     errors: &mut Vec<LowerError>,
 ) -> ir::ViewDeclaration {
-    // The Pest index captured view-level `roles:`/`requires:` before walking
+    // The historical index captured view-level `roles:`/`requires:` before walking
     // the body; keep that order.
     for property in &view.body.properties {
         capture_view_auth(property, index);
@@ -479,29 +480,14 @@ fn extract_chart_ref(properties: &mut Vec<ir::PropertyAssignment>) -> Option<Str
     chart_ref
 }
 
-/// The chart kind vocabularies are closed and exact-case (the PEG grammar had
-/// no identifier fallback); the parser already rejected anything else, so the
-/// fallback is unreachable.
+/// The chart kind vocabulary is closed and exact-case; the parser already
+/// rejected anything else, so the fallback is unreachable.
 fn chart_kind(kind: &str) -> ir::ChartKind {
-    match kind {
-        "line" => ir::ChartKind::Line,
-        "pie" => ir::ChartKind::Pie,
-        "radar" => ir::ChartKind::Radar,
-        "metric" => ir::ChartKind::Metric,
-        "org" => ir::ChartKind::Org,
-        _ => ir::ChartKind::Bar,
-    }
+    ir::ChartKind::from_str(kind).unwrap_or(ir::ChartKind::Bar)
 }
 
 fn chart_aggregate(word: &str) -> Option<ir::ChartAggregate> {
-    match word.to_ascii_lowercase().as_str() {
-        "sum" => Some(ir::ChartAggregate::Sum),
-        "avg" => Some(ir::ChartAggregate::Avg),
-        "count" => Some(ir::ChartAggregate::Count),
-        "min" => Some(ir::ChartAggregate::Min),
-        "max" => Some(ir::ChartAggregate::Max),
-        _ => None,
-    }
+    ir::ChartAggregate::from_str(word).ok()
 }
 
 fn lower_chart(chart: &ast::ChartDecl, errors: &mut Vec<LowerError>) -> ir::ChartSpec {
@@ -652,19 +638,7 @@ fn lower_event(event: &ast::EventHandler, index: &mut IfmlIndex) -> ir::EventHan
 }
 
 fn event_type(event: &str) -> ir::EventType {
-    match event {
-        "select" => ir::EventType::Select,
-        "submit" => ir::EventType::Submit,
-        "click" => ir::EventType::Click,
-        "change" => ir::EventType::Change,
-        "load" => ir::EventType::Load,
-        "save" => ir::EventType::Save,
-        "cancel" => ir::EventType::Cancel,
-        "delete" => ir::EventType::Delete,
-        "confirm" => ir::EventType::Confirm,
-        "back" => ir::EventType::Back,
-        other => ir::EventType::Custom(other.to_string()),
-    }
+    ir::EventType::from(event)
 }
 
 fn lower_binding(binding: &ast::ParameterBinding) -> ir::ParameterBinding {
@@ -1024,7 +998,7 @@ fn lower_value_as_expr(value: &ast::ValueExpr, text: &str) -> ir::Expression {
     }
 }
 
-// ── Property-bag extractors (moved from the Pest walkers) ───────────────
+// ── Property-bag extractors (moved from the historical walkers) ───────────────
 
 fn extract_bool_property(properties: &[ir::PropertyAssignment], key: &str) -> bool {
     properties
@@ -1116,7 +1090,7 @@ fn extract_identifier_list_property(
 // ── Index captures ──────────────────────────────────────────────────────
 
 /// View-level `roles:`/`requires:`: only the array form counts, and every
-/// identifier inside the first array literal is a site (the Pest
+/// identifier inside the first array literal is a site (the historical
 /// `descendants` behaviour).
 fn capture_view_auth(property: &Property, index: &mut IfmlIndex) {
     let kind = match property.key.as_str() {

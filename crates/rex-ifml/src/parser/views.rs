@@ -1,200 +1,198 @@
-//! Views and containers. Both declarations share one body shape
-//! (params, label, properties, nested containers/components, event
-//! handlers, `use` statements, condition); `parse_body_content` walks
-//! it for both callers.
+//! Views, containers, and the shared body shape.
 
-use super::IfmlParseError;
-use super::Rule;
-use pest::iterators::Pair;
+use super::*;
 
-use rex_ir::ifml::*;
-
-use crate::parser::components::parse_component_declaration;
-use crate::parser::events::parse_event_handler;
-use crate::parser::expressions::{parse_expression, parse_property_assignment};
-use crate::parser::modules::parse_module_use_statement;
-use crate::parser::utils::{
-    extract_bool_property, extract_position_property, extract_requires_property,
-    extract_roles_property, parse_parameter_block, parse_string,
-};
-
-/// Everything a view or container body can declare. The grammar gives
-/// both declarations the same body rule, so one walker serves both.
-struct BodyContent {
-    params: Vec<ParameterDecl>,
-    label: Option<String>,
-    properties: Vec<PropertyAssignment>,
-    containers: Vec<ContainerDeclaration>,
-    components: Vec<ComponentDeclaration>,
-    events: Vec<EventHandler>,
-    module_uses: Vec<ModuleUse>,
-    condition: Option<Expression>,
+/// Tokens that can begin the next view/container member (and therefore end a
+/// junk region), plus the enclosing `}` and the next top-level declaration.
+fn stop_at_view_member(token: &Token<'_>) -> bool {
+    matches!(token, Token::RBrace)
+        || is_top_introducer(token)
+        || matches!(
+            token,
+            Token::Ident(text)
+                if matches!(
+                    *text,
+                    "params" | "label" | "container" | "component" | "on" | "use" | "if"
+                )
+        )
 }
 
-fn parse_body_content(pair: Pair<Rule>) -> Result<BodyContent, IfmlParseError> {
-    let mut params = Vec::new();
-    let mut label = None;
-    let mut properties = Vec::new();
-    let mut containers = Vec::new();
-    let mut components = Vec::new();
-    let mut events = Vec::new();
-    let mut module_uses = Vec::new();
-    let mut condition = None;
-
-    for child in pair.clone().into_inner() {
-        match child.as_rule() {
-            Rule::params_block => {
-                if let Some(block) = child.into_inner().next() {
-                    params = parse_parameter_block(block);
-                }
-            }
-            Rule::label_declaration => {
-                if let Some(s) = child.into_inner().next() {
-                    label = Some(parse_string(&s));
-                }
-            }
-            Rule::property_assignment => properties.push(parse_property_assignment(child)),
-            Rule::container_declaration => containers.push(parse_container_declaration(child)?),
-            Rule::component_declaration => components.push(parse_component_declaration(child)?),
-            Rule::event_handler => events.push(parse_event_handler(child)),
-            Rule::module_use_statement => module_uses.push(parse_module_use_statement(child)),
-            Rule::condition_statement => {
-                condition = child.into_inner().next().map(parse_expression);
-            }
-            _ => {}
-        }
+fn empty_body(position: usize) -> Body {
+    Body {
+        params: None,
+        label: None,
+        properties: Vec::new(),
+        items: Vec::new(),
+        span: (position..position).into(),
     }
-
-    Ok(BodyContent {
-        params,
-        label,
-        properties,
-        containers,
-        components,
-        events,
-        module_uses,
-        condition,
-    })
 }
 
-pub(crate) fn parse_container_declaration(
-    pair: Pair<Rule>,
-) -> Result<ContainerDeclaration, IfmlParseError> {
-    let mut inner = pair.clone().into_inner();
-    let name = inner.next().map(|p| parse_string(&p)).unwrap_or_default();
-    let body = if let Some(b) = inner.next() {
-        b
-    } else {
-        return Ok(ContainerDeclaration {
-            name,
-            label: None,
-            is_default: false,
-            is_xor: false,
-            params: Vec::new(),
-            properties: Vec::new(),
-            containers: Vec::new(),
-            components: Vec::new(),
-            events: Vec::new(),
-            module_uses: Vec::new(),
-            condition: None,
-            position: None,
-        });
-    };
-
-    let BodyContent {
-        params,
-        label,
-        properties,
-        containers,
-        components,
-        events,
-        module_uses,
-        condition,
-    } = parse_body_content(body)?;
-
-    let is_default = extract_bool_property(&properties, "default");
-    let is_xor = extract_bool_property(&properties, "xor");
-
-    let position = extract_position_property(&properties);
-
-    Ok(ContainerDeclaration {
-        name,
-        label,
-        is_default,
-        is_xor,
-        params,
-        properties,
-        containers,
-        components,
-        events,
-        module_uses,
-        condition,
-        position,
-    })
+/// One item in a view/container body, before phase validation.
+enum BodyMember {
+    Params(Params),
+    Label(Label),
+    Property(Property),
+    Item(BodyItem),
+    Junk,
 }
 
-pub(crate) fn parse_view_declaration(pair: Pair<Rule>) -> Result<ViewDeclaration, IfmlParseError> {
-    let mut inner = pair.clone().into_inner();
-    let name = inner.next().map(|p| parse_string(&p)).unwrap_or_default();
-    let body = if let Some(b) = inner.next() {
-        b
-    } else {
-        return Ok(ViewDeclaration {
-            name,
-            label: None,
-            is_landmark: false,
-            is_xor: false,
-            is_modal: false,
-            params: Vec::new(),
-            properties: Vec::new(),
-            containers: Vec::new(),
-            components: Vec::new(),
-            events: Vec::new(),
-            module_uses: Vec::new(),
-            roles: Vec::new(),
-            requires: Vec::new(),
-            condition: None,
-            position: None,
-        });
-    };
+/// `view "name" { ... }`. The header commits once the name matched: a
+/// missing body recovers a view node plus one error.
+pub(crate) fn view_decl<'src>() -> impl Parser<'src, Input<'src>, ViewDecl, Extra<'src>> + Clone {
+    word("view")
+        .ignore_then(string_lit())
+        .then(body_parser().or_not())
+        .validate(|(name, body), e, emitter| {
+            let body = body.unwrap_or_else(|| {
+                emitter.emit(Rich::custom(
+                    (name.1.end..name.1.end).into(),
+                    "expected '{' after the view name",
+                ));
+                empty_body(name.1.end)
+            });
+            ViewDecl {
+                name: name.0,
+                name_span: name.1,
+                body,
+                span: e.span(),
+            }
+        })
+}
 
-    let BodyContent {
-        params,
-        label,
-        properties,
-        containers,
-        components,
-        events,
-        module_uses,
-        condition,
-    } = parse_body_content(body)?;
+/// `container "name" { ... }` — the module-facing entry.
+pub(crate) fn container_decl<'src>() -> BoxedP<'src, ContainerDecl> {
+    container_from(body_parser()).boxed()
+}
 
-    let is_landmark = extract_bool_property(&properties, "landmark");
-    let is_xor = extract_bool_property(&properties, "xor");
-    let is_modal = extract_bool_property(&properties, "modal");
-    let position = extract_position_property(&properties);
-    let roles = extract_roles_property(&properties);
-    let requires = extract_requires_property(&properties);
-    let properties: Vec<PropertyAssignment> = properties
-        .into_iter()
-        .filter(|p| p.key != "roles" && p.key != "requires")
-        .collect();
+/// A container whose body is the supplied (possibly recursive) body parser.
+fn container_from<'src, P>(
+    body: P,
+) -> impl Parser<'src, Input<'src>, ContainerDecl, Extra<'src>> + Clone
+where
+    P: Parser<'src, Input<'src>, Body, Extra<'src>> + Clone + 'src,
+{
+    word("container")
+        .ignore_then(string_lit())
+        .then(body.or_not())
+        .validate(|(name, body), e, emitter| {
+            let body = body.unwrap_or_else(|| {
+                emitter.emit(Rich::custom(
+                    (name.1.end..name.1.end).into(),
+                    "expected '{' after the container name",
+                ));
+                empty_body(name.1.end)
+            });
+            ContainerDecl {
+                name: name.0,
+                name_span: name.1,
+                body,
+                span: e.span(),
+            }
+        })
+}
 
-    Ok(ViewDeclaration {
-        name,
-        label,
-        is_landmark,
-        is_xor,
-        is_modal,
-        params,
-        properties,
-        containers,
-        components,
-        events,
-        module_uses,
-        roles,
-        requires,
-        condition,
-        position,
+/// A view/container body. Members are parsed in any order and the PEG's
+/// phases (`params? label? property* (container|component|event|use|
+/// condition)*`) are validated afterwards, so an out-of-order member is
+/// recovered into the right list and reported instead of discarding the rest.
+pub(crate) fn body_parser<'src>() -> BoxedP<'src, Body> {
+    recursive(|body| {
+        let container = container_from(body)
+            .map(|container| BodyMember::Item(BodyItem::Container(Box::new(container))));
+        let member = choice((
+            container,
+            components::component_decl()
+                .map(|component| BodyMember::Item(BodyItem::Component(Box::new(component)))),
+            events::event_handler().map(|event| BodyMember::Item(BodyItem::Event(event))),
+            modules::module_use().map(|use_decl| BodyMember::Item(BodyItem::Use(use_decl))),
+            condition().map(|condition| BodyMember::Item(BodyItem::Condition(condition))),
+        ));
+        let item = choice((
+            params_block().map(BodyMember::Params),
+            label_decl().map(BodyMember::Label),
+            property().map(BodyMember::Property),
+            member,
+            junk_member(stop_at_view_member, "expected a view body member")
+                .map(|()| BodyMember::Junk),
+        ));
+
+        tok(Token::LBrace)
+            .ignore_then(item.repeated().collect::<Vec<_>>())
+            .then(tok(Token::RBrace).or_not())
+            .validate(|(items, close), e, emitter| {
+                let mut params = None;
+                let mut label = None;
+                let mut properties = Vec::new();
+                let mut body_items = Vec::new();
+                let mut seen_params = false;
+                let mut seen_label = false;
+                let mut seen_property = false;
+                let mut seen_item = false;
+
+                for item in items {
+                    match item {
+                        BodyMember::Params(value) => {
+                            if seen_params {
+                                emitter.emit(Rich::custom(
+                                    value.span,
+                                    "duplicate `params` block in the body",
+                                ));
+                            } else if seen_label || seen_property || seen_item {
+                                emitter.emit(Rich::custom(
+                                    value.span,
+                                    "`params` must precede the body's other members",
+                                ));
+                            }
+                            seen_params = true;
+                            params = Some(value);
+                        }
+                        BodyMember::Label(value) => {
+                            if seen_label {
+                                emitter.emit(Rich::custom(
+                                    value.span,
+                                    "duplicate `label` declaration in the body",
+                                ));
+                            } else if seen_property || seen_item {
+                                emitter.emit(Rich::custom(
+                                    value.span,
+                                    "`label` must precede the body's properties and members",
+                                ));
+                            }
+                            seen_label = true;
+                            label = Some(value);
+                        }
+                        BodyMember::Property(value) => {
+                            if seen_item {
+                                emitter.emit(Rich::custom(
+                                    value.span,
+                                    "property assignments must precede the body's members",
+                                ));
+                            }
+                            seen_property = true;
+                            properties.push(value);
+                        }
+                        BodyMember::Item(value) => {
+                            seen_item = true;
+                            body_items.push(value);
+                        }
+                        BodyMember::Junk => {}
+                    }
+                }
+
+                if close.is_none() {
+                    emitter.emit(Rich::custom(
+                        (e.span().end..e.span().end).into(),
+                        "expected '}' to close the body",
+                    ));
+                }
+                Body {
+                    params,
+                    label,
+                    properties,
+                    items: body_items,
+                    span: e.span(),
+                }
+            })
     })
+    .boxed()
 }

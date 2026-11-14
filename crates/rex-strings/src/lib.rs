@@ -34,6 +34,47 @@ pub fn unescape_string(raw: &str) -> String {
     value
 }
 
+/// Decodes a JSON-style string-literal payload (quotes already stripped by
+/// the lexer): exactly the JSON escape set — `\" \\ \/ \b \f \n \r \t
+/// \uXXXX` — decodes.
+///
+/// This is the `.ifml` contract, deliberately richer than
+/// [`unescape_string`] (which decodes only `\"` and `\\` and is the
+/// `.mox`-family contract). A malformed escape cannot reach this function:
+/// the `.ifml` lexer validates the string token first. If one is passed
+/// programmatically, the unreachable behaviour is pinned — an unknown escape
+/// is dropped and a malformed `\u` contributes nothing.
+pub fn unescape_json_string(raw: &str) -> String {
+    let mut result = String::with_capacity(raw.len());
+    let mut chars = raw.chars();
+    while let Some(c) = chars.next() {
+        if c == '\\' {
+            match chars.next() {
+                Some('"') => result.push('"'),
+                Some('\\') => result.push('\\'),
+                Some('/') => result.push('/'),
+                Some('b') => result.push('\u{0008}'),
+                Some('f') => result.push('\u{000C}'),
+                Some('n') => result.push('\n'),
+                Some('r') => result.push('\r'),
+                Some('t') => result.push('\t'),
+                Some('u') => {
+                    let hex: String = chars.by_ref().take(4).collect();
+                    if let Ok(code) = u32::from_str_radix(&hex, 16) {
+                        if let Some(ch) = char::from_u32(code) {
+                            result.push(ch);
+                        }
+                    }
+                }
+                _ => {}
+            }
+        } else {
+            result.push(c);
+        }
+    }
+    result
+}
+
 #[cfg(test)]
 mod tests {
     use super::unescape_string;
@@ -108,5 +149,31 @@ mod tests {
         // Pair-wise scan: `\\` decodes first, then the following `\"`
         // decodes as an escaped quote (not an unknown escape).
         assert_eq!(unescape_string(r#"\\\""#), "\\\"");
+    }
+
+    /// The `.ifml` JSON contract: every JSON escape decodes.
+    #[test]
+    fn json_escapes_decode() {
+        assert_eq!(
+            super::unescape_json_string(r#"a\"b\\c\/d\be\ff\ng\rh\ti"#),
+            "a\"b\\c/d\u{0008}e\u{000C}f\ng\rh\ti"
+        );
+    }
+
+    #[test]
+    fn json_unicode_escapes_decode() {
+        assert_eq!(super::unescape_json_string(r"\u00e9"), "é");
+        assert_eq!(super::unescape_json_string(r"a\u0041b"), "aAb");
+    }
+
+    #[test]
+    fn json_invalid_escapes_are_unreachable_but_pinned() {
+        // The lexer rejects these; the decoder's pinned behaviour is to drop
+        // the unknown escape / malformed \u rather than panic.
+        assert_eq!(super::unescape_json_string(r"\x"), "");
+        assert_eq!(super::unescape_json_string(r"\u12"), "\u{12}");
+        assert_eq!(super::unescape_json_string("trailing\\"), "trailing");
+        assert_eq!(super::unescape_json_string(""), "");
+        assert_eq!(super::unescape_json_string("plain"), "plain");
     }
 }
