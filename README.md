@@ -323,3 +323,13 @@ Model instances exchange through a cross-language JSON contract:
 IR JSON and canonical instance JSON). Every backend must round-trip them.
 Regenerate goldens with `REX_UPDATE_FIXTURES=1 cargo test --workspace`.
 
+When running tests locally, prefer the wrappers: `scripts/dev-test.sh [args]`
+runs `cargo test` with the CI env (`debuginfo=0`, no incremental compilation,
+`TMPDIR=target/tmp`, `--jobs 2`), and `scripts/ci-local.sh` runs the full gate
+sequence. A bare `cargo test --workspace` leaves the default `debuginfo=2` on,
+and cargo never collects old hashes under `target/debug/build/<pkg>/<hash>/out/`
+— repeated builds can fill the disk, which surfaces as
+`ld terminated with signal 7 [Bus error]` during doctest linking. Reclaim with
+`rm -rf target/debug/build/rex-*` (workspace crates only); the full rationale
+is the AGENTS.md operational bullet (issue #261).
+
