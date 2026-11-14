@@ -91,7 +91,7 @@ use std::collections::BTreeMap;
 
 use serde::{Deserialize, Serialize};
 
-use crate::{IrError, Multiplicity, OperationParam, TypeRef};
+use crate::{Multiplicity, OperationParam, TypeRef};
 
 /// The artifact format version this crate writes and accepts for DDD design
 /// artifacts ([`DddModel`]).
@@ -148,31 +148,9 @@ impl DddModel {
         self.modules.push(module);
         self
     }
-
-    /// Serializes the artifact to pretty-printed (2-space indent) JSON.
-    pub fn to_json_pretty(&self) -> Result<String, IrError> {
-        crate::wire::VersionedArtifact::to_json_pretty(self)
-    }
-
-    /// Serializes the artifact to compact JSON.
-    pub fn to_json(&self) -> Result<String, IrError> {
-        crate::wire::VersionedArtifact::to_json(self)
-    }
-
-    /// Deserializes a design artifact from JSON, rejecting artifacts whose
-    /// `formatVersion` is not [`DDD_MODEL_FORMAT_VERSION`].
-    ///
-    /// Unknown fields are ignored for forward compatibility.
-    pub fn from_json(json: &str) -> Result<Self, IrError> {
-        crate::wire::VersionedArtifact::from_json(json)
-    }
 }
 
-impl crate::wire::VersionedArtifact for DddModel {
-    const FORMAT_VERSION: u32 = DDD_MODEL_FORMAT_VERSION;
-}
-
-crate::wire::default_format_version!(DddModel);
+crate::wire::versioned_artifact!(DddModel, DDD_MODEL_FORMAT_VERSION, "the design artifact");
 
 /// The designed application.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -1259,7 +1237,7 @@ use crate::wire::is_false;
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::PrimitiveType;
+    use crate::{IrError, PrimitiveType};
 
     fn class_ref(name: &str) -> TypeRef {
         TypeRef::Class {

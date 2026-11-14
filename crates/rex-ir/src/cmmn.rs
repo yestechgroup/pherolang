@@ -88,7 +88,7 @@
 
 use serde::{Deserialize, Serialize};
 
-use crate::{IrError, Multiplicity, TypeRef};
+use crate::{Multiplicity, TypeRef};
 
 /// The artifact format version this crate writes and accepts for
 /// case-management artifacts ([`CmmnModel`]).
@@ -124,31 +124,9 @@ impl CmmnModel {
             cases: Vec::new(),
         }
     }
-
-    /// Serializes the artifact to pretty-printed (2-space indent) JSON.
-    pub fn to_json_pretty(&self) -> Result<String, IrError> {
-        crate::wire::VersionedArtifact::to_json_pretty(self)
-    }
-
-    /// Serializes the artifact to compact JSON.
-    pub fn to_json(&self) -> Result<String, IrError> {
-        crate::wire::VersionedArtifact::to_json(self)
-    }
-
-    /// Deserializes a case artifact from JSON, rejecting artifacts whose
-    /// `formatVersion` is not [`CMMN_MODEL_FORMAT_VERSION`].
-    ///
-    /// Unknown fields are ignored for forward compatibility.
-    pub fn from_json(json: &str) -> Result<Self, IrError> {
-        crate::wire::VersionedArtifact::from_json(json)
-    }
 }
 
-impl crate::wire::VersionedArtifact for CmmnModel {
-    const FORMAT_VERSION: u32 = CMMN_MODEL_FORMAT_VERSION;
-}
-
-crate::wire::default_format_version!(CmmnModel);
+crate::wire::versioned_artifact!(CmmnModel, CMMN_MODEL_FORMAT_VERSION, "the case artifact");
 
 /// A declared case: roles, the typed case file, and the flat plan-item
 /// graph.
