@@ -38,7 +38,8 @@ use std::sync::Arc;
 
 use rex_driver::graph::{build, GraphFile, GraphIndex, GraphInputs};
 use rex_driver::navigation::{
-    ifml_surface, mox_index, IndexedDefinition, IndexedReference, SurfaceIndex, SurfaceLookup,
+    ifml_surface, mox_index, IndexedDefinition, IndexedReference, ReferenceContext, SurfaceIndex,
+    SurfaceLookup,
 };
 use rex_driver::SurfaceKind;
 use rex_ir::graph::{kinds, GraphModel, GraphNode};
@@ -160,6 +161,28 @@ impl GraphSnapshot {
             uri: file.uri.clone(),
             range: PositionMap::new(&file.text).range_for(definition.name_span),
         })
+    }
+
+    /// The landing site of a `platformCapability` node: the closed
+    /// deploy-vocabulary word has **no declaration site** (its table lives in
+    /// the driver, not in a model file — issue rexlang#262), so the anchor is
+    /// the first written `requires` mention of the word in the node's file.
+    /// The file is the application's anchoring deploy file by construction,
+    /// so a mention always exists; `None` only for a hand-edited artifact.
+    pub(super) fn platform_anchor(&self, node: &GraphNode) -> Option<Location> {
+        let file = self.file(&node.file)?;
+        let map = PositionMap::new(&file.text);
+        file.index
+            .references
+            .iter()
+            .filter(|reference| {
+                reference.context == ReferenceContext::DeployRequires && reference.name == node.name
+            })
+            .min_by_key(|reference| reference.span.start)
+            .map(|reference| Location {
+                uri: file.uri.clone(),
+                range: map.range_for(reference.span),
+            })
     }
 
     /// Every definition of `(kind, name)` in this file, as locations.
@@ -985,7 +1008,13 @@ pub(super) fn graph_goto_definition(
         }),
         SurfaceLookup::Reference(reference) => {
             let node = resolve(&index, file, reference)?;
-            snapshot.location(definition_target(&index, node))
+            let target = definition_target(&index, node);
+            if target.kind == kinds::PLATFORM_CAPABILITY {
+                // No declaration site: land on the word's first written
+                // `requires` mention instead (rexlang#262).
+                return snapshot.platform_anchor(target);
+            }
+            snapshot.location(target)
         }
         SurfaceLookup::None => None,
     }
@@ -1110,6 +1139,14 @@ fn hover_markdown(index: &GraphIndex<'_>, node: &GraphNode) -> String {
             push_line(&mut lines, "requires", target_names(kinds::REQUIRES));
             push_line(&mut lines, "connects to", target_names(kinds::CONNECTS));
         }
+        kinds::PLATFORM_CAPABILITY => {
+            push_line(&mut lines, "required by", holder_names(kinds::REQUIRES));
+            let providers: Vec<String> = rex_driver::platform_capability_targets(&node.name)
+                .into_iter()
+                .map(|target| format!("`{}`", target.keyword()))
+                .collect();
+            push_line(&mut lines, "provided by", providers);
+        }
         kinds::SERVICE_OPERATION | kinds::REPOSITORY_OPERATION => {
             push_line(&mut lines, "carries", target_names(kinds::CARRIES));
             push_line(&mut lines, "invokes", target_names(kinds::INVOKES_DECISION));
@@ -1214,6 +1251,10 @@ enum RenameTarget<'a> {
         /// The owning file's display path.
         file: String,
     },
+    /// The name is a word of the closed `.deploy` platform-capability
+    /// vocabulary (rexlang#262) — renaming it would produce an
+    /// unknown-capability compile error, so it is refused.
+    Closed(&'a GraphNode),
 }
 
 /// Resolves the rename target under `position`.
@@ -1231,23 +1272,34 @@ fn rename_target<'a>(
     position: Position,
 ) -> Option<RenameTarget<'a>> {
     let offset = PositionMap::new(&file.text).offset_for(position);
-    match file.index.at(offset) {
-        SurfaceLookup::Definition(definition) => snapshot
-            .node_of(index, file, definition)
-            .map(RenameTarget::Owned),
-        SurfaceLookup::Reference(reference) => {
-            let node = resolve(index, file, reference)?;
-            if node.file == file.display {
-                Some(RenameTarget::Owned(node))
-            } else {
-                Some(RenameTarget::Foreign {
-                    node,
-                    file: node.file.clone(),
-                })
+    let target = |node: &'a GraphNode| {
+        if node.kind == kinds::PLATFORM_CAPABILITY {
+            RenameTarget::Closed(node)
+        } else if node.file == file.display {
+            RenameTarget::Owned(node)
+        } else {
+            RenameTarget::Foreign {
+                node,
+                file: node.file.clone(),
             }
         }
+    };
+    match file.index.at(offset) {
+        SurfaceLookup::Definition(definition) => {
+            snapshot.node_of(index, file, definition).map(target)
+        }
+        SurfaceLookup::Reference(reference) => resolve(index, file, reference).map(target),
         SurfaceLookup::None => None,
     }
+}
+
+/// The refusal message for a closed-vocabulary name: the word is not
+/// authorable, so the rename cannot mean anything (rexlang#262).
+fn closed_vocabulary_refusal(node: &GraphNode) -> String {
+    format!(
+        "cannot rename {} `{}`: it is part of the closed deploy capability vocabulary",
+        node.kind, node.name
+    )
 }
 
 /// The refusal message for a cross-document rename: it always names the
@@ -1282,6 +1334,7 @@ pub(super) fn graph_prepare_rename(
                 .map(|definition| PositionMap::new(&file.text).range_for(definition.name_span)))
         }
         Some(RenameTarget::Foreign { node, file }) => Err(foreign_refusal(node, &file)),
+        Some(RenameTarget::Closed(node)) => Err(closed_vocabulary_refusal(node)),
         None => Ok(None),
     }
 }
@@ -1303,6 +1356,9 @@ pub(super) fn graph_rename(
         Some(RenameTarget::Owned(node)) => node,
         Some(RenameTarget::Foreign { node, file }) => {
             return Err(foreign_refusal(node, &file));
+        }
+        Some(RenameTarget::Closed(node)) => {
+            return Err(closed_vocabulary_refusal(node));
         }
         None => return Ok(None),
     };

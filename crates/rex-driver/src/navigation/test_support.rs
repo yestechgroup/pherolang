@@ -25,9 +25,10 @@ pub(crate) use rex_testkit::{actor_graph, ddd_graph, evt_graph, fixture, fixture
 /// Asserts the index's definitions are exactly the graph's nodes for
 /// `display`, one-to-one.
 ///
-/// Delegates the comparison (and the two documented exclusions — the `file`
-/// node and the `.ifml` `flow` node) to the testkit, then checks the
-/// index's own contract: one definition site per `(kind, name)`.
+/// Delegates the comparison (and the three documented exclusions — the
+/// `file` node, the `.ifml` `flow` node, and the `.deploy`
+/// `platformCapability` node) to the testkit, then checks the index's own
+/// contract: one definition site per `(kind, name)`.
 pub(crate) fn assert_definitions_match_graph(
     index: &SurfaceIndex,
     graph: &GraphModel,

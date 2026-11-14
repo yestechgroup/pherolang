@@ -8,12 +8,66 @@
 //! the imported file's application/flow node is looked up. A binding that
 //! does not resolve contributes no edge — the deploy compiler already
 //! diagnosed it.
+//!
+//! A component's `requires` clause names the **closed platform-capability
+//! vocabulary** in the driver's deploy tables, not a policy capability
+//! (issue rexlang#262). [`platform_capability_nodes`] emits one
+//! `platformCapability` node per (application, word) — anchored at the
+//! application's first deploy file by display path, so the node is
+//! deterministic and shared — and the `requires` edges bind it. The two
+//! namespaces stay apart: no `requires` edge joins a policy capability or
+//! actor.
+
+use std::collections::BTreeMap;
 
 use rex_ir::deploy::DeployModel;
 use rex_ir::graph::{kinds, GraphEdge};
 
 use super::resolve::{Symbol, Symbols};
-use super::{ids, pooled_with, Builder, FileRef};
+use super::{ids, Builder, FileRef, GraphFile};
+
+/// One `platformCapability` node per (application, vocabulary word) any
+/// component requires.
+///
+/// The word has no declaration site (the vocabulary is the driver's
+/// [`crate::deploy::PLATFORM_CAPABILITIES`] table), so the node is anchored
+/// at the application's **first deploy file by display path** — deterministic
+/// under any input order, shared by every component in the application, and
+/// never duplicated into a same-named twin per file. A word outside the
+/// closed vocabulary gets no node: the deploy compiler already reported it,
+/// and the graph never invents a binding.
+pub(super) fn platform_capability_nodes(
+    builder: &mut Builder,
+    deploys: &[GraphFile<DeployModel>],
+    files: &[FileRef],
+) {
+    // `files` is the builder's clustered view of `deploys`, in the same
+    // order (the caller slices it from the deploy bucket's offset).
+    debug_assert_eq!(files.len(), deploys.len());
+    // `(application, word)` → the anchoring deploy file's display path: the
+    // smallest by display path, so a shuffled input order is byte-identical.
+    let mut anchors: BTreeMap<(&str, &str), &str> = BTreeMap::new();
+    for (file, deploy) in files.iter().zip(deploys) {
+        for application in &deploy.model.applications {
+            for component in &application.components {
+                for capability in &component.requires {
+                    if !crate::deploy::is_platform_capability(capability) {
+                        continue;
+                    }
+                    let anchor = anchors
+                        .entry((file.application.as_str(), capability.as_str()))
+                        .or_insert(file.display.as_str());
+                    if file.display.as_str() < *anchor {
+                        *anchor = file.display.as_str();
+                    }
+                }
+            }
+        }
+    }
+    for ((application, capability), display) in anchors {
+        builder.add_named(kinds::PLATFORM_CAPABILITY, display, application, capability);
+    }
+}
 
 /// Emits the deployment file's nodes.
 pub(super) fn nodes(builder: &mut Builder, file: &FileRef, model: &DeployModel) {
@@ -73,12 +127,19 @@ pub(super) fn edges(builder: &mut Builder, file: &FileRef, model: &DeployModel) 
                     kinds::MEMBER_OF,
                 ));
                 for capability in &component.requires {
-                    pooled_with(
-                        &mut edges,
-                        &component_id,
-                        kinds::REQUIRES,
-                        symbols.capability_or_actor(capability, application),
-                        &[("via", "deploy")],
+                    // The closed target vocabulary is the only namespace a
+                    // `requires` clause names (rexlang#262): bind the
+                    // application's `platformCapability` node, and nothing
+                    // when the word is outside the vocabulary (the deploy
+                    // compiler already reported it).
+                    let Some(target) =
+                        symbols.one(kinds::PLATFORM_CAPABILITY, capability, application)
+                    else {
+                        continue;
+                    };
+                    edges.push(
+                        GraphEdge::new(component_id.clone(), target.id.clone(), kinds::REQUIRES)
+                            .attribute("via", "deploy"),
                     );
                 }
                 for binding in &component.designs {

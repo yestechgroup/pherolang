@@ -275,6 +275,10 @@ warnings do not):
      `horizontalScaling`;
    - `cloudflareWorkers` — sqlDatabase, horizontalScaling,
      edgeExecution (no long-running processes, no local filesystem).
+
+   The closed vocabulary is also the semantic graph's `platformCapability`
+   node kind: one node per application and word, with no declaration site
+   (see [the graph's platform capabilities](GRAPH.md#platform-capabilities-rexlang262)).
 9. **Engines** — a database's effective engine must be one the target
    hosts (`standalone`: sqlite; `dockerCompose`: sqlite, postgres;
    `kubernetes`: postgres; `cloudflareWorkers`: d1). A postgres database

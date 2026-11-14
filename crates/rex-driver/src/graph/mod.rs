@@ -16,7 +16,11 @@
 //! 2. **Nodes.** One pass over every bucket emits the full node vocabulary
 //!    (one `file` node per compiled file plus every declaration), registering
 //!    each node in the builder's symbol table. File attribution is the
-//!    node's `file` field — there are no `declares` edges.
+//!    node's `file` field — there are no `declares` edges. The `.deploy`
+//!    platform-capability nodes come first: they are vocabulary words, not
+//!    file declarations, so one pass over every deploy file emits **one**
+//!    node per (application, word) anchored at the application's first
+//!    deploy file (`deploy::platform_capability_nodes`).
 //! 3. **Edges.** A second pass over every bucket emits the semantic edges,
 //!    resolving every reference through the node table only. An unresolved
 //!    reference produces **no edge** (the manifest's derivation rule): the
@@ -243,6 +247,14 @@ pub fn build(inputs: &GraphInputs) -> GraphModel {
     let at = |offset: usize, index: usize| offset + index;
     let [domain_base, actors_base, design_base, events_base, deploy_base, flow_base, use_case_base, case_base, decision_base] =
         offsets;
+
+    // Pass A0 — the deployment platform-capability vocabulary's nodes, one
+    // per (application, word) anchored at the application's first deploy
+    // file. They belong to no single file's declaration set, so they are
+    // emitted before the per-file passes and are visible to every resolver.
+    let deploy_files: Vec<FileRef> =
+        builder.files[deploy_base..deploy_base + inputs.deploys.len()].to_vec();
+    deploy::platform_capability_nodes(&mut builder, &inputs.deploys, &deploy_files);
 
     // Pass A — nodes for every surface (all nodes exist before any edge
     // resolves, so cross-surface references see their targets).

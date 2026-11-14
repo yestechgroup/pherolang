@@ -381,6 +381,13 @@
       "application": "app.actor"
     },
     {
+      "id": "platformCapability:app.deploy#longRunningProcess",
+      "kind": "platformCapability",
+      "name": "longRunningProcess",
+      "file": "app.deploy",
+      "application": "app.actor"
+    },
+    {
       "id": "bkm:app.dmn#GraphDecisions.assess_refund",
       "kind": "bkm",
       "name": "GraphDecisions.assess_refund",
@@ -1176,6 +1183,14 @@
       "from": "deployComponent:app.deploy#GraphDesk.refund_approval_service",
       "to": "deployApplication:app.deploy#GraphDesk",
       "kind": "memberOf"
+    },
+    {
+      "from": "deployComponent:app.deploy#GraphDesk.refund_approval_service",
+      "to": "platformCapability:app.deploy#longRunningProcess",
+      "kind": "requires",
+      "attributes": {
+        "via": "deploy"
+      }
     },
     {
       "from": "deployComponent:app.deploy#GraphDesk.web",

@@ -223,6 +223,35 @@ contract; it is just not exercised by `examples/` any more.
 | `deployComponent` | `.deploy` component | `<App>.<Component>` |
 | `deployProfile` | `.deploy` profile | `<Profile>` |
 | `deployment` | `.deploy` deployment | `<App>.<Deployment>` |
+| `platformCapability` | one word of the `.deploy` closed target-capability vocabulary a component's `requires` clause names (no model file declares it — see [Platform capabilities](#platform-capabilities-rexlang262)) | the word as written (`longRunningProcess`) |
+
+### Platform capabilities (rexlang#262)
+
+A `.deploy` component's `requires` clause names the **closed platform
+vocabulary** in `crates/rex-driver/src/deploy.rs`
+(`longRunningProcess`, `persistentFilesystem`, `sqlDatabase`, `container`,
+`backgroundWorker`, `horizontalScaling`, `edgeExecution`,
+`statefulProcess`) — not a `.actor` capability. The graph keeps the two
+namespaces apart: the clause produces a `requires` edge (`via=deploy`) to a
+`platformCapability` node, never to a same-named policy capability or
+actor.
+
+- **One node per application and word**, anchored at the application's
+  first deploy file by display path. Every component in the application
+  that requires the word shares that node, so `affected-by` and `list
+  --kind platformCapability` answer application-wide and no file invents a
+  same-named twin. The anchor is display-path order, so shuffled input
+  order stays byte-identical.
+- **No declaration site.** The vocabulary is the driver's table, not a
+  model file, so the node has none — the same family as the `file` and
+  `.ifml` `flow` nodes. The editor's go-to-definition lands on the first
+  written `requires` mention of the word in the anchor file (the nearest
+  source-backed site), and hover names the targets that provide it (the
+  driver's target tables) plus the components that require it. Rename is
+  refused: renaming the word would be an unknown capability at compile
+  time.
+- **No invention.** A word outside the vocabulary gets no node and no
+  edge — the deploy compiler already reported it as an unknown capability.
 
 ## Edges (v1)
 
@@ -245,7 +274,7 @@ contract; it is just not exercised by `examples/` any more.
 | `opaqueGrant` | actor → file (bare `cedar { … }`) | — |
 | `delegates` | receiver actor → capability | `effect`, `fromActor`, `delegation`, `purpose` |
 | `excludes` | capability → capability (`never_both`, both directions emitted) | — |
-| `requires` | view/command/deployComponent/caseRole/useCase → capability\|actor | `via=requires\|roles\|deploy\|ucStep` |
+| `requires` | view/command/caseRole/useCase → capability\|actor; deployComponent → platformCapability | `via=requires\|roles\|deploy\|ucStep` |
 | `invokesDecision` | service op / service / plan item → decision\|decisionService | `via`, `pin` |
 | `binds` | `.ifml` action → serviceOperation | `ambiguous` |
 | `realizes` | useCase → serviceOperation | — |
@@ -689,9 +718,11 @@ parse.
 `crates/rex-driver/tests/navigation.rs`, over **all nine** surfaces of the
 `examples/support/support.*` stack (plus
 `tests/conformance/models/actors.mox` for inline actors and the two
-conformance designs). Exactly two node kinds are excluded, both naming a
-host fact a source-only index cannot know: the `file` node (a display path)
-and the `.ifml` `flow` node (the file stem). Transitions are the one
+conformance designs). Exactly three node kinds are excluded, each naming a
+fact a source-only index cannot know: the `file` node (a display path), the
+`.ifml` `flow` node (the file stem), and the `.deploy` `platformCapability`
+node (one word of the driver's closed target vocabulary — see [platform
+capabilities](#platform-capabilities-rexlang262)). Transitions are the one
 composite node key, so the span test skips the `->`; `.ifml` spans are the
 quoted string token. The unit-test fixture is the self-contained
 `tests/conformance/graph/app.*` application
@@ -739,11 +770,13 @@ a naming rule is written once.
 source and document-symbol walker — the shared projection is the same source
 table, keyed by the graph's node keys.
 
-Two node kinds are the documented exclusion from the equality: one `file`
+Three node kinds are the documented exclusion from the equality: one `file`
 node per compiled file (its name is the display path, a host fact a
-source-only index cannot know) and one `flow` node per `.ifml` file (its
-name is the file stem — the same host fact). Every other node has exactly one
-spanned definition site.
+source-only index cannot know), one `flow` node per `.ifml` file (its name is
+the file stem — the same host fact), and one `platformCapability` node per
+application and closed-vocabulary word (its name is a driver table entry, not
+a declaration — [platform capabilities](#platform-capabilities-rexlang262)).
+Every other node has exactly one spanned definition site.
 
 Each `IndexedReference` carries the name **as written** and a
 `target_kinds` hint — the node kinds the mention may denote — plus a
@@ -758,7 +791,7 @@ layer's.
 | `.actor` | `capability … on <Class>` → `class`; grant/delegation capability names → `capability`; grant actors, `extends`, delegation `from`/`to` → `actor`; `never_both` names → `capability`; delegation `purpose` → none yet (indexed, never bound) |
 | `.ddd` | operation/search `capability X` → `capability`; `invokes` / `inject decision` → `decision`, `decisionService`; `emits` → `event`; `inject <Repo>` / body receiver → `repository`; design and search class names → `class`; `=> Repo.op` → `repositoryOperation`, `serviceOperation`; machine `via` triggers and operation `transition` bindings → `transition`; machine state field → `feature`; machine state enum → `enum` |
 | `.evt` | subscription `consumer` → `deployComponent`; subscription `events` and channel `publishes` → `event`; event field types → `class`, `enum`, `datatype` |
-| `.deploy` | `design "<path>#<Module>"` → `module`, `designApplication` (the mention is the module suffix when written, else the path as written); `flow "<path>[#<Module>]"` → `flow`; component `requires` names → `capability`; `connects a -> b` → `deployComponent`; `deployment … for <App>` → `deployApplication`; `use <Profile>` → `deployProfile` |
+| `.deploy` | `design "<path>#<Module>"` → `module`, `designApplication` (the mention is the module suffix when written, else the path as written); `flow "<path>[#<Module>]"` → `flow`; component `requires` names → `platformCapability` (the vocabulary word's node; definitions land on the word's first mention); `connects a -> b` → `deployComponent`; `deployment … for <App>` → `deployApplication`; `use <Profile>` → `deployProfile` |
 | `.uc` | `subject`/actor `: <type>` → `class`; a bare (untyped) actor's name → `actor`; `realizes Service.operation` and a step's `: <operation>` → `serviceOperation`, `useCase`; step `requires [ … ]` → `capability`; a message's `of <type>` payload → `class`, `enum`, `datatype`, `event` (the surface types payloads with a bare reference — class-vs-event is a resolution fact) |
 | `.cmmn` | case-file item type → `class`, `enum`, `datatype`; `role … as <Actor>` → `actor`; `execute Service.operation` → `serviceOperation`; `invokes Model.Service` → `decisionService`, `decision`; `performer: <role>` → `caseRole`; a criterion's dotted `on <part>` → `planItem`, `caseFileItem` and a bare one → `event` (the compile's rule 9); a decision task's `inputs`/`outputs` → `caseFileItem`; a stage's `children` → `planItem` |
 | `.dmn` | input types → `class`, `enum`, `datatype`; BKM parameter/output types and decision output types (the `ReturnType` contexts) → `class`, `enum`, `datatype`; `logic invoke <model>` → `bkm`; `emits` → `event`; information/knowledge/authority requirement names (both ends) → `decision`, `bkm`, `knowledgeSource`; decision-service `inputs` → `inputData`, `outputs` → `decision`, `encapsulates` → `decision`, `bkm`; a view's `show` names → `decision`, `bkm`, `knowledgeSource`, `inputData`, `decisionService` |
@@ -870,7 +903,8 @@ and fails when a row and its test drift apart.
 | `.deploy` | `design "<path>#<Module>"` | `.ddd` module | `deploy_binding_definition_lands_on_the_ddd_module` |
 | `.deploy` | `connects a -> b` | component | `deploy_connection_definition_lands_on_the_component` |
 | `.deploy` | `flow "<path>"` | the `.ifml` flow node has no written declaration site (the `file`-node exclusion, above) — no location | `deploy_flow_binding_has_no_definition_site` |
-| `.deploy` | `requires` / `use <Profile>` / `for <App>` | target capability (the closed target vocabulary has no graph node — no location), profile, deployment application | `deploy_requires_has_no_definition_site`, `deploy_profile_use_definition_lands_on_the_profile`, `deploy_for_definition_lands_on_the_application` |
+| `.deploy` | `requires` | `platformCapability` — the closed vocabulary has no declaration site, so the location is the word's first written `requires` mention (the anchor) | `deploy_requires_definition_lands_on_the_first_mention` |
+| `.deploy` | `use <Profile>` / `for <App>` | profile, deployment application | `deploy_profile_use_definition_lands_on_the_profile`, `deploy_for_definition_lands_on_the_application` |
 | `.uc` | `realizes`, step `: <operation>` | `.ddd` service operation | `uc_realizes_definition_lands_on_the_ddd_operation` |
 | `.uc` | subject/participant types, policy participants | `.mox` class / `.actor` actor | `uc_subject_type_definition_lands_on_the_mox_class`, `uc_policy_actor_definition_lands_on_the_actor` |
 | `.uc` | step `requires`, event payloads | capability / event | `uc_step_requires_definition_lands_on_the_capability`, `uc_message_payload_definition_lands_on_the_evt_event` |
@@ -894,13 +928,20 @@ reference **in that document** that the graph binds to it; `.ifml`'s
 free-string names (modules, views) keep their cross-file rename, and `.mox`
 keeps its navigation-index rename (same file).
 
+A `platformCapability` is refused outright (issue rexlang#262): it is one
+word of the closed `.deploy` vocabulary, so a rename could only produce an
+unknown-capability compile error — `cannot rename platformCapability
+'longRunningProcess': it is part of the closed deploy capability
+vocabulary`.
+
 ### Hover and document symbols
 
 Hover is the graph node's facts: a capability's class and its grant holders,
 an actor's parents and grants, an event's payload fields and its
 publishers/subscribers/emitters, an action's bound operation, a service
 operation's carried capabilities/decisions/events, a deploy component's
-design/flow bindings. Document symbols are the file's spanned definitions
+design/flow bindings, and a platform capability's providing targets plus the
+components that require it. Document symbols are the file's spanned definitions
 (one symbol per declaration) for every artifact surface; `.mox` keeps its
 richer outline (enum literals included) and `.ifml` its outline with module
 `use` sites nested under their declarations.

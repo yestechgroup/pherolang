@@ -44,7 +44,12 @@ use crate::pipeline;
 /// The closed capability vocabulary a component's `requires` clause may
 /// name (extensible per target implementation, but validated so a typo is
 /// an error, not a silently-vacuous requirement).
-const CAPABILITIES: [&str; 8] = [
+///
+/// This table is also the graph's platform-capability node vocabulary
+/// (issue rexlang#262): the semantic graph emits one `platformCapability`
+/// node per used word — a name no model file declares — and the editor
+/// lands on the first written `requires` mention.
+pub const PLATFORM_CAPABILITIES: [&str; 8] = [
     "longRunningProcess",
     "persistentFilesystem",
     "sqlDatabase",
@@ -54,6 +59,26 @@ const CAPABILITIES: [&str; 8] = [
     "edgeExecution",
     "statefulProcess",
 ];
+
+/// Whether `name` is one of the closed [`PLATFORM_CAPABILITIES`] — the words
+/// a `.deploy` `requires` clause may name.
+pub fn is_platform_capability(name: &str) -> bool {
+    PLATFORM_CAPABILITIES.contains(&name)
+}
+
+/// The deploy targets that provide `capability`, in target order. Empty for
+/// a word outside the closed vocabulary.
+pub fn platform_capability_targets(capability: &str) -> Vec<DeployTarget> {
+    [
+        DeployTarget::Standalone,
+        DeployTarget::DockerCompose,
+        DeployTarget::Kubernetes,
+        DeployTarget::CloudflareWorkers,
+    ]
+    .into_iter()
+    .filter(|target| target_capabilities(*target).contains(&capability))
+    .collect()
+}
 
 /// The capabilities each target provides. These tables — not the DSL — are
 /// the authority: a target's capabilities are defined by its
@@ -347,13 +372,16 @@ fn stage_applications(
 
             // Rule 4 — capability names must be in the closed vocabulary.
             for capability in &component.requires {
-                if !CAPABILITIES.contains(&capability.text.as_str()) {
+                if !PLATFORM_CAPABILITIES.contains(&capability.text.as_str()) {
                     local.push(
                         Diagnostic::error(
                             format!("unknown capability '{}'", capability.text),
                             Some(capability.span),
                         )
-                        .with_help(format!("known capabilities: {}", CAPABILITIES.join(", "))),
+                        .with_help(format!(
+                            "known capabilities: {}",
+                            PLATFORM_CAPABILITIES.join(", ")
+                        )),
                     );
                 }
             }
@@ -801,7 +829,10 @@ fn stage_deployments(ast: &dsl::DeployFile, model: &mut DeployModel, local: &mut
             for capability in &component.requires {
                 // The closed vocabulary was already validated at the
                 // application, so this is only a lookup convenience.
-                if let Some(capability) = CAPABILITIES.iter().find(|known| *known == capability) {
+                if let Some(capability) = PLATFORM_CAPABILITIES
+                    .iter()
+                    .find(|known| *known == capability)
+                {
                     if !required.contains(capability) {
                         required.push(capability);
                     }

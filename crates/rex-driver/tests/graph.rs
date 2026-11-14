@@ -918,6 +918,21 @@ fn inline_ifml(display: &str, source: &str) -> rex_ir::ifml::IfmlModel {
     compilation.model
 }
 
+/// One deployment application with one component requiring `capability` —
+/// the smallest artifact that carries a `requires` clause.
+fn deploy_requires_model(
+    application: &str,
+    component: &str,
+    capability: &str,
+) -> rex_ir::deploy::DeployModel {
+    rex_ir::deploy::DeployModel::new().application(
+        rex_ir::deploy::DeployApplication::new(application).component(
+            rex_ir::deploy::DeployComponent::new(component, rex_ir::deploy::ComponentKind::Worker)
+                .requires(capability),
+        ),
+    )
+}
+
 #[test]
 fn ddd_invokes_resolve_to_decision_services() {
     let source = concat!(
@@ -1105,6 +1120,126 @@ fn deploy_component_binds_design_module_and_flow() {
         &deploy_component(DEPLOY, "SupportDesk.web"),
         kinds::BINDS_FLOW,
         &format!("{}:{IFML}#support", kinds::FLOW),
+    );
+}
+
+// --- The `.deploy` platform-capability target (rexlang#262) ----------------
+
+/// `requires` names the closed platform-capability vocabulary, so the edge
+/// targets a `platformCapability` node — never a same-named policy
+/// capability.
+#[test]
+fn deploy_requires_binds_to_a_platform_capability_node() {
+    const FIXTURE: &str = rex_testkit::fixtures::APP_DEPLOY;
+    let graph = rex_testkit::fixture_graph();
+    let component = deploy_component(FIXTURE, "GraphDesk.refund_approval_service");
+    let target = format!(
+        "{}:{FIXTURE}#longRunningProcess",
+        kinds::PLATFORM_CAPABILITY
+    );
+    let platform = node(graph, &target);
+    assert_eq!(platform.kind, kinds::PLATFORM_CAPABILITY);
+    assert_eq!(platform.name, "longRunningProcess");
+    assert_eq!(platform.file, FIXTURE);
+    assert_eq!(
+        platform.application,
+        node(graph, &component).application,
+        "the capability belongs to the requiring component's application"
+    );
+    assert_eq!(
+        attributes(edge(graph, &component, kinds::REQUIRES, &target), "via"),
+        "deploy"
+    );
+    assert_eq!(
+        graph
+            .edges
+            .iter()
+            .filter(|edge| edge.from == component && edge.kind == kinds::REQUIRES)
+            .count(),
+        1,
+        "one mention, one edge: the vocabulary has no policy join"
+    );
+}
+
+/// One node per application and vocabulary word, anchored at the
+/// application's first deploy file by display path, so every component in
+/// the application shares the target and no file invents a same-named twin.
+#[test]
+fn platform_capabilities_pool_per_application_at_the_first_deploy_file() {
+    let mut inputs = GraphInputs::default();
+    // A bridge file both deploy files import, so they cluster into one
+    // application (clustering reads the host's resolved import keys).
+    inputs.domains.push(GraphFile::new(
+        "bridge.mox",
+        "bridge.mox",
+        Vec::new(),
+        rex_ir::Model::default(),
+    ));
+    for (display, application) in [("deploy/b.deploy", "Right"), ("deploy/a.deploy", "Left")] {
+        inputs.deploys.push(GraphFile::new(
+            display,
+            display,
+            vec!["bridge.mox".to_string()],
+            deploy_requires_model(application, "worker", "sqlDatabase"),
+        ));
+    }
+    // An unconnected deploy file is its own application with its own node.
+    inputs.deploys.push(GraphFile::new(
+        "alone.deploy",
+        "alone.deploy",
+        Vec::new(),
+        deploy_requires_model("Alone", "worker", "sqlDatabase"),
+    ));
+    let graph = build(&inputs);
+
+    let anchor = format!("{}:deploy/a.deploy#sqlDatabase", kinds::PLATFORM_CAPABILITY);
+    node(&graph, &anchor);
+    for (display, application) in [("deploy/a.deploy", "Left"), ("deploy/b.deploy", "Right")] {
+        edge(
+            &graph,
+            &deploy_component(display, &format!("{application}.worker")),
+            kinds::REQUIRES,
+            &anchor,
+        );
+    }
+    assert!(
+        !graph
+            .nodes
+            .iter()
+            .any(|node| node.id
+                == format!("{}:deploy/b.deploy#sqlDatabase", kinds::PLATFORM_CAPABILITY)),
+        "the second deploy file shares the application's node"
+    );
+    node(
+        &graph,
+        &format!("{}:alone.deploy#sqlDatabase", kinds::PLATFORM_CAPABILITY),
+    );
+}
+
+/// The closed vocabulary is the node table's only source: a hand-built
+/// artifact naming a word outside it gets no node and no edge (the
+/// compiler already reported the unknown capability).
+#[test]
+fn platform_capability_nodes_never_invent_a_word_outside_the_vocabulary() {
+    let mut inputs = GraphInputs::default();
+    inputs.deploys.push(GraphFile::new(
+        "app.deploy",
+        "app.deploy",
+        Vec::new(),
+        deploy_requires_model("App", "worker", "noSuchCapability"),
+    ));
+    let graph = build(&inputs);
+    assert!(
+        !graph
+            .nodes
+            .iter()
+            .any(|node| node.kind == kinds::PLATFORM_CAPABILITY),
+        "no node outside the closed vocabulary"
+    );
+    assert_no_edge(
+        &graph,
+        &deploy_component("app.deploy", "App.worker"),
+        kinds::REQUIRES,
     );
 }
 
@@ -1541,7 +1676,7 @@ fn artifact_contains_no_absolute_paths() {
 /// `rex_ir::graph::kinds`.
 #[test]
 fn emitted_kinds_are_the_published_vocabulary() {
-    const NODE_KINDS: [&str; 41] = [
+    const NODE_KINDS: [&str; 42] = [
         kinds::FILE,
         kinds::CLASS,
         kinds::ENUM,
@@ -1583,6 +1718,7 @@ fn emitted_kinds_are_the_published_vocabulary() {
         kinds::DEPLOY_COMPONENT,
         kinds::DEPLOY_PROFILE,
         kinds::DEPLOYMENT,
+        kinds::PLATFORM_CAPABILITY,
     ];
     const EDGE_KINDS: [&str; 40] = [
         kinds::IMPORTS,
@@ -1638,6 +1774,14 @@ fn emitted_kinds_are_the_published_vocabulary() {
         "tests/conformance/ifml/app.ifml",
         flow_model("tests/conformance/ifml/app.ifml"),
     ));
+    // The closed `requires` vocabulary's node kind: no example declares a
+    // `requires`, so a synthetic deployment carries it here.
+    inputs.deploys.push(GraphFile::new(
+        "tests/inline-platform.deploy",
+        "tests/inline-platform.deploy",
+        Vec::new(),
+        deploy_requires_model("Platform", "worker", "longRunningProcess"),
+    ));
     let graph = build(&inputs);
     let mut seen_nodes: BTreeSet<&str> =
         graph.nodes.iter().map(|node| node.kind.as_str()).collect();
@@ -1690,6 +1834,7 @@ fn emitted_kinds_are_the_published_vocabulary() {
         kinds::DEPLOY_COMPONENT,
         kinds::DEPLOY_PROFILE,
         kinds::DEPLOYMENT,
+        kinds::PLATFORM_CAPABILITY,
     ] {
         assert!(seen_nodes.contains(kind), "no {kind} node emitted");
         seen_nodes.remove(kind);
@@ -1739,9 +1884,8 @@ fn emitted_kinds_are_the_published_vocabulary() {
     }
     // Kinds this fixture does not exercise yet (documented, not silent): a
     // datatype (`type … wraps`), a `.ddd` machine (the machine test covers
-    // them), refreshes, a `requires` on a deploy component, a bare `cedar`
-    // opaque grant, and a delegation (the `payrun.actor` fixture covers the
-    // last two).
+    // them), refreshes, a bare `cedar` opaque grant, and a delegation (the
+    // `payrun.actor` fixture covers the last two).
     for kind in seen_nodes {
         assert!(
             [kinds::DATATYPE, kinds::STATE_MACHINE, kinds::TRANSITION].contains(&kind),
