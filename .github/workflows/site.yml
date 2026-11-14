@@ -1,0 +1,567 @@
+# Site deployment — the path-filtered Cloudflare pipeline for the two site
+# apps (`site/phero-web` → pherolang.com, `site/phero-docs` →
+# docs.pherolang.com).
+#
+# (a) The trigger filter is exactly `site/**` plus this workflow file. No
+#     other path is ever added to it.
+# (b) A DSL-only PR (`crates/**`, `examples/**`, `docs/**`, `tests/**`,
+#     `Cargo.*`, `scripts/**`) must not fire this workflow: the site is a
+#     *consumer* of the model corpus, not a participant in it. A Rust or
+#     `.mox` change has no site output that the diff can affect, so firing
+#     here would spend minutes rebuilding two Astro apps and uploading
+#     nothing that changed — and it would make the site jobs a de-facto
+#     required check on every DSL PR.
+# (c) This workflow is deliberately NOT a required status check: a DSL-only
+#     PR never runs it, so a required check would sit "Expected — waiting
+#     for status" forever on exactly the PRs the repository runs most.
+#     Branch protection must not add it (the Rust gate is `CI`).
+# (d) The narrowing is safe because `freshness` and `drift` below regenerate
+#     the committed model data under `site/` from `examples/` with the
+#     *released* `pherolang` binary and diff it: staleness is caught when a
+#     site change lands, nightly on a schedule, and on demand — never
+#     silently absorbed because the DSL PR that caused it stayed out of this
+#     filter.
+#
+# Today the workflow lands green by construction: the apps are not
+# scaffolded (`site/` carries brand assets at most), no `pherolang` release
+# exists, and no Cloudflare project or secret is configured. `detect`
+# reports all three facts as outputs and every other job's `if:` skips on
+# them, so a PR that touches only this file exercises `detect` and nothing
+# else. See the placeholder notes on `freshness`/`drift` for what a later
+# web epic fills in.
+
+name: Site
+
+on:
+  pull_request:
+    paths: ['site/**', '.github/workflows/site.yml']
+  push:
+    branches: [main]
+    paths: ['site/**', '.github/workflows/site.yml']
+  schedule: [{ cron: '17 3 * * *' }]
+  workflow_dispatch:
+
+# One deployment pipeline per ref: a new push supersedes the review/preview
+# of the previous one instead of racing it (two `wrangler versions upload`
+# runs of the same branch would otherwise interleave their sticky comments).
+concurrency:
+  group: site-${{ github.ref }}
+  cancel-in-progress: true
+
+# Least privilege. `pull-requests: write` exists for exactly one thing: the
+# sticky preview comment. Cloudflare credentials are repository secrets read
+# only by `preview`/`deploy`, never by the fork-reachable `verify` job.
+# The single exception is the `drift` job below, which overrides this block
+# with `contents: write` because it must push the regenerated data.
+permissions:
+  contents: read
+  pull-requests: write
+
+env:
+  # The release asset shape `freshness` and `drift` download. The release
+  # pipeline (`.github/workflows/release.yml`) publishes
+  # `pherolang-<version>-<target>.tar.gz` — versioned, so the name cannot be
+  # a constant here. `detect` resolves the concrete asset name from the
+  # latest release against this pattern and passes it to the two data jobs;
+  # until a release exists they stay skipped rather than red.
+  PHEROLANG_ASSET_PATTERN: 'pherolang-*-x86_64-unknown-linux-gnu.tar.gz'
+
+jobs:
+  # Always runs (no `if:`), because it is the only job that can tell the
+  # rest of the graph whether there is anything to do. Cheap by design: one
+  # checkout, no toolchain, no network beyond the release metadata probe.
+  detect:
+    name: Detect site apps and the released binary
+    runs-on: ubuntu-latest
+    outputs:
+      apps: ${{ steps.probe.outputs.apps }}
+      binary: ${{ steps.probe.outputs.binary }}
+      asset: ${{ steps.probe.outputs.asset }}
+      cloudflareSecrets: ${{ steps.probe.outputs.cloudflareSecrets }}
+    steps:
+      - uses: actions/checkout@v4
+      # A job-level `if:` cannot read the `secrets` context, so "are the
+      # Cloudflare secrets configured" is decided here and consumed by
+      # `preview` as an output. On a fork PR every secret is empty, which is
+      # exactly the answer we want.
+      - name: Probe scaffold, release asset, and deployment secrets
+        id: probe
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          CLOUDFLARE_SECRETS: ${{ secrets.CLOUDFLARE_API_TOKEN != '' && secrets.CLOUDFLARE_ACCOUNT_ID != '' }}
+        run: |
+          set -euo pipefail
+
+          # The lockfile is the scaffold marker: the two apps are a pnpm
+          # workspace, so `site/pnpm-lock.yaml` exists iff the workspace
+          # exists. `site/package.json` alone is not enough (a lone manifest
+          # has nothing to install).
+          if [ -f site/pnpm-lock.yaml ]; then
+            echo "apps=true" >> "$GITHUB_OUTPUT"
+            echo "::notice::Site apps detected: site/pnpm-lock.yaml is present."
+          else
+            echo "apps=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::The site apps are not scaffolded yet — site/pnpm-lock.yaml is absent."
+            echo "verify, preview, deploy, and the model-data jobs have nothing to build or upload until the web epic's EP0 lands (issue #228)."
+          fi
+
+          # `binary` means "the asset freshness/drift would download exists
+          # on the latest release", not merely "a release exists" — so the
+          # data jobs never start and then die on a missing asset. The asset
+          # name is versioned (`pherolang-<version>-<target>.tar.gz`), so the
+          # concrete name is resolved here and handed to the data jobs as
+          # `asset`. `gh release view` with no tag resolves the latest
+          # release and exits non-zero when the repository has none, which
+          # is today.
+          asset="$(gh release view --repo "$GITHUB_REPOSITORY" --json assets \
+            --jq '.assets[].name' 2>/dev/null \
+            | grep -E "$PHEROLANG_ASSET_PATTERN" | LC_ALL=C sort | tail -n 1 || true)"
+          if [ -n "${asset:-}" ]; then
+            echo "binary=true" >> "$GITHUB_OUTPUT"
+            echo "asset=$asset" >> "$GITHUB_OUTPUT"
+            echo "::notice::Latest release provides $asset; model-data freshness can be verified."
+          else
+            echo "binary=false" >> "$GITHUB_OUTPUT"
+            echo "asset=" >> "$GITHUB_OUTPUT"
+            echo "::notice::No released pherolang binary yet — no release, or none matching $PHEROLANG_ASSET_PATTERN."
+            echo "Model-data freshness/drift stay skipped; this is expected until the release pipeline (pherolang#236) ships."
+          fi
+
+          if [ "${CLOUDFLARE_SECRETS:-}" = "true" ]; then
+            echo "cloudflareSecrets=true" >> "$GITHUB_OUTPUT"
+            echo "::notice::Cloudflare deployment secrets are configured."
+          else
+            echo "cloudflareSecrets=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::CLOUDFLARE_API_TOKEN/CLOUDFLARE_ACCOUNT_ID are not configured; Cloudflare uploads/deploys stay skipped."
+          fi
+
+  # The fork-safe job: no secrets, no network beyond the pnpm store, and it
+  # is the job a contributor's PR gets. A broken site build fails here.
+  verify:
+    name: Verify (build both apps)
+    runs-on: ubuntu-latest
+    needs: [detect]
+    # Nothing to build until the apps exist; a red job for a missing
+    # directory would block PRs that only touch this workflow.
+    if: needs.detect.outputs.apps == 'true'
+    steps:
+      - uses: actions/checkout@v4
+      # pnpm before setup-node: `cache: pnpm` calls `pnpm store path`, so the
+      # binary must already be on PATH when setup-node runs.
+      - uses: pnpm/action-setup@v4
+        with:
+          package_json_file: site/package.json
+          run_install: false
+      # Two individually gated setup steps instead of a floating
+      # `node-version: node`: the pin is deterministic either way (the
+      # node version the repo declares, else a fixed 22).
+      - name: Set up Node from site/.nvmrc
+        if: hashFiles('site/.nvmrc') != ''
+        uses: actions/setup-node@v4
+        with:
+          node-version-file: site/.nvmrc
+          cache: pnpm
+          cache-dependency-path: site/pnpm-lock.yaml
+      - name: Set up Node 22 (fallback while site/.nvmrc is absent)
+        if: hashFiles('site/.nvmrc') == ''
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: pnpm
+          cache-dependency-path: site/pnpm-lock.yaml
+      - name: Install site dependencies
+        run: pnpm install --frozen-lockfile
+        working-directory: site
+      - name: Build site/phero-web
+        run: pnpm -C site/phero-web build
+      - name: Build site/phero-docs
+        run: pnpm -C site/phero-docs build
+      # `astro check` is opt-in per app: it needs an explicit `check` script
+      # (plus @astrojs/check and typescript) in that app's package.json, and
+      # an app that has not opted in must not fail the job.
+      - name: Astro check where the app defines it
+        run: |
+          set -euo pipefail
+          for app in phero-web phero-docs; do
+            if node -e 'const p = require("./site/" + process.argv[1] + "/package.json"); process.exit(p.scripts && p.scripts.check ? 0 : 1)' "$app"; then
+              echo "astro check — site/$app"
+              pnpm -C "site/$app" run check
+            else
+              echo "::notice::site/$app declares no 'check' script; skipping astro check."
+            fi
+          done
+
+  # The narrowing's honesty gate (header rule d). It never fires on a DSL PR
+  # — the path filter keeps it out — so it re-checks on every site change
+  # instead: whatever the released binary generates from `examples/` must be
+  # byte-identical to what is committed under `site/`.
+  freshness:
+    name: Freshness (regenerate model data, diff)
+    runs-on: ubuntu-latest
+    needs: [detect]
+    # Both halves are required: no apps means there is no committed data to
+    # refresh, and no released binary means the only way to regenerate would
+    # be a workspace build — which would make the site track unreleased DSL
+    # and defeat the point of the check.
+    if: needs.detect.outputs.apps == 'true' && needs.detect.outputs.binary == 'true'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          package_json_file: site/package.json
+          run_install: false
+      - name: Set up Node from site/.nvmrc
+        if: hashFiles('site/.nvmrc') != ''
+        uses: actions/setup-node@v4
+        with:
+          node-version-file: site/.nvmrc
+          cache: pnpm
+          cache-dependency-path: site/pnpm-lock.yaml
+      - name: Set up Node 22 (fallback while site/.nvmrc is absent)
+        if: hashFiles('site/.nvmrc') == ''
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: pnpm
+          cache-dependency-path: site/pnpm-lock.yaml
+      - name: Install site dependencies
+        run: pnpm install --frozen-lockfile
+        working-directory: site
+      # Released binary, never `cargo build`: the committed data must be what
+      # a user of the published `pherolang` would generate, so a DSL change
+      # reaches `site/` only when it ships. `detect` already proved the asset
+      # is attached to the latest release.
+      - name: Install the released pherolang binary
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/pherolang/bin"
+          PHEROLANG_ASSET="${{ needs.detect.outputs.asset }}"
+          gh release download --repo "$GITHUB_REPOSITORY" \
+            --pattern "$PHEROLANG_ASSET" --dir "$RUNNER_TEMP/pherolang"
+          tar -xzf "$RUNNER_TEMP/pherolang/$PHEROLANG_ASSET" -C "$RUNNER_TEMP/pherolang/bin"
+          # The archive may carry the binary at its root or under a
+          # target-named directory; find it either way.
+          binary="$(find "$RUNNER_TEMP/pherolang/bin" -type f -name pherolang -print -quit)"
+          if [ -z "$binary" ]; then
+            echo "::error::$PHEROLANG_ASSET does not contain a 'pherolang' binary."
+            exit 1
+          fi
+          chmod 0755 "$binary"
+          "$binary" --version
+          echo "$(dirname "$binary")" >> "$GITHUB_PATH"
+      # PLACEHOLDER: web epic #228 EP2 wires the real `sync-model` script
+      # here. The command is `pnpm -C site run sync-model`; the contract that
+      # script must keep is what makes the diff below meaningful:
+      #   * it runs the `pherolang` on PATH (the released binary above) and
+      #     never a workspace build;
+      #   * it rewrites the committed model data under `site/` from the
+      #     sources under `examples/`;
+      #   * it is deterministic — byte-identical output for identical input —
+      #     so a diff means "stale", not "noisy".
+      # Until the script exists this step warns instead of failing: the apps
+      # can land (EP0) before the data pipeline does (EP2), and a red site
+      # workflow on that intermediate PR would be a sequencing bug, not a
+      # finding. The `git diff` step below then trivially passes, so treat
+      # the warning as "freshness is NOT verified in this run".
+      - name: Regenerate the committed model data
+        run: |
+          set -euo pipefail
+          if node -e 'const p = require("./site/package.json"); process.exit(p.scripts && p.scripts["sync-model"] ? 0 : 1)'; then
+            pnpm -C site run sync-model
+          else
+            echo "::warning::site/package.json has no 'sync-model' script yet (web epic #228 EP2): model-data freshness is not being verified by this run."
+          fi
+      # The whole point of the job. A non-empty diff means the committed data
+      # under `site/` no longer matches what the released binary generates
+      # from `examples/` — the site is lying about the language.
+      - name: Fail when regeneration leaves a diff
+        run: |
+          set -euo pipefail
+          if ! git diff --exit-code; then
+            echo "::error::The committed model data under site/ is stale against examples/."
+            echo "Regenerate it with the released pherolang binary and commit the result; the nightly drift job opens that PR for you."
+            exit 1
+          fi
+
+  # Same-repo PR previews. Fork PRs are excluded three times over: no
+  # secrets reach them (so `cloudflareSecrets` is false here), GitHub does
+  # not expose repository secrets to them, and uploading an untrusted branch
+  # to our Cloudflare account is not something we do.
+  preview:
+    name: Preview (Cloudflare versions upload)
+    runs-on: ubuntu-latest
+    needs: [detect, verify]
+    # Same-repo PR (not a fork) AND the apps exist AND the Cloudflare
+    # credentials are configured. The `verify` dependency is ordering, not
+    # condition: uploads only happen for a branch whose build is green.
+    if: >-
+      github.event_name == 'pull_request' &&
+      github.event.pull_request.head.repo.full_name == github.repository &&
+      needs.detect.outputs.apps == 'true' &&
+      needs.detect.outputs.cloudflareSecrets == 'true'
+    # The only jobs that read the Cloudflare credentials are this one and
+    # `deploy`; `verify`, `freshness`, and `drift` never see them.
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          package_json_file: site/package.json
+          run_install: false
+      - name: Set up Node from site/.nvmrc
+        if: hashFiles('site/.nvmrc') != ''
+        uses: actions/setup-node@v4
+        with:
+          node-version-file: site/.nvmrc
+          cache: pnpm
+          cache-dependency-path: site/pnpm-lock.yaml
+      - name: Set up Node 22 (fallback while site/.nvmrc is absent)
+        if: hashFiles('site/.nvmrc') == ''
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: pnpm
+          cache-dependency-path: site/pnpm-lock.yaml
+      - name: Install site dependencies
+        run: pnpm install --frozen-lockfile
+        working-directory: site
+      - name: Build site/phero-web
+        run: pnpm -C site/phero-web build
+      - name: Build site/phero-docs
+        run: pnpm -C site/phero-docs build
+      # `versions upload` publishes an immutable preview version without
+      # moving the project's production deployment — exactly what a PR wants.
+      - name: Upload a phero-web preview version
+        id: upload-web
+        working-directory: site/phero-web
+        run: |
+          set -euo pipefail
+          pnpm exec wrangler versions upload 2>&1 | tee "$RUNNER_TEMP/phero-web-upload.log"
+          # wrangler prints the version's preview URL as the last
+          # `*.workers.dev` URL of the upload; taking the last one tolerates
+          # the account/API lines above it.
+          url="$(grep -oE 'https://[^[:space:]]+\.workers\.dev[^[:space:]]*' "$RUNNER_TEMP/phero-web-upload.log" | tail -n 1 || true)"
+          if [ -z "$url" ]; then
+            echo "::error::wrangler printed no preview URL for phero-web; see the upload log above."
+            exit 1
+          fi
+          echo "url=$url" >> "$GITHUB_OUTPUT"
+      - name: Upload a phero-docs preview version
+        id: upload-docs
+        working-directory: site/phero-docs
+        run: |
+          set -euo pipefail
+          pnpm exec wrangler versions upload 2>&1 | tee "$RUNNER_TEMP/phero-docs-upload.log"
+          url="$(grep -oE 'https://[^[:space:]]+\.workers\.dev[^[:space:]]*' "$RUNNER_TEMP/phero-docs-upload.log" | tail -n 1 || true)"
+          if [ -z "$url" ]; then
+            echo "::error::wrangler printed no preview URL for phero-docs; see the upload log above."
+            exit 1
+          fi
+          echo "url=$url" >> "$GITHUB_OUTPUT"
+      # Sticky by `header`: each push updates this one comment instead of
+      # stacking a new one per commit on the PR.
+      - name: Upsert the sticky preview comment
+        uses: marocchino/sticky-pull-request-comment@v2
+        with:
+          header: site-preview
+          message: |
+            ### Cloudflare preview
+
+            | App | Preview URL |
+            |---|---|
+            | `phero-web` | ${{ steps.upload-web.outputs.url }} |
+            | `phero-docs` | ${{ steps.upload-docs.outputs.url }} |
+
+            These are version previews of the two Worker projects — the same
+            artifact `main` deploys, served from the version URL rather than
+            the production route. This comment is updated in place on every
+            push.
+
+  # Production. Only a push to main, and only when `freshness` actually
+  # succeeded — deploying data the freshness check could not confirm is the
+  # one thing the path-filtered design must not allow.
+  deploy:
+    name: Deploy to production
+    runs-on: ubuntu-latest
+    needs: [detect, freshness]
+    # Push to main AND the apps exist AND freshness passed. A skipped
+    # freshness (no released binary) is `skipped`, not `success`, so the
+    # site never deploys unverified model data.
+    if: >-
+      github.event_name == 'push' &&
+      github.ref == 'refs/heads/main' &&
+      needs.detect.outputs.apps == 'true' &&
+      needs.freshness.result == 'success'
+    environment:
+      name: production
+      url: https://pherolang.com
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          package_json_file: site/package.json
+          run_install: false
+      - name: Set up Node from site/.nvmrc
+        if: hashFiles('site/.nvmrc') != ''
+        uses: actions/setup-node@v4
+        with:
+          node-version-file: site/.nvmrc
+          cache: pnpm
+          cache-dependency-path: site/pnpm-lock.yaml
+      - name: Set up Node 22 (fallback while site/.nvmrc is absent)
+        if: hashFiles('site/.nvmrc') == ''
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: pnpm
+          cache-dependency-path: site/pnpm-lock.yaml
+      - name: Install site dependencies
+        run: pnpm install --frozen-lockfile
+        working-directory: site
+      - name: Build site/phero-web
+        run: pnpm -C site/phero-web build
+      - name: Build site/phero-docs
+        run: pnpm -C site/phero-docs build
+      - name: Deploy site/phero-web
+        working-directory: site/phero-web
+        run: pnpm exec wrangler deploy
+      - name: Deploy site/phero-docs
+        working-directory: site/phero-docs
+        run: pnpm exec wrangler deploy
+      - name: Record what was deployed
+        run: |
+          {
+            echo "## Site deploy"
+            echo
+            echo "- \`phero-web\` → https://pherolang.com"
+            echo "- \`phero-docs\` → https://docs.pherolang.com"
+            echo
+            echo "Commit: \`${{ github.sha }}\`"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+  # The safety net for the path filter: a DSL-only PR never fires this
+  # workflow, so staleness introduced by one is caught here — nightly, or on
+  # demand — and handed back as a reviewable PR rather than deployed.
+  drift:
+    name: Drift PR for stale model data
+    runs-on: ubuntu-latest
+    needs: [detect]
+    # Nightly schedule or manual dispatch, AND the apps exist, AND a released
+    # binary is available. Never on a push/PR: a drift PR is opened on a
+    # timer, not as a side effect of someone's site edit.
+    if: >-
+      (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch') &&
+      needs.detect.outputs.apps == 'true' &&
+      needs.detect.outputs.binary == 'true'
+    # The one job that must push, so the one job that overrides the
+    # workflow-level `contents: read`: create-pull-request commits the
+    # regenerated data to its fixed branch. `pull-requests: write` is
+    # restated because a job-level block replaces the workflow-level one.
+    permissions:
+      contents: write
+      pull-requests: write
+    steps:
+      # Scheduled runs resolve the default branch anyway; pinning it makes
+      # the diff base explicit and keeps `create-pull-request` on `main`.
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+      - uses: pnpm/action-setup@v4
+        with:
+          package_json_file: site/package.json
+          run_install: false
+      - name: Set up Node from site/.nvmrc
+        if: hashFiles('site/.nvmrc') != ''
+        uses: actions/setup-node@v4
+        with:
+          node-version-file: site/.nvmrc
+          cache: pnpm
+          cache-dependency-path: site/pnpm-lock.yaml
+      - name: Set up Node 22 (fallback while site/.nvmrc is absent)
+        if: hashFiles('site/.nvmrc') == ''
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: pnpm
+          cache-dependency-path: site/pnpm-lock.yaml
+      - name: Install site dependencies
+        run: pnpm install --frozen-lockfile
+        working-directory: site
+      - name: Install the released pherolang binary
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/pherolang/bin"
+          PHEROLANG_ASSET="${{ needs.detect.outputs.asset }}"
+          gh release download --repo "$GITHUB_REPOSITORY" \
+            --pattern "$PHEROLANG_ASSET" --dir "$RUNNER_TEMP/pherolang"
+          tar -xzf "$RUNNER_TEMP/pherolang/$PHEROLANG_ASSET" -C "$RUNNER_TEMP/pherolang/bin"
+          # The archive may carry the binary at its root or under a
+          # target-named directory; find it either way.
+          binary="$(find "$RUNNER_TEMP/pherolang/bin" -type f -name pherolang -print -quit)"
+          if [ -z "$binary" ]; then
+            echo "::error::$PHEROLANG_ASSET does not contain a 'pherolang' binary."
+            exit 1
+          fi
+          chmod 0755 "$binary"
+          "$binary" --version
+          echo "$(dirname "$binary")" >> "$GITHUB_PATH"
+      # PLACEHOLDER: the same EP2 `sync-model` contract as `freshness`. When
+      # the script is absent this warns and changes nothing, so the run is a
+      # no-op instead of a red scheduled job.
+      - name: Regenerate the committed model data
+        run: |
+          set -euo pipefail
+          if node -e 'const p = require("./site/package.json"); process.exit(p.scripts && p.scripts["sync-model"] ? 0 : 1)'; then
+            pnpm -C site run sync-model
+          else
+            echo "::warning::site/package.json has no 'sync-model' script yet (web epic #228 EP2): the drift job has nothing to regenerate."
+          fi
+      - name: Capture the drift diff
+        id: diff
+        run: |
+          set -euo pipefail
+          if git diff --quiet; then
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::Model data under site/ matches examples/; no drift PR needed."
+          else
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+            {
+              echo 'The committed model data under `site/` no longer matches what the'
+              echo 'released `pherolang` binary generates from the sources under'
+              echo '`examples/`.'
+              echo
+              echo 'Regenerated by the scheduled `Site` workflow; review and merge to'
+              echo 'bring the site back in sync with the language.'
+              echo
+              echo '```diff'
+              git diff --stat
+              git diff | head -n 300
+              echo '```'
+            } > "$RUNNER_TEMP/drift-body.md"
+            echo "::notice::Model data drift found; opening or updating the drift PR."
+          fi
+      # Fixed branch name, so a second run updates the same PR (and its
+      # branch) instead of opening a duplicate. `body-path` carries the diff.
+      # Note: a PR opened with `GITHUB_TOKEN` does not trigger other
+      # workflows; that is fine here — the run that opened it already
+      # regenerated and verified the data.
+      - name: Open or update the drift PR
+        if: steps.diff.outputs.changed == 'true'
+        uses: peter-evans/create-pull-request@v6
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          branch: site/model-data-drift
+          base: main
+          add-paths: site/
+          title: 'chore(site): refresh model data from examples/'
+          commit-message: 'chore(site): regenerate model data from examples/'
+          body-path: ${{ runner.temp }}/drift-body.md
