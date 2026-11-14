@@ -1,7 +1,9 @@
-//! The structural-key scan: the sorted camelCase vocabulary and the
-//! snake_case shadow detector.
+//! The structural-key scan: the snake_case shadow detector, run against the
+//! camelCase vocabulary shared from [`rex_backend_common::STRUCTURAL_KEYS`]
+//! (the corpus has exactly one home — the sortedness invariant travels with
+//! it).
 
-use rex_backend_common::camel_case;
+use rex_backend_common::{camel_case, STRUCTURAL_KEYS};
 use serde_json::Value;
 
 /// `packages`/`blocks` sanity: an array of objects each carrying a string
@@ -24,162 +26,6 @@ pub(super) fn check_named_array(value: &Value, key: &str, errors: &mut Vec<Strin
         }
     }
 }
-
-/// Every structural (non model-defined) key of the IR, actor, DDD design,
-/// event, deployment, and use-case wire formats, from the `rex-ir` serde
-/// shapes — the camelCase spellings a snake_case key is compared against.
-/// Sorted for binary search.
-const STRUCTURAL_KEYS: &[&str] = &[
-    "actors",
-    "anchor",
-    "annotations",
-    "applicabilityRules",
-    "application",
-    "attributes",
-    "authorizedRoles",
-    "autoComplete",
-    "base",
-    "blocks",
-    "bodies",
-    "builtin",
-    "cache",
-    "capabilities",
-    "capability",
-    "caseFile",
-    "cases",
-    "cedar",
-    "channels",
-    "children",
-    "class",
-    "classes",
-    "componentType",
-    "composition",
-    "constraints",
-    "consumer",
-    "context",
-    "convert",
-    "create",
-    "datatypes",
-    "default",
-    "definitionRef",
-    "delegations",
-    "dependencies",
-    "description",
-    "designs",
-    "detailFields",
-    "details",
-    "edges",
-    "effect",
-    "end",
-    "entries",
-    "enums",
-    "eventType",
-    "events",
-    "extends",
-    "facets",
-    "features",
-    "files",
-    "finite",
-    "first",
-    "flags",
-    "format",
-    "formatVersion",
-    "from",
-    "functions",
-    "grants",
-    "hierarchyField",
-    "id",
-    "ifPart",
-    "inputParams",
-    "interfaces",
-    "isDefault",
-    "isDerived",
-    "isId",
-    "isLandmark",
-    "isModal",
-    "isReadOnly",
-    "isXor",
-    "key",
-    "kind",
-    "label",
-    "labelField",
-    "labelFields",
-    "literals",
-    "lower",
-    "manualActivation",
-    "manualActivationRule",
-    "maxDepth",
-    "maxLength",
-    "maximum",
-    "message",
-    "messages",
-    "minLength",
-    "minimum",
-    "moduleUses",
-    "modules",
-    "multiplicity",
-    "name",
-    "neverBoth",
-    "nodes",
-    "nonPersistent",
-    "objects",
-    "obligations",
-    "occurrences",
-    "onParts",
-    "operation",
-    "operations",
-    "opposite",
-    "optimisticLocking",
-    "outputParams",
-    "packages",
-    "params",
-    "participant",
-    "pattern",
-    "payload",
-    "planItems",
-    "planningMode",
-    "planningTables",
-    "platform",
-    "processRef",
-    "publishes",
-    "purposes",
-    "realizes",
-    "repetitionRule",
-    "repository",
-    "requiredRole",
-    "requiredRule",
-    "requires",
-    "returnMultiplicity",
-    "returnType",
-    "rexVersion",
-    "schemaName",
-    "sentryRef",
-    "services",
-    "sessionKind",
-    "source",
-    "steps",
-    "stereotype",
-    "subcommands",
-    "subject",
-    "subscriptions",
-    "successions",
-    "target",
-    "targetBindings",
-    "taskType",
-    "then",
-    "to",
-    "type",
-    "typeName",
-    "unique",
-    "upper",
-    "useCases",
-    "value",
-    "valueFields",
-    "version",
-    "via",
-    "vocabularies",
-    "when",
-];
 
 /// Reports every key whose spelling is snake_case but whose camelCase form
 /// is a known structural key — the readers ignore unknown fields (forward
@@ -215,21 +61,41 @@ pub(super) fn scan_snake_case_keys(value: &Value, errors: &mut Vec<String>) {
 
 #[cfg(test)]
 mod tests {
-    use super::STRUCTURAL_KEYS;
+    use super::*;
 
-    /// [`scan_snake_case_keys`] binary-searches this list, so an
-    /// out-of-order insertion silently disables the detector on one side of
-    /// the break. Pin the order (and uniqueness) — adding a structural key
-    /// means inserting it in place, never appending it.
+    /// The consumer-side half of the shared-corpus contract: the detector
+    /// actually fires on a snake_case spelling of a corpus key (here a real
+    /// IR field), naming both the violation and its camelCase spelling. The
+    /// corpus's sortedness invariant is pinned once, in
+    /// `rex_backend_common`; this test is what a drift there would break.
     #[test]
-    fn structural_keys_are_sorted_and_unique() {
-        for pair in STRUCTURAL_KEYS.windows(2) {
-            assert!(
-                pair[0] < pair[1],
-                "STRUCTURAL_KEYS must be sorted and unique: {:?} before {:?}",
-                pair[0],
-                pair[1]
-            );
-        }
+    fn detector_fires_on_snake_case_structural_key() {
+        let value = serde_json::json!({
+            "classes": [{ "name": "Writer", "is_read_only": false }],
+        });
+        let mut errors = Vec::new();
+        scan_snake_case_keys(&value, &mut errors);
+        assert_eq!(errors.len(), 1, "errors: {errors:?}");
+        assert!(
+            errors[0].contains("is_read_only") && errors[0].contains("isReadOnly"),
+            "the violation and its camelCase spelling must both be named: {errors:?}"
+        );
+    }
+
+    /// A corpus that is not sorted defeats the detector's binary search —
+    /// recorded here so nobody mistakes a stale corpus for "no violations".
+    /// The production corpus is not made mutable for this: the check runs
+    /// over a local unsorted copy and the real list's order is pinned once,
+    /// in `rex_backend_common`.
+    #[test]
+    fn unsorted_corpus_defeats_the_binary_search() {
+        // The corpus is sorted, so "attributes" belongs between
+        // "annotations" and "when"; appending it is the drift the invariant
+        // forbids, and the binary search then never looks at it.
+        let appended_at_the_end = ["annotations", "when", "attributes"];
+        assert!(
+            appended_at_the_end.binary_search(&"attributes").is_err(),
+            "an unsorted corpus must miss a key the detector should flag"
+        );
     }
 }
