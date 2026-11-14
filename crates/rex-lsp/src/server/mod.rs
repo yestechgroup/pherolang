@@ -3,6 +3,7 @@
 
 use std::collections::HashMap;
 use std::path::PathBuf;
+use std::sync::atomic::AtomicUsize;
 use std::sync::{Arc, Mutex};
 
 use rex_driver::navigation::Lookup;
@@ -85,16 +86,36 @@ pub struct RexBackend {
     documents: Mutex<HashMap<Uri, Document>>,
     db: Mutex<Database>,
     graph_cache: Mutex<Option<GraphCache>>,
+    /// The per-file compile memo behind the graph snapshot (rexlang#254):
+    /// a rebuild recompiles only the candidates whose content key moved.
+    graph_memo: Mutex<graph::GraphMemo>,
+    /// How many snapshot candidates have actually been compiled (memo
+    /// misses only). Tests observe it to prove incremental invalidation;
+    /// it is otherwise inert.
+    compile_count: Arc<AtomicUsize>,
 }
 
 impl RexBackend {
     /// Creates a backend that talks to `client`.
     pub fn new(client: Client) -> Self {
+        Self::with_compile_count(client, Arc::new(AtomicUsize::new(0)))
+    }
+
+    /// Creates a backend with an externally observable compile counter
+    /// (the incremental-snapshot tests, rexlang#254).
+    #[cfg(test)]
+    fn new_counted(client: Client, compile_count: Arc<AtomicUsize>) -> Self {
+        Self::with_compile_count(client, compile_count)
+    }
+
+    fn with_compile_count(client: Client, compile_count: Arc<AtomicUsize>) -> Self {
         RexBackend {
             client,
             documents: Mutex::new(HashMap::new()),
             db: Mutex::new(Database::new()),
             graph_cache: Mutex::new(None),
+            graph_memo: Mutex::new(graph::GraphMemo::default()),
+            compile_count,
         }
     }
 

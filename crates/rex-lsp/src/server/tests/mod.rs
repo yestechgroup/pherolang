@@ -12,6 +12,7 @@ mod completion;
 mod definition;
 mod dmn;
 mod graph;
+mod graph_cache;
 mod harness;
 mod hover;
 mod ifml;
