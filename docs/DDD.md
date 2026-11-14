@@ -691,6 +691,39 @@ diagnostics are the errors; `rexlang check <dir>` prints the lint only
 for files phase 1 checked clean. Checking a design or policy alone stays
 per-surface and silent.
 
+### Capability nouns on aggregate members (rexlang#144)
+
+A capability is granted on a class (`capability X on <Class>`), and the
+class's place in the aggregate machinery decides whether that noun is a
+sound grant. With designs provided, `NounClassification`
+(`crates/rex-driver/src/ddd/graph.rs`) — a pure table over the union model
+and the designs, exactly rule 6's predicate — classifies every resolved
+design class:
+
+| verdict | class | a grant on it |
+|---|---|---|
+| `Value` | a value design — no aggregate to escape | clean |
+| `Root` | an entity with a repository that no stereotyped entity contains | clean |
+| `NonRoot` | an entity with a repository that another stereotyped entity's class contains (transitively) | **warning** |
+| none | no design, a dto, or a repository-less entity | silent |
+
+The warning is `capability '<X>' is granted on '<Class>', a non-root
+aggregate member` (plus `of '<Root>'` and a "grant the capability on the
+aggregate root instead" help when the containment chain tops out at exactly
+one class), spanned on the class reference. Granting on a non-root member
+hangs generation bindings (codegraph#596), so the warning points at the
+root; an ambiguous chain names no root. `compile_actor_file` builds the
+table only when designs are provided **and** every imported domain lowered
+(`union_model`, the rule-6 discipline: a domain that failed to lower may
+hide containment, and a wrong verdict is worse than none — its diagnostics
+already block the artifact); an empty design slice, and the `None` table it
+passes through `lower_actors`, is the exact plain `compile_actors_str`
+behavior, byte for byte. The `.ddd` inline
+`actors` block path always passes no table: actor lowering and the design
+registries never co-occur there (domains lower through the shared
+per-file union pipeline before designs exist, and
+`compile_ddd_str_with_actors` receives pre-lowered `ActorModel`s).
+
 ## Events and the event-contract dimension
 
 A service operation's `emits` clause names the events the operation
