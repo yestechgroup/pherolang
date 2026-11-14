@@ -419,7 +419,7 @@ fn resolve_imports(
 /// files in compilation order) and resolves/validates every use site in the
 /// main file against it. Resolution results are written back into
 /// `index.module_uses`.
-fn resolve_module_uses(index: &mut IfmlIndex, diags: &mut Vec<IfmlDiagnostic>) {
+pub(crate) fn resolve_module_uses(index: &mut IfmlIndex, diags: &mut Vec<IfmlDiagnostic>) {
     let main_path = index.files[0].path.clone();
 
     // name -> (file, decl index within that file)

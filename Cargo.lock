@@ -2866,6 +2866,8 @@ dependencies = [
 name = "rex-ifml"
 version = "0.2.0"
 dependencies = [
+ "chumsky 0.10.1",
+ "logos 0.15.1",
  "pest",
  "pest_derive",
  "proptest",
@@ -2873,6 +2875,7 @@ dependencies = [
  "rex-driver",
  "rex-expr",
  "rex-ir",
+ "rex-parser",
  "rex-syntax",
  "serde_json",
  "thiserror",

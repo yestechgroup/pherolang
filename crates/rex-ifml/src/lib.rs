@@ -65,12 +65,16 @@
 //! `codegraph-ifml-dsl` crate did, so consumers of the moved crate need only
 //! swap the dependency.
 
+mod ast;
 mod check;
 mod expand;
 mod fmt;
 mod index;
+mod lexer;
+mod lower;
 mod manifest;
 mod parser;
+mod parser_v2;
 mod resolve;
 
 pub use check::{check_ifml, check_ifml_with_actors, check_ifml_with_decisions};
@@ -82,6 +86,31 @@ pub use index::{
 };
 pub use manifest::manifest_ifml;
 pub use parser::*;
+
+// The chumsky front half's temporary entry: public (and doc-hidden) only so
+// the migration's differential/golden-v2 tests can exercise it before the
+// phase-3 cutover. It is removed when `parse_ifml*` flip to this path.
+#[doc(hidden)]
+pub fn parse_ifml_v2(text: &str) -> Result<(IfmlModel, IfmlIndex), IfmlParseError> {
+    parser_v2::parse_model_with_path("", text)
+}
+
+// Path-aware variant for the golden and differential harnesses.
+#[doc(hidden)]
+pub fn parse_ifml_v2_with_path(
+    path: &str,
+    text: &str,
+) -> Result<(IfmlModel, IfmlIndex), IfmlParseError> {
+    parser_v2::parse_model_with_path(path, text)
+}
+
+// Resolve a v2 index's local module uses (the manifest golden harness needs
+// the same resolved references the Pest compile path produces). Removed with
+// the other v2 plumbing at the cutover.
+#[doc(hidden)]
+pub fn resolve_ifml_v2_module_uses(index: &mut IfmlIndex) {
+    resolve::resolve_module_uses(index, &mut Vec::new());
+}
 pub use resolve::{
     compile_ifml_lenient, compile_ifml_str, walk_ifml_imports, IfmlCompilation, IfmlDiagnostic,
     IfmlImportWalk, IfmlImports, E_AMBIGUOUS_MODULE, E_CIRCULAR, E_DUPLICATE_MODULE,
