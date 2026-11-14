@@ -2,6 +2,7 @@
 resolver = "2"
 members = [
     "crates/rex-syntax",
+    "crates/rex-parser",
     "crates/rex-ir",
     "crates/rex-expr",
     "crates/rex-ifml",
@@ -40,6 +41,7 @@ all = "warn"
 
 [workspace.dependencies]
 rex-syntax = { path = "crates/rex-syntax" }
+rex-parser = { path = "crates/rex-parser" }
 rex-ir = { path = "crates/rex-ir" }
 rex-expr = { path = "crates/rex-expr" }
 rex-ifml = { path = "crates/rex-ifml" }

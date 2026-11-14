@@ -2854,6 +2854,7 @@ dependencies = [
  "rex-dates",
  "rex-diagnostics",
  "rex-ir",
+ "rex-parser",
  "rex-runtime",
  "rex-strings",
  "serde",
@@ -2906,6 +2907,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "rex-parser"
+version = "0.2.0"
+dependencies = [
+ "chumsky 0.10.1",
+ "thiserror",
+]
+
+[[package]]
 name = "rex-runtime"
 version = "0.2.0"
 dependencies = [
@@ -2926,6 +2935,7 @@ version = "0.2.0"
 dependencies = [
  "chumsky 0.10.1",
  "logos 0.15.1",
+ "rex-parser",
  "rex-strings",
  "thiserror",
 ]
