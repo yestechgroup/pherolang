@@ -354,6 +354,11 @@ pub mod kinds {
     pub const DEPLOY_PROFILE: &str = "deployProfile";
     /// Node: a `.deploy` deployment.
     pub const DEPLOYMENT: &str = "deployment";
+    /// Node: one word of the `.deploy` closed platform-capability vocabulary
+    /// (`longRunningProcess`, `sqlDatabase`, …) that a component's
+    /// `requires` clause names. The vocabulary lives in the driver's deploy
+    /// tables, so the node has **no declaration site** in any model file.
+    pub const PLATFORM_CAPABILITY: &str = "platformCapability";
 
     /// Edge: importer file → imported file.
     pub const IMPORTS: &str = "imports";

@@ -1411,7 +1411,7 @@ async fn deploy_flow_binding_has_no_definition_site() {
 }
 
 #[tokio::test]
-async fn deploy_requires_has_no_definition_site() {
+async fn deploy_requires_definition_lands_on_the_first_mention() {
     let fixture = Fixture::new("deploy-requires");
     let (mut service, mut socket) = initialized_service().await;
     open_file(&mut service, &mut socket, &fixture, "app.deploy").await;
@@ -1422,13 +1422,80 @@ async fn deploy_requires_has_no_definition_site() {
         &fixture.uri("app.deploy"),
         position(&deploy, "requires longRunningProcess", 0, 9),
     )
-    .await;
-    // GAP (rexlang#256, reported separately): `requires` names the closed
-    // *target* capability vocabulary (`longRunningProcess`, `sqlDatabase`, …),
-    // which has no graph node kind. The emitter's `capability_or_actor` join
-    // can only bind a policy capability or actor that happens to share the
-    // written name, so on the fixture's policy there is nothing to land on.
-    assert_eq!(found, None);
+    .await
+    .expect("the required platform capability resolves");
+    // A platform capability has no declaration site: the vocabulary is the
+    // driver's closed table (rexlang#262), so the editor lands on the first
+    // written `requires` mention of the word — a source-backed anchor, never
+    // a fabricated declaration.
+    assert_eq!(
+        found,
+        location(
+            &deploy,
+            &fixture.uri("app.deploy"),
+            "requires longRunningProcess",
+            0,
+            9,
+            "longRunningProcess".len()
+        )
+    );
+}
+
+#[tokio::test]
+async fn deploy_platform_capability_hover_names_providers_and_holders() {
+    let fixture = Fixture::new("deploy-platform-hover");
+    let (mut service, mut socket) = initialized_service().await;
+    open_file(&mut service, &mut socket, &fixture, "app.deploy").await;
+
+    let deploy = fixture.text("app.deploy");
+    let markdown = hover(
+        &mut service,
+        &fixture.uri("app.deploy"),
+        position(&deploy, "requires longRunningProcess", 0, 9),
+    )
+    .await
+    .expect("the platform capability hovers");
+    assert!(
+        markdown.contains("platformCapability longRunningProcess"),
+        "the node's kind and name: {markdown}"
+    );
+    assert!(
+        markdown.contains("standalone") && markdown.contains("kubernetes"),
+        "the targets that provide it: {markdown}"
+    );
+    assert!(
+        markdown.contains("GraphDesk.refund_approval_service"),
+        "the component that requires it: {markdown}"
+    );
+}
+
+#[tokio::test]
+async fn platform_capability_rename_is_refused() {
+    let fixture = Fixture::new("deploy-platform-rename");
+    let (mut service, mut socket) = initialized_service().await;
+    open_file(&mut service, &mut socket, &fixture, "app.deploy").await;
+
+    let deploy = fixture.text("app.deploy");
+    let error = rename(
+        &mut service,
+        &fixture.uri("app.deploy"),
+        position(&deploy, "requires longRunningProcess", 0, 9),
+        "sqlDatabase",
+    )
+    .await
+    .expect_err("the platform vocabulary is closed");
+    assert!(
+        error.contains("platformCapability"),
+        "the refusal names the kind: {error}"
+    );
+    assert!(
+        error.contains("longRunningProcess"),
+        "the refusal names the symbol: {error}"
+    );
+    assert!(
+        error.contains("vocabulary"),
+        "the refusal says why: {error}"
+    );
 }
 
 #[tokio::test]
@@ -1725,7 +1792,7 @@ const DEFINITION_MATRIX_TESTS: &[&str] = &[
     "deploy_binding_definition_lands_on_the_ddd_module",
     "deploy_connection_definition_lands_on_the_component",
     "deploy_flow_binding_has_no_definition_site",
-    "deploy_requires_has_no_definition_site",
+    "deploy_requires_definition_lands_on_the_first_mention",
     "deploy_profile_use_definition_lands_on_the_profile",
     "deploy_for_definition_lands_on_the_application",
     "uc_realizes_definition_lands_on_the_ddd_operation",

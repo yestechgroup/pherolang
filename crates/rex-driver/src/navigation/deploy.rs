@@ -12,9 +12,12 @@
 //! `desk`, the graph's `bindsDesign` attribute) and the path as written
 //! otherwise (a binding to the imported file's whole application/flow, which
 //! only a path match can bind). Everything else is a name mention inside the
-//! file: `requires` names name capabilities, `connects` endpoints name
-//! components, and a deployment's `for`/`use` clauses name an application and
-//! a profile. Binding stays the graph index's job.
+//! file: a `requires` word names the closed platform-capability vocabulary
+//! (a `platformCapability` graph node with **no declaration site** — the
+//! editor lands on the first written mention instead, issue rexlang#262),
+//! `connects` endpoints name components, and a deployment's `for`/`use`
+//! clauses name an application and a profile. Binding stays the graph
+//! index's job.
 
 use rex_ir::graph::kinds;
 
@@ -45,7 +48,7 @@ pub fn deploy_index(source: &str) -> SurfaceIndex {
             );
             for capability in &component.requires {
                 index.push_reference(
-                    &[kinds::CAPABILITY],
+                    &[kinds::PLATFORM_CAPABILITY],
                     capability.text.clone(),
                     capability.span,
                     ReferenceContext::DeployRequires,
@@ -219,7 +222,7 @@ mod tests {
     }
 
     #[test]
-    fn component_requires_names_point_at_capabilities() {
+    fn component_requires_names_point_at_platform_capabilities() {
         let source = test_support::fixture("tests/conformance/deploy/svc.deploy");
         let index = deploy_index(&source);
         let requires: Vec<_> = index
@@ -229,10 +232,16 @@ mod tests {
             .collect();
         assert_eq!(requires.len(), 1);
         assert_eq!(requires[0].name, "longRunningProcess");
-        assert_eq!(requires[0].target_kinds, &[kinds::CAPABILITY]);
+        assert_eq!(requires[0].target_kinds, &[kinds::PLATFORM_CAPABILITY]);
         assert_eq!(
             &source[requires[0].span.start..requires[0].span.end],
             "longRunningProcess"
+        );
+        assert_eq!(
+            index
+                .references_to(kinds::PLATFORM_CAPABILITY, "longRunningProcess")
+                .len(),
+            1
         );
         assert_eq!(
             index

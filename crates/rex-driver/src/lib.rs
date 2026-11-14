@@ -48,6 +48,7 @@ pub mod surface;
 pub(crate) mod usecases;
 pub mod workspace_imports;
 
+pub use deploy::{is_platform_capability, platform_capability_targets, PLATFORM_CAPABILITIES};
 pub use diagnostic::{render, Diagnostic, DiagnosticCode, Severity};
 pub use integrity::check_integrity;
 pub use navigation::{

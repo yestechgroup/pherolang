@@ -650,22 +650,27 @@ pub fn surface_index(display: &str) -> (String, SurfaceIndex) {
 
 /// The `(kind, name)` keys of the graph's nodes attributed to `display`.
 ///
-/// Two node kinds have no written declaration site and are the one
-/// documented exclusion (stated here, once):
+/// Three node kinds have no written declaration site and are the documented
+/// exclusions (stated here, once):
 ///
 /// * the `file` node per compiled file — its name is the document's display
 ///   path, a host fact a source-only span index cannot know (the index keys
 ///   declarations, not files);
-/// * an `.ifml` `flow` node — its name is the file stem, the same host fact.
+/// * an `.ifml` `flow` node — its name is the file stem, the same host fact;
+/// * a `.deploy` `platformCapability` node — its name is one word of the
+///   closed target-capability vocabulary in the driver's deploy tables
+///   (rexlang#262), which no model file declares. The editor lands on the
+///   first written `requires` mention instead (`docs/GRAPH.md`).
 ///
-/// Both still exist in the graph (reached by `contains`/`memberOf` and
-/// `bindsFlow`); they are simply not span-indexed.
+/// All three still exist in the graph (reached by `contains`/`memberOf`,
+/// `bindsFlow`, and `requires`); they are simply not span-indexed.
 pub fn graph_definition_keys(graph: &GraphModel, display: &str) -> BTreeSet<(String, String)> {
     graph
         .nodes
         .iter()
         .filter(|node| node.file == display && node.kind != kinds::FILE)
         .filter(|node| !(display.ends_with(".ifml") && node.kind == kinds::FLOW))
+        .filter(|node| node.kind != kinds::PLATFORM_CAPABILITY)
         .map(|node| (node.kind.clone(), node.name.clone()))
         .collect()
 }
