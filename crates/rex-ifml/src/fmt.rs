@@ -1,6 +1,6 @@
 //! Comment-preserving canonical formatter for `.ifml` sources.
 //!
-//! `rexlang fmt` dispatches `.ifml` files here. Pest drops comments during
+//! `rexlang fmt` dispatches `.ifml` files here. The parser drops comments during
 //! parsing, so the formatter does not reprint from the IR: it scans the
 //! source into raw tokens (strings and comments byte-exact) and re-emits
 //! them under structural layout rules:

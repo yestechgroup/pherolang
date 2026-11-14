@@ -15,10 +15,7 @@
 //! the `Dmn`-prefixed declarations the same way — also a standalone
 //! surface with no in-tree wire artifact yet.
 
-use chumsky::span::SimpleSpan;
-
-/// Byte-offset span into the source text.
-pub type Span = SimpleSpan<usize>;
+pub use rex_parser::Span;
 
 /// A single identifier, e.g. `Book` or an escaped keyword such as `^class`.
 mod cmmn;

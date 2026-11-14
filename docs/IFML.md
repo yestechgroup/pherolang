@@ -2,7 +2,7 @@
 
 ## Overview
 
-A Domain-Specific Language that is semantically aligned with [OMG IFML 1.0](https://www.omg.org/spec/IFML/) but uses a modern, C-like expression-heavy syntax instead of XML/XMI. Parsed by **Pest** (Rust PEG parser) at build time into a versioned `IfmlModel` artifact, and by **Tree-sitter** at edit time for IDE features.
+A Domain-Specific Language that is semantically aligned with [OMG IFML 1.0](https://www.omg.org/spec/IFML/) but uses a modern, C-like expression-heavy syntax instead of XML/XMI. Lexed by a **logos** lexer and parsed by **chumsky** into a spanned syntax tree, then lowered into a versioned `IfmlModel` artifact; the same parser and byte-offset spans back the language server.
 
 The IFML DSL lives alongside the `.mox` domain model as a *complementary* input: the domain model defines the data (entities, fields, constraints), the IFML DSL defines the interaction model (views, navigation, events, data binding). The parser crate is **`rex-ifml`**; the artifact types live in **`rex_ir::ifml`** (the rex-ir crate). Downstream consumers — today the [codegraph](https://github.com/magick93/codegraph) UI generators — ingest the artifact and emit running applications.
 
@@ -326,41 +326,37 @@ generation, TUI constructs) are tracked in the follow-up issue.
 
 ## Grammar
 
-**The normative grammar is the Pest grammar file itself:**
-`crates/rex-ifml/src/grammar/ifml.pest`. It is machine-checked —
-`pest_derive` compiles it at build time and every parse runs through it — so
-it is never restated in prose. What follows is a non-normative orientation,
-naming the top-level rules per category; read the `.pest` file for the exact
-productions.
+**The normative grammar is the EBNF in the parser module docs:**
+[`crates/rex-ifml/src/parser/mod.rs`](../crates/rex-ifml/src/parser/mod.rs).
+That module is the single grammar authority for the surface — the
+grammar-doc tests fail when a word table and the EBNF drift — so this page
+does not restate it. What follows is a non-normative orientation:
 
-- **Entry point** — `ifml_model`: imports and `domain_declaration`s first,
-  then `view_declaration` / `action_declaration` / `module_declaration` /
-  `actor_declaration` / `command_declaration` items.
-- **Views and containers** — `view_declaration` / `container_declaration`
-  share a body shape: optional `params_block` and `label_declaration`,
+- **Entry point** — a file is an import/domain prologue followed by `view`,
+  `action`, `module`, `actor`, and `command` declarations.
+- **Views and containers** — one body shape: optional `params` and `label`,
   property assignments, then nested containers, components, event handlers,
-  condition statements, and module uses.
-- **Components** — `component_declaration` with `column_decl`, `field_decl`
-  (typed inputs), and `chart_decl` (closed kind vocabulary, see
-  [Charts](#charts)) members alongside properties and events.
-- **Events** — `event_handler`: `on <type> (params)? (requires ...)? (if
-  expr)? -> <action> ;` with `navigate_action`, `refresh_action`,
-  `action_invocation`, or `stay_statement`.
-- **Actions and modules** — `action_declaration` (properties + events) and
-  `module_declaration` (required `input`/`output` parameter blocks; the body
-  may also contain `module_use_statement`s, composing other declared
-  modules).
-- **Expressions** — the C-like precedence chain `expression` → `logical_or`
-  → `logical_and` → `comparison` → `addition` → `multiplication` → `unary`
-  → `primary` (calls, field access, literals, groups).
-- **Lexical rules** — `identifier`, `string` (with escapes), `number`,
-  `boolean`, `type_ref`, `comment`, whitespace.
+  conditions, and module uses.
+- **Components** — properties first, then typed members (`column`, `field`,
+  `chart`, conditions), then event handlers; chart kinds are a closed
+  vocabulary (see [Charts](#charts)).
+- **Events** — `on <type> (params)? (requires: [...])? (if expr)? -> <action>;`
+  with navigate, refresh, action invocation, or stay.
+- **Actions and modules** — `action` (properties + events) and `module`
+  (required `input`/`output` parameter blocks; module `use` composes other
+  declared modules).
+- **Expressions** — the C-like precedence chain `||` → `&&` → comparisons →
+  `+ -` → `* / %` → unary → primary, plus value-position arrays and objects.
+- **Lexical rules** — identifiers are `[A-Za-z][A-Za-z0-9_]*`; numbers are
+  unsigned tokens; strings carry the JSON escape set; only `//` comments
+  exist. Words are never keywords: every word is an identifier and is
+  special only in its grammar position.
 
 ---
 
 ## Artifact Types (Rust)
 
-Parsed Pest pairs are lowered directly into the `rex_ir::ifml` types (transitional architecture: there is no separate syntax tree yet; a future chumsky/spanned-AST re-platform will introduce a proper syntax → IR lowering). The root artifact:
+The chumsky parser produces the spanned syntax tree in `ast.rs`; `lower.rs` performs the one traversal that emits both the `rex_ir::ifml` types and the span index. The root artifact:
 
 ```rust
 pub struct IfmlModel {
@@ -469,20 +465,23 @@ crates/rex-ifml/
 ├── Cargo.toml
 ├── src/
 │   ├── lib.rs            # Public API: parse_ifml, parse_ifml_file, parse_ifml_indexed, compile_ifml_str, check_ifml(+_with_actors/+_with_decisions), expand_ifml, manifest_ifml, format_ifml + re-exports of rex_ir::ifml
-│   ├── parser.rs         # Pest parser wrapper + IfmlParseError
+│   ├── ast.rs            # Spanned syntax tree (file → declarations/members/expressions)
+│   ├── lexer.rs          # logos lexer: no keyword tokens, total error tokens
+│   ├── parser/           # chumsky parsers; mod.rs carries the normative EBNF
+│   ├── lower.rs          # AST → (IfmlModel, IfmlIndex) in one traversal
 │   ├── index.rs          # Span side-table (IfmlIndex): module decls/uses, views, containers, actions, actors, components, commands, auth sites — never serialized
 │   ├── resolve.rs        # Cross-file module resolution: IfmlImports bundle, compile_ifml_str, IfmlDiagnostic (E0001–E0009)
 │   ├── check/           # Typed expression checking against a domain Model, via rex_expr::DomainTypes; interaction cross-reference, authorization, decision, and lint passes over instantiated-module sites (code table: docs/DIAGNOSTICS.md)
 │   ├── expand.rs         # Module-use expansion (opt-in for the IR artifact; the manifest always derives from it)
 │   ├── manifest.rs       # The control/route manifest emitter: IfmlCompilation (+ imports, + optional domain union) → rex_ir::ifml_manifest::IfmlManifest
-│   ├── fmt.rs            # Comment-preserving canonical formatter
-│   └── grammar/
-│       └── ifml.pest     # Pest grammar file
+│   └── fmt.rs            # Token-based canonical formatter (the lexer drops comments)
 └── tests/
     ├── golden.rs         # Conformance goldens — IR artifacts and manifests (REX_UPDATE_FIXTURES=1 regenerates)
     ├── manifest.rs       # The manifest emitter's derivation contract
     ├── resolve.rs        # Resolver conformance tests
     ├── patterns.rs       # patterns/ifml library compiles clean; composition + negative cases
+    ├── recovery.rs       # Lenient recovery contract: partial model/index + span-accurate E_PARSE
+    ├── proptest_recovery.rs # Arbitrary editor text never panics and always terminates
     └── examples.rs       # examples/*/*.ifml compile, type-check, are fmt-canonical, and manifest byte-identically
 ```
 
@@ -824,19 +823,17 @@ The `domain "sales" { schema "sales"; }` declaration at the top of an `.ifml` fi
 
 ---
 
-## Grammar Sync Strategy (Pest ↔ Tree-sitter)
+## Grammar Authority
 
-Both parse the same language but use different formalisms:
-
-| Aspect | Pest | Tree-sitter |
-|---|---|---|
-| Algorithm | PEG (recursive descent) | GLR (Generalized LR) |
-| Purpose | One-shot parsing for codegen | Incremental parsing for IDE |
-| Location | Rust crate (`rex-ifml`) | Editor grammar (consumer-side) |
-| Error handling | Error on first failure | Produces ERROR nodes, recovers |
-| Performance | Very fast | Extremely fast (C library) |
-
-**Sync approach**: Both grammars target the *same language spec*. In practice, the Pest grammar is the authoritative reference since it drives codegen; Tree-sitter is derived.
+The EBNF in
+[`crates/rex-ifml/src/parser/mod.rs`](../crates/rex-ifml/src/parser/mod.rs)
+is the sole grammar authority for `.ifml`. The parser, the lowering, the
+formatter, and the language server all consume the same lexer/parser stack;
+no second grammar ships in this repository (there is no Tree-sitter grammar),
+so editor features are served by the LSP's one-shot compilation over the same
+spans. The grammar-doc tests cross-check the EBNF against the contextual word
+tables in both directions: adding a word without documenting it (or the
+reverse) fails the suite.
 
 ---
 
@@ -844,8 +841,10 @@ Both parse the same language but use different formalisms:
 
 ```
 rex-ifml
-  ├── pest (parser)
-  ├── pest_derive (grammar compile)
+  ├── logos (lexer)
+  ├── chumsky (parser)
+  ├── rex-parser (byte-span token input + recovery combinators)
+  ├── rex-expr (typed expression checking)
   └── rex-ir (IfmlModel artifact types, versioned wire format)
 ```
 
@@ -857,8 +856,10 @@ rex-ifml
 
 | Scope | Test | Method |
 |---|---|---|
-| Grammar | Valid `.ifml` files parse without errors | Pest `parse()` |
-| Grammar | Invalid `.ifml` files produce expected errors | Pest error reporting |
+| Grammar | Valid `.ifml` files parse without errors | chumsky `parse_ifml` |
+| Grammar | Invalid `.ifml` files produce expected errors | strict `Err` + lenient `E0002` diagnostics |
+| Grammar | The EBNF and word tables stay in sync | `parser/mod.rs` grammar-doc tests |
+| Recovery | Broken documents keep a partial model and index | `tests/recovery.rs` + proptest |
 | Artifact | Parse → `to_json_pretty` → golden byte-compare | `tests/conformance/ifml/` golden |
 | Artifact | `to_json_pretty` → `from_json` round trip | Golden + unit tests |
 | Wire format | `formatVersion` gate, unknown-field tolerance | Unit tests (`rex_ir::ifml`) |

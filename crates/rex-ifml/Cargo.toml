@@ -3,7 +3,7 @@ name = "rex-ifml"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
-description = "IFML interaction-flow DSL: Pest parser producing rex-ir IfmlModel artifacts"
+description = "IFML interaction-flow DSL: chumsky parser producing rex-ir IfmlModel artifacts"
 repository.workspace = true
 
 [lints]
@@ -13,13 +13,14 @@ workspace = true
 rex-diagnostics = { workspace = true }
 rex-ir = { workspace = true }
 rex-expr = { workspace = true }
-pest = { workspace = true }
-pest_derive = { workspace = true }
+rex-parser = { workspace = true }
+rex-strings = { workspace = true }
+chumsky = { workspace = true }
+logos = { workspace = true }
 thiserror = { workspace = true }
 
 [dev-dependencies]
 proptest = { workspace = true }
-pest = { workspace = true, features = ["pretty-print"] }
 rex-driver = { workspace = true }
 rex-syntax = { workspace = true }
 serde_json = { workspace = true }

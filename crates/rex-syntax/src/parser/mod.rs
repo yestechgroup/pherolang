@@ -16,10 +16,9 @@
 //! the EBNF below is derived from the parsers in this file, and the docs
 //! (`docs/LANGUAGE.md`, `docs/DDD.md`) link here instead of restating it.
 //! When any prose and this EBNF disagree, the parsers in this file win;
-//! change both in the same commit. The grammar of the fourth surface,
-//! `.ifml`, is normatively defined by its Pest grammar file
-//! (`crates/rex-ifml/src/grammar/ifml.pest`), which is machine-checked at
-//! build time — it is not duplicated here.
+//! change both in the same commit. The grammar of the `.ifml` surface is
+//! normatively defined by the EBNF in `crates/rex-ifml/src/parser/mod.rs`;
+//! it is not duplicated here.
 //!
 //! The unit tests at the bottom of this file spot-check the EBNF against the
 //! lexer and the `.ddd` keyword tables (every real keyword must appear as a
@@ -794,109 +793,29 @@
 //!   anything at all fails into the enclosing body's junk (the
 //!   `actors_block` coarseness), or into file-level junk above the model.
 
-use std::ops::{Range, RangeFrom};
-
-use chumsky::input::{ExactSizeInput, ValueInput};
 use chumsky::prelude::*;
 
 use crate::ast::*;
 use crate::lexer::Token;
 
+pub use rex_parser::ParseError;
+
 /// Parser input: a token slice paired with a custom [`chumsky::Input`]
 /// implementation that reports **byte-offset** spans (chumsky's built-in slice
 /// input would report token indices instead).
-#[derive(Clone, Copy)]
-struct Tokens<'src> {
-    tokens: &'src [(Token<'src>, Span)],
-}
+pub(crate) type Tokens<'src> = rex_parser::Tokens<'src, Token<'src>>;
 
-impl<'src> Tokens<'src> {
-    fn new(tokens: &'src [(Token<'src>, Span)]) -> Self {
-        Tokens { tokens }
-    }
-
-    /// Byte offset just past the end of the last token (0 for empty input).
-    fn eof_offset(&self) -> usize {
-        self.tokens.last().map(|(_, span)| span.end).unwrap_or(0)
-    }
-
-    /// Convert a token-index range into a byte span. An empty range maps to an
-    /// empty span at the start offset of the token at `start` (or the end of
-    /// the input when at EOF).
-    fn byte_span(&self, start: usize, end: usize) -> Span {
-        let start_byte = match self.tokens.get(start) {
-            Some((_, span)) => span.start,
-            None => self.eof_offset(),
-        };
-        let end_byte = if end > start {
-            self.tokens
-                .get(end - 1)
-                .map(|(_, span)| span.end)
-                .unwrap_or_else(|| self.eof_offset())
-        } else {
-            start_byte
-        };
-        (start_byte..end_byte).into()
-    }
-}
-
-impl<'src> Input<'src> for Tokens<'src> {
-    type Cursor = usize;
-    type Span = Span;
-    type Token = Token<'src>;
-    type MaybeToken = Token<'src>;
-    type Cache = Self;
-
-    fn begin(self) -> (Self::Cursor, Self::Cache) {
-        (0, self)
-    }
-
-    fn cursor_location(cursor: &Self::Cursor) -> usize {
-        *cursor
-    }
-
-    unsafe fn next_maybe(
-        this: &mut Self::Cache,
-        cursor: &mut Self::Cursor,
-    ) -> Option<Self::MaybeToken> {
-        let (token, _) = this.tokens.get(*cursor)?;
-        *cursor += 1;
-        Some(token.clone())
-    }
-
-    unsafe fn span(this: &mut Self::Cache, range: Range<&Self::Cursor>) -> Self::Span {
-        this.byte_span(*range.start, *range.end)
-    }
-}
-
-impl<'src> ValueInput<'src> for Tokens<'src> {
-    unsafe fn next(this: &mut Self::Cache, cursor: &mut Self::Cursor) -> Option<Self::Token> {
-        Self::next_maybe(this, cursor)
-    }
-}
-
-impl<'src> ExactSizeInput<'src> for Tokens<'src> {
-    unsafe fn span_from(this: &mut Self::Cache, range: RangeFrom<&Self::Cursor>) -> Self::Span {
-        let start_byte = match this.tokens.get(*range.start) {
-            Some((_, span)) => span.start,
-            None => this.eof_offset(),
-        };
-        (start_byte..this.eof_offset()).into()
-    }
+/// The shared `kw` combinator, monomorphized for this surface so type
+/// inference at the (hundreds of) call sites stays as direct as it was with
+/// the local definition.
+pub(crate) fn kw<'src>(
+    token: Token<'src>,
+) -> impl Parser<'src, Tokens<'src>, Span, MoxExtra<'src>> + Clone {
+    rex_parser::kw(token)
 }
 
 type MoxError<'src> = Rich<'src, Token<'src>, Span>;
 type MoxExtra<'src> = extra::Err<MoxError<'src>>;
-
-/// A parse error with a span and a rendered message.
-#[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
-#[error("{message} at byte offsets {span}")]
-pub struct ParseError {
-    /// Human-readable description of the error.
-    pub message: String,
-    /// Byte range the error refers to.
-    pub span: Span,
-}
 
 /// The outcome of parsing: as much of the AST as could be recovered, plus all
 /// encountered errors. Parsing never panics and always produces a result.
@@ -906,10 +825,6 @@ pub struct ParseResult {
     pub ast: Option<Model>,
     /// All errors encountered during lexing and parsing.
     pub errors: Vec<ParseError>,
-}
-
-fn kw<'src>(token: Token<'src>) -> impl Parser<'src, Tokens<'src>, Span, MoxExtra<'src>> + Clone {
-    select! { t = e if t == token => e.span() }
 }
 
 // Shared combinators and per-surface grammars:
@@ -968,52 +883,18 @@ mod grammar_doc_tests {
 
     /// The module docs (the leading `//!` line run), comment markers stripped.
     fn module_docs() -> String {
-        let mut docs = String::new();
-        for line in PARSER_SOURCE.lines() {
-            let Some(rest) = line.strip_prefix("//!") else {
-                break;
-            };
-            docs.push_str(rest.strip_prefix(' ').unwrap_or(rest));
-            docs.push('\n');
-        }
-        docs
+        rex_parser::grammar_doc::module_docs(PARSER_SOURCE)
     }
 
     /// The fenced ```text blocks of the docs: the EBNF grammar blocks.
     fn grammar_blocks() -> Vec<String> {
-        let mut blocks = Vec::new();
-        let mut current: Option<Vec<String>> = None;
-        for line in module_docs().lines() {
-            match (current.as_mut(), line.trim()) {
-                (None, "```text") => current = Some(Vec::new()),
-                (Some(block), "```") => {
-                    blocks.push(block.join("\n"));
-                    current = None;
-                }
-                (Some(block), line) => block.push(line.to_string()),
-                (None, _) => {}
-            }
-        }
-        assert!(current.is_none(), "unterminated grammar block");
-        blocks
+        rex_parser::grammar_doc::grammar_blocks(&module_docs())
     }
 
     /// The quoted EBNF terminals of all grammar blocks that are shaped like
     /// words (punctuation terminals such as `"{"` are skipped).
     fn grammar_words() -> Vec<String> {
-        let mut words = Vec::new();
-        for block in grammar_blocks() {
-            for terminal in block.split('"').skip(1).step_by(2) {
-                if !terminal.is_empty()
-                    && terminal
-                        .bytes()
-                        .all(|b| b.is_ascii_alphanumeric() || b == b'_')
-                {
-                    words.push(terminal.to_string());
-                }
-            }
-        }
-        words
+        rex_parser::grammar_doc::grammar_words(&grammar_blocks())
     }
 
     /// Contextual words the grammar quotes that are *not* lexer keywords and

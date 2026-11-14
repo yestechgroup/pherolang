@@ -42,9 +42,7 @@ use std::collections::{BTreeMap, BTreeSet};
 
 use rex_ir::ifml::IfmlModel;
 
-use crate::index::{
-    parse_ifml_indexed_with_path, IfmlIndex, LiteralKind, ModuleDeclSite, UseOverride,
-};
+use crate::index::{IfmlIndex, LiteralKind, ModuleDeclSite, UseOverride};
 
 pub use rex_diagnostics::ifml_resolver::{
     E_AMBIGUOUS_MODULE, E_CIRCULAR, E_DUPLICATE_MODULE, E_IMPORT_NOT_PROVIDED, E_INPUT_TYPE,
@@ -260,9 +258,14 @@ fn walk_file(
     active.push(identity.to_string());
     walk.sources
         .push((identity.to_string(), source.to_string()));
-    let imports = crate::parse_ifml(source)
-        .map(|model| model.imports)
-        .unwrap_or_default();
+    let imports = match crate::parser::parse_file_recovering(source).0 {
+        Some(file) => file
+            .imports
+            .iter()
+            .map(|import| import.path.clone())
+            .collect(),
+        None => Vec::new(),
+    };
     for import in imports {
         // The host-resolved key is information for the gathering layer
         // (dedup, nested resolution); the walker itself needs only the
@@ -312,23 +315,15 @@ pub fn compile_ifml_lenient(
     imports: &IfmlImports,
 ) -> (IfmlCompilation, Vec<IfmlDiagnostic>) {
     let mut diags = Vec::new();
-    let (model, mut index) = match parse_ifml_indexed_with_path(path, text) {
-        Ok(parsed) => parsed,
-        Err(error) => {
-            return (
-                IfmlCompilation {
-                    model: IfmlModel::default(),
-                    index: IfmlIndex::single_file(path, text),
-                },
-                vec![IfmlDiagnostic::error(
-                    E_PARSE,
-                    error.to_string(),
-                    (0, 0),
-                    path.to_string(),
-                )],
-            );
-        }
-    };
+    let ((model, mut index), issues) = crate::parser::parse_model_recovering_with_path(path, text);
+    for issue in issues {
+        diags.push(IfmlDiagnostic::error(
+            E_PARSE,
+            issue.message,
+            (issue.span.start, issue.span.end),
+            path.to_string(),
+        ));
+    }
 
     let mut active = vec![path.to_string()];
     let mut visited: BTreeSet<String> = BTreeSet::from([path.to_string()]);
@@ -385,19 +380,16 @@ fn resolve_imports(
             ));
             continue;
         };
-        let (import_model, import_index) =
-            match parse_ifml_indexed_with_path(import_path, import_text) {
-                Ok(parsed) => parsed,
-                Err(error) => {
-                    diags.push(IfmlDiagnostic::error(
-                        E_PARSE,
-                        error.to_string(),
-                        (0, 0),
-                        import_path.to_string(),
-                    ));
-                    continue;
-                }
-            };
+        let ((import_model, import_index), issues) =
+            crate::parser::parse_model_recovering_with_path(import_path, import_text);
+        for issue in issues {
+            diags.push(IfmlDiagnostic::error(
+                E_PARSE,
+                issue.message,
+                (issue.span.start, issue.span.end),
+                import_path.to_string(),
+            ));
+        }
         let file = index.files.len();
         index.absorb(file, import_index);
         active.push(import_path.clone());
@@ -419,7 +411,7 @@ fn resolve_imports(
 /// files in compilation order) and resolves/validates every use site in the
 /// main file against it. Resolution results are written back into
 /// `index.module_uses`.
-fn resolve_module_uses(index: &mut IfmlIndex, diags: &mut Vec<IfmlDiagnostic>) {
+pub(crate) fn resolve_module_uses(index: &mut IfmlIndex, diags: &mut Vec<IfmlDiagnostic>) {
     let main_path = index.files[0].path.clone();
 
     // name -> (file, decl index within that file)

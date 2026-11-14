@@ -10,8 +10,8 @@
 //! module docs](crate::parser) — the single place the grammar is written
 //! down; `docs/LANGUAGE.md` and `docs/DDD.md` link there instead of
 //! restating it. The `.ifml` surface is parsed by rex-ifml and its grammar
-//! authority is that crate's Pest grammar file
-//! (`crates/rex-ifml/src/grammar/ifml.pest`). For `.ddd` keywords the
+//! authority is the EBNF in that crate's parser module docs
+//! (`crates/rex-ifml/src/parser/mod.rs`). For `.ddd` keywords the
 //! tables in the crate-internal `ddd` module are the authority the parser
 //! and formatter share; the `deploy` module plays the same role for
 //! `.deploy`, and the `usecases` module for `.uc`.

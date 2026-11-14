@@ -11,16 +11,14 @@
 //!
 //! # Parsing
 //!
-//! The grammar ([`str`]-level PEG, compiled at build time via `pest_derive`)
-//! is defined in `src/grammar/ifml.pest`, which is the **normative grammar
-//! authority** for the `.ifml` surface — a machine-checked file, not
-//! duplicated into prose (docs/IFML.md links to it and stays
-//! non-normative). [`parse_ifml`] /
-//! [`parse_ifml_file`] lower a source into a
-//! [`rex_ir::ifml::IfmlModel`] artifact that serializes through the
-//! versioned wire format (`IfmlModel::to_json_pretty` /
-//! `IfmlModel::from_json`). [`parse_ifml_indexed`] returns the same model
-//! plus the [`IfmlIndex`] span side-table.
+//! The surface is lexed by logos (`lexer`) and parsed by chumsky
+//! (`parser`) into a spanned syntax tree (`ast`), then lowered into the
+//! [`rex_ir::ifml::IfmlModel`] artifact (`lower`). The **normative grammar
+//! (EBNF)** lives in the `parser` module docs — the one grammar authority
+//! for the surface; `docs/IFML.md` links there and stays non-normative.
+//! [`parse_ifml`] / [`parse_ifml_file`] return the model, and
+//! [`parse_ifml_indexed`] returns the same model plus the [`IfmlIndex`] span
+//! side-table. Spans are byte offsets; the LSP maps them to UTF-16.
 //!
 //! # Resolving
 //!
@@ -49,26 +47,19 @@
 //! to generation time. See `check` for the walk order and diagnostic
 //! codes.
 //!
-//! # Transitional architecture
-//!
-//! The parser produces `rex_ir::ifml` types **directly** — there is no
-//! separate syntax tree in this crate yet. A future re-platform onto a
-//! chumsky/spanned AST (the `rex-syntax` approach) will introduce a proper
-//! syntax → IR lowering; until then spans survive only on
-//! `PropertyAssignment::span` and the `index` side-table (never
-//! serialized), and module resolution is a post-parse stage
-//! (`resolve`) rather than a lowering pass.
-//!
 //! # Downstream compatibility
 //!
 //! `use rex_ifml::*;` re-exports every IR type exactly as the historical
 //! `codegraph-ifml-dsl` crate did, so consumers of the moved crate need only
 //! swap the dependency.
 
+mod ast;
 mod check;
 mod expand;
 mod fmt;
 mod index;
+mod lexer;
+mod lower;
 mod manifest;
 mod parser;
 mod resolve;

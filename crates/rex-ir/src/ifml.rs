@@ -14,11 +14,11 @@
 //! [`IfmlModel::from_json`] rejects any other `formatVersion` with
 //! [`crate::IrError::UnsupportedFormatVersion`] rather than guessing.
 //!
-//! Transitional architecture: the `rex-ifml` parser crate lowers `.ifml`
-//! sources **directly into these types** (there is no separate syntax tree
-//! yet); a future chumsky/spanned-AST re-platform will introduce a proper
-//! syntax → IR lowering. `PropertyAssignment::span` is parse-only and never
-//! serialized (`#[serde(skip, default)]`).
+//! Architecture: the `rex-ifml` crate lexes and parses `.ifml` sources into
+//! a spanned syntax tree (`rex-ifml::ast`) and lowers that tree into these
+//! types (`rex-ifml::lower`), building the span index in the same traversal.
+//! `PropertyAssignment::span` is parse-only and never serialized
+//! (`#[serde(skip, default)]`).
 //!
 //! Serde note: enums here all use adjacent tagging (never `transparent`),
 //! which round-trips `Option<...>` payloads, boxed subtrees, unit variants
@@ -42,6 +42,8 @@
 //! [rexlang]: https://github.com/anton-makes/rexlang
 
 use serde::{Deserialize, Serialize};
+use std::convert::Infallible;
+use std::str::FromStr;
 
 /// The artifact format version this crate writes and accepts for IFML
 /// interaction-model artifacts ([`IfmlModel`]).
@@ -191,6 +193,22 @@ pub enum ComponentType {
 }
 
 impl ComponentType {
+    /// Every builtin component type (the `Custom` fallback is not listed).
+    pub const ALL: &'static [ComponentType] = &[
+        ComponentType::List,
+        ComponentType::Form,
+        ComponentType::Details,
+        ComponentType::Search,
+        ComponentType::Tree,
+        ComponentType::Chart,
+        ComponentType::Table,
+        ComponentType::Button,
+        ComponentType::Link,
+        ComponentType::Menu,
+        ComponentType::Image,
+        ComponentType::Embedded,
+    ];
+
     pub fn as_str(&self) -> &str {
         match self {
             ComponentType::List => "list",
@@ -227,6 +245,16 @@ impl From<&str> for ComponentType {
             "embedded" => ComponentType::Embedded,
             _ => ComponentType::Custom(s.to_string()),
         }
+    }
+}
+
+impl FromStr for ComponentType {
+    type Err = Infallible;
+
+    /// Case-insensitive builtin match; an unknown word becomes `Custom` with
+    /// its original spelling.
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        Ok(Self::from(s))
     }
 }
 
@@ -362,6 +390,57 @@ impl From<&str> for InputFieldType {
     }
 }
 
+impl InputFieldType {
+    /// Every builtin input type (the `Custom` fallback is not listed).
+    pub const ALL: &'static [InputFieldType] = &[
+        InputFieldType::Text,
+        InputFieldType::TextArea,
+        InputFieldType::Password,
+        InputFieldType::Email,
+        InputFieldType::Number,
+        InputFieldType::Date,
+        InputFieldType::Time,
+        InputFieldType::DateTime,
+        InputFieldType::Dropdown,
+        InputFieldType::RadioGroup,
+        InputFieldType::Checkbox,
+        InputFieldType::Toggle,
+        InputFieldType::File,
+        InputFieldType::Hidden,
+    ];
+
+    /// The surface spelling (`textarea`, `radio`, `datetime`, ...).
+    pub fn as_str(&self) -> &str {
+        match self {
+            InputFieldType::Text => "text",
+            InputFieldType::TextArea => "textarea",
+            InputFieldType::Password => "password",
+            InputFieldType::Email => "email",
+            InputFieldType::Number => "number",
+            InputFieldType::Date => "date",
+            InputFieldType::Time => "time",
+            InputFieldType::DateTime => "datetime",
+            InputFieldType::Dropdown => "dropdown",
+            InputFieldType::RadioGroup => "radio",
+            InputFieldType::Checkbox => "checkbox",
+            InputFieldType::Toggle => "toggle",
+            InputFieldType::File => "file",
+            InputFieldType::Hidden => "hidden",
+            InputFieldType::Custom(s) => s.as_str(),
+        }
+    }
+}
+
+impl FromStr for InputFieldType {
+    type Err = Infallible;
+
+    /// Case-insensitive builtin match; an unknown word becomes `Custom` with
+    /// its original spelling.
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        Ok(Self::from(s))
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ChartSpec {
@@ -413,6 +492,87 @@ pub enum ChartKind {
     Radar,
     Metric,
     Org,
+}
+
+impl ChartAggregate {
+    /// Every aggregation; the vocabulary is closed.
+    pub const ALL: &'static [ChartAggregate] = &[
+        ChartAggregate::Sum,
+        ChartAggregate::Avg,
+        ChartAggregate::Count,
+        ChartAggregate::Min,
+        ChartAggregate::Max,
+    ];
+
+    /// The surface spelling (lowercase).
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            ChartAggregate::Sum => "sum",
+            ChartAggregate::Avg => "avg",
+            ChartAggregate::Count => "count",
+            ChartAggregate::Min => "min",
+            ChartAggregate::Max => "max",
+        }
+    }
+}
+
+impl FromStr for ChartAggregate {
+    type Err = String;
+
+    /// Case-insensitive; unknown aggregates are errors (the parser/lowering
+    /// reject them, matching the historical grammar).
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s.to_ascii_lowercase().as_str() {
+            "sum" => Ok(ChartAggregate::Sum),
+            "avg" => Ok(ChartAggregate::Avg),
+            "count" => Ok(ChartAggregate::Count),
+            "min" => Ok(ChartAggregate::Min),
+            "max" => Ok(ChartAggregate::Max),
+            _ => Err(format!("unknown chart aggregate `{s}`")),
+        }
+    }
+}
+
+impl ChartKind {
+    /// Every chart kind; the vocabulary is closed and exact-case.
+    pub const ALL: &'static [ChartKind] = &[
+        ChartKind::Bar,
+        ChartKind::Line,
+        ChartKind::Pie,
+        ChartKind::Radar,
+        ChartKind::Metric,
+        ChartKind::Org,
+    ];
+
+    /// The surface spelling (lowercase).
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            ChartKind::Bar => "bar",
+            ChartKind::Line => "line",
+            ChartKind::Pie => "pie",
+            ChartKind::Radar => "radar",
+            ChartKind::Metric => "metric",
+            ChartKind::Org => "org",
+        }
+    }
+}
+
+impl FromStr for ChartKind {
+    type Err = String;
+
+    /// Exact-case and closed: unknown kinds are errors (there is no identifier
+    /// fallback, matching the historical grammar).
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s {
+            "bar" => Ok(ChartKind::Bar),
+            "line" => Ok(ChartKind::Line),
+            "pie" => Ok(ChartKind::Pie),
+            "radar" => Ok(ChartKind::Radar),
+            "metric" => Ok(ChartKind::Metric),
+            "org" => Ok(ChartKind::Org),
+            _ => Err(format!("unknown chart kind `{s}`")),
+        }
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -489,6 +649,20 @@ pub enum EventType {
 
 #[allow(clippy::inherent_to_string)]
 impl EventType {
+    /// Every builtin event type (the `Custom` fallback is not listed).
+    pub const ALL: &'static [EventType] = &[
+        EventType::Select,
+        EventType::Submit,
+        EventType::Click,
+        EventType::Change,
+        EventType::Load,
+        EventType::Save,
+        EventType::Cancel,
+        EventType::Delete,
+        EventType::Confirm,
+        EventType::Back,
+    ];
+
     pub fn as_str(&self) -> &str {
         match self {
             EventType::Select => "select",
@@ -503,6 +677,36 @@ impl EventType {
             EventType::Back => "back",
             EventType::Custom(s) => s.as_str(),
         }
+    }
+}
+
+impl From<&str> for EventType {
+    /// Exact-case match; anything else becomes `Custom` with its original
+    /// spelling. This is deliberate: changing it to case-insensitive would
+    /// change the IR.
+    fn from(s: &str) -> Self {
+        match s {
+            "select" => EventType::Select,
+            "submit" => EventType::Submit,
+            "click" => EventType::Click,
+            "change" => EventType::Change,
+            "load" => EventType::Load,
+            "save" => EventType::Save,
+            "cancel" => EventType::Cancel,
+            "delete" => EventType::Delete,
+            "confirm" => EventType::Confirm,
+            "back" => EventType::Back,
+            other => EventType::Custom(other.to_string()),
+        }
+    }
+}
+
+impl FromStr for EventType {
+    type Err = Infallible;
+
+    /// Exact-case; unknown words become `Custom`.
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        Ok(Self::from(s))
     }
 }
 
@@ -812,6 +1016,17 @@ impl From<&str> for PromptKind {
 }
 
 impl PromptKind {
+    /// Every builtin prompt kind (the `Custom` fallback is not listed).
+    pub const ALL: &'static [PromptKind] = &[
+        PromptKind::Text,
+        PromptKind::Secret,
+        PromptKind::Number,
+        PromptKind::Confirm,
+        PromptKind::Select,
+        PromptKind::MultiSelect,
+        PromptKind::Date,
+    ];
+
     pub fn as_str(&self) -> &str {
         match self {
             PromptKind::Text => "text",
@@ -823,6 +1038,16 @@ impl PromptKind {
             PromptKind::Date => "date",
             PromptKind::Custom(s) => s.as_str(),
         }
+    }
+}
+
+impl FromStr for PromptKind {
+    type Err = Infallible;
+
+    /// Case-insensitive builtin match (including the `password`/`boolean`
+    /// aliases); an unknown word becomes `Custom` with its original spelling.
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        Ok(Self::from(s))
     }
 }
 
@@ -1468,5 +1693,157 @@ mod tests {
                 f64::NAN.to_bits(),
             ]
         );
+    }
+}
+
+#[cfg(test)]
+mod vocabulary_tests {
+    use super::*;
+    use std::str::FromStr;
+
+    #[test]
+    fn component_types_round_trip_case_insensitively() {
+        for value in ComponentType::ALL {
+            assert_eq!(ComponentType::from(value.as_str()), *value);
+            assert_eq!(
+                ComponentType::from_str(&value.as_str().to_ascii_uppercase()).unwrap(),
+                *value
+            );
+        }
+        assert_eq!(ComponentType::from("LIST"), ComponentType::List);
+        assert_eq!(
+            ComponentType::from("Widget"),
+            ComponentType::Custom("Widget".into()),
+            "Custom preserves the original spelling"
+        );
+        assert_eq!(
+            ComponentType::ALL,
+            &[
+                ComponentType::List,
+                ComponentType::Form,
+                ComponentType::Details,
+                ComponentType::Search,
+                ComponentType::Tree,
+                ComponentType::Chart,
+                ComponentType::Table,
+                ComponentType::Button,
+                ComponentType::Link,
+                ComponentType::Menu,
+                ComponentType::Image,
+                ComponentType::Embedded,
+            ]
+        );
+    }
+
+    #[test]
+    fn input_field_types_round_trip_case_insensitively() {
+        for value in InputFieldType::ALL {
+            assert_eq!(InputFieldType::from(value.as_str()), *value);
+            assert_eq!(
+                InputFieldType::from_str(&value.as_str().to_ascii_uppercase()).unwrap(),
+                *value
+            );
+        }
+        assert_eq!(InputFieldType::from("RADIO"), InputFieldType::RadioGroup);
+        assert_eq!(
+            InputFieldType::from("Wysiwyg"),
+            InputFieldType::Custom("Wysiwyg".into())
+        );
+        assert_eq!(InputFieldType::ALL.len(), 14);
+    }
+
+    #[test]
+    fn prompt_kinds_round_trip_with_aliases() {
+        for value in PromptKind::ALL {
+            assert_eq!(PromptKind::from(value.as_str()), *value);
+        }
+        assert_eq!(PromptKind::from("PASSWORD"), PromptKind::Secret);
+        assert_eq!(PromptKind::from("boolean"), PromptKind::Confirm);
+        assert_eq!(
+            PromptKind::from("Wizard"),
+            PromptKind::Custom("Wizard".into())
+        );
+        assert_eq!(PromptKind::ALL.len(), 7);
+    }
+
+    #[test]
+    fn event_types_are_exact_case() {
+        for value in EventType::ALL {
+            assert_eq!(EventType::from(value.as_str()), *value);
+            assert_eq!(EventType::from_str(value.as_str()).unwrap(), *value);
+        }
+        assert_eq!(
+            EventType::from("SELECT"),
+            EventType::Custom("SELECT".into()),
+            "case-insensitive matching would change the IR"
+        );
+        assert_eq!(EventType::ALL.len(), 10);
+    }
+
+    #[test]
+    fn chart_kinds_are_closed_and_exact_case() {
+        for value in ChartKind::ALL {
+            assert_eq!(ChartKind::from_str(value.as_str()).unwrap(), *value);
+        }
+        assert!(ChartKind::from_str("BAR").is_err());
+        assert!(ChartKind::from_str("bubble").is_err());
+        assert_eq!(ChartKind::ALL.len(), 6);
+    }
+
+    #[test]
+    fn chart_aggregates_are_case_insensitive_and_closed() {
+        for value in ChartAggregate::ALL {
+            assert_eq!(ChartAggregate::from_str(value.as_str()).unwrap(), *value);
+        }
+        assert_eq!(
+            ChartAggregate::from_str("SUM").unwrap(),
+            ChartAggregate::Sum
+        );
+        assert!(ChartAggregate::from_str("median").is_err());
+        assert_eq!(ChartAggregate::ALL.len(), 5);
+    }
+
+    #[test]
+    fn every_table_has_no_duplicate_surface_spelling() {
+        fn unique(words: &[&str]) -> bool {
+            let mut seen = std::collections::BTreeSet::new();
+            words.iter().all(|word| seen.insert(*word))
+        }
+        assert!(unique(
+            &ComponentType::ALL
+                .iter()
+                .map(|v| v.as_str())
+                .collect::<Vec<_>>()
+        ));
+        assert!(unique(
+            &InputFieldType::ALL
+                .iter()
+                .map(|v| v.as_str())
+                .collect::<Vec<_>>()
+        ));
+        assert!(unique(
+            &PromptKind::ALL
+                .iter()
+                .map(|v| v.as_str())
+                .collect::<Vec<_>>()
+        ));
+        assert!(unique(
+            &EventType::ALL
+                .iter()
+                .map(|v| v.as_str())
+                .collect::<Vec<_>>()
+        ));
+        assert!(unique(
+            &ChartKind::ALL
+                .iter()
+                .map(|v| v.as_str())
+                .collect::<Vec<_>>()
+        ));
+        assert!(unique(
+            &ChartAggregate::ALL
+                .iter()
+                .map(|v| v.as_str())
+                .collect::<Vec<_>>()
+        ));
     }
 }

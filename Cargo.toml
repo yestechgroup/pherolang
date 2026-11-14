@@ -2,6 +2,7 @@
 resolver = "2"
 members = [
     "crates/rex-syntax",
+    "crates/rex-parser",
     "crates/rex-ir",
     "crates/rex-expr",
     "crates/rex-ifml",
@@ -40,6 +41,7 @@ all = "warn"
 
 [workspace.dependencies]
 rex-syntax = { path = "crates/rex-syntax" }
+rex-parser = { path = "crates/rex-parser" }
 rex-ir = { path = "crates/rex-ir" }
 rex-expr = { path = "crates/rex-expr" }
 rex-ifml = { path = "crates/rex-ifml" }
@@ -95,8 +97,6 @@ clap = { version = "4.5", features = ["derive"] }
 jsonschema = "0.61"
 creusot-std = "0.14.0"
 logos = "0.15"
-pest = "2"
-pest_derive = "2"
 proptest = "1.11"
 salsa = "0.28"
 serde = { version = "1.0", features = ["derive"] }

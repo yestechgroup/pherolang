@@ -178,6 +178,30 @@ byte moves.
   artifact, or register change without regeneration — is CI-red with the
   exact command to run (issue #207).
 
+## [Unreleased]
+
+### Changed
+
+- **`.ifml` re-platformed from Pest to the workspace's one parser stack**
+  (issue #212, sub-issues #264–#268): a logos lexer, a chumsky parser
+  producing a fully spanned syntax tree (`rex-ifml::ast`), and a single
+  AST → `(IfmlModel, IfmlIndex)` lowering. The wire artifacts and formatter
+  are byte-identical; no fixture was regenerated.
+- The lenient path (`compile_ifml_lenient`, backing the language server) now
+  returns a **partial model and index** on broken input, with one
+  byte-span-accurate `E_PARSE` per error instead of a single `(0,0)`
+  diagnostic. A bracket-depth guard bounds untrusted editor input.
+- The normative grammar moved from `grammar/ifml.pest` to the EBNF in
+  `crates/rex-ifml/src/parser/mod.rs`; grammar-doc tests keep the EBNF and
+  the contextual word tables in sync. `docs/IFML.md`, `docs/LANGUAGE.md`, and
+  `AGENTS.md` now point there.
+
+### Removed
+
+- `pest` and `pest_derive` leave the dependency graph. The Pest-generated
+  `rex_ifml::Rule` and `rex_ifml::IfmlParser` exports are gone; no in-tree
+  consumer used them, and `IfmlParseError` keeps its public shape.
+
 ## [0.2.0] — 2026-11-14
 
 "Foundation & trust": the security/dependency foundation, the release

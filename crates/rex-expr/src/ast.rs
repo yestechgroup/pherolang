@@ -4,20 +4,9 @@
 //! The shapes mirror `docs/EXPRESSIONS.md`; see that document for the normative
 //! grammar and semantics.
 
-use chumsky::span::SimpleSpan;
 use std::fmt;
 
-/// Byte-offset span into the expression source text.
-pub type Span = SimpleSpan<usize>;
-
-/// A value paired with the span it was written at.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct Spanned<T> {
-    /// The value.
-    pub value: T,
-    /// Span of the value in the source.
-    pub span: Span,
-}
+pub use rex_parser::{Span, Spanned};
 
 /// A parsed expression: a kind plus the span it covers.
 #[derive(Debug, Clone, PartialEq)]
