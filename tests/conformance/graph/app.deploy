@@ -21,7 +21,9 @@ application GraphDesk {
     component db: database {
         storage: managed
     }
-    component refund_approval_service: api {}
+    component refund_approval_service: api {
+        requires longRunningProcess
+    }
     connects web -> api
     connects api -> db
 }

@@ -8,6 +8,8 @@ view "Inbox" {
     params { tickets: Ticket };
     label "Ticket Inbox";
 
+    on load -> refresh("queue");
+
     component "queue" {
         type: list;
         data: Ticket;

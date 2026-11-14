@@ -38,6 +38,13 @@
       "application": "app.actor"
     },
     {
+      "id": "actor:app.actor#App.AutoTriage",
+      "kind": "actor",
+      "name": "App.AutoTriage",
+      "file": "app.actor",
+      "application": "app.actor"
+    },
+    {
       "id": "actor:app.actor#App.Customer",
       "kind": "actor",
       "name": "App.Customer",
@@ -269,6 +276,13 @@
       "application": "app.actor"
     },
     {
+      "id": "serviceOperation:app.ddd#GraphDesk.desk.TicketService.findTicket",
+      "kind": "serviceOperation",
+      "name": "GraphDesk.desk.TicketService.findTicket",
+      "file": "app.ddd",
+      "application": "app.actor"
+    },
+    {
       "id": "serviceOperation:app.ddd#GraphDesk.desk.TicketService.listTickets",
       "kind": "serviceOperation",
       "name": "GraphDesk.desk.TicketService.listTickets",
@@ -419,6 +433,13 @@
       "id": "inputData:app.dmn#GraphDecisions.ticket",
       "kind": "inputData",
       "name": "GraphDecisions.ticket",
+      "file": "app.dmn",
+      "application": "app.actor"
+    },
+    {
+      "id": "knowledgeSource:app.dmn#GraphDecisions.RefundPolicy",
+      "kind": "knowledgeSource",
+      "name": "GraphDecisions.RefundPolicy",
       "file": "app.dmn",
       "application": "app.actor"
     },
@@ -1485,6 +1506,11 @@
       }
     },
     {
+      "from": "knowledgeSource:app.dmn#GraphDecisions.RefundPolicy",
+      "to": "decisionModel:app.dmn#GraphDecisions",
+      "kind": "memberOf"
+    },
+    {
       "from": "module:app.ddd#GraphDesk.desk",
       "to": "designApplication:app.ddd#GraphDesk",
       "kind": "memberOf"
@@ -1665,6 +1691,19 @@
       }
     },
     {
+      "from": "serviceOperation:app.ddd#GraphDesk.desk.TicketService.findTicket",
+      "to": "repositoryOperation:app.ddd#GraphDesk.desk.TicketRepository.findById",
+      "kind": "forwardsTo",
+      "attributes": {
+        "operation": "findById"
+      }
+    },
+    {
+      "from": "serviceOperation:app.ddd#GraphDesk.desk.TicketService.findTicket",
+      "to": "service:app.ddd#GraphDesk.desk.TicketService",
+      "kind": "memberOf"
+    },
+    {
       "from": "serviceOperation:app.ddd#GraphDesk.desk.TicketService.listTickets",
       "to": "service:app.ddd#GraphDesk.desk.TicketService",
       "kind": "memberOf"
@@ -1773,6 +1812,15 @@
       "from": "view:app.ifml#Inbox",
       "to": "flow:app.ifml#app",
       "kind": "memberOf"
+    },
+    {
+      "from": "view:app.ifml#Inbox",
+      "to": "component:app.ifml#Inbox.queue",
+      "kind": "refreshes",
+      "attributes": {
+        "source": "Inbox",
+        "trigger": "load"
+      }
     },
     {
       "from": "view:app.ifml#Intake",

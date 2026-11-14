@@ -12,7 +12,10 @@
 // - `Manager` inherits `RaiseRefund` from `Agent` and is granted
 //   `ApproveRefund` itself, so the *undeclared* pair is the violation;
 // - `Manager` also forbids `UpdateTicket`, which `Agent` permits — the
-//   monotonicity gap (and the second expected self-narrowing warning).
+//   monotonicity gap (and the second expected self-narrowing warning);
+// - `AutoTriage` is the automated escalation target, so the delegation's
+//   `from`/`to` endpoints are a human actor and an agent (the policy's one
+//   delegation shape; its empty entry list adds no authority edge).
 import "app.mox"
 
 actors App {
@@ -20,6 +23,7 @@ actors App {
     actor Agent extends Customer
     actor Manager extends Agent
     actor Finance
+    agent AutoTriage
 
     capability ReadTicket on Ticket
     capability UpdateTicket on Ticket
@@ -50,6 +54,11 @@ actors App {
         permit ApproveRefund
         permit ResolveTicket
         forbid ResolveTicket
+    }
+
+    delegation escalate {
+        from Manager
+        to AutoTriage
     }
 
     never_both { ReadTicket, ResolveTicket }

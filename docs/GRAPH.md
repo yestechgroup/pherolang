@@ -681,40 +681,43 @@ several are ambiguous and the editor answers "no location".
 
 ### Definition targets
 
-One row per surface and grammatical position; each row has a green
-definition test in `crates/rex-lsp/src/server/tests/graph.rs`.
+One row per surface and grammatical position. Every row names the test that
+proves it in `crates/rex-lsp/src/server/tests/graph.rs` (the **Test** column);
+the `definition_matrix_names_the_tests_that_cover_it` test reads this table
+and fails when a row and its test drift apart.
 
-| From (surface) | At | To |
-|---|---|---|
-| `.actor` | `capability <X> on <Class>` | `.mox` class |
-| `.actor` | grant/delegation capability names | capability declaration (same file / sibling `.actor` / inline `.mox` block) |
-| `.actor` | `extends`, delegation `from`/`to` | actor |
-| `.actor` | `never_both` names | capability |
-| `.ddd` | operation/search `capability X` | `.actor` capability |
-| `.ddd` | `invokes D`, `inject decision D` | `.dmn` decision / decision service |
-| `.ddd` | operation `emits E` | `.evt` event |
-| `.ddd` | `inject Repo`, body receiver | same-file repository |
-| `.ddd` | `entity C`, class references | `.mox` class |
-| `.ddd` | machine `on` field / state enum | `.mox` feature / enum (the `via <Trigger>` row has no source-side node: the graph encodes the trigger as an operation → `transition` `triggers` edge) |
-| `.evt` | subscription `consumer C` | `.deploy` component |
-| `.evt` | `publishes` / `events` names, field types | event / domain type |
-| `.ifml` | `requires:` / `roles:` | capability / actor |
-| `.ifml` | `action("A")` | the `.ddd` operation its `binds` edge names (else the `.ifml` action) |
-| `.ifml` | `data:` | `.mox` class |
-| `.ifml` | `navigate` / `refresh` targets | view / container / component |
-| `.deploy` | `design "<path>#<Module>"` | `.ddd` module |
-| `.deploy` | `connects a -> b` | component |
-| `.deploy` | `flow "<path>"` | the `.ifml` flow node has no written declaration site (the `file`-node exclusion, above) — no location |
-| `.deploy` | `requires` / `use <Profile>` / `for <App>` | capability / profile / deployment application |
-| `.uc` | `realizes`, step `: <operation>` | `.ddd` service operation |
-| `.uc` | subject/participant types, policy participants | `.mox` class / `.actor` actor |
-| `.uc` | step `requires`, event payloads | capability / event |
-| `.cmmn` | service task `execute` | `.ddd` service operation |
-| `.cmmn` | decision task `invokes` | `.dmn` decision service |
-| `.cmmn` | role `as <Actor>`, case-file item types | `.actor` actor / domain type |
-| `.dmn` | requirement edges, `invoke` | decision / BKM / knowledge source |
-| `.dmn` | `emits`, io types | `.evt` event / domain type |
-| `.mox` | inline `actors` grant/`extends`/`never_both` names | same-file capability / actor (the `.mox` navigation index) |
+| From (surface) | At | To | Test |
+|---|---|---|---|
+| `.actor` | `capability <X> on <Class>` | `.mox` class | `actor_capability_class_definition_lands_on_the_mox_name` |
+| `.actor` | grant/delegation capability names | capability declaration (same file / sibling `.actor` / inline `.mox` block) | `actor_grant_entry_definition_lands_on_the_capability` |
+| `.actor` | `extends`, delegation `from`/`to` | actor | `actor_extends_definition_lands_on_the_parent_actor`, `actor_delegation_from_definition_lands_on_the_actor`, `actor_delegation_to_definition_lands_on_the_agent` |
+| `.actor` | `never_both` names | capability | `actor_never_both_definition_lands_on_the_capability` |
+| `.ddd` | operation/search `capability X` | `.actor` capability | `ddd_capability_definition_lands_on_the_actor_capability` |
+| `.ddd` | `invokes D`, `inject decision D` | `.dmn` decision / decision service | `ddd_invokes_definition_lands_on_the_dmn_service` |
+| `.ddd` | operation `emits E` | `.evt` event | `ddd_emits_definition_lands_on_the_evt_event` |
+| `.ddd` | `inject Repo`, body receiver | same-file repository | `ddd_injected_repository_definition_lands_on_the_repository` |
+| `.ddd` | `entity C`, class references | `.mox` class | `ddd_entity_definition_lands_on_the_mox_class` |
+| `.ddd` | machine `on` field / state enum | `.mox` feature / enum (the `via <Trigger>` row has no source-side node: the graph encodes the trigger as an operation → `transition` `triggers` edge) | `ddd_machine_field_definition_lands_on_the_mox_feature`, `ddd_machine_state_enum_definition_lands_on_the_mox_enum` |
+| `.ddd` | delegated operation `=> Repo.op` | `repositoryOperation` (the `forwardsTo` edge's target) | `ddd_delegation_forward_definition_lands_on_the_repository_operation` |
+| `.evt` | subscription `consumer C` | `.deploy` component | `evt_consumer_definition_lands_on_the_deploy_component` |
+| `.evt` | `publishes` / `events` names, field types | event / domain type | `evt_field_type_definition_lands_on_the_mox_enum` |
+| `.ifml` | `requires:` / `roles:` | capability / actor | `ifml_requires_definition_lands_on_the_capability`, `ifml_roles_definition_lands_on_the_actor` |
+| `.ifml` | `action("A")` | the `.ddd` operation its `binds` edge names (else the `.ifml` action) | `ifml_action_definition_lands_on_the_ddd_operation` |
+| `.ifml` | `data:` | `.mox` class | `ifml_data_definition_lands_on_the_mox_class` |
+| `.ifml` | `navigate` / `refresh` targets | view / container / component | `ifml_navigate_definition_lands_on_the_view`, `ifml_refresh_definition_lands_on_the_component` |
+| `.deploy` | `design "<path>#<Module>"` | `.ddd` module | `deploy_binding_definition_lands_on_the_ddd_module` |
+| `.deploy` | `connects a -> b` | component | `deploy_connection_definition_lands_on_the_component` |
+| `.deploy` | `flow "<path>"` | the `.ifml` flow node has no written declaration site (the `file`-node exclusion, above) — no location | `deploy_flow_binding_has_no_definition_site` |
+| `.deploy` | `requires` / `use <Profile>` / `for <App>` | target capability (the closed target vocabulary has no graph node — no location), profile, deployment application | `deploy_requires_has_no_definition_site`, `deploy_profile_use_definition_lands_on_the_profile`, `deploy_for_definition_lands_on_the_application` |
+| `.uc` | `realizes`, step `: <operation>` | `.ddd` service operation | `uc_realizes_definition_lands_on_the_ddd_operation` |
+| `.uc` | subject/participant types, policy participants | `.mox` class / `.actor` actor | `uc_subject_type_definition_lands_on_the_mox_class`, `uc_policy_actor_definition_lands_on_the_actor` |
+| `.uc` | step `requires`, event payloads | capability / event | `uc_step_requires_definition_lands_on_the_capability`, `uc_message_payload_definition_lands_on_the_evt_event` |
+| `.cmmn` | service task `execute` | `.ddd` service operation | `cmmn_execute_definition_lands_on_the_ddd_operation` |
+| `.cmmn` | decision task `invokes` | `.dmn` decision service | `cmmn_invokes_definition_lands_on_the_decision_service` |
+| `.cmmn` | role `as <Actor>`, case-file item types | `.actor` actor / domain type | `cmmn_role_definition_lands_on_the_actor`, `cmmn_case_file_item_type_definition_lands_on_the_mox_class` |
+| `.dmn` | requirement edges (information / knowledge / authority), `invoke` | decision / BKM / knowledge source | `dmn_requirement_information_definition_lands_on_the_decision`, `dmn_requirement_knowledge_definition_lands_on_the_bkm`, `dmn_requirement_authority_definition_lands_on_the_knowledge_source`, `dmn_logic_invoke_definition_lands_on_the_bkm` |
+| `.dmn` | `emits`, io types | `.evt` event / domain type | `dmn_emits_definition_lands_on_the_evt_event`, `dmn_input_type_definition_lands_on_the_mox_class` |
+| `.mox` | inline `actors` grant/`extends`/`never_both` names | same-file capability / actor (the `.mox` navigation index) | `mox_inline_actor_grant_definition_lands_on_the_capability` |
 
 ### Rename ownership
 
