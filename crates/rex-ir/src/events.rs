@@ -72,7 +72,7 @@
 
 use serde::{Deserialize, Serialize};
 
-use crate::{IrError, TypeRef};
+use crate::TypeRef;
 
 /// The artifact format version this crate writes and accepts for
 /// event-contract artifacts ([`EventModel`]).
@@ -135,31 +135,13 @@ impl EventModel {
         self.subscriptions.push(subscription);
         self
     }
-
-    /// Serializes the artifact to pretty-printed (2-space indent) JSON.
-    pub fn to_json_pretty(&self) -> Result<String, IrError> {
-        crate::wire::VersionedArtifact::to_json_pretty(self)
-    }
-
-    /// Serializes the artifact to compact JSON.
-    pub fn to_json(&self) -> Result<String, IrError> {
-        crate::wire::VersionedArtifact::to_json(self)
-    }
-
-    /// Deserializes an event-contract artifact from JSON, rejecting
-    /// artifacts whose `formatVersion` is not [`EVENT_MODEL_FORMAT_VERSION`].
-    ///
-    /// Unknown fields are ignored for forward compatibility.
-    pub fn from_json(json: &str) -> Result<Self, IrError> {
-        crate::wire::VersionedArtifact::from_json(json)
-    }
 }
 
-impl crate::wire::VersionedArtifact for EventModel {
-    const FORMAT_VERSION: u32 = EVENT_MODEL_FORMAT_VERSION;
-}
-
-crate::wire::default_format_version!(EventModel);
+crate::wire::versioned_artifact!(
+    EventModel,
+    EVENT_MODEL_FORMAT_VERSION,
+    "the event-contract artifact"
+);
 
 /// A declared event: a named contract with its typed payload fields.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]

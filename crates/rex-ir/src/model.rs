@@ -9,7 +9,7 @@ use crate::actors::ActorsDef;
 use crate::class::{ClassDef, DatatypeDef, EnumDef, InterfaceDef, Operation};
 use crate::vocabulary::VocabularyDef;
 use crate::wire;
-use crate::{IrError, FORMAT_VERSION};
+use crate::FORMAT_VERSION;
 
 /// The root of a resolved rexlang model: a set of packages.
 ///
@@ -40,31 +40,9 @@ impl Model {
             packages: Vec::new(),
         }
     }
-
-    /// Serializes the model to pretty-printed (2-space indent) JSON.
-    pub fn to_json_pretty(&self) -> Result<String, IrError> {
-        wire::VersionedArtifact::to_json_pretty(self)
-    }
-
-    /// Serializes the model to compact JSON.
-    pub fn to_json(&self) -> Result<String, IrError> {
-        wire::VersionedArtifact::to_json(self)
-    }
-
-    /// Deserializes a model from JSON, rejecting artifacts whose
-    /// `formatVersion` is not [`FORMAT_VERSION`].
-    ///
-    /// Unknown fields are ignored for forward compatibility.
-    pub fn from_json(json: &str) -> Result<Self, IrError> {
-        wire::VersionedArtifact::from_json(json)
-    }
 }
 
-impl wire::VersionedArtifact for Model {
-    const FORMAT_VERSION: u32 = FORMAT_VERSION;
-}
-
-wire::default_format_version!(Model);
+wire::versioned_artifact!(Model, FORMAT_VERSION, "the model");
 
 /// A named namespace of related definitions, corresponding to a dotted package
 /// clause in a `.mox` source (e.g. `nz.example.library`).
