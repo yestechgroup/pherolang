@@ -923,7 +923,7 @@ fn exit_gate_support_example_answers_what_is_affected_by_changing_a_capability()
     .expect("the examples artifact is versioned");
     let index = GraphIndex::new(&artifact);
 
-    let capability = "capability:support.actor#Support.RaiseRefund";
+    let capability = "capability:support/support.actor#Support.RaiseRefund";
     let answer =
         affected_by(&index, capability, &[], ClosureDirection::Dependents).expect("resolves");
     let ids: Vec<&str> = answer.results.iter().map(|node| node.id.as_str()).collect();
@@ -931,45 +931,45 @@ fn exit_gate_support_example_answers_what_is_affected_by_changing_a_capability()
         ids,
         [
             capability,
-            "actor:support.actor#Support.Agent",
-            "capability:support.actor#Support.ApproveRefund",
-            "serviceOperation:support.ddd#SupportDesk.desk.TicketService.raiseRefund",
-            "useCase:support.uc#RaiseRefund",
-            "action:support.ifml#RaiseRefund",
-            "actor:support.actor#Support.Finance",
-            "actor:support.actor#Support.Manager",
-            "caseRole:support.cmmn#RefundDesk.triage",
-            "command:cli.ifml#tickets",
-            "planItem:support.cmmn#RefundDesk.AssessRefund",
-            "service:support.ddd#SupportDesk.desk.TicketService",
-            "serviceOperation:support.ddd#SupportDesk.desk.TicketService.approveRefund",
-            "useCase:support.uc#ApproveRefund",
-            "action:support.ifml#ApproveRefund",
-            "case:support.cmmn#RefundDesk",
-            "caseRole:support.cmmn#RefundDesk.escalation",
-            "caseRole:support.cmmn#RefundDesk.finance",
-            "component:support.ifml#Queue.intake",
-            "flow:cli.ifml#cli",
-            "flow:support.ifml#support",
-            "module:support.ddd#SupportDesk.desk",
-            "planItem:support.cmmn#RefundDesk.CloseTicket",
-            "planItem:support.cmmn#RefundDesk.ReviewTicket",
-            "component:support.ifml#Queue.refunds",
-            "deployComponent:support.deploy#SupportDesk.api",
-            "deployComponent:support.deploy#SupportDesk.web",
-            "designApplication:support.ddd#SupportDesk",
-            "planItem:support.cmmn#RefundDesk.ApproveRefund",
-            "planItem:support.cmmn#RefundDesk.Escalate",
-            "deployApplication:support.deploy#SupportDesk",
-            "deployment:support.deploy#SupportDesk.edgeLive",
-            "deployment:support.deploy#SupportDesk.production",
+            "actor:support/support.actor#Support.Agent",
+            "capability:support/support.actor#Support.ApproveRefund",
+            "serviceOperation:support/support.ddd#SupportDesk.desk.TicketService.raiseRefund",
+            "useCase:support/support.uc#RaiseRefund",
+            "action:support/support.ifml#RaiseRefund",
+            "actor:support/support.actor#Support.Finance",
+            "actor:support/support.actor#Support.Manager",
+            "caseRole:support/support.cmmn#RefundDesk.triage",
+            "command:support/cli.ifml#tickets",
+            "planItem:support/support.cmmn#RefundDesk.AssessRefund",
+            "service:support/support.ddd#SupportDesk.desk.TicketService",
+            "serviceOperation:support/support.ddd#SupportDesk.desk.TicketService.approveRefund",
+            "useCase:support/support.uc#ApproveRefund",
+            "action:support/support.ifml#ApproveRefund",
+            "case:support/support.cmmn#RefundDesk",
+            "caseRole:support/support.cmmn#RefundDesk.escalation",
+            "caseRole:support/support.cmmn#RefundDesk.finance",
+            "component:support/support.ifml#Queue.intake",
+            "flow:support/cli.ifml#cli",
+            "flow:support/support.ifml#support",
+            "module:support/support.ddd#SupportDesk.desk",
+            "planItem:support/support.cmmn#RefundDesk.CloseTicket",
+            "planItem:support/support.cmmn#RefundDesk.ReviewTicket",
+            "component:support/support.ifml#Queue.refunds",
+            "deployComponent:support/support.deploy#SupportDesk.api",
+            "deployComponent:support/support.deploy#SupportDesk.web",
+            "designApplication:support/support.ddd#SupportDesk",
+            "planItem:support/support.cmmn#RefundDesk.ApproveRefund",
+            "planItem:support/support.cmmn#RefundDesk.Escalate",
+            "deployApplication:support/support.deploy#SupportDesk",
+            "deployment:support/support.deploy#SupportDesk.edgeLive",
+            "deployment:support/support.deploy#SupportDesk.production",
         ]
     );
 
     let options = SeparationOfDutyOptions {
         pair: Some((
-            "capability:support.actor#Support.RaiseRefund",
-            "capability:support.actor#Support.ApproveRefund",
+            "capability:support/support.actor#Support.RaiseRefund",
+            "capability:support/support.actor#Support.ApproveRefund",
         )),
         actor: None,
         session: None,
@@ -988,27 +988,27 @@ fn exit_gate_support_example_answers_what_is_affected_by_changing_a_capability()
             .clone()
     };
     assert_eq!(
-        holders("capability:support.actor#Support.RaiseRefund"),
+        holders("capability:support/support.actor#Support.RaiseRefund"),
         [
-            "actor:support.actor#Support.Agent",
-            "actor:support.actor#Support.Manager",
+            "actor:support/support.actor#Support.Agent",
+            "actor:support/support.actor#Support.Manager",
         ]
     );
     assert_eq!(
-        holders("capability:support.actor#Support.ApproveRefund"),
-        ["actor:support.actor#Support.Finance"]
+        holders("capability:support/support.actor#Support.ApproveRefund"),
+        ["actor:support/support.actor#Support.Finance"]
     );
     assert!(
         result.violations.is_empty(),
         "nobody raises and approves: {:#?}",
         result.violations
     );
-    // `Manager` carries a bare `cedar` entry in `support.actor`, so the pair
+    // `Manager` carries a bare `cedar` entry in `support/support.actor`, so the pair
     // is genuinely undecidable for it: the answer names it instead of
     // claiming a definite no.
     assert_eq!(
         result.unknown_actors,
-        ["actor:support.actor#Support.Manager"]
+        ["actor:support/support.actor#Support.Manager"]
     );
     assert!(!answer.has_findings());
 }
