@@ -127,6 +127,13 @@ byte moves.
   the external decision table.
 - **`docs/RECEIPTS.md`**: what a receipt is and is not, its schema and
   closed vocabularies, the commands, and the staleness classes.
+- **Editor diagnostics for every artifact surface** (issue #255):
+  `.evt`, `.deploy`, `.uc`, and `.cmmn` documents now publish their
+  compiler diagnostics (spanned, with the `rexlang` source) instead of
+  silently accepting errors. They reuse the already memoized graph-snapshot
+  compile — no second compile per keystroke — and a clean document publishes
+  an empty set that clears stale diagnostics; a document with no directory
+  snapshot (a non-file URI) publishes nothing.
 
 ### Changed
 
