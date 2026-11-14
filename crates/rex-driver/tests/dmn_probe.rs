@@ -7,8 +7,8 @@ fn normalize() {
     for path in [
         "tests/conformance/dmn/kiwisaver.dmn",
         "tests/conformance/dmn/minimal.dmn",
-        "examples/lending.dmn",
-        "examples/support.dmn",
+        "examples/lending/lending.dmn",
+        "examples/support/support.dmn",
     ] {
         let absolute = root.join(path);
         let source = std::fs::read_to_string(&absolute).unwrap();

@@ -113,7 +113,7 @@ mod tests {
     use super::*;
     use crate::navigation::test_support;
 
-    const SUPPORT: &str = "examples/support.uc";
+    const SUPPORT: &str = "examples/support/support.uc";
     const FIXTURE: &str = "tests/conformance/graph/app.uc";
 
     #[test]

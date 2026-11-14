@@ -1040,5 +1040,5 @@ searches, capabilities validated against `support.actor` through
 `compile_ddd_str_with_actors`) and `orders.ddd` (the aggregate-derivation
 rule over `ecommerce.mox`), byte-pinned against `examples/artifacts/` by
 `crates/rex-driver/tests/examples_artifacts.rs`. Note that
-`examples/library.mox` itself is *not* designable: its `Writer.books`
+`examples/library/library.mox` itself is *not* designable: its `Writer.books`
 cross reference escapes the Library aggregate (rule 13).

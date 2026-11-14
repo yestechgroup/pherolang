@@ -4,7 +4,11 @@
 //! (`target/scratch/rex-codegen-test` and `target/scratch/rex-examples-test`).
 //!
 //! The example list is hardcoded: a missing file fails loudly instead of
-//! being skipped, so the harness is the spec for the suite's shape.
+//! being skipped, so the harness is the spec for the suite's shape. Each
+//! entry is `(module name, app-relative stem)`: the module name is the
+//! scratch-crate module the assertion suite imports (the file stem), the
+//! stem is the example's path under `examples/` (one directory per
+//! application since rexlang#258).
 //!
 //! This module is compiled into both `codegen_end_to_end.rs` and
 //! `examples_conformance.rs` via `#[path]`; helpers used by only one of the
@@ -13,16 +17,17 @@
 use std::path::{Path, PathBuf};
 use std::sync::OnceLock;
 
-/// The seven canonical examples. Order is also the module declaration order
-/// in the scratch crate's `lib.rs`.
-pub const EXAMPLES: [&str; 7] = [
-    "library",
-    "ecommerce",
-    "org",
-    "iot",
-    "shapes",
-    "support",
-    "pricing",
+/// The seven canonical examples as `(module name, app-relative stem)`.
+/// Order is also the module declaration order in the scratch crate's
+/// `lib.rs`.
+pub const EXAMPLES: [(&str, &str); 7] = [
+    ("library", "library/library"),
+    ("ecommerce", "shop/ecommerce"),
+    ("org", "org/org"),
+    ("iot", "iot/iot"),
+    ("shapes", "shapes/shapes"),
+    ("support", "support/support"),
+    ("pricing", "pricing/pricing"),
 ];
 
 pub fn workspace_root() -> &'static Path {
@@ -39,10 +44,14 @@ pub fn examples_dir() -> PathBuf {
     workspace_root().join("examples")
 }
 
-pub fn example_path(name: &str) -> PathBuf {
-    examples_dir().join(format!("{name}.mox"))
+/// `examples/<app>/<stem>.mox` — the example's path; `stem` is the
+/// app-relative stem from [`EXAMPLES`].
+pub fn example_path(stem: &str) -> PathBuf {
+    examples_dir().join(format!("{stem}.mox"))
 }
 
+/// The canonical instance documents stay at `examples/instances/`, keyed by
+/// the example's file stem (not its application directory).
 #[allow(dead_code)]
 pub fn instance_path(name: &str) -> PathBuf {
     examples_dir()
@@ -52,8 +61,8 @@ pub fn instance_path(name: &str) -> PathBuf {
 
 /// The example's source text; a missing file is a harness failure naming
 /// the expected path (never a silent skip).
-pub fn example_source(name: &str) -> String {
-    let path = example_path(name);
+pub fn example_source(stem: &str) -> String {
+    let path = example_path(stem);
     std::fs::read_to_string(&path).unwrap_or_else(|error| {
         panic!(
             "missing canonical example {}: {error} — the examples suite is part of the harness",
@@ -67,11 +76,11 @@ pub fn example_source(name: &str) -> String {
 /// the CLI collector) so the rosetta walk is scoped to the example's own
 /// directory. Examples without sigil imports yield an empty bundle, so
 /// every example compiles through the same path.
-pub fn example_imports(name: &str) -> rex_driver::DomainImports {
-    let path = example_path(name);
+pub fn example_imports(stem: &str) -> rex_driver::DomainImports {
+    let path = example_path(stem);
     let sources = [(
         path.to_str().expect("utf-8 example path").to_string(),
-        example_source(name),
+        example_source(stem),
     )];
     let sigil = rex_driver::workspace_imports::collect_sigil_imports(&sources)
         .expect("gather sigil imports for the example");
@@ -82,28 +91,28 @@ pub fn example_imports(name: &str) -> rex_driver::DomainImports {
 }
 
 /// Compiles an example to the Core IR with **zero** diagnostics allowed.
-pub fn compile_example(name: &str) -> rex_ir::Model {
-    let path = example_path(name);
+pub fn compile_example(stem: &str) -> rex_ir::Model {
+    let path = example_path(stem);
     let compilation = rex_driver::compile_str(
         path.to_str().expect("utf-8 example path"),
-        &example_source(name),
-        &example_imports(name),
+        &example_source(stem),
+        &example_imports(stem),
     );
     assert!(
         compilation.diagnostics.is_empty(),
-        "example {name}.mox must compile with zero diagnostics: {:?}",
+        "example {stem}.mox must compile with zero diagnostics: {:?}",
         compilation.diagnostics
     );
-    compilation.model.expect("example {name} lowered to IR")
+    compilation.model.expect("example lowered to IR")
 }
 
 /// The example's generated Rust code, wrapped as a namespaced module body:
-/// `pub mod <name> { ... }`.
-pub fn example_module(name: &str) -> String {
-    let model = compile_example(name);
+/// `pub mod <module> { ... }`.
+pub fn example_module(module: &str, stem: &str) -> String {
+    let model = compile_example(stem);
     let generated = rex_backend_rust::generate(&model).expect("generate Rust code");
     let models_rs = &generated["models.rs"];
-    format!("pub mod {name} {{\n{models_rs}\n}}\n")
+    format!("pub mod {module} {{\n{models_rs}\n}}\n")
 }
 
 /// All example modules concatenated (the scratch crate declares one module
@@ -111,7 +120,7 @@ pub fn example_module(name: &str) -> String {
 pub fn example_modules() -> String {
     EXAMPLES
         .iter()
-        .map(|name| example_module(name))
+        .map(|(module, stem)| example_module(module, stem))
         .collect::<Vec<_>>()
         .join("\n")
 }

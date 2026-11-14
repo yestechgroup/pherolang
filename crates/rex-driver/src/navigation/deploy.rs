@@ -150,7 +150,7 @@ mod tests {
     use super::*;
     use crate::navigation::test_support;
 
-    const SUPPORT: &str = "examples/support.deploy";
+    const SUPPORT: &str = "examples/support/support.deploy";
     const FIXTURE: &str = "tests/conformance/graph/app.deploy";
 
     #[test]

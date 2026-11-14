@@ -184,7 +184,7 @@ domain IR or its JSON Schemas. They live in `.actor` files that import the
 domain so everything stays type safe:
 
 ```actor
-import "examples/support.mox"
+import "examples/support/support.mox"
 
 actors Support {
     actor Customer
@@ -208,7 +208,7 @@ actors Support {
 }
 ```
 
-(This policy compiles — it is the shape of `examples/support.actor`, and
+(This policy compiles — it is the shape of `examples/support/support.actor`, and
 the fenced blocks in these docs are compiled by CI.)
 ```
 

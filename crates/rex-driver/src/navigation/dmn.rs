@@ -226,7 +226,7 @@ mod tests {
     use super::*;
     use crate::navigation::test_support;
 
-    const SUPPORT: &str = "examples/support.dmn";
+    const SUPPORT: &str = "examples/support/support.dmn";
     const FIXTURE: &str = "tests/conformance/graph/app.dmn";
 
     #[test]
@@ -429,7 +429,7 @@ mod tests {
 
     #[test]
     fn a_model_without_a_declared_name_takes_the_file_stem() {
-        let index = dmn_index("", "examples/support.dmn");
+        let index = dmn_index("", "examples/support/support.dmn");
         assert!(index.is_empty());
         // The name-derivation rule is the graph's own helper: the declared
         // name wins, the file stem is the artifact's fallback.

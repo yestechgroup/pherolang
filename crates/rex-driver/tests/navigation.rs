@@ -498,15 +498,24 @@ use rex_ir::graph::{kinds, GraphModel};
 /// flow, compiled through the support stack like the other artifact
 /// surfaces.
 const SURFACES: [(&str, &str); 12] = [
-    ("examples/support.actor", "examples/support.mox"),
-    ("examples/support.ddd", "examples/support.mox"),
-    ("examples/support.evt", "examples/support.mox"),
-    ("examples/support.deploy", ""),
-    ("examples/support.uc", ""),
-    ("examples/support.cmmn", ""),
-    ("examples/support.dmn", ""),
-    ("examples/support.ifml", ""),
-    ("examples/support.mox", ""),
+    (
+        "examples/support/support.actor",
+        "examples/support/support.mox",
+    ),
+    (
+        "examples/support/support.ddd",
+        "examples/support/support.mox",
+    ),
+    (
+        "examples/support/support.evt",
+        "examples/support/support.mox",
+    ),
+    ("examples/support/support.deploy", ""),
+    ("examples/support/support.uc", ""),
+    ("examples/support/support.cmmn", ""),
+    ("examples/support/support.dmn", ""),
+    ("examples/support/support.ifml", ""),
+    ("examples/support/support.mox", ""),
     ("tests/conformance/models/actors.mox", ""),
     (
         "tests/conformance/ddd/payrun.ddd",
@@ -718,7 +727,7 @@ fn flow_model(display: &str) -> rex_ir::ifml::IfmlModel {
 fn support_graph() -> &'static GraphModel {
     static GRAPH: OnceLock<GraphModel> = OnceLock::new();
     GRAPH.get_or_init(|| {
-        let domain_display = "examples/support.mox";
+        let domain_display = "examples/support/support.mox";
         let domain_key = disk(domain_display).display().to_string();
         let domain_source = fixture(domain_display);
         let compilation = rex_driver::compile_str(
@@ -729,7 +738,7 @@ fn support_graph() -> &'static GraphModel {
         let domain = lowered(domain_display, compilation.model, &compilation.diagnostics);
         let domains = [(domain_key, domain_source.clone())];
 
-        let actor_display = "examples/support.actor";
+        let actor_display = "examples/support/support.actor";
         let compilation = rex_driver::compile_actors_str(
             &disk(actor_display).display().to_string(),
             &fixture(actor_display),
@@ -739,7 +748,7 @@ fn support_graph() -> &'static GraphModel {
         );
         let actor = lowered(actor_display, compilation.model, &compilation.diagnostics);
 
-        let ddd_display = "examples/support.ddd";
+        let ddd_display = "examples/support/support.ddd";
         let compilation = rex_driver::compile_ddd_str(
             &disk(ddd_display).display().to_string(),
             &fixture(ddd_display),
@@ -748,7 +757,7 @@ fn support_graph() -> &'static GraphModel {
         );
         let design = lowered(ddd_display, compilation.model, &compilation.diagnostics);
 
-        let evt_display = "examples/support.evt";
+        let evt_display = "examples/support/support.evt";
         let compilation = rex_driver::compile_evt_str(
             &disk(evt_display).display().to_string(),
             &fixture(evt_display),
@@ -757,7 +766,7 @@ fn support_graph() -> &'static GraphModel {
         );
         let events = lowered(evt_display, compilation.model, &compilation.diagnostics);
 
-        let dmn_display = "examples/support.dmn";
+        let dmn_display = "examples/support/support.dmn";
         let compilation = rex_driver::compile_dmn_str(
             &disk(dmn_display).display().to_string(),
             &fixture(dmn_display),
@@ -765,17 +774,17 @@ fn support_graph() -> &'static GraphModel {
             &rex_driver::DomainImports::default(),
             &[(
                 "./tables/refund-authority.md".to_string(),
-                fixture("examples/tables/refund-authority.md"),
+                fixture("examples/support/tables/refund-authority.md"),
             )],
             &[("support.evt".to_string(), events.clone())],
         );
         let decision = lowered(dmn_display, compilation.model, &compilation.diagnostics);
 
-        let ifml_display = "examples/support.ifml";
+        let ifml_display = "examples/support/support.ifml";
         let ifml_key = disk(ifml_display).display().to_string();
         let flow = flow_model(ifml_display);
 
-        let uc_display = "examples/support.uc";
+        let uc_display = "examples/support/support.uc";
         let compilation = rex_driver::compile_usecase_str(
             &disk(uc_display).display().to_string(),
             &fixture(uc_display),
@@ -787,7 +796,7 @@ fn support_graph() -> &'static GraphModel {
         );
         let use_cases = lowered(uc_display, compilation.model, &compilation.diagnostics);
 
-        let cmmn_display = "examples/support.cmmn";
+        let cmmn_display = "examples/support/support.cmmn";
         let compilation = rex_driver::compile_cmmn_str(
             &disk(cmmn_display).display().to_string(),
             &fixture(cmmn_display),
@@ -800,7 +809,7 @@ fn support_graph() -> &'static GraphModel {
         );
         let case = lowered(cmmn_display, compilation.model, &compilation.diagnostics);
 
-        let deploy_display = "examples/support.deploy";
+        let deploy_display = "examples/support/support.deploy";
         let compilation = rex_driver::compile_deploy_str(
             &disk(deploy_display).display().to_string(),
             &fixture(deploy_display),

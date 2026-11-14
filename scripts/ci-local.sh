@@ -148,9 +148,11 @@ step_receipt() {
     echo "RECEIPT-FAIL"
     echo "Regenerate the flagship receipt (and read the diff — it is the spec):"
     echo "  cargo run -q -p rex-cli -- verify \\"
-    echo "    examples/support.actor examples/support.cmmn examples/support.ddd \\"
-    echo "    examples/support.deploy examples/support.dmn examples/support.evt \\"
-    echo "    examples/support.ifml examples/support.mox examples/support.uc \\"
+    echo "    examples/support/support.actor examples/support/support.cmmn \\"
+    echo "    examples/support/support.ddd examples/support/support.deploy \\"
+    echo "    examples/support/support.dmn examples/support/support.evt \\"
+    echo "    examples/support/support.ifml examples/support/support.mox \\"
+    echo "    examples/support/support.uc \\"
     echo "    -o examples/artifacts/support.receipt.json"
   fi
   kill_orphans

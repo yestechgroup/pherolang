@@ -135,15 +135,14 @@ diff /tmp/examples.graph.json examples/artifacts/examples.graph.json
 REX_UPDATE_FIXTURES=1 cargo test -p rex-cli --test cli graph
 ```
 
-Every file under the tree compiles, so the command exits `0`: `orders.ddd`
-no longer resolves its `PlaceOrder` capability against `support.actor`'s
-names (the two files belong to different applications — rexlang#249), and
-an application with no policy of its own keeps the join silent. The
+Every file under the tree compiles and every application is coherent, so
+both `graph examples/` and `check examples/` exit `0`: `orders.ddd` no
+longer resolves its `PlaceOrder` capability against `support.actor`'s names
+(the two files belong to different applications — rexlang#249), and each
+application's events/actions are wired to its own design (rexlang#258). The
 best-effort emission path (a failing file renders its diagnostics, the
 artifact covers the compiling subset, the command exits `1`) is still the
-contract; it is just not exercised by `examples/` any more. `check
-examples/` still fails in the union integrity pass (rexlang#258), which
-`graph` does not run.
+contract; it is just not exercised by `examples/` any more.
 
 ## Nodes (v1)
 
@@ -306,7 +305,7 @@ coexist; clap matches the subcommand first, so a directory literally named
 A `<ref>` resolves **exact id → exact name → unique name suffix**:
 
 ```sh
-rexlang graph query g.json node 'capability:support.actor#Support.RaiseRefund'  # id
+rexlang graph query g.json node 'capability:support/support.actor#Support.RaiseRefund'  # id
 rexlang graph query g.json node 'Support.RaiseRefund'                           # name
 rexlang graph query g.json node 'TicketService.raiseRefund'                     # suffix
 ```
@@ -334,26 +333,26 @@ an array, sorted by id (`list`) or by `(depth, id)` (the closures):
 {
   "formatVersion": 1,
   "query": "affectedBy",
-  "reference": "capability:support.actor#Support.RaiseRefund",
-  "resolved": "capability:support.actor#Support.RaiseRefund",
+  "reference": "capability:support/support.actor#Support.RaiseRefund",
+  "resolved": "capability:support/support.actor#Support.RaiseRefund",
   "direction": "dependents",
   "results": [
     {
-      "id": "capability:support.actor#Support.RaiseRefund",
+      "id": "capability:support/support.actor#Support.RaiseRefund",
       "kind": "capability",
       "name": "Support.RaiseRefund",
-      "file": "support.actor",
-      "application": "cli.ifml",
+      "file": "support/support.actor",
+      "application": "support/cli.ifml",
       "depth": 0
     },
     {
-      "id": "serviceOperation:support.ddd#SupportDesk.desk.TicketService.raiseRefund",
+      "id": "serviceOperation:support/support.ddd#SupportDesk.desk.TicketService.raiseRefund",
       "kind": "serviceOperation",
       "name": "SupportDesk.desk.TicketService.raiseRefund",
-      "file": "support.ddd",
-      "application": "cli.ifml",
+      "file": "support/support.ddd",
+      "application": "support/cli.ifml",
       "depth": 1,
-      "parent": "capability:support.actor#Support.RaiseRefund",
+      "parent": "capability:support/support.actor#Support.RaiseRefund",
       "via": "carries"
     }
   ]
@@ -385,7 +384,7 @@ operation, which is the opposite of an impact answer.
 two ownership edges walk back to the members.
 
 **File nodes answer with the `imports` graph.** `affected-by
-file:support.mox#support.mox` is the set of files that import it,
+file:support/support.mox#support/support.mox` is the set of files that import it,
 transitively; `dependencies` is the set it imports. The symbol walk never
 reports nor expands a `file` node, so a cross-file import hop can never
 smuggle a whole file's symbols into a symbol answer.

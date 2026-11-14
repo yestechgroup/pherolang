@@ -7,7 +7,7 @@
 //! Node naming mirrors the interaction tree: a container/component/command
 //! is named by its declaration path (`Inbox.escalations`,
 //! `tickets.show`), so nesting never collides. The flow node is the entry
-//! file's stem (`examples/support.ifml` → `support`).
+//! file's stem (`examples/support/support.ifml` → `support`).
 //!
 //! Only the entry file's declarations are emitted: a `use "Module"` splice is
 //! a pattern instantiation whose internals belong to the module, and the

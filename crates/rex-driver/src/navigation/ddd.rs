@@ -264,8 +264,8 @@ mod tests {
     use super::*;
     use crate::navigation::test_support;
 
-    const SUPPORT: &str = "examples/support.ddd";
-    const SUPPORT_DOMAIN: &str = "examples/support.mox";
+    const SUPPORT: &str = "examples/support/support.ddd";
+    const SUPPORT_DOMAIN: &str = "examples/support/support.mox";
 
     fn support_index() -> (String, SurfaceIndex) {
         let source = test_support::fixture(SUPPORT);

@@ -16,7 +16,7 @@
       "formatVersion": 1,
       "kind": "dddDesign",
       "path": "support.ddd.json",
-      "sha256": "5733d5632a35082c4d3b6569c6827015b521352eef6aecc9d10085a040d07ab8"
+      "sha256": "b7bb5262e02017a9821a2315779768a9e6eb3ee93785bb6cdf6e5db363aaa292"
     },
     {
       "formatVersion": 1,
@@ -61,15 +61,15 @@
     "version": "0.2.0"
   },
   "inputs": [
-    "examples/support.actor",
-    "examples/support.cmmn",
-    "examples/support.ddd",
-    "examples/support.deploy",
-    "examples/support.dmn",
-    "examples/support.evt",
-    "examples/support.ifml",
-    "examples/support.mox",
-    "examples/support.uc"
+    "examples/support/support.actor",
+    "examples/support/support.cmmn",
+    "examples/support/support.ddd",
+    "examples/support/support.deploy",
+    "examples/support/support.dmn",
+    "examples/support/support.evt",
+    "examples/support/support.ifml",
+    "examples/support/support.mox",
+    "examples/support/support.uc"
   ],
   "kind": "verificationReceipt",
   "limits": [
@@ -498,43 +498,43 @@
   },
   "sources": [
     {
-      "path": "examples/support.actor",
+      "path": "examples/support/support.actor",
       "sha256": "b7ecc5dfbbbf59f6efa9c92fb41a2da29e3d6d9802a644e0afe73f8135a11dc4"
     },
     {
-      "path": "examples/support.cmmn",
+      "path": "examples/support/support.cmmn",
       "sha256": "db59aa68d119df84db9adaba9c3f42cc3bc011b80700b30391726a8f40e92670"
     },
     {
-      "path": "examples/support.ddd",
-      "sha256": "2dde61cabdfbd0c12737f5a8c12c7686f2559679eb694a2ca3c9b31bb30c1f9b"
+      "path": "examples/support/support.ddd",
+      "sha256": "d4f7643e6733f3439361bb7e82075f8f48a45072bef61c7fa981455e0d9908a0"
     },
     {
-      "path": "examples/support.deploy",
+      "path": "examples/support/support.deploy",
       "sha256": "9998af4f6e0a990d7534a9a419cdc63a0d3525e2bfa9e070c70e483906178445"
     },
     {
-      "path": "examples/support.dmn",
+      "path": "examples/support/support.dmn",
       "sha256": "b8eb20738838450ad90ee39cdecca2bb87b87efcc04b65374bd7ce8172ac529c"
     },
     {
-      "path": "examples/support.evt",
+      "path": "examples/support/support.evt",
       "sha256": "772d0c8be24e835e7e9680b4fd8c4a2d84cb9ff1cd41275c9b6301e2142d3dd4"
     },
     {
-      "path": "examples/support.ifml",
-      "sha256": "b46b791fd8adf404bd96338c7f60238cd37e30ca73a907956b860d6734adea72"
+      "path": "examples/support/support.ifml",
+      "sha256": "05b5bb35e5f437408ca4274e1eca80c1d3cb6e0a33cce84060589b38ce1645a3"
     },
     {
-      "path": "examples/support.mox",
+      "path": "examples/support/support.mox",
       "sha256": "9eb97b8933b1e6bf5bfdf77a930af12fcb0e0ea8a726c233cc97d6698c28f446"
     },
     {
-      "path": "examples/support.uc",
+      "path": "examples/support/support.uc",
       "sha256": "ac34a7e927e0248073d7d04bc163f1a158f97b0b6e0a2f8df40353f15c9b7fcf"
     },
     {
-      "path": "examples/tables/refund-authority.md",
+      "path": "examples/support/tables/refund-authority.md",
       "sha256": "149c52782b8017c65256235c5735fe8f8289777b0615d2cbb56cc9e035ff2b8a"
     },
     {

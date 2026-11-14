@@ -49,7 +49,7 @@ pub(crate) fn file_node(file: &str, application: &str) -> GraphNode {
     graph_node(kinds::FILE, file, application, file)
 }
 
-/// The file stem of a display path (`examples/support.ddd` → `support`) — the
+/// The file stem of a display path (`examples/support/support.ddd` → `support`) — the
 /// surface's model name where the artifact carries none of its own.
 pub(crate) fn file_stem(display: &str) -> String {
     let name = display.rsplit('/').next().unwrap_or(display);

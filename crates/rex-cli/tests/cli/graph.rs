@@ -21,13 +21,12 @@
 //! Directory mode compiles each file independently against the project
 //! snapshot, exactly like `check`/`build` — including the capability join
 //! scoped to each file's import-connected application (rexlang#249). Every
-//! file under `examples/` compiles: `orders.ddd` no longer resolves
-//! `PlaceOrder` against the unrelated `support.actor` pool, so the
-//! capability join stays silent there (the application has no policy of its
-//! own) and the graph command exits `0`. The `build`-precedent best-effort
-//! path is still pinned by `graph_still_writes_when_a_file_fails`; the
-//! failure `check examples/` keeps reporting lives in the union integrity
-//! pass (rexlang#258), which `graph` does not run.
+//! file under `examples/` compiles and every application is coherent
+//! (rexlang#258): `orders.ddd` no longer resolves `PlaceOrder` against the
+//! unrelated `support.actor` pool, so the capability join stays silent there
+//! and both `graph examples/` and `check examples/` exit `0`. The
+//! `build`-precedent best-effort path is still pinned by
+//! `graph_still_writes_when_a_file_fails`.
 //!
 //! Regenerate with:
 //!
@@ -43,7 +42,7 @@ use crate::support::*;
 use rex_ir::graph::GraphModel;
 
 /// The capability the exit-gate impact query starts from.
-const CAPABILITY: &str = "capability:support.actor#Support.RaiseRefund";
+const CAPABILITY: &str = "capability:support/support.actor#Support.RaiseRefund";
 
 fn examples_dir() -> PathBuf {
     workspace_root().join("examples")
@@ -165,14 +164,14 @@ fn graph_paths_are_root_relative() {
     assert_eq!(json, golden);
     let graph = GraphModel::from_json(&json).expect("versioned graph");
     assert!(
-        graph
-            .applications
+        graph.applications.iter().any(|application| application
+            .files
             .iter()
-            .any(|application| application.files.iter().any(|file| file == "support.mox")),
-        "support.mox is a member of the examples tree"
+            .any(|file| file == "support/support.mox")),
+        "support/support.mox is a member of the examples tree"
     );
     assert!(
-        json.contains("\"file\": \"support.mox\""),
+        json.contains("\"file\": \"support/support.mox\""),
         "node attribution is the root-relative display path"
     );
     let root = workspace_root().display().to_string();
@@ -364,8 +363,8 @@ fn query_node_prints_the_golden() {
     assert_eq!(envelope["query"], "node");
     assert_eq!(envelope["resolved"], CAPABILITY);
     assert_eq!(envelope["results"][0]["id"], CAPABILITY);
-    assert_eq!(envelope["results"][0]["file"], "support.actor");
-    assert_eq!(envelope["results"][0]["application"], "cli.ifml");
+    assert_eq!(envelope["results"][0]["file"], "support/support.actor");
+    assert_eq!(envelope["results"][0]["application"], "support/cli.ifml");
     let out = envelope["edges"]["out"].as_array().expect("out edges");
     let incoming = envelope["edges"]["in"].as_array().expect("in edges");
     assert!(!out.is_empty() && !incoming.is_empty(), "both directions");
@@ -403,25 +402,27 @@ fn query_list_filters_by_kind_file_application() {
         .all(|node| node["kind"] == "deployComponent"));
     assert_eq!(all["results"][0]["kind"], "action", "kinds are lowercase");
 
-    let designs = parsed(&query_examples(&["list", "--file", "support.ddd"]));
+    let designs = parsed(&query_examples(&["list", "--file", "support/support.ddd"]));
     let designs = designs["results"].as_array().expect("results");
     assert!(!designs.is_empty());
-    assert!(designs.iter().all(|node| node["file"] == "support.ddd"));
+    assert!(designs
+        .iter()
+        .all(|node| node["file"] == "support/support.ddd"));
 
     let capabilities = parsed(&query_examples(&[
         "list",
         "--application",
-        "cli.ifml",
+        "support/cli.ifml",
         "--kind",
         "capability",
     ]));
     assert_eq!(capabilities["kind"], "capability");
-    assert_eq!(capabilities["application"], "cli.ifml");
+    assert_eq!(capabilities["application"], "support/cli.ifml");
     let capabilities = capabilities["results"].as_array().expect("results");
     assert!(!capabilities.is_empty());
     assert!(capabilities
         .iter()
-        .all(|node| node["kind"] == "capability" && node["application"] == "cli.ifml"));
+        .all(|node| node["kind"] == "capability" && node["application"] == "support/cli.ifml"));
 }
 
 /// The exit-gate answer, pinned exactly (derived from the committed artifact,
@@ -448,38 +449,38 @@ fn query_affected_by_prints_the_golden() {
         .collect();
     let expected = [
         CAPABILITY,
-        "actor:support.actor#Support.Agent",
-        "capability:support.actor#Support.ApproveRefund",
-        "serviceOperation:support.ddd#SupportDesk.desk.TicketService.raiseRefund",
-        "useCase:support.uc#RaiseRefund",
-        "action:support.ifml#RaiseRefund",
-        "actor:support.actor#Support.Finance",
-        "actor:support.actor#Support.Manager",
-        "caseRole:support.cmmn#RefundDesk.triage",
-        "command:cli.ifml#tickets",
-        "planItem:support.cmmn#RefundDesk.AssessRefund",
-        "service:support.ddd#SupportDesk.desk.TicketService",
-        "serviceOperation:support.ddd#SupportDesk.desk.TicketService.approveRefund",
-        "useCase:support.uc#ApproveRefund",
-        "action:support.ifml#ApproveRefund",
-        "case:support.cmmn#RefundDesk",
-        "caseRole:support.cmmn#RefundDesk.escalation",
-        "caseRole:support.cmmn#RefundDesk.finance",
-        "component:support.ifml#Queue.intake",
-        "flow:cli.ifml#cli",
-        "flow:support.ifml#support",
-        "module:support.ddd#SupportDesk.desk",
-        "planItem:support.cmmn#RefundDesk.CloseTicket",
-        "planItem:support.cmmn#RefundDesk.ReviewTicket",
-        "component:support.ifml#Queue.refunds",
-        "deployComponent:support.deploy#SupportDesk.api",
-        "deployComponent:support.deploy#SupportDesk.web",
-        "designApplication:support.ddd#SupportDesk",
-        "planItem:support.cmmn#RefundDesk.ApproveRefund",
-        "planItem:support.cmmn#RefundDesk.Escalate",
-        "deployApplication:support.deploy#SupportDesk",
-        "deployment:support.deploy#SupportDesk.edgeLive",
-        "deployment:support.deploy#SupportDesk.production",
+        "actor:support/support.actor#Support.Agent",
+        "capability:support/support.actor#Support.ApproveRefund",
+        "serviceOperation:support/support.ddd#SupportDesk.desk.TicketService.raiseRefund",
+        "useCase:support/support.uc#RaiseRefund",
+        "action:support/support.ifml#RaiseRefund",
+        "actor:support/support.actor#Support.Finance",
+        "actor:support/support.actor#Support.Manager",
+        "caseRole:support/support.cmmn#RefundDesk.triage",
+        "command:support/cli.ifml#tickets",
+        "planItem:support/support.cmmn#RefundDesk.AssessRefund",
+        "service:support/support.ddd#SupportDesk.desk.TicketService",
+        "serviceOperation:support/support.ddd#SupportDesk.desk.TicketService.approveRefund",
+        "useCase:support/support.uc#ApproveRefund",
+        "action:support/support.ifml#ApproveRefund",
+        "case:support/support.cmmn#RefundDesk",
+        "caseRole:support/support.cmmn#RefundDesk.escalation",
+        "caseRole:support/support.cmmn#RefundDesk.finance",
+        "component:support/support.ifml#Queue.intake",
+        "flow:support/cli.ifml#cli",
+        "flow:support/support.ifml#support",
+        "module:support/support.ddd#SupportDesk.desk",
+        "planItem:support/support.cmmn#RefundDesk.CloseTicket",
+        "planItem:support/support.cmmn#RefundDesk.ReviewTicket",
+        "component:support/support.ifml#Queue.refunds",
+        "deployComponent:support/support.deploy#SupportDesk.api",
+        "deployComponent:support/support.deploy#SupportDesk.web",
+        "designApplication:support/support.ddd#SupportDesk",
+        "planItem:support/support.cmmn#RefundDesk.ApproveRefund",
+        "planItem:support/support.cmmn#RefundDesk.Escalate",
+        "deployApplication:support/support.deploy#SupportDesk",
+        "deployment:support/support.deploy#SupportDesk.edgeLive",
+        "deployment:support/support.deploy#SupportDesk.production",
     ];
     assert_eq!(actual_ids, expected);
     // Sorted by `(depth, id)` and deduplicated, the root at depth 0.
@@ -506,10 +507,13 @@ fn query_affected_by_prints_the_golden() {
     // The file-start case walks the `imports` graph instead.
     let dependents = parsed(&query_examples(&[
         "affected-by",
-        "file:support.mox#support.mox",
+        "file:support/support.mox#support/support.mox",
     ]));
     let dependents = dependents["results"].as_array().expect("results");
-    assert_eq!(dependents[0]["id"], "file:support.mox#support.mox");
+    assert_eq!(
+        dependents[0]["id"],
+        "file:support/support.mox#support/support.mox"
+    );
     assert!(
         dependents.iter().all(|node| node["kind"] == "file"),
         "a file start stays on the import graph: {dependents:?}"
@@ -552,7 +556,10 @@ fn query_reads_the_artifact_from_stdin() {
 /// stderr — never a guessed node.
 #[test]
 fn query_unknown_reference_exits_1_with_candidates() {
-    let output = query_examples(&["affected-by", "capability:support.actor#Support.RaiseRefnd"]);
+    let output = query_examples(&[
+        "affected-by",
+        "capability:support/support.actor#Support.RaiseRefnd",
+    ]);
     assert_eq!(output.status.code(), Some(1));
     let rendered = stderr(&output);
     assert!(
@@ -567,8 +574,8 @@ fn query_unknown_reference_exits_1_with_candidates() {
     assert_eq!(output.status.code(), Some(1));
     let rendered = stderr(&output);
     assert!(rendered.contains("ambiguous node reference"), "{rendered}");
-    let action = rendered.find("action:support.ifml#RaiseRefund");
-    let use_case = rendered.find("useCase:support.uc#RaiseRefund");
+    let action = rendered.find("action:support/support.ifml#RaiseRefund");
+    let use_case = rendered.find("useCase:support/support.uc#RaiseRefund");
     assert!(
         matches!((action, use_case), (Some(action), Some(use_case)) if action < use_case),
         "candidates are sorted: {rendered}"
@@ -584,7 +591,7 @@ fn query_is_byte_identical_across_runs() {
         vec!["list", "--kind", "serviceOperation"],
         vec!["affected-by", CAPABILITY],
         vec!["dependencies", CAPABILITY],
-        vec!["node", "file:support.mox#support.mox"],
+        vec!["node", "file:support/support.mox#support/support.mox"],
     ] {
         let first = query_examples(&arguments);
         let second = query_examples(&arguments);
