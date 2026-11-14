@@ -5,7 +5,7 @@
 //! reader, and the snapshot/lock adapters the request handlers run
 //! through.
 
-use rex_driver::NavigationIndex;
+use rex_driver::{NavigationIndex, SurfaceKind};
 use tower_lsp_server::ls_types::*;
 
 use super::graph::{is_formatter_golden, resolved_imports, surface_of_path};
@@ -88,7 +88,7 @@ impl RexBackend {
         };
         let map = PositionMap::new(&text);
         let lsp_diagnostics = match surface {
-            Surface::Mox => {
+            Surface::Known(SurfaceKind::Mox) => {
                 let Some(file) = file else {
                     return;
                 };
@@ -114,7 +114,7 @@ impl RexBackend {
                     .map(|diagnostic| to_lsp_diagnostic(diagnostic, &map))
                     .collect()
             }
-            Surface::Ifml => {
+            Surface::Known(SurfaceKind::Ifml) => {
                 let (_snapshot, diagnostics) = self.compile_ifml(uri, &text);
                 diagnostics
                     .iter()
@@ -122,7 +122,7 @@ impl RexBackend {
                     .map(|diagnostic| to_ifml_diagnostic(diagnostic, &map))
                     .collect()
             }
-            Surface::Ddd => {
+            Surface::Known(SurfaceKind::Ddd) => {
                 // The driver keys by the disk path when the document lives
                 // on disk — the CLI's semantics, where imports resolve
                 // lexically against the real path and sibling artifacts
@@ -157,7 +157,7 @@ impl RexBackend {
                 .map(|(_, diagnostic)| to_lsp_diagnostic(diagnostic, &map))
                 .collect()
             }
-            Surface::Actor => {
+            Surface::Known(SurfaceKind::Actor) => {
                 let driver_path = uri
                     .to_file_path()
                     .map(|path| path.display().to_string())
@@ -181,7 +181,7 @@ impl RexBackend {
                 .map(|(_, diagnostic)| to_lsp_diagnostic(diagnostic, &map))
                 .collect()
             }
-            Surface::Dmn => {
+            Surface::Known(SurfaceKind::Dmn) => {
                 // The driver keys by the disk path when the document lives
                 // on disk — the CLI's semantics, where imports resolve
                 // lexically against the real path and sibling designs pool
@@ -210,9 +210,11 @@ impl RexBackend {
             // The artifact surfaces publish diagnostics once their own
             // compile pipeline lands; today they contribute to the graph
             // snapshot on demand and publish nothing.
-            Surface::Evt | Surface::Deploy | Surface::Uc | Surface::Cmmn | Surface::Other => {
-                Vec::new()
-            }
+            Surface::Known(SurfaceKind::Evt)
+            | Surface::Known(SurfaceKind::Deploy)
+            | Surface::Known(SurfaceKind::Uc)
+            | Surface::Known(SurfaceKind::Cmmn)
+            | Surface::Other => Vec::new(),
         };
         self.client
             .publish_diagnostics(uri.clone(), lsp_diagnostics, version)
@@ -385,7 +387,7 @@ impl RexBackend {
         let open = {
             let documents = self.documents.lock().unwrap();
             documents.iter().find_map(|(open_uri, document)| {
-                if document.surface != Surface::Mox {
+                if document.surface != Surface::Known(SurfaceKind::Mox) {
                     return None;
                 }
                 let open_path = open_uri.to_file_path()?;
@@ -412,7 +414,7 @@ impl RexBackend {
     fn siblings_in_application(
         &self,
         except: &std::path::Path,
-        extension: &str,
+        kind: SurfaceKind,
     ) -> Vec<(std::path::PathBuf, String)> {
         let Some(directory) = except.parent() else {
             return Vec::new();
@@ -444,9 +446,8 @@ impl RexBackend {
             .iter()
             .filter_map(|&member| {
                 let (path, _, text) = &candidates[member];
-                (path != except
-                    && path.extension().and_then(|extension| extension.to_str()) == Some(extension))
-                .then(|| (path.clone(), text.clone()))
+                (path != except && SurfaceKind::of_path(path) == Some(kind))
+                    .then(|| (path.clone(), text.clone()))
             })
             .collect()
     }
@@ -517,7 +518,7 @@ impl RexBackend {
             return Vec::new();
         };
         let mut models = Vec::new();
-        for (sibling, text) in self.siblings_in_application(&path, "actor") {
+        for (sibling, text) in self.siblings_in_application(&path, SurfaceKind::Actor) {
             let key = sibling.display().to_string();
             let mut fetch =
                 |resolved: &str| -> Option<String> { self.fetch_open_or_disk(resolved) };
@@ -557,7 +558,7 @@ impl RexBackend {
             return Vec::new();
         };
         let mut models = Vec::new();
-        for (sibling, text) in self.siblings_in_application(&path, "ddd") {
+        for (sibling, text) in self.siblings_in_application(&path, SurfaceKind::Ddd) {
             let key = sibling.display().to_string();
             let mut fetch =
                 |resolved: &str| -> Option<String> { self.fetch_open_or_disk(resolved) };
@@ -596,7 +597,7 @@ impl RexBackend {
             return Vec::new();
         };
         let mut models = Vec::new();
-        for (sibling, text) in self.siblings_in_application(&path, "dmn") {
+        for (sibling, text) in self.siblings_in_application(&path, SurfaceKind::Dmn) {
             let key = sibling.display().to_string();
             let mut fetch =
                 |resolved: &str| -> Option<String> { self.fetch_open_or_disk(resolved) };
@@ -719,7 +720,9 @@ impl RexBackend {
             let documents = self.documents.lock().unwrap();
             documents
                 .iter()
-                .filter(|(url, document)| **url != *changed && document.surface == Surface::Ifml)
+                .filter(|(url, document)| {
+                    **url != *changed && document.surface == Surface::Known(SurfaceKind::Ifml)
+                })
                 .map(|(url, document)| (url.clone(), document.text.clone()))
                 .collect()
         };
@@ -739,7 +742,7 @@ impl RexBackend {
             .lock()
             .unwrap()
             .get(uri)
-            .is_some_and(|document| document.surface == Surface::Ifml)
+            .is_some_and(|document| document.surface == Surface::Known(SurfaceKind::Ifml))
     }
 
     /// Compiles every open `.ifml` document into a snapshot. References
@@ -751,7 +754,7 @@ impl RexBackend {
             let documents = self.documents.lock().unwrap();
             documents
                 .iter()
-                .filter(|(_, document)| document.surface == Surface::Ifml)
+                .filter(|(_, document)| document.surface == Surface::Known(SurfaceKind::Ifml))
                 .map(|(url, document)| (url.clone(), document.text.clone()))
                 .collect()
         };
@@ -771,7 +774,10 @@ impl RexBackend {
         let snapshot = {
             let documents = self.documents.lock().unwrap();
             let document = documents.get(uri)?;
-            (document.text.clone(), document.surface == Surface::Ifml)
+            (
+                document.text.clone(),
+                document.surface == Surface::Known(SurfaceKind::Ifml),
+            )
         };
         let (text, is_ifml) = snapshot;
         if !is_ifml {

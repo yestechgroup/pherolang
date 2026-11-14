@@ -42,6 +42,9 @@ use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 
 use rex_driver::applications::{applications, ApplicationFile};
+use rex_driver::SurfaceKind;
+
+use crate::inputs::{read_actor_pair_in, read_ddd_design, read_dmn_pair};
 
 /// One compiled surface artifact — the same JSON `rexlang ir` emits for
 /// the surface, kept typed so consumers can pull the model they need.
@@ -180,6 +183,119 @@ impl Project {
         self.applications.get(key).cloned().unwrap_or_default()
     }
 
+    /// The compiled `.actor` artifacts of `file`'s import-connected
+    /// application, the file itself excluded — the capability pool a
+    /// design's rule-10 check resolves against at compile time
+    /// (rexlang#128's J3). One gather per artifact kind; a sibling that
+    /// fails to compile contributes nothing (parity with the union pass,
+    /// which keeps only the successful artifacts).
+    pub(crate) fn sibling_actors(&mut self, file: &Path) -> Vec<rex_ir::ActorModel> {
+        let key = file.display().to_string();
+        let members = self.application_of(&key);
+        let mut models = Vec::new();
+        for member in members {
+            if member == key || SurfaceKind::of_path(Path::new(&member)) != Some(SurfaceKind::Actor)
+            {
+                continue;
+            }
+            match self.peek(&member) {
+                Some(Artifact::Actor(model)) => models.push(model),
+                Some(_) => {}
+                None => {
+                    let Ok(pair) = read_actor_pair_in(Path::new(&member), Some(self)) else {
+                        continue;
+                    };
+                    let compilation = rex_driver::compile_actors_str(
+                        &pair.path,
+                        &pair.source,
+                        &pair.domains,
+                        &pair.imports(),
+                    );
+                    if let Some(model) = compilation.model {
+                        self.store(&member, &Artifact::Actor(model.clone()));
+                        models.push(model);
+                    }
+                }
+            }
+        }
+        models
+    }
+
+    /// The compiled `.dmn` artifacts of `file`'s application
+    /// (rexlang#78) — the decision services a design's `invokes`/`inject
+    /// decision` links resolve against (rule 17). Gathered exactly like
+    /// [`Project::sibling_actors`].
+    pub(crate) fn sibling_decisions(
+        &mut self,
+        file: &Path,
+    ) -> Vec<(String, rex_ir::dmn::DmnModel)> {
+        let key = file.display().to_string();
+        let members = self.application_of(&key);
+        let mut models = Vec::new();
+        for member in members {
+            if member == key || SurfaceKind::of_path(Path::new(&member)) != Some(SurfaceKind::Dmn) {
+                continue;
+            }
+            match self.peek(&member) {
+                Some(Artifact::Decision(model)) => models.push((member.clone(), model)),
+                Some(_) => {}
+                None => {
+                    let Ok(pair) = read_dmn_pair(Path::new(&member), Some(self)) else {
+                        continue;
+                    };
+                    let compilation = rex_driver::compile_dmn_str(
+                        &pair.pair.path,
+                        &pair.pair.source,
+                        &pair.pair.domains,
+                        &pair.pair.imports(),
+                        &pair.tables,
+                        &pair.events,
+                    );
+                    if let Some(model) = compilation.model {
+                        self.store(&member, &Artifact::Decision(model.clone()));
+                        models.push((member, model));
+                    }
+                }
+            }
+        }
+        models
+    }
+
+    /// The compiled `.ddd` artifacts of `file`'s application (rexlang#249,
+    /// the file itself excluded) — the carrier set an actor policy's grant
+    /// coverage resolves against (rexlang#128's J4). Gathered exactly like
+    /// [`Project::sibling_actors`].
+    pub(crate) fn sibling_designs(&mut self, file: &Path) -> Vec<rex_ir::ddd::DddModel> {
+        let key = file.display().to_string();
+        let members = self.application_of(&key);
+        let mut models = Vec::new();
+        for member in members {
+            if member == key || SurfaceKind::of_path(Path::new(&member)) != Some(SurfaceKind::Ddd) {
+                continue;
+            }
+            match self.peek(&member) {
+                Some(Artifact::Design(model)) => models.push(model),
+                Some(_) => {}
+                None => {
+                    let Ok(design) = read_ddd_design(Path::new(&member), Some(self)) else {
+                        continue;
+                    };
+                    let compilation = rex_driver::compile_ddd_str(
+                        &design.path,
+                        &design.source,
+                        &design.domains,
+                        &design.imports(),
+                    );
+                    if let Some(model) = compilation.model {
+                        self.store(&member, &Artifact::Design(model.clone()));
+                        models.push(model);
+                    }
+                }
+            }
+        }
+        models
+    }
+
     /// Lookup-before-compute: the cached artifact for `key`, or
     /// `compute()` run exactly once and stored. The import graph is
     /// acyclic by grammar, so a plain map suffices — no cycle machinery.
@@ -243,45 +359,47 @@ fn application_members(sources: &BTreeMap<String, String>) -> BTreeMap<String, V
     members
 }
 
-/// The `import "…"` strings one snapshot member writes, read from its
-/// extension. `.mox` writes none (its `import schema`/`import sigil`
-/// targets are vocabulary content, not application files), and every other
-/// surface's written imports are its parse's `imports` list — the same
+/// The `import "…"` strings one snapshot member writes, dispatched on the
+/// one surface table. `.mox` writes none (its `import schema`/`import
+/// sigil` targets are vocabulary content, not application files), and every
+/// other surface's written imports are its parse's `imports` list — the same
 /// strings the reader later resolves, so the clustering never invents an
 /// edge the compile would not follow.
 fn written_imports(path: &Path, text: &str) -> Vec<String> {
-    match path.extension().and_then(|extension| extension.to_str()) {
-        Some("actor") => rex_syntax::parse_actors(text)
+    match SurfaceKind::of_path(path) {
+        Some(SurfaceKind::Actor) => rex_syntax::parse_actors(text)
             .ast
             .map(|ast| ast.imports.into_iter().map(|import| import.path).collect())
             .unwrap_or_default(),
-        Some("ddd") => rex_syntax::parse_ddd(text)
+        Some(SurfaceKind::Ddd) => rex_syntax::parse_ddd(text)
             .ast
             .map(|ast| ast.imports.into_iter().map(|import| import.path).collect())
             .unwrap_or_default(),
-        Some("evt") => rex_syntax::parse_evt(text)
+        Some(SurfaceKind::Evt) => rex_syntax::parse_evt(text)
             .ast
             .map(|ast| ast.imports.into_iter().map(|import| import.path).collect())
             .unwrap_or_default(),
-        Some("deploy") => rex_syntax::parse_deploy(text)
+        Some(SurfaceKind::Deploy) => rex_syntax::parse_deploy(text)
             .ast
             .map(|ast| ast.imports.into_iter().map(|import| import.path).collect())
             .unwrap_or_default(),
-        Some("uc") => rex_syntax::parse_usecases(text)
+        Some(SurfaceKind::Uc) => rex_syntax::parse_usecases(text)
             .ast
             .map(|ast| ast.imports.into_iter().map(|import| import.path).collect())
             .unwrap_or_default(),
-        Some("cmmn") => rex_syntax::parse_cmmn(text)
+        Some(SurfaceKind::Cmmn) => rex_syntax::parse_cmmn(text)
             .ast
             .map(|ast| ast.imports.into_iter().map(|import| import.path).collect())
             .unwrap_or_default(),
         // `.dmn` imports are domains plus `.evt` contracts; both are
         // surface files the snapshot may hold, so both are edges.
-        Some("dmn") => rex_driver::project::dmn_import_paths(text),
-        Some("ifml") => rex_ifml::parse_ifml(text)
+        Some(SurfaceKind::Dmn) => rex_driver::project::dmn_import_paths(text),
+        Some(SurfaceKind::Ifml) => rex_ifml::parse_ifml(text)
             .map(|model| model.imports)
             .unwrap_or_default(),
-        _ => Vec::new(),
+        // A `.mox` member declares no surface imports; an unknown extension
+        // is no application file at all.
+        Some(SurfaceKind::Mox) | None => Vec::new(),
     }
 }
 

@@ -37,6 +37,7 @@ use rex_driver::graph::{build, GraphFile, GraphIndex, GraphInputs};
 use rex_driver::navigation::{
     ifml_surface, mox_index, IndexedDefinition, IndexedReference, SurfaceIndex, SurfaceLookup,
 };
+use rex_driver::SurfaceKind;
 use rex_ir::graph::{kinds, GraphModel, GraphNode};
 use tower_lsp_server::ls_types::*;
 
@@ -314,14 +315,14 @@ impl RexBackend {
             |domains: &[(String, String)]| super::pipeline::domain_import_bundle(domains);
         let mut fetch = |resolved: &str| -> Option<String> { self.fetch_open_or_disk(resolved) };
         match surface {
-            Surface::Mox => {
+            Surface::Known(SurfaceKind::Mox) => {
                 let imports =
                     rex_driver::workspace_imports::collect_for_source(&key, path, text).ok()?;
                 rex_driver::compile_str(&key, text, &imports)
                     .model
                     .map(SnapshotArtifact::Domain)
             }
-            Surface::Actor => {
+            Surface::Known(SurfaceKind::Actor) => {
                 let domains = rex_driver::project::gather_domain_sources(
                     &key,
                     text,
@@ -337,7 +338,7 @@ impl RexBackend {
                     .model
                     .map(SnapshotArtifact::Actor)
             }
-            Surface::Ddd => {
+            Surface::Known(SurfaceKind::Ddd) => {
                 let domains = rex_driver::project::gather_domain_sources(
                     &key,
                     text,
@@ -353,7 +354,7 @@ impl RexBackend {
                     .model
                     .map(SnapshotArtifact::Design)
             }
-            Surface::Evt => {
+            Surface::Known(SurfaceKind::Evt) => {
                 let domains = rex_driver::project::gather_domain_sources(
                     &key,
                     text,
@@ -369,7 +370,7 @@ impl RexBackend {
                     .model
                     .map(SnapshotArtifact::Event)
             }
-            Surface::Deploy => {
+            Surface::Known(SurfaceKind::Deploy) => {
                 let pair = rex_driver::project::gather_deploy_imports(
                     &key,
                     text,
@@ -386,11 +387,11 @@ impl RexBackend {
                     .model
                     .map(SnapshotArtifact::Deploy)
             }
-            Surface::Ifml => {
+            Surface::Known(SurfaceKind::Ifml) => {
                 let (snapshot, _diagnostics) = self.compile_ifml(uri, text);
                 snapshot.map(|snapshot| SnapshotArtifact::Flow(snapshot.compilation.model))
             }
-            Surface::Uc => {
+            Surface::Known(SurfaceKind::Uc) => {
                 let buckets = rex_driver::project::gather_usecase_imports(
                     &key,
                     text,
@@ -415,7 +416,7 @@ impl RexBackend {
                 .model
                 .map(SnapshotArtifact::UseCase)
             }
-            Surface::Cmmn => {
+            Surface::Known(SurfaceKind::Cmmn) => {
                 let buckets = rex_driver::project::gather_case_imports(
                     &key,
                     text,
@@ -441,7 +442,7 @@ impl RexBackend {
                 .model
                 .map(SnapshotArtifact::Case)
             }
-            Surface::Dmn => {
+            Surface::Known(SurfaceKind::Dmn) => {
                 let sources = self.dmn_sources_for(uri, text);
                 rex_driver::compile_dmn_str(
                     &key,
@@ -523,18 +524,7 @@ fn push_artifact(
 
 /// The surface of a path, by extension.
 pub(super) fn surface_of_path(path: &Path) -> Option<Surface> {
-    match path.extension().and_then(|extension| extension.to_str())? {
-        "mox" => Some(Surface::Mox),
-        "actor" => Some(Surface::Actor),
-        "ddd" => Some(Surface::Ddd),
-        "evt" => Some(Surface::Evt),
-        "deploy" => Some(Surface::Deploy),
-        "ifml" => Some(Surface::Ifml),
-        "uc" => Some(Surface::Uc),
-        "cmmn" => Some(Surface::Cmmn),
-        "dmn" => Some(Surface::Dmn),
-        _ => None,
-    }
+    SurfaceKind::of_path(path).map(Surface::Known)
 }
 
 /// `true` for a formatter-golden `X.fmt.<ext>` file — an output, not a
@@ -558,18 +548,18 @@ fn display_path(path: &Path) -> Option<String> {
 /// equivalent answer).
 fn surface_index(surface: Surface, text: &str, display: &str) -> Option<SurfaceIndex> {
     Some(match surface {
-        Surface::Mox => mox_index(text),
-        Surface::Actor => rex_driver::navigation::actors_index(text),
-        Surface::Ddd => rex_driver::navigation::ddd_index(text),
-        Surface::Evt => rex_driver::navigation::evt_index(text, display),
-        Surface::Deploy => rex_driver::navigation::deploy_index(text),
-        Surface::Ifml => {
+        Surface::Known(SurfaceKind::Mox) => mox_index(text),
+        Surface::Known(SurfaceKind::Actor) => rex_driver::navigation::actors_index(text),
+        Surface::Known(SurfaceKind::Ddd) => rex_driver::navigation::ddd_index(text),
+        Surface::Known(SurfaceKind::Evt) => rex_driver::navigation::evt_index(text, display),
+        Surface::Known(SurfaceKind::Deploy) => rex_driver::navigation::deploy_index(text),
+        Surface::Known(SurfaceKind::Ifml) => {
             let (model, index) = rex_ifml::parse_ifml_indexed(text).ok()?;
             ifml_surface(&model, &index)
         }
-        Surface::Uc => rex_driver::navigation::uc_index(text),
-        Surface::Cmmn => rex_driver::navigation::cmmn_index(text),
-        Surface::Dmn => rex_driver::navigation::dmn_index(text, display),
+        Surface::Known(SurfaceKind::Uc) => rex_driver::navigation::uc_index(text),
+        Surface::Known(SurfaceKind::Cmmn) => rex_driver::navigation::cmmn_index(text),
+        Surface::Known(SurfaceKind::Dmn) => rex_driver::navigation::dmn_index(text, display),
         Surface::Other => return None,
     })
 }
@@ -599,33 +589,33 @@ pub(super) fn resolved_imports(surface: Surface, text: &str, path: &Path) -> Vec
 fn written_imports(surface: Surface, text: &str) -> Vec<String> {
     match surface {
         // `.mox` imports are schema/sigil content, not application files.
-        Surface::Mox | Surface::Other => Vec::new(),
-        Surface::Actor => rex_syntax::parse_actors(text)
+        Surface::Known(SurfaceKind::Mox) | Surface::Other => Vec::new(),
+        Surface::Known(SurfaceKind::Actor) => rex_syntax::parse_actors(text)
             .ast
             .map(|ast| ast.imports.into_iter().map(|import| import.path).collect())
             .unwrap_or_default(),
-        Surface::Ddd => rex_syntax::parse_ddd(text)
+        Surface::Known(SurfaceKind::Ddd) => rex_syntax::parse_ddd(text)
             .ast
             .map(|ast| ast.imports.into_iter().map(|import| import.path).collect())
             .unwrap_or_default(),
-        Surface::Evt => rex_syntax::parse_evt(text)
+        Surface::Known(SurfaceKind::Evt) => rex_syntax::parse_evt(text)
             .ast
             .map(|ast| ast.imports.into_iter().map(|import| import.path).collect())
             .unwrap_or_default(),
-        Surface::Deploy => rex_syntax::parse_deploy(text)
+        Surface::Known(SurfaceKind::Deploy) => rex_syntax::parse_deploy(text)
             .ast
             .map(|ast| ast.imports.into_iter().map(|import| import.path).collect())
             .unwrap_or_default(),
-        Surface::Uc => rex_syntax::parse_usecases(text)
+        Surface::Known(SurfaceKind::Uc) => rex_syntax::parse_usecases(text)
             .ast
             .map(|ast| ast.imports.into_iter().map(|import| import.path).collect())
             .unwrap_or_default(),
-        Surface::Cmmn => rex_syntax::parse_cmmn(text)
+        Surface::Known(SurfaceKind::Cmmn) => rex_syntax::parse_cmmn(text)
             .ast
             .map(|ast| ast.imports.into_iter().map(|import| import.path).collect())
             .unwrap_or_default(),
-        Surface::Dmn => rex_driver::project::dmn_import_paths(text),
-        Surface::Ifml => rex_ifml::parse_ifml(text)
+        Surface::Known(SurfaceKind::Dmn) => rex_driver::project::dmn_import_paths(text),
+        Surface::Known(SurfaceKind::Ifml) => rex_ifml::parse_ifml(text)
             .map(|model| model.imports)
             .unwrap_or_default(),
     }

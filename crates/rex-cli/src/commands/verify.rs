@@ -222,27 +222,30 @@ fn emit_artifacts(inputs: &[PathBuf]) -> anyhow::Result<Vec<Emission>> {
     Ok(emissions)
 }
 
-/// The receipt-local kind for an input's extension (the closed
-/// [`rex_evidence::receipt::ARTIFACT_KINDS`] vocabulary).
+/// The receipt-local kind for an input's surface (the closed
+/// [`rex_evidence::receipt::ARTIFACT_KINDS`] vocabulary). The surface table
+/// is the driver's, so a new surface is a compile error here too.
 fn artifact_kind(input: &Path) -> anyhow::Result<&'static str> {
-    let extension = input
-        .extension()
-        .and_then(|extension| extension.to_str())
-        .unwrap_or_default();
-    Ok(match extension {
-        "mox" => "irModel",
-        "actor" => "actorModel",
-        "ddd" => "dddDesign",
-        "evt" => "eventContract",
-        "uc" => "useCaseModel",
-        "deploy" => "deployModel",
-        "dmn" => "decisionModel",
-        "cmmn" => "cmmnModel",
-        "ifml" => "ifmlManifest",
-        other => anyhow::bail!(
-            "verify does not support .{other} inputs ({}); pass model surfaces",
+    let Some(kind) = rex_driver::SurfaceKind::of_path(input) else {
+        let extension = input
+            .extension()
+            .and_then(|extension| extension.to_str())
+            .unwrap_or_default();
+        anyhow::bail!(
+            "verify does not support .{extension} inputs ({}); pass model surfaces",
             input.display()
-        ),
+        );
+    };
+    Ok(match kind {
+        rex_driver::SurfaceKind::Mox => "irModel",
+        rex_driver::SurfaceKind::Actor => "actorModel",
+        rex_driver::SurfaceKind::Ddd => "dddDesign",
+        rex_driver::SurfaceKind::Evt => "eventContract",
+        rex_driver::SurfaceKind::Uc => "useCaseModel",
+        rex_driver::SurfaceKind::Deploy => "deployModel",
+        rex_driver::SurfaceKind::Dmn => "decisionModel",
+        rex_driver::SurfaceKind::Cmmn => "cmmnModel",
+        rex_driver::SurfaceKind::Ifml => "ifmlManifest",
     })
 }
 

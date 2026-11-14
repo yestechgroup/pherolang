@@ -6,7 +6,7 @@ use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 
 use rex_driver::navigation::Lookup;
-use rex_driver::{Database, SourceFile};
+use rex_driver::{Database, SourceFile, SurfaceKind};
 use salsa::Setter as _;
 use tower_lsp_server::ls_types::*;
 use tower_lsp_server::{Client, LanguageServer};
@@ -40,33 +40,20 @@ const SOURCE_NAME: &str = "rexlang";
 /// [`graph::GraphSnapshot`]'s builder and publish no diagnostics yet; an
 /// unknown file kind publishes nothing either (it must never produce bogus
 /// `.mox` errors).
+///
+/// The extension table lives once, in [`rex_driver::SurfaceKind`]; this
+/// wrapper only adds the "not a rexlang surface" case the LSP must handle
+/// (the CLI has no equivalent — it compiles an unknown extension as a
+/// domain, its historical default).
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum Surface {
-    Mox,
-    Ifml,
-    Ddd,
-    Actor,
-    Evt,
-    Deploy,
-    Uc,
-    Cmmn,
-    Dmn,
+    Known(SurfaceKind),
     Other,
 }
 
 fn surface_for(uri: &Uri) -> Surface {
-    match uri.path().decode().to_string_lossy().rsplit('.').next() {
-        Some("mox") => Surface::Mox,
-        Some("ifml") => Surface::Ifml,
-        Some("ddd") => Surface::Ddd,
-        Some("actor") => Surface::Actor,
-        Some("evt") => Surface::Evt,
-        Some("deploy") => Surface::Deploy,
-        Some("uc") => Surface::Uc,
-        Some("cmmn") => Surface::Cmmn,
-        Some("dmn") => Surface::Dmn,
-        _ => Surface::Other,
-    }
+    let path = uri.path().decode().to_string_lossy().into_owned();
+    SurfaceKind::of_path(std::path::Path::new(&path)).map_or(Surface::Other, Surface::Known)
 }
 /// One open document as the server sees it.
 #[derive(Clone)]
@@ -160,7 +147,7 @@ impl LanguageServer for RexBackend {
         let uri = text_document.uri;
         let surface = surface_for(&uri);
         let file = match surface {
-            Surface::Mox => {
+            Surface::Known(SurfaceKind::Mox) => {
                 let db = self.db.lock().unwrap();
                 Some(SourceFile::new(
                     &*db,
@@ -231,8 +218,10 @@ impl LanguageServer for RexBackend {
             let documents = self.documents.lock().unwrap();
             match documents.get(&uri) {
                 Some(document) => match document.surface {
-                    Surface::Ifml => Some(rex_ifml::format_ifml(&document.text)),
-                    Surface::Dmn => rex_syntax::format_dmn(&document.text).ok(),
+                    Surface::Known(SurfaceKind::Ifml) => {
+                        Some(rex_ifml::format_ifml(&document.text))
+                    }
+                    Surface::Known(SurfaceKind::Dmn) => rex_syntax::format_dmn(&document.text).ok(),
                     _ => None,
                 },
                 None => None,
@@ -268,7 +257,7 @@ impl LanguageServer for RexBackend {
     ) -> tower_lsp_server::jsonrpc::Result<Option<GotoDefinitionResponse>> {
         let uri = params.text_document_position_params.text_document.uri;
         let position = params.text_document_position_params.position;
-        if surface_for(&uri) == Surface::Mox {
+        if surface_for(&uri) == Surface::Known(SurfaceKind::Mox) {
             // `.mox` keeps its own index: it resolves typed references,
             // `opposite` ends, enum literals, and vocabulary facets the graph
             // deliberately does not model.
@@ -296,7 +285,7 @@ impl LanguageServer for RexBackend {
         // `.ifml` keeps its own declaration-to-declaration walk for the
         // free-string names (module uses, views) when the graph has no node
         // to bind.
-        if surface_for(&uri) == Surface::Ifml {
+        if surface_for(&uri) == Surface::Known(SurfaceKind::Ifml) {
             return Ok(self.with_ifml(&uri, |snapshot| {
                 ifml_goto_definition(snapshot, uri.clone(), position)
             }));
@@ -307,7 +296,7 @@ impl LanguageServer for RexBackend {
     async fn hover(&self, params: HoverParams) -> tower_lsp_server::jsonrpc::Result<Option<Hover>> {
         let uri = params.text_document_position_params.text_document.uri;
         let position = params.text_document_position_params.position;
-        if surface_for(&uri) == Surface::Mox {
+        if surface_for(&uri) == Surface::Known(SurfaceKind::Mox) {
             let hover = self.with_navigation(&uri, |map, index| {
                 let offset = map.offset_for(position);
                 match index.at(offset) {
@@ -325,7 +314,7 @@ impl LanguageServer for RexBackend {
         }
         // `.ifml`'s own hover (the module signature, the declaration kind)
         // wins where it has an answer; the graph enriches the rest.
-        if surface_for(&uri) == Surface::Ifml {
+        if surface_for(&uri) == Surface::Known(SurfaceKind::Ifml) {
             if let Some(hover) = self.with_ifml(&uri, |snapshot| ifml_hover(snapshot, position)) {
                 return Ok(Some(hover));
             }
@@ -342,7 +331,7 @@ impl LanguageServer for RexBackend {
         params: DocumentSymbolParams,
     ) -> tower_lsp_server::jsonrpc::Result<Option<DocumentSymbolResponse>> {
         let uri = params.text_document.uri;
-        if surface_for(&uri) == Surface::Mox {
+        if surface_for(&uri) == Surface::Known(SurfaceKind::Mox) {
             let symbols = self.with_navigation(&uri, |map, index| {
                 let roots: Vec<DocumentSymbol> = index
                     .definitions()
@@ -370,7 +359,7 @@ impl LanguageServer for RexBackend {
         }
         // `.ifml`'s outline carries its module `use` sites nested under their
         // declarations — richer than the flat surface index.
-        if surface_for(&uri) == Surface::Ifml {
+        if surface_for(&uri) == Surface::Known(SurfaceKind::Ifml) {
             if let Some(symbols) = self.with_ifml(&uri, ifml_document_symbols) {
                 return Ok(Some(symbols));
             }
@@ -497,7 +486,7 @@ impl LanguageServer for RexBackend {
         // `.mox` references ride rename's resolver (the navigation index's
         // typed targets); the standalone handler declines rather than
         // answering from a second, partial table.
-        if surface_for(&uri) == Surface::Mox {
+        if surface_for(&uri) == Surface::Known(SurfaceKind::Mox) {
             return Ok(None);
         }
         let locations = self
@@ -520,7 +509,7 @@ impl LanguageServer for RexBackend {
                 }
             }
         }
-        if surface_for(&uri) == Surface::Mox {
+        if surface_for(&uri) == Surface::Known(SurfaceKind::Mox) {
             return Ok(None);
         }
         match self
@@ -559,7 +548,7 @@ impl LanguageServer for RexBackend {
                 "invalid identifier",
             ));
         }
-        if surface_for(&uri) == Surface::Mox {
+        if surface_for(&uri) == Surface::Known(SurfaceKind::Mox) {
             let edit = self.with_navigation(&uri, |map, index| {
                 let offset = map.offset_for(position);
                 let target = match index.at(offset) {
