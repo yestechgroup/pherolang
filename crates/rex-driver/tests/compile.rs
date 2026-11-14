@@ -4,7 +4,7 @@
 use rex_driver::{compile_str, render, Severity};
 use rex_ir::{ClassDef, DefaultValue, FeatureKind, Multiplicity, OppositeRef, TypeRef, Upper};
 
-const LIBRARY: &str = include_str!("../../../examples/library.mox");
+const LIBRARY: &str = include_str!("../../../examples/library/library.mox");
 
 const PKG: &str = "nz.example.library";
 

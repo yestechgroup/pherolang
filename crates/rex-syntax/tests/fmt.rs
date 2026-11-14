@@ -604,7 +604,7 @@ fn idempotent_on_conformance_actors_file() {
 
 #[test]
 fn idempotent_on_examples_library() {
-    assert_idempotent(include_str!("../../../examples/library.mox"));
+    assert_idempotent(include_str!("../../../examples/library/library.mox"));
 }
 
 #[test]

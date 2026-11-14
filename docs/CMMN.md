@@ -295,5 +295,5 @@ operation, and whose decision task invokes `support.dmn`'s
 `RefundDecisions.AssessRefund` service — byte-pinned under
 `examples/artifacts/` (`examples_artifacts.rs`, plus the engine-definition
 golden in `rex-backend-cmmn`'s examples test). The CI fmt gate covers
-`tests/conformance/cmmn/*.cmmn` and `examples/*.cmmn`. Regenerate goldens
+`tests/conformance/cmmn/*.cmmn` and `examples/*/*.cmmn`. Regenerate goldens
 with `REX_UPDATE_FIXTURES=1 cargo test --workspace`.

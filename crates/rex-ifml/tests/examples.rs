@@ -1,5 +1,5 @@
 //! Conformance tests for the `examples/` interaction flows: every
-//! `examples/<name>.ifml` listed in [`EXAMPLES`] must exist, compile with
+//! `examples/<app>/<name>.ifml` listed in [`EXAMPLES`] must exist, compile with
 //! zero diagnostics when its imports resolve from disk exactly the way the
 //! CLI resolves them, type-check against the union of its imported `.mox`
 //! domains and the decision services of its imported `.dmn` models, and be
@@ -13,9 +13,16 @@ use rex_ifml::{
     check_ifml_with_decisions, compile_ifml_str, IfmlCompilation, IfmlDiagnostic, IfmlImports,
 };
 
-/// The interaction-flow examples, hardcoded so a missing file fails loudly
-/// (the house convention for the `examples/` harnesses).
-pub const EXAMPLES: [&str; 3] = ["cli", "ecommerce", "support"];
+/// The interaction-flow examples as `(name, app-relative stem)`, hardcoded
+/// so a missing file fails loudly (the house convention for the `examples/`
+/// harnesses). The name keys the golden manifest under
+/// `examples/artifacts/`; the stem is the path under `examples/` — one
+/// directory per application since rexlang#258.
+pub const EXAMPLES: [(&str, &str); 3] = [
+    ("cli", "support/cli"),
+    ("ecommerce", "shop/ecommerce"),
+    ("support", "support/support"),
+];
 
 const EXAMPLES_DIR: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/../../examples");
 
@@ -32,7 +39,7 @@ struct Example {
     decision_imports: Vec<rex_driver::project::DecisionImport>,
 }
 
-/// Reads `examples/<name>.ifml` plus everything it imports through
+/// Reads `examples/<stem>.ifml` plus everything it imports through
 /// [`rex_ifml::walk_ifml_imports`], mirroring the CLI's collection: the
 /// fetch closure resolves each import relative to the importing file's
 /// directory on disk, provides `.ifml` content under the walker's
@@ -41,10 +48,10 @@ struct Example {
 /// each with its own `.mox` imports and decision-table contents fetched
 /// under the model's resolved path — as side effects. Disk paths are
 /// tracked per identity here — the walker only sees identities.
-fn load(name: &str) -> Example {
-    let source_path = Path::new(EXAMPLES_DIR).join(format!("{name}.ifml"));
+fn load(stem: &str) -> Example {
+    let source_path = Path::new(EXAMPLES_DIR).join(format!("{stem}.ifml"));
     let source = fs::read_to_string(&source_path)
-        .unwrap_or_else(|error| panic!("example {name}.ifml must exist under examples/: {error}"));
+        .unwrap_or_else(|error| panic!("example {stem}.ifml must exist under examples/: {error}"));
     let mut example = Example {
         path: source_path.display().to_string(),
         source,
@@ -215,12 +222,12 @@ fn render(diagnostics: &[IfmlDiagnostic]) -> String {
         .join("\n")
 }
 
-fn compile(name: &str) -> IfmlCompilation {
-    let example = load(name);
+fn compile(stem: &str) -> IfmlCompilation {
+    let example = load(stem);
     match compile_ifml_str(&example.path, &example.source, &example.imports) {
         Ok(compilation) => compilation,
         Err(diagnostics) => panic!(
-            "{name}.ifml must compile with zero diagnostics:\n{}",
+            "{stem}.ifml must compile with zero diagnostics:\n{}",
             render(&diagnostics)
         ),
     }
@@ -229,11 +236,11 @@ fn compile(name: &str) -> IfmlCompilation {
 /// Compiles every imported `.mox` domain to Core IR and unions the
 /// packages — the model [`check_ifml_with_decisions`] binds expressions
 /// against.
-fn domain_union(name: &str) -> rex_ir::Model {
-    let example = load(name);
+fn domain_union(stem: &str) -> rex_ir::Model {
+    let example = load(stem);
     assert!(
         !example.domains.is_empty(),
-        "{name}.ifml must import at least one .mox domain"
+        "{stem}.ifml must import at least one .mox domain"
     );
     let mut union = rex_ir::Model::new();
     for (path, source) in &example.domains {
@@ -257,17 +264,17 @@ fn domain_union(name: &str) -> rex_ir::Model {
 /// [`check_ifml_with_decisions`] resolves `data:` names against. A model
 /// that fails to compile (its types must resolve against its own gathered
 /// `.mox` imports; its tables must ingest) fails the harness loudly.
-fn decisions(name: &str) -> Vec<rex_ir::dmn::DmnModel> {
-    let example = load(name);
+fn decisions(stem: &str) -> Vec<rex_ir::dmn::DmnModel> {
+    let example = load(stem);
     rex_driver::project::compile_decision_imports(&example.decision_imports).unwrap_or_else(
-        |message| panic!("{name}.ifml's imported decision models must compile: {message}"),
+        |message| panic!("{stem}.ifml's imported decision models must compile: {message}"),
     )
 }
 
 #[test]
 fn every_example_compiles_and_resolves_its_module_uses() {
-    for name in &EXAMPLES {
-        let compilation = compile(name);
+    for (name, stem) in &EXAMPLES {
+        let compilation = compile(stem);
         assert!(
             !compilation.model.views.is_empty() || !compilation.model.commands.is_empty(),
             "{name}.ifml must declare at least one view or command"
@@ -297,10 +304,10 @@ fn every_example_compiles_and_resolves_its_module_uses() {
 
 #[test]
 fn every_example_type_checks_against_its_domain_union() {
-    for name in &EXAMPLES {
-        let compilation = compile(name);
-        let union = domain_union(name);
-        let binding = check_ifml_with_decisions(&compilation, Some(&union), &[], &decisions(name));
+    for (name, stem) in &EXAMPLES {
+        let compilation = compile(stem);
+        let union = domain_union(stem);
+        let binding = check_ifml_with_decisions(&compilation, Some(&union), &[], &decisions(stem));
         assert!(
             binding.is_empty(),
             "{name}.ifml must type-check against its domains:\n{}",
@@ -319,21 +326,21 @@ fn every_example_type_checks_against_its_domain_union() {
 /// Regenerate with `REX_UPDATE_FIXTURES=1 cargo test -p rex-ifml --test examples`.
 #[test]
 fn every_example_manifest_matches_its_golden_artifact() {
-    for name in &EXAMPLES {
-        let example = load(name);
-        let compilation = compile(name);
+    for (name, stem) in &EXAMPLES {
+        let example = load(stem);
+        let compilation = compile(stem);
         let binding = check_ifml_with_decisions(
             &compilation,
-            Some(&domain_union(name)),
+            Some(&domain_union(stem)),
             &[],
-            &decisions(name),
+            &decisions(stem),
         );
         assert!(
             binding.is_empty(),
             "{name}.ifml must check clean before manifesting:\n{}",
             render(&binding)
         );
-        let union = domain_union(name);
+        let union = domain_union(stem);
         let manifest = rex_ifml::manifest_ifml(&compilation, &example.imports, Some(&union));
         let json = manifest.to_json_pretty().expect("serialize manifest");
 
@@ -369,8 +376,8 @@ fn every_example_manifest_matches_its_golden_artifact() {
 
 #[test]
 fn every_example_is_fmt_canonical() {
-    for name in &EXAMPLES {
-        let example = load(name);
+    for (name, stem) in &EXAMPLES {
+        let example = load(stem);
         assert_eq!(
             rex_ifml::format_ifml(&example.source),
             example.source,
@@ -381,25 +388,38 @@ fn every_example_is_fmt_canonical() {
 
 #[test]
 fn the_example_list_covers_every_ifml_file_on_disk() {
-    let mut listed: Vec<String> = EXAMPLES.iter().map(|name| format!("{name}.ifml")).collect();
-    listed.sort();
-    let mut on_disk: Vec<String> = fs::read_dir(EXAMPLES_DIR)
-        .expect("examples directory exists")
-        .map(|entry| entry.expect("readable entry").path())
-        .filter(|path| {
-            path.extension()
+    fn walk(dir: &Path, base: &Path, found: &mut Vec<String>) {
+        let mut entries: Vec<PathBuf> = fs::read_dir(dir)
+            .expect("readable examples directory")
+            .map(|entry| entry.expect("readable entry").path())
+            .collect();
+        entries.sort();
+        for path in entries {
+            if path.is_dir() {
+                let name = path.file_name().unwrap_or_default().to_string_lossy();
+                if base == Path::new("") && (name == "artifacts" || name == "instances") {
+                    continue;
+                }
+                walk(&path, &base.join(name.as_ref()), found);
+            } else if path
+                .extension()
                 .is_some_and(|extension| extension == "ifml")
-        })
-        .map(|path| {
-            path.file_name()
-                .expect("named file")
-                .to_string_lossy()
-                .into_owned()
-        })
-        .collect();
+            {
+                let stem = path.file_stem().expect("named file").to_string_lossy();
+                found.push(base.join(stem.as_ref()).to_string_lossy().into_owned());
+            }
+        }
+    }
+    let mut on_disk = Vec::new();
+    walk(Path::new(EXAMPLES_DIR), Path::new(""), &mut on_disk);
     on_disk.sort();
+    let mut listed: Vec<String> = EXAMPLES
+        .iter()
+        .map(|(_, stem)| (*stem).to_string())
+        .collect();
+    listed.sort();
     assert_eq!(
         listed, on_disk,
-        "examples/*.ifml and EXAMPLES must stay in sync"
+        "examples/**/*.ifml and EXAMPLES must stay in sync"
     );
 }

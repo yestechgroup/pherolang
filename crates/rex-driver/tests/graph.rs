@@ -99,7 +99,7 @@ fn assert_clean<D: std::fmt::Debug>(where_: &str, diagnostics: &[D]) {
 // ---------------------------------------------------------------------------
 
 fn support_mox() -> rex_ir::Model {
-    let display = "examples/support.mox";
+    let display = "examples/support/support.mox";
     let compilation = rex_driver::compile_str(
         &disk(display).display().to_string(),
         &read(display),
@@ -143,11 +143,14 @@ fn evt_model(display: &str, domain_display: &str) -> rex_ir::events::EventModel 
 /// The `support.actor` policy — the `.actor` import key is the string as
 /// written (the driver receives texts only).
 fn actor_model() -> rex_ir::ActorModel {
-    let display = "examples/support.actor";
+    let display = "examples/support/support.actor";
     let compilation = rex_driver::compile_actors_str(
         &disk(display).display().to_string(),
         &read(display),
-        &[("support.mox".to_string(), read("examples/support.mox"))],
+        &[(
+            "support.mox".to_string(),
+            read("examples/support/support.mox"),
+        )],
         &rex_driver::DomainImports::default(),
     );
     assert_clean(display, &compilation.diagnostics);
@@ -155,18 +158,21 @@ fn actor_model() -> rex_ir::ActorModel {
 }
 
 fn dmn_model() -> rex_ir::dmn::DmnModel {
-    let display = "examples/support.dmn";
+    let display = "examples/support/support.dmn";
     let domains = [(
-        disk("examples/support.mox").display().to_string(),
-        read("examples/support.mox"),
+        disk("examples/support/support.mox").display().to_string(),
+        read("examples/support/support.mox"),
     )];
     let tables = [(
         "./tables/refund-authority.md".to_string(),
-        read("examples/tables/refund-authority.md"),
+        read("examples/support/tables/refund-authority.md"),
     )];
     let events = [(
         "support.evt".to_string(),
-        evt_model("examples/support.evt", "examples/support.mox"),
+        evt_model(
+            "examples/support/support.evt",
+            "examples/support/support.mox",
+        ),
     )];
     let compilation = rex_driver::compile_dmn_str(
         &disk(display).display().to_string(),
@@ -218,22 +224,28 @@ fn flow_model(display: &str) -> rex_ir::ifml::IfmlModel {
 }
 
 fn uc_model() -> rex_ir::usecases::UseCaseModel {
-    let display = "examples/support.uc";
+    let display = "examples/support/support.uc";
     let domains = [(
-        disk("examples/support.mox").display().to_string(),
-        read("examples/support.mox"),
+        disk("examples/support/support.mox").display().to_string(),
+        read("examples/support/support.mox"),
     )];
     let designs = [(
-        disk("examples/support.ddd").display().to_string(),
-        ddd_model("examples/support.ddd", "examples/support.mox"),
+        disk("examples/support/support.ddd").display().to_string(),
+        ddd_model(
+            "examples/support/support.ddd",
+            "examples/support/support.mox",
+        ),
     )];
     let actors = [(
-        disk("examples/support.actor").display().to_string(),
+        disk("examples/support/support.actor").display().to_string(),
         actor_model(),
     )];
     let events = [(
-        disk("examples/support.evt").display().to_string(),
-        evt_model("examples/support.evt", "examples/support.mox"),
+        disk("examples/support/support.evt").display().to_string(),
+        evt_model(
+            "examples/support/support.evt",
+            "examples/support/support.mox",
+        ),
     )];
     let compilation = rex_driver::compile_usecase_str(
         &disk(display).display().to_string(),
@@ -249,25 +261,31 @@ fn uc_model() -> rex_ir::usecases::UseCaseModel {
 }
 
 fn cmmn_model() -> rex_ir::cmmn::CmmnModel {
-    let display = "examples/support.cmmn";
+    let display = "examples/support/support.cmmn";
     let domains = [(
-        disk("examples/support.mox").display().to_string(),
-        read("examples/support.mox"),
+        disk("examples/support/support.mox").display().to_string(),
+        read("examples/support/support.mox"),
     )];
     let designs = [(
-        disk("examples/support.ddd").display().to_string(),
-        ddd_model("examples/support.ddd", "examples/support.mox"),
+        disk("examples/support/support.ddd").display().to_string(),
+        ddd_model(
+            "examples/support/support.ddd",
+            "examples/support/support.mox",
+        ),
     )];
     let actors = [(
-        disk("examples/support.actor").display().to_string(),
+        disk("examples/support/support.actor").display().to_string(),
         actor_model(),
     )];
     let events = [(
-        disk("examples/support.evt").display().to_string(),
-        evt_model("examples/support.evt", "examples/support.mox"),
+        disk("examples/support/support.evt").display().to_string(),
+        evt_model(
+            "examples/support/support.evt",
+            "examples/support/support.mox",
+        ),
     )];
     let decisions = [(
-        disk("examples/support.dmn").display().to_string(),
+        disk("examples/support/support.dmn").display().to_string(),
         dmn_model(),
     )];
     let compilation = rex_driver::compile_cmmn_str(
@@ -285,14 +303,17 @@ fn cmmn_model() -> rex_ir::cmmn::CmmnModel {
 }
 
 fn deploy_model() -> rex_ir::deploy::DeployModel {
-    let display = "examples/support.deploy";
+    let display = "examples/support/support.deploy";
     let designs = [(
-        disk("examples/support.ddd").display().to_string(),
-        ddd_model("examples/support.ddd", "examples/support.mox"),
+        disk("examples/support/support.ddd").display().to_string(),
+        ddd_model(
+            "examples/support/support.ddd",
+            "examples/support/support.mox",
+        ),
     )];
     let flows = [(
-        disk("examples/support.ifml").display().to_string(),
-        flow_model("examples/support.ifml"),
+        disk("examples/support/support.ifml").display().to_string(),
+        flow_model("examples/support/support.ifml"),
     )];
     let compilation = rex_driver::compile_deploy_str(
         &disk(display).display().to_string(),
@@ -309,23 +330,30 @@ fn support_inputs() -> GraphInputs {
     let mut inputs = GraphInputs::default();
     inputs
         .domains
-        .push(graph_file("examples/support.mox", support_mox()));
+        .push(graph_file("examples/support/support.mox", support_mox()));
     inputs
         .actors
-        .push(graph_file("examples/support.actor", actor_model()));
+        .push(graph_file("examples/support/support.actor", actor_model()));
     inputs.designs.push(graph_file(
-        "examples/support.ddd",
-        ddd_model("examples/support.ddd", "examples/support.mox"),
+        "examples/support/support.ddd",
+        ddd_model(
+            "examples/support/support.ddd",
+            "examples/support/support.mox",
+        ),
     ));
     inputs.events.push(graph_file(
-        "examples/support.evt",
-        evt_model("examples/support.evt", "examples/support.mox"),
+        "examples/support/support.evt",
+        evt_model(
+            "examples/support/support.evt",
+            "examples/support/support.mox",
+        ),
     ));
-    inputs
-        .deploys
-        .push(graph_file("examples/support.deploy", deploy_model()));
+    inputs.deploys.push(graph_file(
+        "examples/support/support.deploy",
+        deploy_model(),
+    ));
     for display in [
-        "examples/support.ifml",
+        "examples/support/support.ifml",
         PATTERN_FLOWS[0],
         PATTERN_FLOWS[1],
         PATTERN_FLOWS[2],
@@ -337,13 +365,13 @@ fn support_inputs() -> GraphInputs {
     }
     inputs
         .use_cases
-        .push(graph_file("examples/support.uc", uc_model()));
+        .push(graph_file("examples/support/support.uc", uc_model()));
     inputs
         .cases
-        .push(graph_file("examples/support.cmmn", cmmn_model()));
+        .push(graph_file("examples/support/support.cmmn", cmmn_model()));
     inputs
         .decisions
-        .push(graph_file("examples/support.dmn", dmn_model()));
+        .push(graph_file("examples/support/support.dmn", dmn_model()));
     inputs
 }
 
@@ -351,19 +379,21 @@ fn support_inputs() -> GraphInputs {
 /// `ecommerce.mox` bridge, no import path to the support files).
 fn two_application_inputs() -> GraphInputs {
     let mut inputs = support_inputs();
-    inputs.domains.push(graph_file("examples/ecommerce.mox", {
-        let display = "examples/ecommerce.mox";
-        let compilation = rex_driver::compile_str(
-            &disk(display).display().to_string(),
-            &read(display),
-            &rex_driver::DomainImports::default(),
-        );
-        assert_clean(display, &compilation.diagnostics);
-        compilation.model.expect("ecommerce.mox must lower")
-    }));
+    inputs
+        .domains
+        .push(graph_file("examples/shop/ecommerce.mox", {
+            let display = "examples/shop/ecommerce.mox";
+            let compilation = rex_driver::compile_str(
+                &disk(display).display().to_string(),
+                &read(display),
+                &rex_driver::DomainImports::default(),
+            );
+            assert_clean(display, &compilation.diagnostics);
+            compilation.model.expect("ecommerce.mox must lower")
+        }));
     inputs.designs.push(graph_file(
-        "examples/orders.ddd",
-        ddd_model("examples/orders.ddd", "examples/ecommerce.mox"),
+        "examples/shop/orders.ddd",
+        ddd_model("examples/shop/orders.ddd", "examples/shop/ecommerce.mox"),
     ));
     inputs
 }
@@ -433,15 +463,15 @@ fn attributes<'a>(edge: &'a GraphEdge, key: &str) -> &'a str {
 // Curated ids (the fixture's contract)
 // ---------------------------------------------------------------------------
 
-const MOX: &str = "examples/support.mox";
-const ACTOR: &str = "examples/support.actor";
-const DDD: &str = "examples/support.ddd";
-const EVT: &str = "examples/support.evt";
-const DMN: &str = "examples/support.dmn";
-const IFML: &str = "examples/support.ifml";
-const UC: &str = "examples/support.uc";
-const CMMN: &str = "examples/support.cmmn";
-const DEPLOY: &str = "examples/support.deploy";
+const MOX: &str = "examples/support/support.mox";
+const ACTOR: &str = "examples/support/support.actor";
+const DDD: &str = "examples/support/support.ddd";
+const EVT: &str = "examples/support/support.evt";
+const DMN: &str = "examples/support/support.dmn";
+const IFML: &str = "examples/support/support.ifml";
+const UC: &str = "examples/support/support.uc";
+const CMMN: &str = "examples/support/support.cmmn";
+const DEPLOY: &str = "examples/support/support.deploy";
 
 fn class(file: &str, name: &str) -> String {
     format!("{}:{file}#{name}", kinds::CLASS)
@@ -772,7 +802,7 @@ fn support_stack_emits_the_expected_nodes_and_edges() {
     // the stack clusters as exactly one component carrying every file.
     assert_eq!(graph.applications.len(), 1, "{:#?}", graph.applications);
     // The application id is the component's smallest member path.
-    assert_eq!(graph.applications[0].id, "examples/support.actor");
+    assert_eq!(graph.applications[0].id, "examples/support/support.actor");
     assert_eq!(graph.applications[0].packages, ["nz.example.support"]);
     assert!(
         graph.applications[0].files.contains(&DDD.to_string()),
@@ -861,12 +891,13 @@ fn inline_file<M>(display: &str, imports: &[&str], model: M) -> GraphFile<M> {
 
 fn inline_ddd(display: &str, source: &str) -> rex_ir::ddd::DddModel {
     let domains = [(
-        disk("examples/support.mox").display().to_string(),
-        read("examples/support.mox"),
+        disk("examples/support/support.mox").display().to_string(),
+        read("examples/support/support.mox"),
     )];
     // The compile path resolves imports lexically, so it lives next to the
-    // real examples even though the file itself is source text.
-    let compile_path = disk("examples")
+    // support application's sources even though the file itself is source
+    // text.
+    let compile_path = disk("examples/support")
         .join(display.rsplit('/').next().unwrap_or(display))
         .display()
         .to_string();
@@ -905,7 +936,7 @@ fn ddd_invokes_resolve_to_decision_services() {
     let mut inputs = support_inputs();
     inputs.designs.push(inline_file(
         "examples/inline-decisions.ddd",
-        &["examples/support.mox"],
+        &["examples/support/support.mox"],
         inline_ddd("examples/inline-decisions.ddd", source),
     ));
     let graph = build(&inputs);
@@ -963,7 +994,7 @@ fn ddd_emits_resolve_to_events() {
     let mut inputs = support_inputs();
     inputs.designs.push(inline_file(
         "examples/inline-emits.ddd",
-        &["examples/support.mox"],
+        &["examples/support/support.mox"],
         inline_ddd("examples/inline-emits.ddd", source),
     ));
     let graph = build(&inputs);
@@ -1020,15 +1051,15 @@ fn ambiguous_bindings_are_flagged() {
     let mut inputs = GraphInputs::default();
     inputs
         .domains
-        .push(graph_file("examples/support.mox", support_mox()));
+        .push(graph_file("examples/support/support.mox", support_mox()));
     inputs.designs.push(inline_file(
         "examples/inline-ambiguous.ddd",
-        &["examples/support.mox"],
+        &["examples/support/support.mox"],
         inline_ddd("examples/inline-ambiguous.ddd", design),
     ));
     inputs.flows.push(inline_file(
         "examples/inline-ambiguous.ifml",
-        &["examples/support.mox"],
+        &["examples/support/support.mox"],
         inline_ifml("examples/inline-ambiguous.ifml", flow),
     ));
     let graph = build(&inputs);
@@ -1293,12 +1324,12 @@ fn unresolved_references_produce_no_edges() {
     let mut inputs = support_inputs();
     inputs.designs.push(inline_file(
         "examples/inline-unresolved.ddd",
-        &["examples/support.mox"],
+        &["examples/support/support.mox"],
         inline_ddd("examples/inline-unresolved.ddd", design),
     ));
     inputs.flows.push(inline_file(
         "examples/inline-unresolved.ifml",
-        &["examples/support.mox"],
+        &["examples/support/support.mox"],
         inline_ifml("examples/inline-unresolved.ifml", flow),
     ));
     let graph = build(&inputs);
@@ -1328,11 +1359,11 @@ fn two_unrelated_applications_do_not_merge() {
     let graph = build(&two_application_inputs());
     assert_eq!(graph.applications.len(), 2, "{:#?}", graph.applications);
     assert_eq!(
-        graph.applications[0].id, "examples/ecommerce.mox",
+        graph.applications[0].id, "examples/shop/ecommerce.mox",
         "applications sort by id"
     );
     assert_eq!(graph.applications[0].packages, ["nz.example.shop"]);
-    assert_eq!(graph.applications[1].id, "examples/support.actor");
+    assert_eq!(graph.applications[1].id, "examples/support/support.actor");
     assert_eq!(graph.applications[1].packages, ["nz.example.support"]);
 
     // No edge crosses an application boundary: the pooled resolution never
@@ -1358,19 +1389,22 @@ fn two_unrelated_applications_do_not_merge() {
     // The shop application's design resolved inside itself.
     edge(
         &graph,
-        &repository("examples/orders.ddd", "Orders.ordering.OrderRepository"),
+        &repository(
+            "examples/shop/orders.ddd",
+            "Orders.ordering.OrderRepository",
+        ),
         kinds::DESIGNS,
-        &class("examples/ecommerce.mox", "nz.example.shop.Order"),
+        &class("examples/shop/ecommerce.mox", "nz.example.shop.Order"),
     );
     // `extend Order { OrderLine addLine(OrderLine line) => lines.add; }` — a
     // module-level child operation is a serviceOperation node owned by the
     // module, typed by the same `typeOf` rules as any operation.
-    let add_line = service_operation("examples/orders.ddd", "Orders.ordering.Order.addLine");
+    let add_line = service_operation("examples/shop/orders.ddd", "Orders.ordering.Order.addLine");
     edge(
         &graph,
         &add_line,
         kinds::MEMBER_OF,
-        &module("examples/orders.ddd", "Orders.ordering"),
+        &module("examples/shop/orders.ddd", "Orders.ordering"),
     );
     // The return type and the parameter share the type but not the role.
     let mut typed: Vec<(&str, &str)> = graph
@@ -1380,31 +1414,36 @@ fn two_unrelated_applications_do_not_merge() {
         .map(|edge| (attributes(edge, "role"), edge.to.as_str()))
         .collect();
     typed.sort_unstable();
-    let line = class("examples/ecommerce.mox", "nz.example.shop.OrderLine");
+    let line = class("examples/shop/ecommerce.mox", "nz.example.shop.OrderLine");
     assert_eq!(typed, [("param", line.as_str()), ("return", line.as_str())]);
 
     // The shop application's object graph: `contains` and its back-pointer's
     // `opposite` are the same relation from each end.
-    let order = class("examples/ecommerce.mox", "nz.example.shop.Order");
-    let line = class("examples/ecommerce.mox", "nz.example.shop.OrderLine");
+    let order = class("examples/shop/ecommerce.mox", "nz.example.shop.Order");
+    let line = class("examples/shop/ecommerce.mox", "nz.example.shop.OrderLine");
     assert_eq!(
         attributes(edge(&graph, &order, kinds::CONTAINS, &line), "feature"),
         "lines"
     );
     edge(
         &graph,
-        &feature("examples/ecommerce.mox", "nz.example.shop.Order.lines"),
+        &feature("examples/shop/ecommerce.mox", "nz.example.shop.Order.lines"),
         kinds::OPPOSITE,
-        &feature("examples/ecommerce.mox", "nz.example.shop.OrderLine.order"),
+        &feature(
+            "examples/shop/ecommerce.mox",
+            "nz.example.shop.OrderLine.order",
+        ),
     );
 
     // The two applications' file sets stay disjoint.
     let shop_files = &graph.applications[0].files;
     let support_files = &graph.applications[1].files;
-    assert!(shop_files.iter().any(|file| file == "examples/orders.ddd"));
+    assert!(shop_files
+        .iter()
+        .any(|file| file == "examples/shop/orders.ddd"));
     assert!(support_files
         .iter()
-        .any(|file| file == "examples/support.ddd"));
+        .any(|file| file == "examples/support/support.ddd"));
     assert!(shop_files.iter().all(|file| !support_files.contains(file)));
 }
 
@@ -1592,8 +1631,8 @@ fn emitted_kinds_are_the_published_vocabulary() {
     // v1 kind the fixtures can reach is exercised.
     let mut inputs = two_application_inputs();
     inputs.flows.push(graph_file(
-        "examples/cli.ifml",
-        flow_model("examples/cli.ifml"),
+        "examples/support/cli.ifml",
+        flow_model("examples/support/cli.ifml"),
     ));
     inputs.flows.push(graph_file(
         "tests/conformance/ifml/app.ifml",
@@ -1905,9 +1944,10 @@ fn queries_run_on_the_deserialized_artifact() {
 ///
 /// The expected set is derived from the committed golden
 /// (`examples/artifacts/examples.graph.json`) restricted to the support
-/// fixture (the golden additionally carries `cli.ifml`, whose
-/// `command:cli.ifml#tickets` hangs off `Support.Agent` through `requires:`;
-/// the driver fixture has no `cli.ifml`), then sorted by `(depth, id)`. It is
+/// fixture (the golden additionally carries `support/cli.ifml`, whose
+/// `command:support/cli.ifml#tickets` hangs off `Support.Agent` through
+/// `requires:`; the driver fixture has no CLI flow), then sorted by
+/// `(depth, id)`. It is
 /// written out literally on purpose: a snapshot of whatever the code prints
 /// would pin a bug.
 #[test]

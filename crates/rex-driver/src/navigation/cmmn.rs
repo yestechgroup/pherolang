@@ -192,7 +192,7 @@ mod tests {
     use super::*;
     use crate::navigation::test_support;
 
-    const SUPPORT: &str = "examples/support.cmmn";
+    const SUPPORT: &str = "examples/support/support.cmmn";
     const FIXTURE: &str = "tests/conformance/graph/app.cmmn";
 
     #[test]

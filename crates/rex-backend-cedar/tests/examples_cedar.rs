@@ -2,8 +2,8 @@
 //! `support` example — the suite's actors-model showcase — must generate a
 //! policy set and schema that the real `cedar-policy` crate parses, loads,
 //! and accepts under strict validation. The actors surface lives in
-//! `examples/support.actor`, compiled as a pair against the domain model it
-//! imports (`examples/support.mox`). Mirrors the per-crate `EXAMPLES` list
+//! `examples/support/support.actor`, compiled as a pair against the domain
+//! model it imports (`examples/support/support.mox`). Mirrors the per-crate `EXAMPLES` list
 //! convention of `examples_schemas.rs`.
 
 use std::collections::BTreeMap;
@@ -31,6 +31,7 @@ fn workspace_root() -> &'static Path {
 fn example_source(extension: &str, name: &str) -> (PathBuf, String) {
     let path = workspace_root()
         .join("examples")
+        .join("support")
         .join(format!("{name}.{extension}"));
     let source = std::fs::read_to_string(&path).unwrap_or_else(|error| {
         panic!(

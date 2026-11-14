@@ -6,19 +6,22 @@ use crate::support::*;
 
 // --- the canonical examples suite --------------------------------------------
 
-/// The seven canonical examples, hardcoded so a missing file fails loudly.
-const EXAMPLES: [&str; 7] = [
-    "library",
-    "ecommerce",
-    "org",
-    "iot",
-    "shapes",
-    "support",
-    "pricing",
+/// The seven canonical domain examples as `(name, app-relative stem)`,
+/// hardcoded so a missing file fails loudly. The stem is the example's
+/// path under `examples/` — one directory per application since
+/// rexlang#258.
+const EXAMPLES: [(&str, &str); 7] = [
+    ("library", "library/library"),
+    ("ecommerce", "shop/ecommerce"),
+    ("org", "org/org"),
+    ("iot", "iot/iot"),
+    ("shapes", "shapes/shapes"),
+    ("support", "support/support"),
+    ("pricing", "pricing/pricing"),
 ];
 
 /// Canonical `.actor` policy files: compiled against the domain they import.
-const ACTOR_EXAMPLES: [&str; 1] = ["support"];
+const ACTOR_EXAMPLES: [(&str, &str); 1] = [("support", "support/support")];
 
 /// Canonical artifact-surface examples: each compiled against the imports
 /// it declares (and, for `.dmn`, the decision tables its `logic table`
@@ -27,16 +30,16 @@ const ACTOR_EXAMPLES: [&str; 1] = ["support"];
 /// like a `rexlang check` of those surfaces). Their artifact bytes are
 /// pinned by `crates/rex-driver/tests/examples_artifacts.rs` and the cmmn
 /// backend's examples test.
-const ARTIFACT_EXAMPLES: [(&str, &str); 9] = [
-    ("ecommerce", "evt"),
-    ("support", "evt"),
-    ("lending", "dmn"),
-    ("support", "dmn"),
-    ("orders", "ddd"),
-    ("support", "ddd"),
-    ("support", "uc"),
-    ("support", "deploy"),
-    ("support", "cmmn"),
+const ARTIFACT_EXAMPLES: [(&str, &str, &str); 9] = [
+    ("ecommerce", "shop/ecommerce", "evt"),
+    ("support", "support/support", "evt"),
+    ("lending", "lending/lending", "dmn"),
+    ("support", "support/support", "dmn"),
+    ("orders", "shop/orders", "ddd"),
+    ("support", "support/support", "ddd"),
+    ("support", "support/support", "uc"),
+    ("support", "support/support", "deploy"),
+    ("support", "support/support", "cmmn"),
 ];
 
 fn workspace_root() -> PathBuf {
@@ -50,29 +53,29 @@ fn workspace_root() -> PathBuf {
 fn examples_suite_checks_clean_and_is_fmt_canonical() {
     let paths: Vec<PathBuf> = EXAMPLES
         .iter()
-        .map(|name| {
+        .map(|(_, stem)| {
             workspace_root()
                 .join("examples")
-                .join(format!("{name}.mox"))
+                .join(format!("{stem}.mox"))
         })
         .collect();
     let actor_paths: Vec<PathBuf> = ACTOR_EXAMPLES
         .iter()
-        .map(|name| {
+        .map(|(_, stem)| {
             workspace_root()
                 .join("examples")
-                .join(format!("{name}.actor"))
+                .join(format!("{stem}.actor"))
         })
         .collect();
     let artifact_paths: Vec<PathBuf> = ARTIFACT_EXAMPLES
         .iter()
-        .map(|(name, extension)| {
+        .map(|(_, stem, extension)| {
             workspace_root()
                 .join("examples")
-                .join(format!("{name}.{extension}"))
+                .join(format!("{stem}.{extension}"))
         })
         .collect();
-    for (name, path) in EXAMPLES.iter().zip(&paths) {
+    for ((name, _), path) in EXAMPLES.iter().zip(&paths) {
         assert!(
             path.is_file(),
             "missing canonical example {}: the examples suite is part of the harness",
@@ -93,7 +96,7 @@ fn examples_suite_checks_clean_and_is_fmt_canonical() {
             "rexlang check {name}.mox stdout"
         );
     }
-    for (name, path) in ACTOR_EXAMPLES.iter().zip(&actor_paths) {
+    for ((name, _), path) in ACTOR_EXAMPLES.iter().zip(&actor_paths) {
         assert!(
             path.is_file(),
             "missing canonical example {name}.actor: the examples suite is part of the harness"
@@ -114,7 +117,7 @@ fn examples_suite_checks_clean_and_is_fmt_canonical() {
         );
     }
 
-    for ((name, extension), path) in ARTIFACT_EXAMPLES.iter().zip(&artifact_paths) {
+    for ((name, _, extension), path) in ARTIFACT_EXAMPLES.iter().zip(&artifact_paths) {
         assert!(
             path.is_file(),
             "missing canonical example {name}.{extension}: the examples suite is part of the harness"

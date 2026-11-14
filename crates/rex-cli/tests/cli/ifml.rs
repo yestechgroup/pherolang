@@ -469,9 +469,9 @@ fn canonical_ifml_fixtures_produce_no_warnings() {
     let fixtures: Vec<PathBuf> = [
         "tests/conformance/ifml/app.ifml",
         "tests/conformance/ifml/cli.ifml",
-        "examples/cli.ifml",
-        "examples/support.ifml",
-        "examples/ecommerce.ifml",
+        "examples/support/cli.ifml",
+        "examples/support/support.ifml",
+        "examples/shop/ecommerce.ifml",
     ]
     .iter()
     .map(|relative| workspace_root().join(relative))

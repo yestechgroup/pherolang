@@ -213,12 +213,12 @@ of the grammar authority (`import sigil "<path>"`, no alias):
 ```mox
 package nz.example.pricing
 
-import sigil "../examples/pricing.rosetta"
+import sigil "../examples/pricing/pricing.rosetta"
 
 /// The lowered `pricing.model` package carries the Rune namespace's
 /// functions (signature-only operations with verbatim `"rosetta"` bodies);
 /// the `zonedDateTime` reference pulls in the `com.rosetta.model` builtin
-/// package. See `examples/pricing.mox` — the canonical example this fence
+/// package. See `examples/pricing/pricing.mox` — the canonical example this fence
 /// mirrors.
 class Quote {
     String symbol

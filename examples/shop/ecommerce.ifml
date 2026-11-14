@@ -4,7 +4,7 @@
 // shop's Product where the domain has no dedicated class.
 
 import "ecommerce.mox";
-import "../patterns/ifml/commerce.ifml";
+import "../../patterns/ifml/commerce.ifml";
 
 view "Storefront" {
     params { products: Product, categories: Product, filters: Product };

@@ -18,11 +18,11 @@ use examples_flow::{examples_dir, examples_scratch_files, EXAMPLES};
 
 #[test]
 fn all_canonical_examples_compile_with_zero_diagnostics() {
-    for name in EXAMPLES {
-        let model = examples_flow::compile_example(name);
+    for (module, stem) in EXAMPLES {
+        let model = examples_flow::compile_example(stem);
         assert!(
             !model.packages.is_empty(),
-            "example {name}.mox must lower to the Core IR"
+            "example {module}.mox must lower to the Core IR"
         );
     }
 }
@@ -34,7 +34,7 @@ fn all_canonical_examples_compile_with_zero_diagnostics() {
 /// rule 15).
 #[test]
 fn sigil_example_carries_function_signatures_and_verbatim_bodies() {
-    let model = examples_flow::compile_example("pricing");
+    let model = examples_flow::compile_example("pricing/pricing");
     let package = model
         .packages
         .iter()
@@ -95,7 +95,7 @@ fn sigil_example_carries_function_signatures_and_verbatim_bodies() {
 
     // The verbatim bodies round-trip: byte-exact slices of the rosetta
     // source, ends-trimmed (the spans consume trailing whitespace).
-    let rosetta = std::fs::read_to_string(examples_dir().join("pricing.rosetta"))
+    let rosetta = std::fs::read_to_string(examples_dir().join("pricing/pricing.rosetta"))
         .expect("read pricing.rosetta");
     for function in &package.functions {
         let body = function.bodies.get("rosetta").expect("rosetta body");
@@ -167,8 +167,8 @@ fn generated_example_modules_pass_behavioral_assertions_in_a_scratch_crate() {
 /// lives in the scratch crate above).
 #[test]
 fn every_example_generates_a_namespaced_rust_module() {
-    for name in EXAMPLES {
-        let module = examples_flow::example_module(name);
+    for (name, stem) in EXAMPLES {
+        let module = examples_flow::example_module(name, stem);
         assert!(
             module.starts_with(&format!("pub mod {name} {{\n")),
             "example {name} must generate a `pub mod {name}` module"

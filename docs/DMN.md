@@ -672,12 +672,12 @@ minimum: no imports, one input, one logic-less decision).
 The `examples/` side ships `support.dmn` (the support-desk refund
 decisions over `support.mox`: a domain-typed `Ticket`/`User` input pair,
 an expression decision, a table decision with its
-`examples/tables/refund-authority.md`, an invoked BKM composing the two,
+`examples/support/tables/refund-authority.md`, an invoked BKM composing the two,
 the `AssessRefund` service the design links to, and an `emits` block on
 `RefundAssessment` naming the `RefundApproved` event declared in
-`examples/support.evt`) and `lending.dmn`
+`examples/support/support.evt`) and `lending.dmn`
 (the architecture-first lending model with no imports: five decisions,
-two BKMs, three sources, two views, and `examples/tables/lvr.md`).
+two BKMs, three sources, two views, and `examples/lending/tables/lvr.md`).
 
 Regenerate the goldens with
 `REX_UPDATE_FIXTURES=1 cargo test -p rex-driver --test dmn_golden` (the

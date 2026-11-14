@@ -124,7 +124,7 @@ REX_UPDATE_FIXTURES=1 cargo test -p rex-cli --test cli graph
 ```
 
 The tree keeps one pre-existing project-mode failure (`orders.ddd`'s
-`PlaceOrder` capability against the union-wide pooled `support.actor`
+`PlaceOrder` capability against the union-wide pooled `support/support.actor`
 capabilities — the same finding `check examples/` renders), which exercises
 the best-effort path: the artifact is written over the compiling subset and
 the command exits `1`.
@@ -289,7 +289,7 @@ coexist; clap matches the subcommand first, so a directory literally named
 A `<ref>` resolves **exact id → exact name → unique name suffix**:
 
 ```sh
-rexlang graph query g.json node 'capability:support.actor#Support.RaiseRefund'  # id
+rexlang graph query g.json node 'capability:support/support.actor#Support.RaiseRefund'  # id
 rexlang graph query g.json node 'Support.RaiseRefund'                           # name
 rexlang graph query g.json node 'TicketService.raiseRefund'                     # suffix
 ```
@@ -317,26 +317,26 @@ an array, sorted by id (`list`) or by `(depth, id)` (the closures):
 {
   "formatVersion": 1,
   "query": "affectedBy",
-  "reference": "capability:support.actor#Support.RaiseRefund",
-  "resolved": "capability:support.actor#Support.RaiseRefund",
+  "reference": "capability:support/support.actor#Support.RaiseRefund",
+  "resolved": "capability:support/support.actor#Support.RaiseRefund",
   "direction": "dependents",
   "results": [
     {
-      "id": "capability:support.actor#Support.RaiseRefund",
+      "id": "capability:support/support.actor#Support.RaiseRefund",
       "kind": "capability",
       "name": "Support.RaiseRefund",
-      "file": "support.actor",
-      "application": "cli.ifml",
+      "file": "support/support.actor",
+      "application": "support/cli.ifml",
       "depth": 0
     },
     {
-      "id": "serviceOperation:support.ddd#SupportDesk.desk.TicketService.raiseRefund",
+      "id": "serviceOperation:support/support.ddd#SupportDesk.desk.TicketService.raiseRefund",
       "kind": "serviceOperation",
       "name": "SupportDesk.desk.TicketService.raiseRefund",
-      "file": "support.ddd",
-      "application": "cli.ifml",
+      "file": "support/support.ddd",
+      "application": "support/cli.ifml",
       "depth": 1,
-      "parent": "capability:support.actor#Support.RaiseRefund",
+      "parent": "capability:support/support.actor#Support.RaiseRefund",
       "via": "carries"
     }
   ]
@@ -368,7 +368,7 @@ operation, which is the opposite of an impact answer.
 two ownership edges walk back to the members.
 
 **File nodes answer with the `imports` graph.** `affected-by
-file:support.mox#support.mox` is the set of files that import it,
+file:support/support.mox#support/support.mox` is the set of files that import it,
 transitively; `dependencies` is the set it imports. The symbol walk never
 reports nor expands a `file` node, so a cross-file import hop can never
 smuggle a whole file's symbols into a symbol answer.

@@ -136,7 +136,7 @@ mod tests {
     use crate::navigation::test_support;
     use crate::navigation::IndexedReference;
 
-    const SUPPORT: &str = "examples/support.actor";
+    const SUPPORT: &str = "examples/support/support.actor";
 
     fn support_index() -> (String, SurfaceIndex) {
         let source = test_support::fixture(SUPPORT);

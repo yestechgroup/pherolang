@@ -746,7 +746,7 @@ fn receipt_dir(path: &Path) -> PathBuf {
 }
 
 /// The default subject: the inputs' common file stem (`support` for
-/// `examples/support.*`), else the receipt file's stem with a trailing
+/// `examples/support/support.*`), else the receipt file's stem with a trailing
 /// `.receipt` removed (`support` for `examples/artifacts/support.receipt.json`).
 fn default_subject(inputs: &[PathBuf], receipt: &Path) -> String {
     let stems: BTreeSet<String> = inputs
