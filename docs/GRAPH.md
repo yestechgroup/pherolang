@@ -299,6 +299,13 @@ exits `1` with the sorted candidates on stderr. No match is **unknown**, and
 the did-you-mean candidates (also sorted) come from the adaptive name/id
 suggestion policy in `rex-diagnostics`.
 
+Both resolutions are **indexed, never scanned**: exact ids, exact
+`(kind, name)` pairs, every proper `.`-suffix of every node name, and the
+adjacency views are built once per artifact (each name with `d` `.`-segments
+contributes at most `d - 1` borrowed suffix keys), so one reference costs
+`O(log n + matches)` map work and a lookup never walks the node table — the
+property the v0.6 MCP server and Studio rely on over 10k+ node artifacts.
+
 ### Result envelopes
 
 Every answer is one JSON envelope: `formatVersion`
