@@ -191,9 +191,10 @@ fn criterion(index: &mut SurfaceIndex, criteria: &[CmmnCriterion]) {
 mod tests {
     use super::*;
     use crate::navigation::test_support;
+    use rex_testkit::fixtures;
 
-    const SUPPORT: &str = "examples/support/support.cmmn";
-    const FIXTURE: &str = "tests/conformance/graph/app.cmmn";
+    const SUPPORT: &str = fixtures::SUPPORT_CMMN;
+    const FIXTURE: &str = fixtures::APP_CMMN;
 
     #[test]
     fn cmmn_definitions_are_the_graph_nodes() {

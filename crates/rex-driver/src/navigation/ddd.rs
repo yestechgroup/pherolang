@@ -263,9 +263,10 @@ fn decision_reference(index: &mut SurfaceIndex, reference: &DddDecisionRef) {
 mod tests {
     use super::*;
     use crate::navigation::test_support;
+    use rex_testkit::fixtures;
 
-    const SUPPORT: &str = "examples/support/support.ddd";
-    const SUPPORT_DOMAIN: &str = "examples/support/support.mox";
+    const SUPPORT: &str = fixtures::SUPPORT_DDD;
+    const SUPPORT_DOMAIN: &str = fixtures::SUPPORT_MOX;
 
     fn support_index() -> (String, SurfaceIndex) {
         let source = test_support::fixture(SUPPORT);
@@ -286,14 +287,8 @@ mod tests {
         // exercise: a designed state machine with its transitions (payrun)
         // and module-level `extend` child operations (childops).
         for (display, domain) in [
-            (
-                "tests/conformance/ddd/payrun.ddd",
-                "tests/conformance/ddd/payrun.mox",
-            ),
-            (
-                "tests/conformance/ddd/childops.ddd",
-                "tests/conformance/ddd/childops.mox",
-            ),
+            (fixtures::PAYRUN_DDD, fixtures::PAYRUN_MOX),
+            (fixtures::CHILDOPS_DDD, fixtures::CHILDOPS_MOX),
         ] {
             let source = test_support::fixture(display);
             let index = ddd_index(&source);
@@ -394,7 +389,7 @@ application Support {
 
     #[test]
     fn machine_transition_sites_are_indexed() {
-        let display = "tests/conformance/ddd/payrun.ddd";
+        let display = fixtures::PAYRUN_DDD;
         let source = test_support::fixture(display);
         let index = ddd_index(&source);
 

@@ -2822,6 +2822,7 @@ dependencies = [
  "rex-ifml",
  "rex-ir",
  "rex-syntax",
+ "rex-testkit",
  "rex-verify",
  "rex-vocab",
  "salsa",
@@ -2895,6 +2896,7 @@ dependencies = [
  "rex-ifml",
  "rex-ir",
  "rex-syntax",
+ "rex-testkit",
  "salsa",
  "serde",
  "serde_json",
@@ -2926,6 +2928,15 @@ dependencies = [
  "logos 0.15.1",
  "rex-strings",
  "thiserror",
+]
+
+[[package]]
+name = "rex-testkit"
+version = "0.2.0"
+dependencies = [
+ "rex-driver",
+ "rex-ifml",
+ "rex-ir",
 ]
 
 [[package]]

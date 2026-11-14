@@ -21,6 +21,7 @@ members = [
     "crates/rex-evidence",
     "crates/rex-strings",
     "crates/rex-dates",
+    "crates/rex-testkit",
 ]
 
 [workspace.package]
@@ -55,6 +56,8 @@ rex-diagnostics = { path = "crates/rex-diagnostics" }
 rex-evidence = { path = "crates/rex-evidence" }
 rex-strings = { path = "crates/rex-strings" }
 rex-dates = { path = "crates/rex-dates" }
+# Dev-only shared test fixtures (issue rexlang#260): never a production dependency.
+rex-testkit = { path = "crates/rex-testkit" }
 
 # The Rune DSL (`.rosetta`) toolchain, pinned by rev — the embedding
 # contract is documented in sigil's docs/api-stability.md (sigil-model is

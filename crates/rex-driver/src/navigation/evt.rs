@@ -89,9 +89,10 @@ pub fn evt_index(source: &str, file: &str) -> SurfaceIndex {
 mod tests {
     use super::*;
     use crate::navigation::test_support;
+    use rex_testkit::fixtures;
 
-    const SUPPORT: &str = "examples/support/support.evt";
-    const SUPPORT_DOMAIN: &str = "examples/support/support.mox";
+    const SUPPORT: &str = fixtures::SUPPORT_EVT;
+    const SUPPORT_DOMAIN: &str = fixtures::SUPPORT_MOX;
 
     fn support_index() -> (String, SurfaceIndex) {
         let source = test_support::fixture(SUPPORT);
