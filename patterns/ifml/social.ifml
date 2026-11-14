@@ -1,4 +1,4 @@
-// rexlang reference pattern library — social.
+// Phero Lang reference pattern library — social.
 // Feed-item interaction: reactions, social cards, and sharing.
 
 module "ReactionBar" {

@@ -1,37 +1,41 @@
 # Changelog
 
-All notable changes to rexlang are documented here. The format follows
-[Keep a Changelog](https://keepachangelog.com/en/1.0.0/); versioning policy
-in [docs/VERSIONING.md](docs/VERSIONING.md).
+All notable changes to Phero Lang are documented here. The project was named
+rexlang before 0.3.0; the historical sections keep the old name. The format
+follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/); versioning
+policy in [docs/VERSIONING.md](docs/VERSIONING.md).
 
 ## [Unreleased]
 
-"Proof-carrying models" (epic #202, phases P0 and P1's receipts core): the
-evidence chain becomes mechanical. No grammar, IR, artifact, or wire-format
-change — the receipts are a new document kind, and every existing golden is
-untouched.
+Nothing yet.
 
-"The unified semantic graph" (epic #194): every surface now compiles into
-**one** queryable artifact — applications, nodes, and edges — that impact
-analysis, `graph query`, the cross-policy analytics, the editor's
-cross-surface navigation, and (in later milestones) the MCP server and
-Studio all consume. The graph is a new *additive, independently versioned*
-wire artifact (`rex_ir::graph::GraphModel`, marker
-`GRAPH_MODEL_FORMAT_VERSION`): no existing artifact, golden, or emitted
-byte moves.
+## [0.3.0] — Phero Lang (2026-11-14)
+
+"Phero Lang": the project is renamed, and the wire tells the truth about it.
+The language, grammar, and file extensions are unchanged; this release is the
+rename plus its one deliberate wire-contract break. Pre-0.3 artifacts are
+**rejected**, not silently misread.
 
 ### Added
 
-- **`rex_ir::graph::GraphModel`** (issue #239, the semantic-graph slice
+- **Legacy-artifact detection in `pherolang artifact check`** (epic #270,
+  R2): a 0.2-era artifact — one carrying the old provenance key or the old
+  instance discriminator — is reported before any shape sniffing with the
+  exact message `0.2-era rexlang artifact — regenerate with pherolang 0.3`,
+  never a generic `formatVersion` mismatch or an unknown root `$type`.
+  A committed fixture (`tests/conformance/artifacts/legacy-0.2.rex.json`)
+  pins the message, and a matrix test covers every classified artifact kind.
+
+- **`phero_ir::graph::GraphModel`** (issue #239, the semantic-graph slice
   1/8): the unified, versioned semantic-graph wire artifact — applications,
   nodes (`class`, `serviceOperation`, `decision`, `event`, `view`,
   `planItem`, …), and edges (`imports`, `permits`, `binds`, `emits`,
   `executes`, `deploys`, …). Node and edge kinds are an **open,
   string-typed vocabulary** so the artifact can grow additively before the
   v0.7 freeze; an empty graph serializes as exactly `{"formatVersion":1}`,
-  unknown kinds round-trip, and there is no `rexVersion` stamp (goldens
+  unknown kinds round-trip, and there is no `pheroVersion` stamp (goldens
   never churn on release bumps). Normative tables in `docs/GRAPH.md`.
-- **`rex_driver::graph` + `rex_driver::applications`** (issue #241, slice
+- **`phero_driver::graph` + `phero_driver::applications`** (issue #241, slice
   2/8): the pure post-compile builder over all nine surfaces — `.mox`,
   `.actor`, `.ddd` (state machines included), `.evt`, `.dmn`, `.ifml`,
   `.deploy`, `.uc`, `.cmmn` — with cross-surface resolution mirroring the
@@ -40,10 +44,10 @@ byte moves.
   **no** edge). The import-connected-application union-find moved out of
   the CLI into the driver and `check`'s integrity pass now consumes it
   (its diagnostics are byte-identical).
-- **`GraphIndex` + `rexlang graph query`** (issue #242, slice 4/8): the
+- **`GraphIndex` + `pherolang graph query`** (issue #242, slice 4/8): the
   artifact-only query surface — `node`, `list`, `affected-by`,
   `dependencies` — each in one versioned envelope, running from a committed
-  `graph.json` with no sources and no recompile. `rexlang artifact check`
+  `graph.json` with no sources and no recompile. `pherolang artifact check`
   classifies `GraphModel` artifacts (before the deploy rule) and names
   violations precisely.
 - **Spanned `SurfaceIndex` navigation indexes for all seven artifact
@@ -53,9 +57,9 @@ byte moves.
   the graph builder's node key — pinned by the anti-drift equality test
   over all nine surfaces. The `.mox` index moved verbatim into
   `navigation/mox.rs` (behavior frozen).
-- **`rexlang graph build`** (issue #240, the semantic-graph slice 3/8): compile a
+- **`pherolang graph build`** (issue #240, the semantic-graph slice 3/8): compile a
   tree of model files into **one** deterministic, versioned
-  `rex_ir::graph::GraphModel` — the import-connected applications, the full
+  `phero_ir::graph::GraphModel` — the import-connected applications, the full
   node/edge vocabulary, and the semantic edges between every surface —
   printed to stdout or `-o`. Directories enter project mode like
   `check`/`build`; display paths are root-relative POSIX (base = the input
@@ -65,8 +69,8 @@ byte moves.
   resolved imports (and `IfmlInputs` its imports), so the graph re-reads and
   re-compiles nothing; `check`/`ir`/`build` output is unchanged. Pinned by
   `examples/artifacts/examples.graph.json` (the whole `examples/` tree, base
-  `examples/`) and its `crates/rex-cli/tests/cli/graph.rs` suite.
-- **`rexlang graph query … separation-of-duty|monotonicity|dead-capabilities|reachability`**
+  `examples/`) and its `crates/phero-cli/tests/cli/graph.rs` suite.
+- **`pherolang graph query … separation-of-duty|monotonicity|dead-capabilities|reachability`**
   (issue #246, the semantic-graph slice 5/8): the four cross-policy analytics
   run on the artifact **alone** and answer in the same versioned envelope as
   the structural queries — per application (unrelated applications never
@@ -76,7 +80,7 @@ byte moves.
   finding (a violated pair, a monotonicity gap, a `dead` capability, an
   unreachable target), so CI can gate without making a policy finding a
   language error. The compiler's `lineage`/`effective_permits` semantics are
-  rederived from the artifact (`crates/rex-driver/src/graph/analytics.rs`).
+  rederived from the artifact (`crates/phero-driver/src/graph/analytics.rs`).
   Pinned by the self-contained `tests/conformance/graph/` fixture — `app.*`
   across all nine surfaces plus the unrelated `other.*` application (its
   `cedar` policy is the `unknown` case) — with `app.graph.json` and one
@@ -98,7 +102,7 @@ byte moves.
   (`.mox`) and `IfmlIndex` (`.ifml`) gained `SurfaceIndex` projections, and
   the anti-drift equality test now covers all nine surfaces. No artifact,
   wire-format, or golden change.
-- **`rex-evidence`**, the evidence-spine crate (issue #203): the
+- **`phero-evidence`**, the evidence-spine crate (issue #203): the
   machine-readable proof-obligation register's data model, canonical parse,
   semantic validation, and markdown rendering. Pure — serde/serde_json only,
   no filesystem or compiler access.
@@ -112,7 +116,7 @@ byte moves.
   `WF`/`WT`/`Secure`/`Consistent` judgment forms, theorem **S** with its
   named assumptions, the explicit non-goals with reversal triggers, and the
   complete #189 section mapping. Supersedes #189.
-- **`rexlang verify`** (issue #197) and the versioned **verification
+- **`pherolang verify`** (issue #197) and the versioned **verification
   receipt** (`formatVersion` 1): one canonical, deterministic JSON document
   per model set — the source closure hashed, every artifact hashed (pinned
   against its committed golden), the generator version, and the register's
@@ -129,7 +133,7 @@ byte moves.
   closed vocabularies, the commands, and the staleness classes.
 - **Editor diagnostics for every artifact surface** (issue #255):
   `.evt`, `.deploy`, `.uc`, and `.cmmn` documents now publish their
-  compiler diagnostics (spanned, with the `rexlang` source) instead of
+  compiler diagnostics (spanned, with the `pherolang` source) instead of
   silently accepting errors. They reuse the already memoized graph-snapshot
   compile — no second compile per keystroke — and a clean document publishes
   an empty set that clears stale diagnostics; a document with no directory
@@ -137,10 +141,43 @@ byte moves.
 
 ### Changed
 
+- **The product is now Phero Lang** (epic #270): the binary is `pherolang`,
+  the crates are `phero-*` (`phero-ir` → `phero-ir`, `phero-driver` →
+  `phero-driver`, …), environment variables are `PHERO_*`, the repository is
+  `yestechgroup/pherolang`, generated Rust links against `phero_runtime::`,
+  and the LSP identity (diagnostic `source`, server/client name) is
+  `pherolang`. The full old → new table is in
+  [docs/REBRAND.md](docs/REBRAND.md); the spelling contract is
+  [docs/NAMING.md](docs/NAMING.md).
+- **Wire provenance and discriminator renamed**: the artifact provenance key
+  is `pheroVersion` (was `pheroVersion`), the canonical-instance discriminator
+  is `phero.instance` (was `phero.instance`), and the JSON-Schema `$id` URN is
+  `urn:phero:model:<pkg>:<profile>`. The artifact file convention is
+  `.phero.json`.
+- **`formatVersion` moves 1 → 2** for every artifact whose shape changed:
+  `FORMAT_VERSION`, `ACTOR_MODEL_FORMAT_VERSION`,
+  `DDD_MODEL_FORMAT_VERSION`, `IFML_MODEL_FORMAT_VERSION`,
+  `IFML_MANIFEST_FORMAT_VERSION`, `EVENT_MODEL_FORMAT_VERSION`,
+  `DEPLOY_MODEL_FORMAT_VERSION`, `USE_CASE_MODEL_FORMAT_VERSION`,
+  `CMMN_MODEL_FORMAT_VERSION`, `DMN_MODEL_FORMAT_VERSION`, and
+  `INSTANCE_FORMAT_VERSION`. This is the single allowed pre-1.0 wire break.
+  `GRAPH_MODEL_FORMAT_VERSION`, the `graph query` envelope version, and the
+  receipt/proof-register format versions **stay at 1** — they carry no
+  provenance key and their shapes did not change.
+- **Regenerate every artifact.** 0.3 does not read 0.2 artifacts:
+
+  ```sh
+  PHERO_UPDATE_FIXTURES=1 cargo test --workspace
+  ```
+
+  Policy and the exact failure mode are in
+  [docs/VERSIONING.md](docs/VERSIONING.md) and
+  [docs/BACKENDS.md](docs/BACKENDS.md).
+
 - **Compile-time cross-surface joins are scoped to the application** (issue
   #249): the `.ddd` capability pool, the `.ddd` decision bucket, and the
   `.actor` grant-coverage carrier set pool the checked file's
-  **import-connected application** (`rex_driver::applications`) — the same
+  **import-connected application** (`phero_driver::applications`) — the same
   relation the union integrity pass already used — instead of every sibling
   in the directory. A design in one application is no longer validated
   against a policy in another; an application with no counterpart surface
@@ -158,14 +195,14 @@ byte moves.
   phase-2 `.ifml` re-check now keeps the decision and actor dimensions
   phase 1 uses, so a `data:` binding to a decision output is no longer
   re-reported as a disagreement.
-- **`rexlang graph` is now a pure namespace with two verbs** (issue #257):
-  `rexlang graph build <paths>... [-o <file>]` compiles sources into one
-  artifact, and `rexlang graph query <graph.json|-> …` answers from a
+- **`pherolang graph` is now a pure namespace with two verbs** (issue #257):
+  `pherolang graph build <paths>... [-o <file>]` compiles sources into one
+  artifact, and `pherolang graph query <graph.json|-> …` answers from a
   committed artifact. The previous shape overloaded a positional `PATHS`
   list with an optional `query` subcommand, and clap matches the subcommand
   first, so a directory literally named `query` could not be passed
-  directly. **Breaking for the unreleased command only**: `rexlang graph
-  <paths>` becomes `rexlang graph build <paths>`, and bare `rexlang graph`
+  directly. **Breaking for the unreleased command only**: `pherolang graph
+  <paths>` becomes `pherolang graph build <paths>`, and bare `pherolang graph`
   is now a clap usage error. The artifact bytes and the query envelopes are
   unchanged — no golden moves.
 - The `#[trusted]` register gate (issue #89) is now the full **register
@@ -178,13 +215,9 @@ byte moves.
   artifact, or register change without regeneration — is CI-red with the
   exact command to run (issue #207).
 
-## [Unreleased]
-
-### Changed
-
 - **`.ifml` re-platformed from Pest to the workspace's one parser stack**
   (issue #212, sub-issues #264–#268): a logos lexer, a chumsky parser
-  producing a fully spanned syntax tree (`rex-ifml::ast`), and a single
+  producing a fully spanned syntax tree (`phero-ifml::ast`), and a single
   AST → `(IfmlModel, IfmlIndex)` lowering. The wire artifacts and formatter
   are byte-identical; no fixture was regenerated.
 - The lenient path (`compile_ifml_lenient`, backing the language server) now
@@ -192,14 +225,24 @@ byte moves.
   byte-span-accurate `E_PARSE` per error instead of a single `(0,0)`
   diagnostic. A bracket-depth guard bounds untrusted editor input.
 - The normative grammar moved from `grammar/ifml.pest` to the EBNF in
-  `crates/rex-ifml/src/parser/mod.rs`; grammar-doc tests keep the EBNF and
+  `crates/phero-ifml/src/parser/mod.rs`; grammar-doc tests keep the EBNF and
   the contextual word tables in sync. `docs/IFML.md`, `docs/LANGUAGE.md`, and
   `AGENTS.md` now point there.
 
 ### Removed
 
+- The pre-0.3 names are gone from the working tree: no `phero-*` crate, no
+  `pherolang` binary, no `PHERO_*` environment variable, and no old wire marker
+  outside the history, the migration tables, and the legacy-detection
+  module. `scripts/check-rebrand.sh` fails CI on a revived spelling.
+
+**Scope note.** No crate was ever published to crates.io and no release
+asset ever shipped, so the blast radius of the rename and the wire break is
+internal: this repository, its pinned downstream consumers, and its
+committed artifacts. The regeneration command above is the whole migration.
+
 - `pest` and `pest_derive` leave the dependency graph. The Pest-generated
-  `rex_ifml::Rule` and `rex_ifml::IfmlParser` exports are gone; no in-tree
+  `phero_ifml::Rule` and `phero_ifml::IfmlParser` exports are gone; no in-tree
   consumer used them, and `IfmlParseError` keeps its public shape.
 
 ## [0.2.0] — 2026-11-14
@@ -288,3 +331,4 @@ commit log (`git log v0.2.0` ancestry); the per-surface references under
 `docs/` describe each surface as shipped.
 
 [0.2.0]: https://github.com/yestechgroup/rexlang/releases/tag/v0.2.0
+[0.3.0]: https://github.com/yestechgroup/pherolang/releases/tag/v0.3.0

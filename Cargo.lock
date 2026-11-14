@@ -2280,6 +2280,279 @@ dependencies = [
 ]
 
 [[package]]
+name = "phero-backend-cedar"
+version = "0.3.0"
+dependencies = [
+ "anyhow",
+ "cedar-policy",
+ "phero-backend-common",
+ "phero-driver",
+ "phero-expr",
+ "phero-ir",
+ "serde_json",
+]
+
+[[package]]
+name = "phero-backend-cmmn"
+version = "0.3.0"
+dependencies = [
+ "phero-driver",
+ "phero-expr",
+ "phero-ir",
+ "serde",
+ "serde_json",
+ "thiserror",
+]
+
+[[package]]
+name = "phero-backend-common"
+version = "0.3.0"
+dependencies = [
+ "anyhow",
+ "serde_json",
+]
+
+[[package]]
+name = "phero-backend-dmn"
+version = "0.3.0"
+dependencies = [
+ "dsntk-common",
+ "dsntk-feel",
+ "dsntk-feel-evaluator",
+ "dsntk-feel-parser",
+ "dsntk-model",
+ "dsntk-model-evaluator",
+ "dsntk-recognizer",
+ "phero-backend-common",
+ "phero-driver",
+ "phero-ir",
+ "serde",
+ "serde_json",
+ "thiserror",
+]
+
+[[package]]
+name = "phero-backend-jsonschema"
+version = "0.3.0"
+dependencies = [
+ "anyhow",
+ "jsonschema",
+ "phero-backend-common",
+ "phero-driver",
+ "phero-ir",
+ "proptest",
+ "serde_json",
+]
+
+[[package]]
+name = "phero-backend-rust"
+version = "0.3.0"
+dependencies = [
+ "anyhow",
+ "phero-backend-common",
+ "phero-driver",
+ "phero-expr",
+ "phero-ir",
+ "proptest",
+ "serde_json",
+]
+
+[[package]]
+name = "phero-cli"
+version = "0.3.0"
+dependencies = [
+ "anyhow",
+ "clap",
+ "clap_complete",
+ "clap_mangen",
+ "phero-backend-cedar",
+ "phero-backend-common",
+ "phero-backend-jsonschema",
+ "phero-backend-rust",
+ "phero-diagnostics",
+ "phero-driver",
+ "phero-evidence",
+ "phero-ifml",
+ "phero-ir",
+ "phero-lsp",
+ "phero-runtime",
+ "phero-syntax",
+ "phero-vocab",
+ "serde_json",
+ "walkdir",
+]
+
+[[package]]
+name = "phero-dates"
+version = "0.3.0"
+
+[[package]]
+name = "phero-diagnostics"
+version = "0.3.0"
+
+[[package]]
+name = "phero-driver"
+version = "0.3.0"
+dependencies = [
+ "anyhow",
+ "ariadne",
+ "dsntk-feel",
+ "dsntk-feel-parser",
+ "dsntk-recognizer",
+ "phero-diagnostics",
+ "phero-expr",
+ "phero-ifml",
+ "phero-ir",
+ "phero-syntax",
+ "phero-testkit",
+ "phero-verify",
+ "phero-vocab",
+ "salsa",
+ "serde",
+ "serde_json",
+ "sigil-diag",
+ "sigil-model",
+ "sigil-resolve",
+ "sigil-syntax",
+ "xstate-ir",
+]
+
+[[package]]
+name = "phero-evidence"
+version = "0.3.0"
+dependencies = [
+ "serde",
+ "serde_json",
+ "sha2",
+]
+
+[[package]]
+name = "phero-expr"
+version = "0.3.0"
+dependencies = [
+ "chumsky 0.10.1",
+ "logos 0.15.1",
+ "phero-dates",
+ "phero-diagnostics",
+ "phero-ir",
+ "phero-parser",
+ "phero-runtime",
+ "phero-strings",
+ "serde",
+ "serde_json",
+ "thiserror",
+]
+
+[[package]]
+name = "phero-ifml"
+version = "0.3.0"
+dependencies = [
+ "chumsky 0.10.1",
+ "logos 0.15.1",
+ "phero-diagnostics",
+ "phero-driver",
+ "phero-expr",
+ "phero-ir",
+ "phero-parser",
+ "phero-strings",
+ "phero-syntax",
+ "proptest",
+ "serde_json",
+ "thiserror",
+]
+
+[[package]]
+name = "phero-ir"
+version = "0.3.0"
+dependencies = [
+ "serde",
+ "serde_json",
+ "thiserror",
+]
+
+[[package]]
+name = "phero-lsp"
+version = "0.3.0"
+dependencies = [
+ "futures",
+ "phero-driver",
+ "phero-expr",
+ "phero-ifml",
+ "phero-ir",
+ "phero-syntax",
+ "phero-testkit",
+ "salsa",
+ "serde",
+ "serde_json",
+ "tokio",
+ "tower 0.4.13",
+ "tower-lsp-server",
+]
+
+[[package]]
+name = "phero-parser"
+version = "0.3.0"
+dependencies = [
+ "chumsky 0.10.1",
+ "thiserror",
+]
+
+[[package]]
+name = "phero-runtime"
+version = "0.3.0"
+dependencies = [
+ "phero-dates",
+ "slotmap",
+ "thiserror",
+]
+
+[[package]]
+name = "phero-strings"
+version = "0.3.0"
+
+[[package]]
+name = "phero-syntax"
+version = "0.3.0"
+dependencies = [
+ "chumsky 0.10.1",
+ "logos 0.15.1",
+ "phero-parser",
+ "phero-strings",
+ "thiserror",
+]
+
+[[package]]
+name = "phero-testkit"
+version = "0.3.0"
+dependencies = [
+ "phero-driver",
+ "phero-ifml",
+ "phero-ir",
+]
+
+[[package]]
+name = "phero-verify"
+version = "0.3.0"
+dependencies = [
+ "creusot-std",
+ "phero-evidence",
+ "proptest",
+]
+
+[[package]]
+name = "phero-vocab"
+version = "0.3.0"
+dependencies = [
+ "anyhow",
+ "phero-ir",
+ "serde",
+ "serde_json",
+ "sha2",
+ "thiserror",
+ "ureq",
+]
+
+[[package]]
 name = "phf"
 version = "0.12.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2640,279 +2913,6 @@ dependencies = [
  "wasm-bindgen",
  "wasm-bindgen-futures",
  "web-sys",
-]
-
-[[package]]
-name = "rex-backend-cedar"
-version = "0.2.0"
-dependencies = [
- "anyhow",
- "cedar-policy",
- "rex-backend-common",
- "rex-driver",
- "rex-expr",
- "rex-ir",
- "serde_json",
-]
-
-[[package]]
-name = "rex-backend-cmmn"
-version = "0.2.0"
-dependencies = [
- "rex-driver",
- "rex-expr",
- "rex-ir",
- "serde",
- "serde_json",
- "thiserror",
-]
-
-[[package]]
-name = "rex-backend-common"
-version = "0.2.0"
-dependencies = [
- "anyhow",
- "serde_json",
-]
-
-[[package]]
-name = "rex-backend-dmn"
-version = "0.2.0"
-dependencies = [
- "dsntk-common",
- "dsntk-feel",
- "dsntk-feel-evaluator",
- "dsntk-feel-parser",
- "dsntk-model",
- "dsntk-model-evaluator",
- "dsntk-recognizer",
- "rex-backend-common",
- "rex-driver",
- "rex-ir",
- "serde",
- "serde_json",
- "thiserror",
-]
-
-[[package]]
-name = "rex-backend-jsonschema"
-version = "0.2.0"
-dependencies = [
- "anyhow",
- "jsonschema",
- "proptest",
- "rex-backend-common",
- "rex-driver",
- "rex-ir",
- "serde_json",
-]
-
-[[package]]
-name = "rex-backend-rust"
-version = "0.2.0"
-dependencies = [
- "anyhow",
- "proptest",
- "rex-backend-common",
- "rex-driver",
- "rex-expr",
- "rex-ir",
- "serde_json",
-]
-
-[[package]]
-name = "rex-cli"
-version = "0.2.0"
-dependencies = [
- "anyhow",
- "clap",
- "clap_complete",
- "clap_mangen",
- "rex-backend-cedar",
- "rex-backend-common",
- "rex-backend-jsonschema",
- "rex-backend-rust",
- "rex-diagnostics",
- "rex-driver",
- "rex-evidence",
- "rex-ifml",
- "rex-ir",
- "rex-lsp",
- "rex-runtime",
- "rex-syntax",
- "rex-vocab",
- "serde_json",
- "walkdir",
-]
-
-[[package]]
-name = "rex-dates"
-version = "0.2.0"
-
-[[package]]
-name = "rex-diagnostics"
-version = "0.2.0"
-
-[[package]]
-name = "rex-driver"
-version = "0.2.0"
-dependencies = [
- "anyhow",
- "ariadne",
- "dsntk-feel",
- "dsntk-feel-parser",
- "dsntk-recognizer",
- "rex-diagnostics",
- "rex-expr",
- "rex-ifml",
- "rex-ir",
- "rex-syntax",
- "rex-testkit",
- "rex-verify",
- "rex-vocab",
- "salsa",
- "serde",
- "serde_json",
- "sigil-diag",
- "sigil-model",
- "sigil-resolve",
- "sigil-syntax",
- "xstate-ir",
-]
-
-[[package]]
-name = "rex-evidence"
-version = "0.2.0"
-dependencies = [
- "serde",
- "serde_json",
- "sha2",
-]
-
-[[package]]
-name = "rex-expr"
-version = "0.2.0"
-dependencies = [
- "chumsky 0.10.1",
- "logos 0.15.1",
- "rex-dates",
- "rex-diagnostics",
- "rex-ir",
- "rex-parser",
- "rex-runtime",
- "rex-strings",
- "serde",
- "serde_json",
- "thiserror",
-]
-
-[[package]]
-name = "rex-ifml"
-version = "0.2.0"
-dependencies = [
- "chumsky 0.10.1",
- "logos 0.15.1",
- "proptest",
- "rex-diagnostics",
- "rex-driver",
- "rex-expr",
- "rex-ir",
- "rex-parser",
- "rex-strings",
- "rex-syntax",
- "serde_json",
- "thiserror",
-]
-
-[[package]]
-name = "rex-ir"
-version = "0.2.0"
-dependencies = [
- "serde",
- "serde_json",
- "thiserror",
-]
-
-[[package]]
-name = "rex-lsp"
-version = "0.2.0"
-dependencies = [
- "futures",
- "rex-driver",
- "rex-expr",
- "rex-ifml",
- "rex-ir",
- "rex-syntax",
- "rex-testkit",
- "salsa",
- "serde",
- "serde_json",
- "tokio",
- "tower 0.4.13",
- "tower-lsp-server",
-]
-
-[[package]]
-name = "rex-parser"
-version = "0.2.0"
-dependencies = [
- "chumsky 0.10.1",
- "thiserror",
-]
-
-[[package]]
-name = "rex-runtime"
-version = "0.2.0"
-dependencies = [
- "rex-dates",
- "slotmap",
- "thiserror",
-]
-
-[[package]]
-name = "rex-strings"
-version = "0.2.0"
-
-[[package]]
-name = "rex-syntax"
-version = "0.2.0"
-dependencies = [
- "chumsky 0.10.1",
- "logos 0.15.1",
- "rex-parser",
- "rex-strings",
- "thiserror",
-]
-
-[[package]]
-name = "rex-testkit"
-version = "0.2.0"
-dependencies = [
- "rex-driver",
- "rex-ifml",
- "rex-ir",
-]
-
-[[package]]
-name = "rex-verify"
-version = "0.2.0"
-dependencies = [
- "creusot-std",
- "proptest",
- "rex-evidence",
-]
-
-[[package]]
-name = "rex-vocab"
-version = "0.2.0"
-dependencies = [
- "anyhow",
- "rex-ir",
- "serde",
- "serde_json",
- "sha2",
- "thiserror",
- "ureq",
 ]
 
 [[package]]

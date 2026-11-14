@@ -1,0 +1,1977 @@
+//! Integration tests for `.actor` file compilation (`compile_actors`):
+//! salsa-tracked compilation of an actor file against one or more imported
+//! domain models, producing the standalone `phero_ir::ActorModel`.
+
+use phero_driver::{
+    compile_actors_str, compile_actors_str_with_designs, ActorCompilation, Diagnostic, Severity,
+};
+use phero_ir::{GrantEffect, TypeRef, ACTOR_MODEL_FORMAT_VERSION};
+
+/// A support-style domain: classes to resolve capabilities and conditions
+/// against, plus an inline actors block that joins the union policy set.
+const DOMAIN: &str = r#"
+package phero.support.domain
+
+class User {
+    id String id
+    boolean active
+}
+
+class Ticket {
+    id String id
+    String title
+    boolean internal
+    int amount
+    refers User[0..1] assignee
+}
+
+actors Inbox {
+    actor Agent
+    capability AutoAssign on Ticket
+
+    grant Agent {
+        permit AutoAssign when (amount > 0)
+    }
+}
+"#;
+
+/// The matching actor file: imports the domain, declares its own block with
+/// capabilities resolved across the domain namespace and fully typed
+/// conditions.
+const ACTOR: &str = r#"
+import "domain.mox"
+
+actors Support {
+    actor Customer
+    actor Agent extends Customer
+
+    capability ReadTicket on Ticket
+    capability RaiseRefund on phero.support.domain.Ticket
+    obligation audit
+
+    grant Customer {
+        permit ReadTicket
+    }
+
+    grant Agent {
+        permit ReadTicket when (!internal)
+        permit RaiseRefund when (assignee?.active ?: false) obligation audit
+    }
+}
+"#;
+
+fn compile(actor_source: &str, domains: &[(&str, &str)]) -> ActorCompilation {
+    let domains: Vec<(String, String)> = domains
+        .iter()
+        .map(|(path, source)| (path.to_string(), source.to_string()))
+        .collect();
+    compile_actors_str(
+        "support.actor",
+        actor_source,
+        &domains,
+        &phero_driver::DomainImports::default(),
+    )
+}
+
+/// Byte span of the `nth` (0-based) occurrence of `needle` in `source`.
+fn span_of(source: &str, needle: &str, nth: usize) -> phero_driver::Span {
+    let (start, _) = source
+        .match_indices(needle)
+        .nth(nth)
+        .unwrap_or_else(|| panic!("occurrence {nth} of '{needle}' not found"));
+    (start..start + needle.len()).into()
+}
+
+/// The single diagnostic whose message contains `needle`, with its file path,
+/// or a panic.
+fn single<'a>(compilation: &'a ActorCompilation, needle: &str) -> (&'a str, &'a Diagnostic) {
+    let mut matches: Vec<&(String, Diagnostic)> = compilation
+        .diagnostics
+        .iter()
+        .filter(|(_, diagnostic)| diagnostic.message.contains(needle))
+        .collect();
+    assert_eq!(
+        matches.len(),
+        1,
+        "expected exactly one diagnostic containing '{needle}', got: {:?}",
+        compilation.diagnostics
+    );
+    let (path, diagnostic) = matches.remove(0);
+    (path.as_str(), diagnostic)
+}
+
+fn ticket_ref(package: &str) -> TypeRef {
+    TypeRef::Class {
+        package: package.to_string(),
+        name: "Ticket".to_string(),
+    }
+}
+
+#[test]
+fn happy_path_lowers_the_union_actor_model() {
+    let compilation = compile(ACTOR, &[("domain.mox", DOMAIN)]);
+    assert!(
+        compilation.diagnostics.is_empty(),
+        "unexpected diagnostics: {:?}",
+        compilation.diagnostics
+    );
+    let model = compilation.model.expect("actor model lowered");
+    assert_eq!(model.format_version, ACTOR_MODEL_FORMAT_VERSION);
+
+    // Actor-file blocks first, then the imported domain's inline blocks.
+    let names: Vec<_> = model
+        .blocks
+        .iter()
+        .map(|block| block.name.as_str())
+        .collect();
+    assert_eq!(names, ["Support", "Inbox"]);
+
+    // Both the single-segment and the qualified `on X` resolve to the
+    // domain's package.
+    let support = &model.blocks[0];
+    assert_eq!(
+        support.capabilities[0].class,
+        ticket_ref("phero.support.domain")
+    );
+    assert_eq!(
+        support.capabilities[1].class,
+        ticket_ref("phero.support.domain")
+    );
+
+    assert_eq!(support.actors[0].name, "Customer");
+    assert_eq!(support.actors[0].extends, None);
+    assert_eq!(support.actors[1].extends.as_deref(), Some("Customer"));
+
+    assert_eq!(support.grants[0].actor, "Customer");
+    assert_eq!(support.grants[0].entries[0].effect, GrantEffect::Permit);
+    assert_eq!(support.grants[0].entries[0].capability, "ReadTicket");
+    assert_eq!(support.grants[0].entries[0].when, None);
+
+    assert_eq!(support.grants[1].actor, "Agent");
+    assert_eq!(
+        support.grants[1].entries[0].when.as_deref(),
+        Some("!internal")
+    );
+    assert_eq!(
+        support.grants[1].entries[1].when.as_deref(),
+        Some("assignee?.active ?: false")
+    );
+    assert_eq!(support.grants[1].entries[1].obligations, ["audit"]);
+
+    // The domain's inline block keeps its own name, capabilities, and typed
+    // condition.
+    let inbox = &model.blocks[1];
+    assert_eq!(
+        inbox.capabilities[0].class,
+        ticket_ref("phero.support.domain")
+    );
+    assert_eq!(
+        inbox.grants[0].entries[0].when.as_deref(),
+        Some("amount > 0")
+    );
+}
+
+#[test]
+fn missing_import_is_an_error_on_the_import() {
+    let source = r#"
+import "ghost.mox"
+
+actors Support {
+    actor Customer
+}
+"#;
+    let compilation = compile(source, &[("domain.mox", DOMAIN)]);
+    assert!(compilation.model.is_none(), "errors block lowering");
+    let (path, diagnostic) = single(&compilation, "was not provided");
+    assert_eq!(path, "support.actor");
+    assert_eq!(
+        diagnostic.message,
+        "imported file \"ghost.mox\" was not provided"
+    );
+    assert!(diagnostic.is_error());
+    let span = diagnostic.span.expect("span on the import");
+    assert_eq!(span.start, span_of(source, "import", 0).start);
+}
+
+#[test]
+fn extra_provided_domains_are_ignored() {
+    let broken = "package broken\n\nclass X { Ghost g }";
+    let compilation = compile(ACTOR, &[("domain.mox", DOMAIN), ("broken.mox", broken)]);
+    assert!(
+        compilation.diagnostics.is_empty(),
+        "unimported domains must not contribute diagnostics: {:?}",
+        compilation.diagnostics
+    );
+    assert!(compilation.model.is_some());
+}
+
+#[test]
+fn duplicate_import_compiles_the_domain_once() {
+    let source = r#"
+import "domain.mox"
+import "domain.mox"
+
+actors Support {
+    actor Customer
+}
+"#;
+    let compilation = compile(source, &[("domain.mox", DOMAIN)]);
+    assert!(
+        compilation.diagnostics.is_empty(),
+        "a duplicate import is not an error: {:?}",
+        compilation.diagnostics
+    );
+    let model = compilation.model.expect("actor model lowered");
+    let names: Vec<_> = model
+        .blocks
+        .iter()
+        .map(|block| block.name.as_str())
+        .collect();
+    assert_eq!(
+        names,
+        ["Support", "Inbox"],
+        "the domain joins the union once"
+    );
+}
+
+#[test]
+fn duplicate_block_names_in_the_actor_file_point_at_the_second() {
+    let source = r#"
+actors Support {
+    actor Customer
+}
+
+actors Support {
+    actor Agent
+}
+"#;
+    let compilation = compile(source, &[("domain.mox", DOMAIN)]);
+    assert!(compilation.model.is_none(), "errors block lowering");
+    let (path, diagnostic) = single(&compilation, "duplicate actors block");
+    assert_eq!(path, "support.actor");
+    assert_eq!(diagnostic.message, "duplicate actors block `Support`");
+    assert!(diagnostic.is_error());
+    assert_eq!(
+        diagnostic.span,
+        Some(span_of(source, "Support", 1)),
+        "span must sit on the later occurrence"
+    );
+}
+
+#[test]
+fn duplicate_block_name_with_a_domain_block_points_at_the_domain() {
+    let source = r#"
+import "domain.mox"
+
+actors Inbox {
+    actor Customer
+}
+"#;
+    let compilation = compile(source, &[("domain.mox", DOMAIN)]);
+    assert!(compilation.model.is_none(), "errors block lowering");
+    let (path, diagnostic) = single(&compilation, "duplicate actors block `Inbox`");
+    // The inline block is later in union order, so its span lands in the
+    // domain file.
+    assert_eq!(path, "domain.mox");
+    assert_eq!(diagnostic.span, Some(span_of(DOMAIN, "Inbox", 0)));
+}
+
+#[test]
+fn duplicate_block_name_across_domains_points_at_the_later_domain() {
+    let a = "package a\n\nclass Ticket { String title }\n\nactors Dup {\n    actor X\n}";
+    let b = "package b\n\nclass Ticket { String title }\n\nactors Dup {\n    actor Y\n}";
+    let source = r#"
+import "a.mox"
+import "b.mox"
+
+actors Unique {
+    actor Customer
+}
+"#;
+    let compilation = compile(source, &[("a.mox", a), ("b.mox", b)]);
+    assert!(compilation.model.is_none(), "errors block lowering");
+    let (path, diagnostic) = single(&compilation, "duplicate actors block `Dup`");
+    assert_eq!(path, "b.mox", "the later domain carries the span");
+    assert_eq!(diagnostic.span, Some(span_of(b, "Dup", 0)));
+}
+
+#[test]
+fn actors_block_name_colliding_with_a_domain_class_is_not_an_error() {
+    let domain = "package demo\n\nclass Support {\n    String title\n}";
+    let source = r#"
+import "domain.mox"
+
+actors Support {
+    actor Customer
+}
+"#;
+    let compilation = compile(source, &[("domain.mox", domain)]);
+    assert!(
+        compilation.diagnostics.is_empty(),
+        "actors blocks are not data types; the name may collide: {:?}",
+        compilation.diagnostics
+    );
+    assert!(compilation.model.is_some());
+}
+
+#[test]
+fn capabilities_resolve_across_imported_packages() {
+    let support = "package support\n\nclass Ticket { String title }";
+    let billing = "package billing\n\nclass Invoice { int total }";
+    let source = r#"
+import "support.mox"
+import "billing.mox"
+
+actors Ops {
+    actor Clerk
+
+    capability ReadTicket on Ticket
+    capability ApproveInvoice on Invoice
+}
+"#;
+    let compilation = compile(
+        source,
+        &[("support.mox", support), ("billing.mox", billing)],
+    );
+    assert!(
+        compilation.diagnostics.is_empty(),
+        "unexpected diagnostics: {:?}",
+        compilation.diagnostics
+    );
+    let block = &compilation.model.expect("actor model lowered").blocks[0];
+    assert_eq!(
+        block.capabilities[0].class,
+        ticket_ref("support"),
+        "the single-segment name resolves to its owning package"
+    );
+    assert_eq!(
+        block.capabilities[1].class,
+        TypeRef::Class {
+            package: "billing".to_string(),
+            name: "Invoice".to_string()
+        }
+    );
+}
+
+#[test]
+fn ambiguous_single_segment_type_is_an_error() {
+    let support = "package support\n\nclass Ticket { String title }";
+    let billing = "package billing\n\nclass Ticket { int total }";
+    let source = r#"
+import "support.mox"
+import "billing.mox"
+
+actors Ops {
+    actor Clerk
+
+    capability ReadTicket on Ticket
+}
+"#;
+    let compilation = compile(
+        source,
+        &[("support.mox", support), ("billing.mox", billing)],
+    );
+    assert!(compilation.model.is_none(), "errors block lowering");
+    let (path, diagnostic) = single(&compilation, "ambiguous type");
+    assert_eq!(path, "support.actor");
+    assert_eq!(
+        diagnostic.message, "ambiguous type `Ticket`; qualify as `billing.Ticket`",
+        "the hint names the alphabetically first package"
+    );
+    assert_eq!(
+        diagnostic.help.as_deref(),
+        Some("matching types: billing.Ticket, support.Ticket")
+    );
+    assert_eq!(
+        diagnostic.span,
+        // Occurrence 0 is the `Ticket` inside `ReadTicket`.
+        Some(span_of(source, "Ticket", 1))
+    );
+}
+
+#[test]
+fn qualified_type_resolves_against_that_exact_package() {
+    let support = "package support\n\nclass Ticket { String title }";
+    let billing = "package billing\n\nclass Ticket { int total }";
+    let source = r#"
+import "support.mox"
+import "billing.mox"
+
+actors Ops {
+    actor Clerk
+
+    capability ReadTicket on support.Ticket
+    capability Approve on billing.Ticket
+}
+"#;
+    let compilation = compile(
+        source,
+        &[("support.mox", support), ("billing.mox", billing)],
+    );
+    assert!(
+        compilation.diagnostics.is_empty(),
+        "unexpected diagnostics: {:?}",
+        compilation.diagnostics
+    );
+    let block = &compilation.model.expect("actor model lowered").blocks[0];
+    assert_eq!(block.capabilities[0].class, ticket_ref("support"));
+    assert_eq!(block.capabilities[1].class, ticket_ref("billing"));
+}
+
+#[test]
+fn qualified_type_in_an_unknown_package_is_unknown_type() {
+    let source = r#"
+import "domain.mox"
+
+actors Support {
+    actor Customer
+
+    capability ReadTicket on nowhere.Ticket
+}
+"#;
+    let compilation = compile(source, &[("domain.mox", DOMAIN)]);
+    assert!(compilation.model.is_none(), "errors block lowering");
+    let (path, diagnostic) = single(&compilation, "unknown type");
+    assert_eq!(path, "support.actor");
+    assert_eq!(diagnostic.message, "unknown type 'nowhere.Ticket'");
+}
+
+#[test]
+fn capability_on_a_domain_enum_is_not_a_class() {
+    let domain = "package demo\n\nenum Kind { Normal = 0 }";
+    let source = r#"
+import "domain.mox"
+
+actors Support {
+    actor Customer
+
+    capability ReadTicket on Kind
+}
+"#;
+    let compilation = compile(source, &[("domain.mox", domain)]);
+    assert!(compilation.model.is_none(), "errors block lowering");
+    let (_, diagnostic) = single(&compilation, "ReadTicket");
+    assert_eq!(
+        diagnostic.message,
+        "capability `ReadTicket` must be granted on a class, but `Kind` is not a class"
+    );
+}
+
+#[test]
+fn capability_on_a_domain_actors_block_is_not_a_data_type() {
+    let domain = "package demo\n\nactors Audit {\n    actor Auditor\n}";
+    let source = r#"
+import "domain.mox"
+
+actors Support {
+    actor Customer
+
+    capability ReadTicket on Audit
+}
+"#;
+    let compilation = compile(source, &[("domain.mox", domain)]);
+    assert!(compilation.model.is_none(), "errors block lowering");
+    let (_, diagnostic) = single(&compilation, "actors block");
+    assert_eq!(
+        diagnostic.message,
+        "type 'Audit' is an actors block, not a data type"
+    );
+}
+
+#[test]
+fn cross_file_sod_violation_is_caught() {
+    // The permit for RaiseRefund lives in the domain's inline block; the
+    // never_both lives in the actor file.
+    let domain = r#"
+package phero.support.domain
+
+class Ticket { String title }
+
+actors Inbox {
+    actor Agent
+    capability RaiseRefund on Ticket
+
+    grant Agent {
+        permit RaiseRefund
+    }
+}
+"#;
+    let source = r#"
+import "domain.mox"
+
+actors Support {
+    actor Agent
+    capability RaiseRefund on Ticket
+    capability ApproveRefund on Ticket
+
+    grant Agent {
+        permit ApproveRefund
+    }
+
+    never_both { ApproveRefund, RaiseRefund }
+}
+"#;
+    let compilation = compile(source, &[("domain.mox", domain)]);
+    assert!(compilation.model.is_none(), "errors block lowering");
+    let (path, diagnostic) = single(&compilation, "(never_both)");
+    assert_eq!(
+        path, "support.actor",
+        "the constraint lives in the actor file"
+    );
+    assert_eq!(
+        diagnostic.message,
+        "actor `Agent` is granted both `ApproveRefund` and `RaiseRefund` (never_both)"
+    );
+    assert!(diagnostic.is_error());
+    let span = diagnostic.span.expect("span present");
+    assert_eq!(span.start, span_of(source, "never_both", 0).start);
+}
+
+#[test]
+fn cross_file_self_narrowing_warns_and_still_compiles() {
+    let domain = r#"
+package phero.support.domain
+
+class Ticket { String title }
+
+actors Inbox {
+    actor Agent
+    capability ReadTicket on Ticket
+
+    grant Agent {
+        permit ReadTicket
+    }
+}
+"#;
+    let source = r#"
+import "domain.mox"
+
+actors Support {
+    actor Agent
+    capability ReadTicket on Ticket
+
+    grant Agent {
+        forbid ReadTicket
+    }
+}
+"#;
+    let compilation = compile(source, &[("domain.mox", domain)]);
+    let model = compilation
+        .model
+        .clone()
+        .expect("warnings must not block lowering");
+    let (path, diagnostic) = single(&compilation, "forbids `ReadTicket`");
+    assert_eq!(path, "support.actor", "the forbid lives in the actor file");
+    assert_eq!(
+        diagnostic.message,
+        "actor `Agent` forbids `ReadTicket` but inherits or declares a permit for it"
+    );
+    assert_eq!(diagnostic.severity, Severity::Warning);
+    assert_eq!(
+        diagnostic.span,
+        Some(span_of(source, "ReadTicket", 1)),
+        "span must sit on the forbid entry's capability name"
+    );
+    assert!(model.blocks.len() == 2);
+}
+
+#[test]
+fn actor_file_extends_cycle_is_an_error() {
+    let source = r#"
+actors Support {
+    actor A extends B
+    actor B extends A
+}
+"#;
+    let compilation = compile(source, &[("domain.mox", DOMAIN)]);
+    assert!(compilation.model.is_none(), "errors block lowering");
+    let (path, diagnostic) = single(&compilation, "actor inheritance cycle: A -> B -> A");
+    assert_eq!(path, "support.actor");
+    assert!(diagnostic.is_error());
+}
+
+#[test]
+fn condition_with_wrong_feature_type_is_an_error() {
+    let source = r#"
+import "domain.mox"
+
+actors Support {
+    actor Customer
+
+    capability ReadTicket on Ticket
+
+    grant Customer {
+        permit ReadTicket when (amount <= "x")
+    }
+}
+"#;
+    let compilation = compile(source, &[("domain.mox", DOMAIN)]);
+    assert!(compilation.model.is_none(), "errors block lowering");
+    let (path, diagnostic) = single(&compilation, "invalid `when` condition:");
+    assert_eq!(path, "support.actor");
+    assert!(diagnostic.is_error());
+    assert!(
+        diagnostic.message.contains("requires numeric operands"),
+        "the phero-expr message must be carried: {}",
+        diagnostic.message
+    );
+    let open = span_of(source, "(", 0);
+    let close = span_of(source, ")", 0);
+    let span = diagnostic.span.expect("span inside the parens");
+    assert!(span.start >= open.start && span.end <= close.end);
+}
+
+#[test]
+fn condition_with_unknown_feature_is_an_error() {
+    let source = r#"
+import "domain.mox"
+
+actors Support {
+    actor Customer
+
+    capability ReadTicket on Ticket
+
+    grant Customer {
+        permit ReadTicket when (refundCentss > 0)
+    }
+}
+"#;
+    let compilation = compile(source, &[("domain.mox", DOMAIN)]);
+    assert!(compilation.model.is_none(), "errors block lowering");
+    let (path, diagnostic) = single(&compilation, "invalid `when` condition:");
+    assert_eq!(path, "support.actor");
+    assert_eq!(
+        diagnostic.message,
+        "invalid `when` condition: unknown name `refundCentss`"
+    );
+    assert_eq!(
+        diagnostic.span,
+        Some(span_of(source, "refundCentss", 0)),
+        "the span maps onto the condition text in the host file"
+    );
+}
+
+#[test]
+fn condition_without_safe_navigation_is_an_r3_error() {
+    // `assignee` is `User[0..1]` — accessing `.name` needs `?.`.
+    let source = r#"
+import "domain.mox"
+
+actors Support {
+    actor Customer
+
+    capability ReadTicket on Ticket
+
+    grant Customer {
+        permit ReadTicket when (assignee.name == "x")
+    }
+}
+"#;
+    let compilation = compile(source, &[("domain.mox", DOMAIN)]);
+    assert!(compilation.model.is_none(), "errors block lowering");
+    let (path, diagnostic) = single(&compilation, "invalid `when` condition:");
+    assert_eq!(path, "support.actor");
+    assert!(
+        diagnostic.message.contains("R3: receiver is optional"),
+        "the R3 rule must be cited: {}",
+        diagnostic.message
+    );
+    assert!(diagnostic.message.contains("?."));
+}
+
+#[test]
+fn condition_with_safe_navigation_typechecks() {
+    let source = r#"
+import "domain.mox"
+
+actors Support {
+    actor Customer
+
+    capability ReadTicket on Ticket
+
+    grant Customer {
+        permit ReadTicket when (assignee?.active ?: false)
+    }
+}
+"#;
+    let compilation = compile(source, &[("domain.mox", DOMAIN)]);
+    assert!(
+        compilation.diagnostics.is_empty(),
+        "unexpected diagnostics: {:?}",
+        compilation.diagnostics
+    );
+    let block = &compilation.model.expect("actor model lowered").blocks[0];
+    assert_eq!(
+        block.grants[0].entries[0].when.as_deref(),
+        Some("assignee?.active ?: false")
+    );
+}
+
+#[test]
+fn bad_condition_in_a_domain_block_is_tagged_with_the_domain_file() {
+    let domain = r#"
+package phero.support.domain
+
+class Ticket { int amount }
+
+actors Inbox {
+    actor Agent
+    capability AutoAssign on Ticket
+
+    grant Agent {
+        permit AutoAssign when (nonsense > 1)
+    }
+}
+"#;
+    let source = r#"
+import "domain.mox"
+
+actors Support {
+    actor Customer
+}
+"#;
+    let compilation = compile(source, &[("domain.mox", domain)]);
+    assert!(compilation.model.is_none(), "errors block lowering");
+    let (path, diagnostic) = single(&compilation, "invalid `when` condition:");
+    assert_eq!(path, "domain.mox");
+    assert_eq!(
+        diagnostic.message,
+        "invalid `when` condition: unknown name `nonsense`"
+    );
+    assert_eq!(diagnostic.span, Some(span_of(domain, "nonsense", 0)));
+}
+
+#[test]
+fn empty_actor_file_compiles_to_an_empty_artifact() {
+    let compilation = compile_actors_str(
+        "empty.actor",
+        "",
+        &[],
+        &phero_driver::DomainImports::default(),
+    );
+    assert!(
+        compilation.diagnostics.is_empty(),
+        "unexpected diagnostics: {:?}",
+        compilation.diagnostics
+    );
+    let model = compilation.model.expect("empty artifact lowered");
+    assert_eq!(model.format_version, ACTOR_MODEL_FORMAT_VERSION);
+    assert!(model.blocks.is_empty());
+}
+
+#[test]
+fn domain_compile_errors_propagate_and_block() {
+    let broken = "package broken\n\nclass X { Ghost g }";
+    let source = r#"
+import "broken.mox"
+
+actors Support {
+    actor Customer
+}
+"#;
+    let compilation = compile(source, &[("broken.mox", broken)]);
+    assert!(compilation.model.is_none(), "errors block lowering");
+    let (path, diagnostic) = single(&compilation, "unknown type 'Ghost'");
+    assert_eq!(
+        path, "broken.mox",
+        "the domain's diagnostics keep their file"
+    );
+    assert!(diagnostic.is_error());
+}
+
+#[test]
+fn actor_file_syntax_errors_are_tagged_and_block() {
+    let compilation = compile_actors_str(
+        "broken.actor",
+        "import",
+        &[],
+        &phero_driver::DomainImports::default(),
+    );
+    assert!(compilation.model.is_none(), "errors block lowering");
+    assert!(
+        !compilation.diagnostics.is_empty(),
+        "parse errors must surface"
+    );
+    for (path, diagnostic) in &compilation.diagnostics {
+        assert_eq!(path, "broken.actor");
+        assert!(diagnostic.is_error());
+    }
+}
+
+#[test]
+fn cross_file_delegation_targets_a_domain_agent_through_the_union() {
+    // The agent, its kind, and its backing grant all live in the imported
+    // domain's inline block; the delegation lives in the actor file.
+    let domain = r#"
+package phero.support.domain
+
+class Ticket { String title }
+
+actors Inbox {
+    agent Helper
+    capability AutoReply on Ticket
+
+    grant Helper {
+        permit AutoReply
+    }
+}
+"#;
+    let source = r#"
+import "domain.mox"
+
+actors Support {
+    actor Clerk
+    capability AutoReply on Ticket
+
+    delegation AutoReplyHelp {
+        from Clerk
+        to Helper
+        permit AutoReply
+    }
+}
+"#;
+    let compilation = compile(source, &[("domain.mox", domain)]);
+    assert!(
+        compilation.diagnostics.is_empty(),
+        "the union namespace must resolve the delegation: {:?}",
+        compilation.diagnostics
+    );
+    let support = &compilation.model.expect("actor model lowered").blocks[0];
+    assert_eq!(support.delegations.len(), 1);
+    let delegation = &support.delegations[0];
+    assert_eq!(delegation.name, "AutoReplyHelp");
+    assert_eq!(delegation.from, "Clerk");
+    assert_eq!(delegation.to, "Helper");
+    assert_eq!(delegation.entries[0].capability, "AutoReply");
+    assert_eq!(delegation.entries[0].effect, GrantEffect::Permit);
+}
+
+#[test]
+fn cross_file_delegation_to_a_human_is_an_error() {
+    let domain = r#"
+package phero.support.domain
+
+class Ticket { String title }
+
+actors Inbox {
+    actor Helper
+    capability AutoReply on Ticket
+
+    grant Helper {
+        permit AutoReply
+    }
+}
+"#;
+    let source = r#"
+import "domain.mox"
+
+actors Support {
+    actor Clerk
+    capability AutoReply on Ticket
+
+    delegation AutoReplyHelp {
+        from Clerk
+        to Helper
+        permit AutoReply
+    }
+}
+"#;
+    let compilation = compile(source, &[("domain.mox", domain)]);
+    assert!(compilation.model.is_none(), "errors block lowering");
+    let (path, diagnostic) = single(
+        &compilation,
+        "delegation `AutoReplyHelp` targets actor `Helper`, which is not an agent",
+    );
+    assert_eq!(
+        path, "support.actor",
+        "the delegation lives in the actor file"
+    );
+    assert!(diagnostic.is_error());
+    assert_eq!(diagnostic.span, Some(span_of(source, "Helper", 0)));
+}
+
+#[test]
+fn cross_file_delegation_purpose_resolves_from_an_imported_domain() {
+    // The purpose is declared in the domain's inline block; the delegation
+    // lives in the actor file — the union namespace must connect them.
+    let domain = r#"
+package phero.support.domain
+
+class Ticket { String title }
+
+actors Inbox {
+    agent Helper
+    purpose Triage
+    capability AutoReply on Ticket
+
+    grant Helper {
+        permit AutoReply
+    }
+}
+"#;
+    let source = r#"
+import "domain.mox"
+
+actors Support {
+    actor Clerk
+    capability AutoReply on Ticket
+
+    delegation AutoReplyHelp {
+        from Clerk
+        to Helper
+        purpose Triage
+        permit AutoReply
+    }
+}
+"#;
+    let compilation = compile(source, &[("domain.mox", domain)]);
+    assert!(
+        compilation.diagnostics.is_empty(),
+        "the union namespace must resolve the purpose: {:?}",
+        compilation.diagnostics
+    );
+    let support = &compilation.model.expect("actor model lowered").blocks[0];
+    assert!(support.purposes.is_empty(), "no purposes declared here");
+    assert_eq!(support.delegations[0].purpose.as_deref(), Some("Triage"));
+}
+
+#[test]
+fn delegation_with_unknown_purpose_in_an_actor_file_is_an_error() {
+    let domain = r#"
+package phero.support.domain
+
+class Ticket { String title }
+
+actors Inbox {
+    agent Helper
+    capability AutoReply on Ticket
+
+    grant Helper {
+        permit AutoReply
+    }
+}
+"#;
+    let source = r#"
+import "domain.mox"
+
+actors Support {
+    actor Clerk
+    capability AutoReply on Ticket
+
+    delegation AutoReplyHelp {
+        from Clerk
+        to Helper
+        purpose Ghost
+        permit AutoReply
+    }
+}
+"#;
+    let compilation = compile(source, &[("domain.mox", domain)]);
+    assert!(compilation.model.is_none(), "errors block lowering");
+    let (path, diagnostic) = single(
+        &compilation,
+        "delegation `AutoReplyHelp` names unknown purpose `Ghost`",
+    );
+    assert_eq!(
+        path, "support.actor",
+        "the delegation lives in the actor file"
+    );
+    assert!(diagnostic.is_error());
+    assert_eq!(diagnostic.span, Some(span_of(source, "Ghost", 0)));
+}
+
+#[test]
+fn duplicate_purposes_across_actor_file_and_domain_are_legal() {
+    // Declarations union by name across files; only same-block duplicates
+    // error.
+    let domain = r#"
+package phero.support.domain
+
+class Ticket { String title }
+
+actors Inbox {
+    purpose Triage
+    actor Agent
+}
+"#;
+    let source = r#"
+import "domain.mox"
+
+actors Support {
+    purpose Triage
+    actor Clerk
+}
+"#;
+    let compilation = compile(source, &[("domain.mox", domain)]);
+    assert!(
+        compilation.diagnostics.is_empty(),
+        "cross-file duplicates union by name: {:?}",
+        compilation.diagnostics
+    );
+    let model = compilation.model.expect("actor model lowered");
+    assert_eq!(model.blocks[0].purposes, ["Triage"]);
+    assert_eq!(model.blocks[1].purposes, ["Triage"]);
+}
+
+/// Package `phero.pairs.a` declares `Book`, which refers `Sheet` in package
+/// `phero.pairs.b`; package `phero.pairs.b` declares `Sheet`, which refers back
+/// to `Book`. Neither package can lower standalone — this is the shape the
+/// single-package resolver rejected outright (issue #14).
+const PAIR_A: &str = r#"
+package phero.pairs.a
+
+class Book {
+    id String id
+    String title
+    refers phero.pairs.b.Sheet[0..1] sheet
+}
+"#;
+
+const PAIR_B: &str = r#"
+package phero.pairs.b
+
+class Sheet {
+    id String id
+    int pageNumber
+    refers phero.pairs.a.Book[0..1] book
+}
+"#;
+
+const PAIR_ACTOR: &str = r#"
+import "a.mox"
+import "b.mox"
+
+actors PairPolicies {
+    actor Librarian
+
+    capability ShelveBook on phero.pairs.a.Book
+    capability FlipSheet on Sheet
+
+    grant Librarian {
+        permit ShelveBook
+        permit FlipSheet when (pageNumber > 0)
+    }
+}
+"#;
+
+#[test]
+fn mutually_referencing_packages_lower_through_the_union() {
+    let compilation = compile(PAIR_ACTOR, &[("a.mox", PAIR_A), ("b.mox", PAIR_B)]);
+    assert!(
+        compilation.diagnostics.is_empty(),
+        "unexpected diagnostics: {:?}",
+        compilation.diagnostics
+    );
+    let model = compilation.model.expect("actor model lowered");
+
+    // Capabilities bind to classes from both mutually-referencing packages.
+    let block = &model.blocks[0];
+    assert_eq!(
+        block.capabilities[0].class,
+        TypeRef::Class {
+            package: "phero.pairs.a".to_string(),
+            name: "Book".to_string(),
+        }
+    );
+    assert_eq!(
+        block.capabilities[1].class,
+        TypeRef::Class {
+            package: "phero.pairs.b".to_string(),
+            name: "Sheet".to_string(),
+        }
+    );
+
+    // The union domain model is available for downstream class lookup.
+    let domains_model = compilation.domains_model.expect("domains lowered");
+    let package_names: Vec<_> = domains_model
+        .packages
+        .iter()
+        .map(|package| package.name.as_str())
+        .collect();
+    assert_eq!(package_names, ["phero.pairs.a", "phero.pairs.b"]);
+}
+
+#[test]
+fn when_condition_navigates_a_cross_package_feature() {
+    let source = r#"
+import "a.mox"
+import "b.mox"
+
+actors PairPolicies {
+    actor Librarian
+
+    capability ShelveBook on phero.pairs.a.Book
+
+    grant Librarian {
+        permit ShelveBook when ((sheet?.pageNumber ?: 0) > 0)
+    }
+}
+"#;
+    let compilation = compile(source, &[("a.mox", PAIR_A), ("b.mox", PAIR_B)]);
+    assert!(
+        compilation.diagnostics.is_empty(),
+        "unexpected diagnostics: {:?}",
+        compilation.diagnostics
+    );
+    let grant = &compilation.model.expect("lowered").blocks[0].grants[0];
+    assert_eq!(
+        grant.entries[0].when.as_deref(),
+        Some("(sheet?.pageNumber ?: 0) > 0")
+    );
+}
+
+#[test]
+fn delegation_targets_an_agent_whose_package_references_another_package() {
+    // Package `b` references package `a` and declares the automation agent
+    // plus its own grant; the actor file delegates the capability to it.
+    const B_WITH_AGENT: &str = r#"
+package phero.pairs.b
+
+class Sheet {
+    id String id
+    int pageNumber
+    refers phero.pairs.a.Book[0..1] book
+}
+
+actors SheetAutomation {
+    agent AutoFlipper
+
+    capability FlipSheet on Sheet
+
+    grant AutoFlipper {
+        permit FlipSheet when (pageNumber > 0)
+    }
+}
+"#;
+    let source = r#"
+import "a.mox"
+import "b.mox"
+
+actors PairPolicies {
+    actor Trustee
+
+    capability ShelveBook on phero.pairs.a.Book
+    capability FlipSheet on Sheet
+
+    grant Trustee {
+        permit ShelveBook
+    }
+
+    delegation FlipAutomation {
+        from Trustee
+        to AutoFlipper
+        permit FlipSheet
+    }
+}
+"#;
+    let compilation = compile(source, &[("a.mox", PAIR_A), ("b.mox", B_WITH_AGENT)]);
+    assert!(
+        compilation.diagnostics.is_empty(),
+        "unexpected diagnostics: {:?}",
+        compilation.diagnostics
+    );
+    let model = compilation.model.expect("actor model lowered");
+    assert_eq!(model.blocks.len(), 2, "actor file plus the domain block");
+    assert_eq!(model.blocks[0].delegations.len(), 1);
+    assert_eq!(model.blocks[0].delegations[0].to, "AutoFlipper");
+}
+
+#[test]
+fn bare_name_ambiguous_across_imported_packages_names_the_candidates() {
+    const LEFT: &str = "package phero.dups.left\n\nclass Widget {\n    id String id\n}\n";
+    const RIGHT: &str = "package phero.dups.right\n\nclass Widget {\n    id String id\n}\n";
+    let source = r#"
+import "left.mox"
+import "right.mox"
+
+actors DupPolicies {
+    actor Maker
+
+    capability PaintWidget on Widget
+
+    grant Maker {
+        permit PaintWidget
+    }
+}
+"#;
+    let compilation = compile(source, &[("left.mox", LEFT), ("right.mox", RIGHT)]);
+    assert!(compilation.model.is_none(), "ambiguity blocks lowering");
+    let (path, diagnostic) = single(&compilation, "ambiguous type `Widget`");
+    assert_eq!(path, "support.actor");
+    let help = diagnostic
+        .help
+        .as_deref()
+        .expect("ambiguity lists candidates");
+    assert!(help.contains("phero.dups.left"), "help: {help}");
+    assert!(help.contains("phero.dups.right"), "help: {help}");
+}
+
+#[test]
+fn domain_bare_name_collision_is_tagged_with_the_domain_file() {
+    // Both packages export `Widget`; the third domain references it bare, so
+    // its own lowering hits the union ambiguity — tagged with the domain.
+    const LEFT: &str = "package phero.dups.left\n\nclass Widget {\n    id String id\n}\n";
+    const RIGHT: &str = "package phero.dups.right\n\nclass Widget {\n    id String id\n}\n";
+    const USER: &str = r#"
+package phero.dups.user
+
+class Holder {
+    id String id
+    refers Widget[0..1] widget
+}
+"#;
+    let source = r#"
+import "left.mox"
+import "right.mox"
+import "user.mox"
+
+actors DupPolicies {
+    actor Maker
+}
+"#;
+    let compilation = compile(
+        source,
+        &[("left.mox", LEFT), ("right.mox", RIGHT), ("user.mox", USER)],
+    );
+    assert!(compilation.model.is_none(), "ambiguity blocks lowering");
+    let (path, diagnostic) = single(&compilation, "ambiguous type `Widget`");
+    assert_eq!(path, "user.mox");
+    assert!(diagnostic.is_error());
+}
+
+#[test]
+fn duplicate_package_across_imports_errors_on_the_later_file() {
+    const FIRST: &str = "package phero.dup.once\n\nclass Widget {\n    id String id\n}\n";
+    const SECOND: &str = "package phero.dup.once\n\nclass Gadget {\n    id String id\n}\n";
+    let source = r#"
+import "first.mox"
+import "second.mox"
+
+actors DupPolicies {
+    actor Maker
+}
+"#;
+    let compilation = compile(source, &[("first.mox", FIRST), ("second.mox", SECOND)]);
+    assert!(
+        compilation.model.is_none(),
+        "duplicate package blocks lowering"
+    );
+    let (path, diagnostic) = single(&compilation, "duplicate package 'phero.dup.once'");
+    assert_eq!(path, "second.mox");
+    assert!(diagnostic.is_error());
+}
+
+#[test]
+fn broken_domain_does_not_stop_the_remaining_imports_from_resolving() {
+    // `left.mox` has a class error; the actor file's capability binds to
+    // `right.mox`'s class and must still resolve (no unknown-type noise),
+    // while the artifact stays blocked by the broken domain's diagnostic.
+    const BROKEN: &str = "package phero.mixed.broken\n\nclass Ghosted { Ghost g }\n";
+    const GOOD: &str = r#"
+package phero.mixed.good
+
+class Widget {
+    id String id
+    boolean painted
+}
+"#;
+    let source = r#"
+import "broken.mox"
+import "good.mox"
+
+actors MixedPolicies {
+    actor Maker
+
+    capability PaintWidget on Widget
+
+    grant Maker {
+        permit PaintWidget when (painted)
+    }
+}
+"#;
+    let compilation = compile(source, &[("broken.mox", BROKEN), ("good.mox", GOOD)]);
+    assert!(
+        compilation.model.is_none(),
+        "the broken domain blocks the artifact"
+    );
+    assert!(
+        !compilation
+            .diagnostics
+            .iter()
+            .any(|(path, diagnostic)| path != "broken.mox"
+                && diagnostic.message.contains("unknown type")),
+        "the good domain must still resolve, got: {:?}",
+        compilation.diagnostics
+    );
+    let (path, diagnostic) = single(&compilation, "unknown type 'Ghost'");
+    assert_eq!(path, "broken.mox");
+    assert!(diagnostic.is_error());
+}
+
+#[test]
+fn resolved_import_paths_match_lexically_for_cwd_independent_compilation() {
+    // The CLI passes resolved paths (actor dir joined with the import); the
+    // driver must match them lexically so vocabulary snapshots resolve next
+    // to the declaring file regardless of the process CWD.
+    const DOMAIN_WITH_CURRENCY: &str = r#"
+package phero.resolve.domain
+
+class Wallet {
+    id String id
+    int cents
+}
+"#;
+    let source = r#"
+import "nested/deep/domain.mox"
+
+actors ResolvePolicies {
+    actor Teller
+
+    capability TopUp on Wallet
+
+    grant Teller {
+        permit TopUp when (cents > 0)
+    }
+}
+"#;
+    let compilation = compile_actors_str(
+        "project/support.actor",
+        source,
+        &[(
+            "project/nested/deep/domain.mox".to_string(),
+            DOMAIN_WITH_CURRENCY.to_string(),
+        )],
+        &phero_driver::DomainImports::default(),
+    );
+    assert!(
+        compilation.diagnostics.is_empty(),
+        "unexpected diagnostics: {:?}",
+        compilation.diagnostics
+    );
+    assert!(compilation.model.is_some());
+    assert!(compilation.domains_model.is_some());
+}
+
+// --- capability coverage (pherolang#128: J4 promoted to compile time) ---------
+
+/// A design whose one operation carries `AutoAssign` — the carrier set the
+/// coverage check pools across every provided design.
+const DESK_DESIGN: &str = r#"
+application Desk {
+    module desk {
+        service TicketService {
+            boolean autoAssign() capability AutoAssign;
+        }
+    }
+}
+"#;
+
+/// A design whose one operation carries `ReadTicket`.
+const READ_DESIGN: &str = r#"
+application Desk {
+    module desk {
+        service TicketService {
+            boolean read() capability ReadTicket;
+        }
+    }
+}
+"#;
+
+/// A design whose one operation carries `RaiseRefund`.
+const REFUND_DESIGN: &str = r#"
+application Desk {
+    module desk {
+        service RefundService {
+            boolean raise() capability RaiseRefund;
+        }
+    }
+}
+"#;
+
+/// Compiles the actor source against designs compiled standalone (no
+/// imports — capability clauses are plain names the design records
+/// unvalidated without an actor model).
+fn compile_with_designs(
+    actor_source: &str,
+    domains: &[(&str, &str)],
+    designs: &[&str],
+) -> ActorCompilation {
+    let domains: Vec<(String, String)> = domains
+        .iter()
+        .map(|(path, source)| (path.to_string(), source.to_string()))
+        .collect();
+    let models: Vec<phero_ir::ddd::DddModel> = designs
+        .iter()
+        .map(|source| {
+            phero_driver::compile_ddd_str(
+                "design.ddd",
+                source,
+                &[],
+                &phero_driver::DomainImports::default(),
+            )
+            .model
+            .expect("standalone design compiles")
+        })
+        .collect();
+    compile_actors_str_with_designs(
+        "support.actor",
+        actor_source,
+        &domains,
+        &phero_driver::DomainImports::default(),
+        &models,
+    )
+}
+
+#[test]
+fn granted_capability_with_no_designs_stays_silent() {
+    let compilation = compile_with_designs(ACTOR, &[("domain.mox", DOMAIN)], &[]);
+    assert!(
+        compilation.diagnostics.is_empty(),
+        "no designs: coverage is silent (opt-in house style): {:?}",
+        compilation.diagnostics
+    );
+}
+
+#[test]
+fn granted_capability_carried_by_an_operation_passes() {
+    let compilation = compile_with_designs(
+        ACTOR,
+        &[("domain.mox", DOMAIN)],
+        &[DESK_DESIGN, READ_DESIGN, REFUND_DESIGN],
+    );
+    assert!(
+        compilation.diagnostics.is_empty(),
+        "every granted capability has a carrier across the designs: {:?}",
+        compilation.diagnostics
+    );
+}
+
+#[test]
+fn granted_capability_uncarried_errors_on_the_grant_entry() {
+    let source = concat!(
+        "import \"domain.mox\"\n",
+        "\n",
+        "actors Support {\n",
+        "    actor Customer\n",
+        "    capability ReadTicket on Ticket\n",
+        "\n",
+        "    grant Customer {\n",
+        "        permit ReadTicket\n",
+        "    }\n",
+        "}\n",
+    );
+    // The desk design carries only AutoAssign — ReadTicket dangles.
+    let compilation = compile_with_designs(source, &[("domain.mox", DOMAIN)], &[DESK_DESIGN]);
+    let (path, diagnostic) = single(
+        &compilation,
+        "is granted but no operation or search carries it",
+    );
+    assert_eq!(path, "support.actor");
+    assert!(
+        diagnostic.message.contains("capability 'ReadTicket'"),
+        "the message names the dangling capability: {:?}",
+        diagnostic.message
+    );
+    let span = span_of(source, "permit ReadTicket", 0);
+    let grant_span = {
+        let start = span.start + "permit ".len();
+        (start..start + "ReadTicket".len()).into()
+    };
+    assert_eq!(
+        diagnostic.span,
+        Some(grant_span),
+        "the span lands on the grant entry's capability reference"
+    );
+    assert_eq!(
+        diagnostic.help.as_deref(),
+        Some("declare the capability on an operation or search of a design, or drop the grant"),
+    );
+    let code = diagnostic.code.as_ref().expect("carries a code");
+    assert_eq!(code.name(), "grantedCapabilityUncarried");
+    let json = serde_json::to_value(code).expect("the code serializes");
+    let grant_span: phero_driver::Span = grant_span;
+    assert_eq!(
+        json,
+        serde_json::json!({
+            "grantedCapabilityUncarried": {
+                "capability": "ReadTicket",
+                "span": [grant_span.start, grant_span.end]
+            }
+        })
+    );
+    assert!(compilation.model.is_none(), "errors block the artifact");
+}
+
+#[test]
+fn delegated_capability_uncarried_errors_like_a_grant() {
+    let source = concat!(
+        "import \"domain.mox\"\n",
+        "\n",
+        "actors Support {\n",
+        "    actor Customer\n",
+        "    agent Runner\n",
+        "    capability AuditTrail on Ticket\n",
+        "\n",
+        "    grant Runner {\n",
+        "        permit AuditTrail\n",
+        "    }\n",
+        "\n",
+        "    delegation HandOff {\n",
+        "        from Customer to Runner\n",
+        "        permit AuditTrail\n",
+        "    }\n",
+        "}\n",
+    );
+    let compilation = compile_with_designs(source, &[("domain.mox", DOMAIN)], &[DESK_DESIGN]);
+    let (path, diagnostic) = single(&compilation, "capability 'AuditTrail' is granted");
+    assert_eq!(path, "support.actor");
+    assert!(
+        diagnostic.span.is_some(),
+        "one deduplicated diagnostic, spanned on the (grant) reference"
+    );
+}
+
+#[test]
+fn cedar_only_grant_entries_stay_out_of_coverage() {
+    let source = concat!(
+        "import \"domain.mox\"\n",
+        "\n",
+        "actors Support {\n",
+        "    actor Customer\n",
+        "    capability ReadTicket on Ticket\n",
+        "\n",
+        "    grant Customer {\n",
+        "        cedar { permit(principal, action, resource); }\n",
+        "    }\n",
+        "}\n",
+    );
+    let compilation = compile_with_designs(source, &[("domain.mox", DOMAIN)], &[DESK_DESIGN]);
+    assert!(
+        compilation.diagnostics.is_empty(),
+        "verbatim cedar policies name no pherolang capability: {:?}",
+        compilation.diagnostics
+    );
+}
+
+#[test]
+fn coverage_pools_carriers_across_designs() {
+    let carried = r#"
+application Desk {
+    module desk {
+        service OtherService {
+            boolean read() capability ReadTicket;
+        }
+    }
+}
+"#;
+    // ReadTicket carried by the *second* design; AutoAssign by the third;
+    // RaiseRefund by a fourth.
+    let compilation = compile_with_designs(
+        ACTOR,
+        &[("domain.mox", DOMAIN)],
+        &[READ_DESIGN, carried, DESK_DESIGN, REFUND_DESIGN],
+    );
+    assert!(
+        compilation.diagnostics.is_empty(),
+        "any design's operation or search carries the capability: {:?}",
+        compilation.diagnostics
+    );
+}
+
+#[test]
+fn inline_domain_blocks_join_coverage_under_their_own_file() {
+    // DOMAIN's inline `actors Inbox` block grants `AutoAssign`; a design
+    // set that carries nothing leaves it dangling — tagged with the
+    // domain's path, spanned into the domain source.
+    let compilation = compile_with_designs(ACTOR, &[("domain.mox", DOMAIN)], &[READ_DESIGN]);
+    let (path, diagnostic) = single(&compilation, "capability 'AutoAssign' is granted");
+    assert_eq!(path, "domain.mox");
+    let span = diagnostic.span.expect("spanned into the mox source");
+    assert!(
+        DOMAIN[span.start..span.end].contains("AutoAssign"),
+        "the span points at the inline grant's capability: {:?}",
+        &DOMAIN[span.start..span.end]
+    );
+}
+
+// --- capability noun classification (pherolang#144) ----------------------------
+//
+// The designs bucket also classifies capability nouns against the
+// aggregates: a capability granted on a class that some pooled design
+// marks a contained, repository-holding entity warns toward its aggregate
+// root (codegraph#596 hangs non-root bindings). Value and root verdicts
+// are clean; without designs the join is silent (opt-in house style).
+
+/// A domain with containment: Library owns Books, Books own Chapters;
+/// Money is a value-shaped spare class.
+const AGGREGATE_DOMAIN: &str = r#"
+package phero.support.domain
+
+class Library {
+    String name
+    contains Book[] books opposite library
+}
+
+class Book {
+    container Library library opposite books
+    String title
+    contains Chapter[] chapters opposite book
+}
+
+class Chapter {
+    container Book book opposite chapters
+    String heading
+}
+
+class Money {
+    readonly int cents
+}
+"#;
+
+/// The root design, alone in its file: rule 6 sees only this file's
+/// designs, so the standalone design compile is clean.
+const LIBRARY_DESIGN: &str = r#"
+import "aggregate.mox";
+
+application Support {
+    base phero.support.domain
+
+    module desk {
+        entity Library repository LibraryRepository {
+            findById;
+        }
+    }
+}
+"#;
+
+/// The member design, alone in ITS file: Book holds a repository and
+/// nothing here contains it, so the standalone design compile is clean
+/// too — the non-root verdict exists only once an actor join pools both
+/// files' designs.
+const BOOK_DESIGN: &str = r#"
+import "aggregate.mox";
+
+application Support {
+    base phero.support.domain
+
+    module desk {
+        entity Book repository BookRepository {
+            findById;
+        }
+    }
+}
+"#;
+
+/// The chapter design: transitively contained (Library → Book → Chapter).
+const CHAPTER_DESIGN: &str = r#"
+import "aggregate.mox";
+
+application Support {
+    base phero.support.domain
+
+    module desk {
+        entity Chapter repository ChapterRepository {
+            findById;
+        }
+    }
+}
+"#;
+
+/// Book designed as a bare entity — no repository, so it is not a root
+/// candidate and gets no verdict (the rule-6 predicate convicts
+/// repository holders only).
+const PLAIN_BOOK_DESIGN: &str = r#"
+import "aggregate.mox";
+
+application Support {
+    base phero.support.domain
+
+    module desk {
+        entity Book
+    }
+}
+"#;
+
+/// Money designed as a value object (its features are `readonly`, per the
+/// value contract).
+const MONEY_DESIGN: &str = r#"
+import "aggregate.mox";
+
+application Support {
+    base phero.support.domain
+
+    module desk {
+        value Money
+    }
+}
+"#;
+
+/// Compiles the actor source against the aggregate domain with every
+/// design compiled against the same domain (entity designs target domain
+/// classes, unlike the coverage fixtures' service-only designs).
+fn compile_with_aggregate_designs(actor_source: &str, designs: &[&str]) -> ActorCompilation {
+    let domains = [("aggregate.mox".to_string(), AGGREGATE_DOMAIN.to_string())];
+    let models: Vec<phero_ir::ddd::DddModel> = designs
+        .iter()
+        .map(|source| {
+            phero_driver::compile_ddd_str(
+                "design.ddd",
+                source,
+                &domains,
+                &phero_driver::DomainImports::default(),
+            )
+            .model
+            .expect("standalone design compiles")
+        })
+        .collect();
+    compile_actors_str_with_designs(
+        "support.actor",
+        actor_source,
+        &domains,
+        &phero_driver::DomainImports::default(),
+        &models,
+    )
+}
+
+#[test]
+fn capability_on_a_contained_entity_warns_toward_the_root() {
+    let source = concat!(
+        "import \"aggregate.mox\"\n",
+        "\n",
+        "actors Support {\n",
+        "    actor Librarian\n",
+        "\n",
+        "    capability ReadBook on Book\n",
+        "}\n",
+    );
+    // Both designs are clean standalone (rule 6 only sees one file's
+    // designs); pooled by the actor join, Book is a repository holder
+    // contained by Library — exactly the non-root verdict the language
+    // must know about.
+    let compilation = compile_with_aggregate_designs(source, &[LIBRARY_DESIGN, BOOK_DESIGN]);
+    let (path, diagnostic) = single(&compilation, "non-root aggregate member");
+    assert_eq!(path, "support.actor");
+    assert_eq!(diagnostic.severity, Severity::Warning);
+    assert!(
+        diagnostic.message.contains(
+            "capability `ReadBook` is granted on `Book`, a non-root aggregate member of `Library`"
+        ),
+        "the message names the capability, the class, and the root: {:?}",
+        diagnostic.message
+    );
+    let span = span_of(source, "on Book", 0);
+    let class_span = {
+        let start = span.start + "on ".len();
+        (start..start + "Book".len()).into()
+    };
+    assert_eq!(
+        diagnostic.span,
+        Some(class_span),
+        "the span lands on the capability's class"
+    );
+    assert_eq!(
+        diagnostic.help.as_deref(),
+        Some("grant the capability on the aggregate root `Library` instead"),
+    );
+    // Warnings never block the artifact.
+    assert!(compilation.model.is_some());
+}
+
+#[test]
+fn capability_on_the_aggregate_root_is_clean() {
+    let source = concat!(
+        "import \"aggregate.mox\"\n",
+        "\n",
+        "actors Support {\n",
+        "    actor Librarian\n",
+        "\n",
+        "    capability ManageLibrary on Library\n",
+        "}\n",
+    );
+    let compilation = compile_with_aggregate_designs(source, &[LIBRARY_DESIGN, BOOK_DESIGN]);
+    assert!(
+        compilation.diagnostics.is_empty(),
+        "an aggregate root is a sanctioned grant target: {:?}",
+        compilation.diagnostics
+    );
+    assert!(compilation.model.is_some());
+}
+
+#[test]
+fn capability_on_a_value_design_is_clean() {
+    let source = concat!(
+        "import \"aggregate.mox\"\n",
+        "\n",
+        "actors Support {\n",
+        "    actor Librarian\n",
+        "\n",
+        "    capability PriceTag on Money\n",
+        "}\n",
+    );
+    let compilation = compile_with_aggregate_designs(source, &[MONEY_DESIGN]);
+    assert!(
+        compilation.diagnostics.is_empty(),
+        "a value object is a sanctioned grant target: {:?}",
+        compilation.diagnostics
+    );
+}
+
+#[test]
+fn noun_classification_is_silent_without_designs() {
+    // The plain compile: no designs bucket, so the join never fires —
+    // byte-identical to the pre-#144 behavior.
+    let source = concat!(
+        "import \"aggregate.mox\"\n",
+        "\n",
+        "actors Support {\n",
+        "    actor Librarian\n",
+        "\n",
+        "    capability ReadBook on Book\n",
+        "}\n",
+    );
+    let compilation = compile(source, &[("aggregate.mox", AGGREGATE_DOMAIN)]);
+    assert!(
+        compilation.diagnostics.is_empty(),
+        "no designs: no classification: {:?}",
+        compilation.diagnostics
+    );
+}
+
+#[test]
+fn transitive_containment_names_the_top_root() {
+    let source = concat!(
+        "import \"aggregate.mox\"\n",
+        "\n",
+        "actors Support {\n",
+        "    actor Librarian\n",
+        "\n",
+        "    capability PeekChapter on Chapter\n",
+        "}\n",
+    );
+    // Chapter sits two links down (Library → Book → Chapter); the verdict
+    // is transitive over the containment closure, exactly rule 6's
+    // predicate, and the named root is the chain's unique top.
+    let compilation = compile_with_aggregate_designs(source, &[LIBRARY_DESIGN, CHAPTER_DESIGN]);
+    let (_, diagnostic) = single(&compilation, "non-root aggregate member of `Library`");
+    assert_eq!(diagnostic.severity, Severity::Warning);
+    assert_eq!(
+        diagnostic.help.as_deref(),
+        Some("grant the capability on the aggregate root `Library` instead"),
+    );
+}
+
+#[test]
+fn containment_without_an_entity_design_grants_a_clean_root() {
+    // Book's repository holder with NO Library design anywhere: no
+    // stereotyped entity contains it, so the verdict is Root — the same
+    // allowance rule 6 gives a repository without a container design.
+    let source = concat!(
+        "import \"aggregate.mox\"\n",
+        "\n",
+        "actors Support {\n",
+        "    actor Librarian\n",
+        "\n",
+        "    capability ReadBook on Book\n",
+        "}\n",
+    );
+    let compilation = compile_with_aggregate_designs(source, &[BOOK_DESIGN]);
+    assert!(
+        compilation.diagnostics.is_empty(),
+        "containment needs a stereotyped entity container: {:?}",
+        compilation.diagnostics
+    );
+}
+
+#[test]
+fn an_entity_without_a_repository_stays_silent() {
+    // Book designed as a bare entity: not a root candidate, so the
+    // classification gives no verdict — the rule-6 predicate convicts
+    // repository holders only, and no new predicate is invented here.
+    let source = concat!(
+        "import \"aggregate.mox\"\n",
+        "\n",
+        "actors Support {\n",
+        "    actor Librarian\n",
+        "\n",
+        "    capability ReadBook on Book\n",
+        "}\n",
+    );
+    let compilation = compile_with_aggregate_designs(source, &[LIBRARY_DESIGN, PLAIN_BOOK_DESIGN]);
+    assert!(
+        compilation.diagnostics.is_empty(),
+        "a repository-less entity carries no verdict: {:?}",
+        compilation.diagnostics
+    );
+}
+
+#[test]
+fn an_undesigned_class_stays_silent() {
+    // Chapter has no design in the bucket: no verdict, whatever the other
+    // designs say.
+    let source = concat!(
+        "import \"aggregate.mox\"\n",
+        "\n",
+        "actors Support {\n",
+        "    actor Librarian\n",
+        "\n",
+        "    capability TidyChapter on Chapter\n",
+        "}\n",
+    );
+    let compilation = compile_with_aggregate_designs(source, &[LIBRARY_DESIGN, BOOK_DESIGN]);
+    assert!(
+        compilation.diagnostics.is_empty(),
+        "a class without a design stays silent: {:?}",
+        compilation.diagnostics
+    );
+}
+
+// --- session-kind grant modifiers (pherolang#181 part B) ---------------------------
+
+#[test]
+fn session_kind_modifiers_lower_in_actor_files() {
+    let source = concat!(
+        "import \"domain.mox\"\n",
+        "\n",
+        "actors Payroll {\n",
+        "    actor Finance\n",
+        "    agent Helper extends Finance\n",
+        "\n",
+        "    capability SubmitPayRun on Ticket\n",
+        "    capability IngestHours on Ticket\n",
+        "\n",
+        "    grant Finance {\n",
+        "        permit human SubmitPayRun\n",
+        "    }\n",
+        "\n",
+        "    grant Helper {\n",
+        "        permit agent IngestHours\n",
+        "    }\n",
+        "\n",
+        "    delegation Ingest {\n",
+        "        from Finance\n",
+        "        to Helper\n",
+        "        permit agent IngestHours\n",
+        "    }\n",
+        "}\n",
+    );
+    let compilation = compile(source, &[("domain.mox", DOMAIN)]);
+    assert!(
+        compilation.diagnostics.is_empty(),
+        "unexpected diagnostics: {:?}",
+        compilation.diagnostics
+    );
+    let model = compilation.model.expect("actor model lowered");
+    let block = model
+        .blocks
+        .iter()
+        .find(|block| block.name == "Payroll")
+        .expect("Payroll block lowered");
+    assert_eq!(
+        block.grants[0].entries[0].session_kind,
+        phero_ir::SessionKind::Human
+    );
+    assert_eq!(
+        block.delegations[0].entries[0].session_kind,
+        phero_ir::SessionKind::Agent
+    );
+}

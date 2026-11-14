@@ -1,4 +1,4 @@
-// rexlang reference pattern library — navigation.
+// Phero Lang reference pattern library — navigation.
 // Positioning patterns: paging, tab switchers, breadcrumb trails, and links.
 
 module "Pagination" {

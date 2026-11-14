@@ -5,8 +5,8 @@
 // C-like expressions. Parse → IfmlModel::to_json_pretty must byte-match the
 // committed golden artifact.
 
-import "rexlang/auth.actor";
-import "rexlang/decisions.dmn";
+import "phero/auth.actor";
+import "phero/decisions.dmn";
 
 domain "sales" {
     schema "sales";

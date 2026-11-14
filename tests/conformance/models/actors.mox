@@ -1,4 +1,4 @@
-package rex.conformance.actors
+package phero.conformance.actors
 
 class User {
     id String id

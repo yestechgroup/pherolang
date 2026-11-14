@@ -1,9 +1,9 @@
 {
-  "formatVersion": 1,
-  "rexVersion": "0.2.0",
+  "formatVersion": 2,
+  "pheroVersion": "0.3.0",
   "packages": [
     {
-      "name": "rex.conformance.sigil",
+      "name": "phero.conformance.sigil",
       "annotations": [],
       "enums": [],
       "datatypes": [],
@@ -21,7 +21,7 @@
               "type": {
                 "type": "class",
                 "value": {
-                  "package": "rex.sigil.fixture",
+                  "package": "phero.sigil.fixture",
                   "name": "Bond"
                 }
               },
@@ -40,7 +40,7 @@
               "type": {
                 "type": "enum",
                 "value": {
-                  "package": "rex.sigil.fixture",
+                  "package": "phero.sigil.fixture",
                   "name": "InstrumentStatus"
                 }
               },
@@ -61,7 +61,7 @@
               "type": {
                 "type": "datatype",
                 "value": {
-                  "package": "rex.sigil.fixture",
+                  "package": "phero.sigil.fixture",
                   "name": "InstrumentCode"
                 }
               },
@@ -80,7 +80,7 @@
       ]
     },
     {
-      "name": "rex.sigil.fixture",
+      "name": "phero.sigil.fixture",
       "annotations": [],
       "enums": [
         {
@@ -185,7 +185,7 @@
             {
               "type": "class",
               "value": {
-                "package": "rex.sigil.fixture",
+                "package": "phero.sigil.fixture",
                 "name": "Instrument"
               }
             }
@@ -236,7 +236,7 @@
             {
               "type": "interface",
               "value": {
-                "package": "rex.sigil.fixture",
+                "package": "phero.sigil.fixture",
                 "name": "InstrumentType"
               }
             }

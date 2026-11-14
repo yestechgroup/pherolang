@@ -7,10 +7,10 @@ domain model defines the data; the `.evt` contract declares the **events**
 flowing through the system (named contracts with typed payload fields), the
 **channels** that publish them, and the **subscriptions** that deliver event
 sets to named consumers — with nothing about brokers, wire encodings, or
-delivery guaranteed. Parsed by **rex-syntax** (`parse_evt`, the chumsky
-parser) at compile time, lowered and validated by **rex-driver**
+delivery guaranteed. Parsed by **phero-syntax** (`parse_evt`, the chumsky
+parser) at compile time, lowered and validated by **phero-driver**
 (`compile_evt_str`) against the imported domains, and emitted as the
-versioned `rex_ir::events::EventModel` artifact (the rex-ir crate).
+versioned `phero_ir::events::EventModel` artifact (the phero-ir crate).
 
 The `.evt` DSL lives alongside the `.mox` domain model as a *complementary*
 input: an event never declares types of its own — its payload fields resolve
@@ -23,15 +23,15 @@ those generators need (CloudEvents attributes, delivery policy, governance
 metadata, filters), never their execution.
 
 The normative contract — entry points, resolution semantics, and the
-validation rules — is documented on `rex_driver::compile_evt_str`; this page
+validation rules — is documented on `phero_driver::compile_evt_str`; this page
 is the language reference.
 
 ---
 
 ## Artifact wire format
 
-`EventModel` is a standalone, versioned wire artifact following the rex-ir
-[wire format contract](BACKENDS.md) (see also the `rex_ir::events` module
+`EventModel` is a standalone, versioned wire artifact following the phero-ir
+[wire format contract](BACKENDS.md) (see also the `phero_ir::events` module
 docs):
 
 - Versioned independently of the domain-model marker via
@@ -42,8 +42,8 @@ docs):
   `events`, `channels`, `subscriptions`). There
   are no tagged enums in this artifact: a publication is exactly
   `{"event": "<name>"}`, and a subscription's consumer is a bare string.
-  In a checked application the name must resolve: `rexlang check <dir>`
-  runs the union integrity pass (`rex_driver::check_integrity`, register
+  In a checked application the name must resolve: `pherolang check <dir>`
+  runs the union integrity pass (`phero_driver::check_integrity`, register
   row **V12**) over the import-connected application and errors when a
   consumer names no declared `.deploy` component — a dead inbox, not a
   valid contract. Checking the contract alone stays per-surface and
@@ -71,12 +71,12 @@ docs):
   channel/subscription without a scope clause serializes byte-identical to
   the pre-scope format, and the version stays 1).
 
-Minimal artifact: an empty model serializes as exactly `{"formatVersion":1}`.
+Minimal artifact: an empty model serializes as exactly `{"formatVersion":2}`.
 
 ```rust
-let compilation = rex_driver::compile_evt_str("orders.evt", source, &domains, &rex_driver::DomainImports::default());
+let compilation = phero_driver::compile_evt_str("orders.evt", source, &domains, &phero_driver::DomainImports::default());
 let json = compilation.model.unwrap().to_json_pretty()?; // versioned artifact
-let model = rex_ir::events::EventModel::from_json(&json)?; // version-gated reload
+let model = phero_ir::events::EventModel::from_json(&json)?; // version-gated reload
 ```
 
 Excerpt of the committed golden artifact
@@ -85,7 +85,7 @@ the `billing` subscription show every slice-2 shape:
 
 ```json
 {
-  "formatVersion": 1,
+  "formatVersion": 2,
   "events": [
     {
       "name": "OrderPlaced",
@@ -157,8 +157,8 @@ the `billing` subscription show every slice-2 shape:
 
 The normative EBNF for the `.evt` surface lives exactly once, in the parser
 module docs under [*`.evt` event-contract
-sources*](https://docs.rs/rex-syntax/latest/rex_syntax/parser/index.html)
-(`crates/rex-syntax/src/parser/mod.rs`) — the single authority for `evt_file`,
+sources*](https://docs.rs/phero-syntax/latest/phero_syntax/parser/index.html)
+(`crates/phero-syntax/src/parser/mod.rs`) — the single authority for `evt_file`,
 `evt_import`, `event_decl`, `field`, `channel_decl`, `publishes_entry`, and
 `subscription_decl`; this page keeps only the language-level rules.
 
@@ -167,7 +167,7 @@ Language-level rules:
 - **`event <name> (version "<string>")? { <member>* }`** — a named contract
   with its typed payload fields (`name: Type;`, one per line). The
   `version` clause is a **free-form string** pinned into the artifact
-  verbatim; rexlang attaches no semantics to it (no comparison, no
+  verbatim; Phero Lang attaches no semantics to it (no comparison, no
   ordering — consumers decide what a version means). Members may appear in
   any source order; the formatter canonicalizes them to fields →
   governance → `cloudEvents`.
@@ -201,7 +201,7 @@ Language-level rules:
   `delivery`. Inside the list, the contextual `consumer` word ends the
   list, so a missing `]` never swallows the consumer line.
 - **`when ( <expression> )`** — a subscription filter whose interior is
-  raw rex-expr text (stored verbatim). The driver types it **boolean**
+  raw phero-expr text (stored verbatim). The driver types it **boolean**
   against *every* event in the subscription's list — a filter is a routing
   decision per event, so a field absent from any subscribed event is an
   error by design (rule 13 below).
@@ -211,7 +211,7 @@ Language-level rules:
   present and must be one of `at_most_once`, `at_least_once`,
   `effectively_once`; the three tuning knobs must be positive; the
   dead-letter reference must name a channel declared in the same file.
-- **Field types** are a rex-syntax primitive (`String`, `int`, ...) or any
+- **Field types** are a phero-syntax primitive (`String`, `int`, ...) or any
   declared domain kind — class, enum, datatype, interface, vocabulary —
   resolved against the imported domains (below).
 - **Imports come first**: `import "<path>"` (no trailing `;`, the `.actor`
@@ -247,7 +247,7 @@ Language-level rules:
 
 Payload field types resolve against the **union namespace of the imported
 domains** (the same rule multi-file `.mox` compiles follow): the
-`rex-syntax` primitives resolve everywhere; every other reference follows
+`phero-syntax` primitives resolve everywhere; every other reference follows
 the `.mox` cross-package rules (a bare single-segment name must be unique
 across all domain packages; a qualified `pkg.Name` must match exactly one
 package — ambiguity and unknown names report through the same diagnostics
@@ -296,7 +296,7 @@ file or an imported domain — drops the artifact; warnings do not):
     declared in the same file (`unknown dead-letter channel 'x' on
     subscription 'S'`).
 13. **Subscription `when`** — the filter's interior (sliced strictly inside
-    the parens, trimmed) must parse as a rex-expr condition and type
+    the parens, trimmed) must parse as a phero-expr condition and type
     `boolean` against **every** event in the subscription's `events [...]`
     list. The expression is typed with a synthetic per-event class — the
     subscribed event's payload fields as the implicit `self`, registered
@@ -336,17 +336,17 @@ domains when they lowered.
 ## CLI usage
 
 ```
-rexlang check orders.evt                  # validate contract + imported domains
-rexlang ir orders.evt -o orders.evt.json  # emit the EventModel artifact
-rexlang fmt --check orders.evt            # canonical formatting gate
-rexlang artifact check orders.evt.json    # validate the serialized artifact
+pherolang check orders.evt                  # validate contract + imported domains
+pherolang ir orders.evt -o orders.evt.json  # emit the EventModel artifact
+pherolang fmt --check orders.evt            # canonical formatting gate
+pherolang artifact check orders.evt.json    # validate the serialized artifact
 ```
 
 Try it on the canonical fixture from the repository root:
 
 ```
-cargo run -p rex-cli -- check tests/conformance/events/orders.evt
-cargo run -p rex-cli -- ir tests/conformance/events/orders.evt -o orders.evt.json
+cargo run -p phero-cli -- check tests/conformance/events/orders.evt
+cargo run -p phero-cli -- ir tests/conformance/events/orders.evt -o orders.evt.json
 ```
 
 - Import paths resolve **relative to the `.evt` file's directory**; each
@@ -357,9 +357,9 @@ cargo run -p rex-cli -- ir tests/conformance/events/orders.evt -o orders.evt.jso
   target lowered JSON-Schema and Rune types like any other class.
 - Diagnostics come from every file involved and render grouped per file,
   the way `.actor` compiles render them.
-- `rexlang ir` on an `.evt` file emits only the event artifact; the domain
+- `pherolang ir` on an `.evt` file emits only the event artifact; the domain
   IR is emitted by running `ir` on the `.mox` files themselves.
-- `rexlang fmt` formats `.evt` files with the canonical layout: imports
+- `pherolang fmt` formats `.evt` files with the canonical layout: imports
   hoisted into a tight first section, then declarations grouped by kind
   (event → channel → subscription, source order within a kind), fields as
   `name: Type;` one per line, event bodies reordered to fields →
@@ -370,13 +370,13 @@ cargo run -p rex-cli -- ir tests/conformance/events/orders.evt -o orders.evt.jso
   `scope S` tail, the `when (...)` filter (interior verbatim), and the
   `delivery { ... }` block with one `word value;` entry per line in
   canonical order. Stdin is treated as `.mox`.
-- Directory batch mode (`rexlang check <dir>`) picks `.evt` files up like
+- Directory batch mode (`pherolang check <dir>`) picks `.evt` files up like
   every other surface: each contract in the directory compiles
   independently, imports resolved relative to it.
-- `rexlang artifact check` classifies a non-empty event artifact by its
+- `pherolang artifact check` classifies a non-empty event artifact by its
   `events`/`channels`/`subscriptions` keys (rule 5 of the classifier's
   precedence list). The **empty** event artifact serializes as exactly
-  `{"formatVersion":1}` and therefore classifies as an ActorModel — a
+  `{"formatVersion":2}` and therefore classifies as an ActorModel — a
   documented shape-sniffing limitation the empty IFML model shares (see
   the classification rules in the CLI's `artifact_check` module).
 
@@ -491,7 +491,7 @@ decisions, recorded here as the contract:
 - **Delivery policy + governance + filters are carried, not executed.**
   `at_most_once`/`at_least_once`/`effectively_once`, the tuning knobs,
   the dead-letter channel, the PII list, and the `when` filters are
-  contract facts a consumer implements; rexlang's driver validates their
+  contract facts a consumer implements; Phero Lang's driver validates their
   *shape* (mode vocabulary, positive knobs, resolvable channel and field
   references, boolean filters) and stops there.
 
@@ -508,15 +508,15 @@ names.
 `tests/conformance/events/` holds the canonical fixture set: `orders.mox`
 (the domain), `orders.evt` (the contract, formatter-canonical), and
 `orders.evt.json` (the committed artifact). The driver golden test
-(`crates/rex-driver/tests/evt_golden.rs`) byte-compares the compiled
+(`crates/phero-driver/tests/evt_golden.rs`) byte-compares the compiled
 artifact, round-trips it through `from_json`, and pins the negative
 diagnostics; the wire shape is pinned by
-`crates/rex-ir/tests/event_model.rs`; the formatter golden
+`crates/phero-ir/tests/event_model.rs`; the formatter golden
 `tests/conformance/fmt/events.fmt.evt` is byte-compared by
-`crates/rex-syntax/tests/fmt.rs`, and the CI fmt gate covers
+`crates/phero-syntax/tests/fmt.rs`, and the CI fmt gate covers
 `tests/conformance/events/`. Regenerate goldens with
-`REX_UPDATE_FIXTURES=1 cargo test --workspace`.
+`PHERO_UPDATE_FIXTURES=1 cargo test --workspace`.
 
 The `examples/` side ships `support.evt` and `ecommerce.evt` (the latter
 with a vocabulary-typed payload field), compiled and byte-pinned against
-`examples/artifacts/` by `crates/rex-driver/tests/examples_artifacts.rs`.
+`examples/artifacts/` by `crates/phero-driver/tests/examples_artifacts.rs`.

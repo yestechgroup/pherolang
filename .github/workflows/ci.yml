@@ -7,9 +7,10 @@ on:
 
 env:
   CARGO_TERM_COLOR: always
-  # The rev-pinned git dependencies (sigil, xstate-ir) fetch through the git
-  # CLI so actions/checkout's persisted credentials authenticate private
-  # repos; cargo's default libgit2 backend carries no credentials.
+  # The rev-pinned git dependencies (sigil, xstate-ir, dsntk) fetch through
+  # the git CLI: it resolves bare `rev = "<sha>"` pins more reliably than
+  # cargo's default libgit2 backend. The three repositories are public, so
+  # no credentials are involved.
   CARGO_NET_GIT_FETCH_WITH_CLI: "true"
   # The dsntk dependency tree pushed the full --all-targets build past the
   # runner's disk budget (the linker Bus-errors when the disk fills); CI
@@ -35,8 +36,8 @@ jobs:
     runs-on: ubuntu-latest
     env:
       # The rev-pinned git deps (sigil, xstate-ir, dsntk) fetch through the
-      # git CLI with checkout's persisted credentials — cargo-deny reads
-      # their sources for the license check, and restingstate is private.
+      # git CLI — cargo-deny reads their sources for the license check.
+      # They are public repositories, so no credentials are involved.
       CARGO_NET_GIT_FETCH_WITH_CLI: "true"
     steps:
       - uses: actions/checkout@v4
@@ -70,6 +71,12 @@ jobs:
       - uses: Swatinem/rust-cache@v2
       - name: Build
         run: scripts/ci-local.sh build
+      # The rebrand guard (epic #270, P0-03): a revived pre-0.3 spelling is
+      # a documentation/identifier regression no other gate can see. Cheap,
+      # so it runs before the expensive test step. The contract it enforces
+      # is docs/NAMING.md; the allowlist is scripts/check-rebrand.sh itself.
+      - name: Rebrand guard
+        run: scripts/ci-local.sh rebrand
       # Every gate below invokes scripts/ci-local.sh — the single source
       # of truth for the gate sequence and the fixture-glob list (issue
       # #121): local and remote can never drift. Step boundaries match the
@@ -78,7 +85,7 @@ jobs:
       # the small tmpfs /tmp — the linker SIGBUSes there (the AGENTS.md
       # testing-quirks gotcha; `ld terminated with signal 7`). The script
       # points TMPDIR at the disk-backed target/ and caps the job count so
-      # the eleven rex-driver doctests don't link concurrently.
+      # the eleven phero-driver doctests don't link concurrently.
       - name: Tests
         run: scripts/ci-local.sh test
       - name: Clippy

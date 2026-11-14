@@ -1,14 +1,14 @@
 # The .mox language reference
 
-`rexlang` compiles `.mox` modeling sources (inspired by [Eclipse Xcore]) into a
-resolved **Core IR** artifact, from which backends generate Rust models, JSON
+Phero Lang compiles `.mox` modeling sources (inspired by [Eclipse Xcore]) into
+a resolved **Core IR** artifact, from which backends generate Rust models, JSON
 Schemas, and canonical instance JSON. This document is the normative language
-reference; crate docs cover implementation.
+reference; the `pherolang` CLI and crate docs cover implementation.
 
-**Grammar authority.** The normative EBNF for every rexlang surface lives
+**Grammar authority.** The normative EBNF for every Phero Lang surface lives
 exactly once, in the parser module docs
-(`crates/rex-syntax/src/parser/mod.rs`, rendered as
-[`rex_syntax::parser`](https://docs.rs/rex-syntax/latest/rex_syntax/parser/) —
+(`crates/phero-syntax/src/parser/mod.rs`, rendered as
+[`phero_syntax::parser`](https://docs.rs/phero-syntax/latest/phero_syntax/parser/) —
 sections: *`.mox` model sources*, *the shared `actors_block`*, *`.actor`
 policy files*, *`.ddd` design sources*, *`.evt` event-contract sources*,
 *`.deploy` deployment sources*, *`.uc` use case sources*, and *`.cmmn`
@@ -16,7 +16,7 @@ case management sources*).
 The sections below link to it
 instead of restating the grammar; when this page and the parser disagree,
 the parser wins. The `.ifml` surface's authority is the EBNF in
-`crates/rex-ifml/src/parser/mod.rs` (see [docs/IFML.md](IFML.md)); the
+`crates/phero-ifml/src/parser/mod.rs` (see [docs/IFML.md](IFML.md)); the
 expression language is normative in [`docs/EXPRESSIONS.md`](EXPRESSIONS.md).
 
 [Eclipse Xcore]: https://eclipse.dev/Xtext/documentation/305_xbase.html
@@ -24,7 +24,7 @@ expression language is normative in [`docs/EXPRESSIONS.md`](EXPRESSIONS.md).
 ## Lexical rules
 
 - **Comments**: `//` to end of line, `/* ... */` block comments. Preserved
-  verbatim by `rexlang fmt`.
+  verbatim by `pherolang fmt`.
 - **Doc comments**: `///` line comments and `/** ... */` block comments on
   their own lines directly above the `package` declaration, a declaration,
   feature, or enum literal become that element's **description**. Contiguous
@@ -58,7 +58,7 @@ A file holds one package and any number of declarations. The full EBNF —
 `model`, `package_decl`, `annotation_decl`, `import_schema_decl`,
 `import_sigil_decl`, and every declaration form below — lives in the parser
 module docs under [*`.mox` model
-sources*](https://docs.rs/rex-syntax/latest/rex_syntax/parser/index.html);
+sources*](https://docs.rs/phero-syntax/latest/phero_syntax/parser/index.html);
 the sections that follow keep the language-level rules.
 
 `doc` marks the optional doc-comment run described under Lexical rules; it
@@ -126,8 +126,8 @@ multi-package `Model` vs a standalone `ActorModel`).
 
 A model may span multiple `.mox` files — one package per file, named by its
 `package` declaration. Compiling several files produces **one** Core IR
-artifact whose `packages` follow the input order (for `rexlang`, the sorted
-path order of the expanded inputs). Declarations may reference types from
+artifact whose `packages` follow the input order (for the CLI, the sorted path
+order of the expanded inputs). Declarations may reference types from
 any package of the compilation:
 
 - A bare single-segment name must be unique across **all** packages; if
@@ -191,23 +191,23 @@ Malformed declarations are syntax errors: a missing path literal after
 `import schema`, or a missing name after `as`.
 
 **Resolution contract.** The driver stays filesystem-free: import content
-arrives as text. `rexlang check`/`ir`/`gen` read each import file from disk
+arrives as text. `pherolang check`/`ir`/`gen` read each import file from disk
 (relative to the model, as above) and hand it to the driver; a missing file
 is a clean CLI error naming the path. Embedded callers (tests, language
-servers) pass content through `rex_driver::SchemaImports`, keyed by the
+servers) pass content through `phero_driver::SchemaImports`, keyed by the
 *(mox file path, import path)* pair exactly as named; `compile_str` and
 `compile_files` provide nothing, so a model with `import schema`
 declarations compiled through them errors with
 `imported schema '<path>' was not provided`.
 
-`rexlang fmt` canonicalizes import-schema declarations into a section
+`pherolang fmt` canonicalizes import-schema declarations into a section
 directly after the `package` declaration, before every other declaration —
 one per line, no blank lines between them (the `.actor` import rule).
 
 ### Importing Rune models
 
 A `.mox` package can import a Rune DSL (`.rosetta`) file, whose namespaces
-lower into synthetic rexlang packages — the `import_sigil_decl` production
+lower into synthetic Phero Lang packages — the `import_sigil_decl` production
 of the grammar authority (`import sigil "<path>"`, no alias):
 
 ```mox
@@ -229,7 +229,7 @@ class Quote {
 The path resolves **relative to the declaring `.mox` file's directory**,
 like `import schema`. A whole namespace set is imported, not one type, so
 the declaration takes no `as` alias (an `as` clause after `import sigil`
-is a syntax error). Beyond the named file, `rexlang check`/`ir`/`gen` also
+is a syntax error). Beyond the named file, `pherolang check`/`ir`/`gen` also
 read every other `*.rosetta` file in the named file's directory (walking
 subdirectories, skipping dot and `target` directories) as **candidate**
 files, so rosetta-internal namespace imports (`import a.b.*`,
@@ -238,17 +238,17 @@ closure the named files actually need, and candidates that end up
 unselected are never diagnosed — an unrelated broken file next to the
 import must not block the model.
 
-**Lowering.** Each rosetta namespace becomes one synthetic rexlang package
+**Lowering.** Each rosetta namespace becomes one synthetic Phero Lang package
 named after the namespace, appended after every declared `.mox` package of
 the compilation (the same namespace across files merges into one package).
 Elements map:
 
-| Rune | rexlang |
+| Rune | Phero Lang |
 |---|---|
 | `type T: <"…">` | `class T` — attributes → attribute features, `extends` kept, the `definition` string → the class'/feature's description |
-| `choice C: <"…">` | `interface C` (choice options do not survive: a rexlang interface declares no features); a `type` whose super type is a choice extends the interface |
-| `enum E: <"…">` | `enum E` — literals in declaration order with **synthesized integer values `0..n-1`** (rexlang enums require ints; this is the lowering contract); `displayName "…"` → the literal's `as` label, `definition` → description |
-| `typeAlias X: <"…"> t` | `type X wraps t` when `t` maps to a rexlang primitive, an opaque datatype otherwise |
+| `choice C: <"…">` | `interface C` (choice options do not survive: a Phero Lang interface declares no features); a `type` whose super type is a choice extends the interface |
+| `enum E: <"…">` | `enum E` — literals in declaration order with **synthesized integer values `0..n-1`** (Phero Lang enums require ints; this is the lowering contract); `displayName "…"` → the literal's `as` label, `definition` → description |
+| `typeAlias X: <"…"> t` | `type X wraps t` when `t` maps to a Phero Lang primitive, an opaque datatype otherwise |
 
 Attribute cardinalities map verbatim (`(1..1)`, `(0..1)`, `(0..*)`,
 `(2..10)`, …). Attribute `override`s lower as ordinary features. Conditions,
@@ -256,18 +256,18 @@ annotation references, labels, rule references, and doc references are
 skipped in v1.
 
 A `func` or `library function` declaration lowers to a **signature-only
-operation** on the namespace package's `functions` (`rex_ir::Operation` —
+operation** on the namespace package's `functions` (`phero_ir::Operation` —
 the node domain `op`s use, minus a receiver): `inputs` → parameters with
 their cardinalities (the required `(1..1)` stays unset, the domain-operation
 convention), the `output` → the return type **and the output's cardinality
 → the operation's return multiplicity** (`returnMultiplicity` on the wire;
 `(0..1)` and `(0..*)` lower verbatim so call sites type the call as
-`Option`/`List` and backends emit the lifted return shape — rex-expr and
+`Option`/`List` and backends emit the lifted return shape — phero-expr and
 the Rust backend do), the `definition` string → the
 description, and a `library function`'s array parameters carry a `0..*`
 multiplicity (a library function's return carries no cardinality in the
 sigil AST, so its return multiplicity always stays unset). A func without
-an `output` cannot become an operation (rexlang
+an `output` cannot become an operation (Phero Lang
 operations always return) and is skipped with a warning naming it. The
 declaration's complete Rune source is embedded **ends-trimmed verbatim**
 (the declaration's text without trailing whitespace — sigil spans consume
@@ -276,7 +276,7 @@ operation's `"rosetta"` body target. A statement-bearing function (a
 dispatch head, or any non-empty conditions, aliases, or `set`/`add`
 statements) additionally carries its lowered, type-checked statement body
 beside it as the **`"rune"`** target — one canonical JSON string whose
-expression slots are rex-expr programs; a fragment rex-expr cannot type
+expression slots are phero-expr programs; a fragment phero-expr cannot type
 defers with a warning and the verbatim text stands alone (the generation-time
 deferral contract). Making the statements executable is the Rune body
 translation design, [`docs/RUNE-BODIES.md`](RUNE-BODIES.md) — landed: the
@@ -289,7 +289,7 @@ attribute typed by a function stays an error), and builtin
 `com.rosetta.model` functions stay implicit.
 
 The builtin `com.rosetta.model` namespace — which sigil implicitly
-wildcard-imports into every model — maps to rexlang primitives where
+wildcard-imports into every model — maps to Phero Lang primitives where
 counterparts exist (`boolean` → `boolean`, `string` → `String`, `int` →
 `int`, `number` → `double`, `date` → `date`); everything else it declares
 without one (`time`, `pattern`, the `dateTime`/`zonedDateTime` family,
@@ -299,7 +299,7 @@ resolve. That package is emitted **only when something from it is actually
 referenced** by lowered content. Only the imported *user* namespaces join
 the `.mox`-side resolution namespace: a `.mox` reference to `number` or
 `time` stays an unknown-type error (the coinciding `string`/`int`/
-`boolean`/`date` resolve as the rexlang primitives they always were).
+`boolean`/`date` resolve as the Phero Lang primitives they always were).
 
 Skipped elements in v1: `rule`, `report`, external rule sources,
 `schema`/`body`/`corpus`/`segment`, `metaType`, and `annotation`
@@ -319,17 +319,17 @@ missing file is a clean CLI error naming the resolved path).
 
 **Resolution contract.** The driver stays filesystem-free: rosetta content
 arrives as text. Embedded callers (tests, language servers) pass content
-through `rex_driver::SigilImports`, keyed by the *(mox file path, import
+through `phero_driver::SigilImports`, keyed by the *(mox file path, import
 path)* pair exactly as named — additional entries for the same mox path
 are the candidate files described above. Every compile entry point takes
-one `rex_driver::DomainImports` bundle holding the `SchemaImports` and
+one `phero_driver::DomainImports` bundle holding the `SchemaImports` and
 `SigilImports` maps; the empty `DomainImports::default()` provides
 nothing, so a model with `import sigil` declarations compiled through it
 errors with ``imported sigil '<path>' was not provided``. (For the
 `.actor`/`.ddd` entry points the bundle carries the `.actor`/`.ddd`
 file's domains' import content, keyed by each domain's path.)
 
-`rexlang fmt` canonicalizes both import kinds into a section directly
+`pherolang fmt` canonicalizes both import kinds into a section directly
 after the `package` declaration, before every other declaration.
 
 ### Classes and features
@@ -337,7 +337,7 @@ after the `package` declaration, before every other declaration.
 The declaration forms — `class_decl` and the six feature kinds with their
 modifiers, multiplicities, defaults, op bodies, and constraint blocks — are
 normative in the parser module docs under [*`.mox` model
-sources*](https://docs.rs/rex-syntax/latest/rex_syntax/parser/index.html);
+sources*](https://docs.rs/phero-syntax/latest/phero_syntax/parser/index.html);
 what follows is what they mean.
 
 - **`contains`** — by-value ownership (Ecore containment). The child's
@@ -429,7 +429,7 @@ class a distinct `table "…"` to resolve an E0301.
 ### Register classes
 
 A `register` declaration declares a **register class** — an org/role noun
-space the generated app can list, join, and reference (issue rexlang#181):
+space the generated app can list, join, and reference (issue pherolang#181):
 
 ```mox
 package nz.example.org
@@ -450,7 +450,7 @@ class Person {
 ```
 
 The `register_decl` production is normative in the parser module docs under
-[*`.mox` model sources*](https://docs.rs/rex-syntax/latest/rex_syntax/parser/index.html).
+[*`.mox` model sources*](https://docs.rs/phero-syntax/latest/phero_syntax/parser/index.html).
 A register body holds the `attribute` production only — attributes with
 their modifiers, multiplicities, defaults, and constraint blocks, exactly
 like a class body. Relationship features are **not part of the v1 register
@@ -461,7 +461,7 @@ the flat noun space means a register class itself declares no relations.)
 
 A register declaration lowers onto the standard Core IR as a **plain
 `ClassDef`** — its attributes as attribute features with the same stable-ID
-contract — plus the additive `kind` marker (`rex-ir` wire-contract rule 16):
+contract — plus the additive `kind` marker (`phero-ir` wire-contract rule 16):
 `"kind": "register"` on the serialized class. The marker is the *only*
 difference: ordinary classes carry no `kind` field at all, so models without
 register declarations compile to byte-identical artifacts, and every
@@ -503,7 +503,7 @@ The declaration forms — `enum_decl` (with literals), `type_decl` (with the
 datatype block's bindings, `format` entry, and `create`/`convert` bodies),
 `interface_decl`, and `vocabulary_decl` — are normative in the parser module
 docs under [*`.mox` model
-sources*](https://docs.rs/rex-syntax/latest/rex_syntax/parser/index.html).
+sources*](https://docs.rs/phero-syntax/latest/phero_syntax/parser/index.html).
 
 - **Enums** carry integer values (required) and optional labels: `Mystery as
   "M" = 0`. Backends emit real enums; canonical JSON uses the literal name.
@@ -523,7 +523,7 @@ sources*](https://docs.rs/rex-syntax/latest/rex_syntax/parser/index.html).
 - **Vocabularies** reference well-known external code sets. The declaration
   names the source, version, key facet, and typed facets. Snapshots are
   vendored to `vocab/<source>@<version>.json` and pinned by sha256 in
-  `model.lock` — only `rexlang vocab fetch` touches the network; compilation
+  `model.lock` — only `pherolang vocab fetch` touches the network; compilation
   is hermetic. Entries are embedded in the IR, and every backend materializes
   the vocabulary as a closed set of keys with facet accessors.
 
@@ -534,7 +534,7 @@ separately from the domain and emitted as their own ActorModel artifact for
 the Cedar backend. The file grammar (`actor_file`, `import_decl`) and the
 shared `actors_block` production it consists of are normative in the parser
 module docs under [*`.actor` policy
-files*](https://docs.rs/rex-syntax/latest/rex_syntax/parser/index.html);
+files*](https://docs.rs/phero-syntax/latest/phero_syntax/parser/index.html);
 what follows is what it means.
 
 The `actors` block grammar is identical to the inline `actors` block of a
@@ -614,7 +614,7 @@ error naming the capability and the grant authority (emitting a restricted
 entry as an unconditional policy would widen the grant), and the downstream
 enforcement semantics — how a human- or agent-session restriction joins the
 codegraph v1 API-key authentication model — are explicitly deferred pending
-the codegraph security sign-off (rexlang#181). Until that sign-off lands,
+the codegraph security sign-off (pherolang#181). Until that sign-off lands,
 session kinds change nothing about how credentials authorize sessions.
 
 `agent` is the real lexer keyword — a capability named `agent` needs the
@@ -658,12 +658,12 @@ permits combined. In Cedar output delegations surface only as evidence
 comments (`// delegation Name: from -> to (N capabilities)`, suffixed
 ` purpose: <P>` when a purpose is declared); like `never_both`, the driver
 enforces them at compile time, and runtime enforcement — of permits and
-purpose alike — belongs to the authorization gateway. `rexlang gen tools`
+purpose alike — belongs to the authorization gateway. `pherolang gen tools`
 projects this authorization model into each agent's tool manifest — the
 agent's effective grant permits plus the delegation bindings scoped to it;
 human actors are omitted.
 
-`rexlang fmt` formats `.actor` files with the same canonical layout rules
+`pherolang fmt` formats `.actor` files with the same canonical layout rules
 (imports first, one per line; then blocks).
 
 ## Canonical instance JSON
@@ -672,8 +672,8 @@ The cross-language exchange format (`$type`/`$id`/`$ref`):
 
 ```json
 {
-  "$type": "rex.instance",
-  "formatVersion": 1,
+  "$type": "phero.instance",
+  "formatVersion": 2,
   "model": "nz.example.library",
   "objects": [
     { "$type": "Library", "$id": "library/0", "name": "Default Name",
@@ -701,16 +701,16 @@ is a tested property, not an aspiration.
 
 | Command | Purpose |
 |---|---|
-| `rexlang check <file>...` | validate; ariadne-rendered diagnostics grouped per file (every surface: `.mox`, `.actor`, `.ddd`, `.evt`, `.deploy`, `.uc`, `.cmmn`, `.ifml`; a directory argument enters **project mode**: every supported surface under it is gathered into one snapshot and checked independently, each file's imports resolving map-first from the snapshot and sibling artifacts reused compile-once) |
-| `rexlang ir <file>... -o <out>` | emit the Core IR artifact (`.actor`: the ActorModel artifact; `.ddd`: the DDD design artifact; `.evt`: the EventModel artifact; `.uc`/`.cmmn`: the standalone artifact; several `.mox`: one multi-package model) |
-| `rexlang build <paths>... -o <dir>` | one JSON artifact per supported input file at `<dir>/<input path>.json` — the `rexlang ir` artifact for that surface; the output directory defaults to `target/rex`; directories enter project mode like `check`; exits `1` when any file fails, while compiling files still emit |
-| `rexlang gen rust <file>... -o <dir>` | arena-based Rust models |
-| `rexlang gen json-schema <file>... --profile wire\|api -o <dir>` | JSON Schema |
-| `rexlang gen cedar <file>... -o <dir>` | Cedar policies + schema (`.mox`: inline blocks; `.actor`: file + imported domains) |
-| `rexlang gen tools <file>...` | per-agent tool manifest JSON on stdout (`.mox`: inline blocks; `.actor`: file + imported domains) |
-| `rexlang vocab fetch <file>` | vendor + pin vocabulary snapshots |
-| `rexlang fmt [--check] <files>\|-` | canonical formatting (comments kept) |
-| `rexlang lsp` | language server (stdio) |
+| `pherolang check <file>...` | validate; ariadne-rendered diagnostics grouped per file (every surface: `.mox`, `.actor`, `.ddd`, `.evt`, `.deploy`, `.uc`, `.cmmn`, `.ifml`; a directory argument enters **project mode**: every supported surface under it is gathered into one snapshot and checked independently, each file's imports resolving map-first from the snapshot and sibling artifacts reused compile-once) |
+| `pherolang ir <file>... -o <out>` | emit the Core IR artifact (`.actor`: the ActorModel artifact; `.ddd`: the DDD design artifact; `.evt`: the EventModel artifact; `.uc`/`.cmmn`: the standalone artifact; several `.mox`: one multi-package model) |
+| `pherolang build <paths>... -o <dir>` | one JSON artifact per supported input file at `<dir>/<input path>.json` — the `pherolang ir` artifact for that surface; the output directory defaults to `target/phero`; directories enter project mode like `check`; exits `1` when any file fails, while compiling files still emit |
+| `pherolang gen rust <file>... -o <dir>` | arena-based Rust models |
+| `pherolang gen json-schema <file>... --profile wire\|api -o <dir>` | JSON Schema |
+| `pherolang gen cedar <file>... -o <dir>` | Cedar policies + schema (`.mox`: inline blocks; `.actor`: file + imported domains) |
+| `pherolang gen tools <file>...` | per-agent tool manifest JSON on stdout (`.mox`: inline blocks; `.actor`: file + imported domains) |
+| `pherolang vocab fetch <file>` | vendor + pin vocabulary snapshots |
+| `pherolang fmt [--check] <files>\|-` | canonical formatting (comments kept) |
+| `pherolang lsp` | language server (stdio) |
 
 ## Surfaces beyond this reference
 
@@ -731,7 +731,7 @@ downstream tools. This page is the `.mox`/`.actor` reference; the others:
   messages, performed steps, and successions, composed across all four
   import buckets. See [docs/USECASES.md](USECASES.md).
 - **`.cmmn`** — CMMN 1.1 case management: cases, typed case files, plans,
-  and sentry criteria, lowered by `rex-backend-cmmn` to the cmmn-rs
+  and sentry criteria, lowered by `phero-backend-cmmn` to the cmmn-rs
   engine's `CaseDefinition` JSON. See [docs/CMMN.md](CMMN.md).
 - **`.ifml`** — interaction flows over the reference pattern library,
   type-checked against the imported domains. See [docs/IFML.md](IFML.md).

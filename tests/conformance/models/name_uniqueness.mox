@@ -1,4 +1,4 @@
-/// Conformance: the stripped-name uniqueness shapes (issue rexlang#177) in
+/// Conformance: the stripped-name uniqueness shapes (issue pherolang#177) in
 /// one compiling package — the entity + contained-value-object exemption
 /// (`PayRun` contains `PayRunType`, so the pair that strips to `pay_run`
 /// compiles) and the `table "…"` override (`StatusLabel` declares its

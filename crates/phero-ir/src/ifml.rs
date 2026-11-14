@@ -1,0 +1,1849 @@
+//! The IFML interaction-model artifact: views, components, events,
+//! navigation flows, and CLI commands, produced by parsing `.ifml` sources.
+//!
+//! This is a standalone, versioned wire artifact in the [pherolang] family,
+//! versioned independently of [`crate::FORMAT_VERSION`] via
+//! [`IFML_MODEL_FORMAT_VERSION`] — the [`crate::ActorModel`] precedent (wire
+//! contract rule 10). The [wire format contract](crate#wire-format-contract)
+//! applies unchanged: struct fields serialize as `camelCase`
+//! (`formatVersion`, `eventType`, ...), enums with payloads are *adjacently*
+//! tagged `{"type": "<variant>", "value": <payload>}` (tags camelCase:
+//! `"navigate"`, `"stringLit"`, `"fieldExpr"`, ...), unit-only enums
+//! serialize as bare camelCase strings (`"bar"`, `"regexMatch"`), unknown
+//! fields are ignored on deserialize, and
+//! [`IfmlModel::from_json`] rejects any other `formatVersion` with
+//! [`crate::IrError::UnsupportedFormatVersion`] rather than guessing.
+//!
+//! Architecture: the `phero-ifml` crate lexes and parses `.ifml` sources into
+//! a spanned syntax tree (`phero-ifml::ast`) and lowers that tree into these
+//! types (`phero-ifml::lower`), building the span index in the same traversal.
+//! `PropertyAssignment::span` is parse-only and never serialized
+//! (`#[serde(skip, default)]`).
+//!
+//! Serde note: enums here all use adjacent tagging (never `transparent`),
+//! which round-trips `Option<...>` payloads, boxed subtrees, unit variants
+//! (serialized as bare `{"type": ...}`), and tuple payloads alike — no
+//! untagged interaction exists in this surface.
+//!
+//! Write-side discipline (the [`crate::ActorModel`]/[`crate::ddd::DddModel`]
+//! rule): every struct `Vec` field is `#[serde(default,
+//! skip_serializing_if = "Vec::is_empty")]` — absent on read means empty, and
+//! empty vecs are omitted on write, so an empty model serializes as exactly
+//! `{"formatVersion":2}`. Enum payload vecs (`Array`, `Call`) are exempt:
+//! an empty payload array is a meaningful value there (`today()`), not an
+//! absent record field.
+//!
+//! Equality policy (wire contract rule 14): [`IfmlModel`] and every type
+//! nested in it derive [`Eq`]; the `f64` values (layout coordinates,
+//! property numbers, condition literals) are wrapped in the ordered
+//! [`Float`] newtype — transparent on the wire, total in equality,
+//! hashing, and ordering.
+//!
+//! [pherolang]: https://github.com/yestechgroup/pherolang
+
+use serde::{Deserialize, Serialize};
+use std::convert::Infallible;
+use std::str::FromStr;
+
+/// The artifact format version this crate writes and accepts for IFML
+/// interaction-model artifacts ([`IfmlModel`]).
+///
+/// Bump whenever the IFML wire format changes incompatibly; this marker is
+/// versioned independently of every other artifact marker — see the
+/// [version-marker inventory](crate#version-markers).
+pub const IFML_MODEL_FORMAT_VERSION: u32 = 2;
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(tag = "type", content = "value", rename_all = "camelCase")]
+pub enum IfmlDefinition {
+    Domain(DomainDeclaration),
+    View(ViewDeclaration),
+    Action(ActionDeclaration),
+    Module(ModuleDeclaration),
+    Actor(ActorDeclaration),
+    Command(CommandDeclaration),
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DomainDeclaration {
+    pub name: String,
+    pub schema_name: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ViewDeclaration {
+    pub name: String,
+    pub label: Option<String>,
+    pub is_landmark: bool,
+    pub is_xor: bool,
+    pub is_modal: bool,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub params: Vec<ParameterDecl>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub properties: Vec<PropertyAssignment>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub containers: Vec<ContainerDeclaration>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub components: Vec<ComponentDeclaration>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub events: Vec<EventHandler>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub module_uses: Vec<ModuleUse>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub roles: Vec<String>,
+    /// Capability requirements declared as `requires: [CapA, CapB];` on a
+    /// view. Extracted from the property bag; empty when absent.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub requires: Vec<String>,
+    pub condition: Option<Expression>,
+    pub position: Option<Position>,
+}
+
+crate::wire::total_order_float! {
+    /// The ordered, equality-preserving wrapper for every `f64` this artifact
+    /// carries — layout coordinates ([`Position`]), property-bag numbers
+    /// ([`ValueExpression::Number`]), and condition literals
+    /// ([`Expression::NumLit`]) — so [`IfmlModel`] and everything nested in it
+    /// derive [`Eq`] (wire contract rule 14).
+    ///
+    /// # Wire layout
+    ///
+    /// `#[serde(transparent)]`: a `Float` serializes and deserializes exactly
+    /// as the bare JSON number it wraps — artifacts are byte-identical to the
+    /// raw-`f64` encoding.
+    ///
+    /// # Equality and hashing
+    ///
+    /// [`PartialEq`]/[`Eq`] follow `f64::total_cmp` semantics: equality is
+    /// bit-pattern equality, which makes it reflexive even for `NaN` (a `NaN`
+    /// equals only another `NaN` with the same bit pattern) and distinguishes
+    /// `-0.0` from `0.0` (both deliberate). [`Hash`] hashes the raw bit
+    /// pattern, consistent with that equality.
+    ///
+    /// # Ordering
+    ///
+    /// [`Ord`]/[`PartialOrd`] are `f64::total_cmp`: a genuine total order
+    /// (`-0.0 < 0.0`, every `NaN` above [`f64::INFINITY`]).
+    ///
+    /// # Where `NaN`/`-0.0` can come from
+    ///
+    /// The `.ifml` grammar accepts only finite numeric literals and JSON
+    /// cannot encode `NaN`, so neither source nor wire artifacts produce one
+    /// today; the `NaN`/`-0.0` behavior above is the type's deliberate
+    /// contract for programmatic construction, not dead-letter handling.
+    Float(f64)
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Position {
+    pub x: Float,
+    pub y: Float,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ContainerDeclaration {
+    pub name: String,
+    /// `label "…";` inside the container body; must precede property
+    /// assignments (PEG ordering).
+    #[serde(default)]
+    pub label: Option<String>,
+    pub is_default: bool,
+    /// `xor: true;` extracted from the property bag; siblings carrying it
+    /// form one exclusive group.
+    #[serde(default)]
+    pub is_xor: bool,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub params: Vec<ParameterDecl>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub properties: Vec<PropertyAssignment>,
+    /// Containers declared inside this container (the grammar allows
+    /// nesting to any depth).
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub containers: Vec<ContainerDeclaration>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub components: Vec<ComponentDeclaration>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub events: Vec<EventHandler>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub module_uses: Vec<ModuleUse>,
+    pub condition: Option<Expression>,
+    pub position: Option<Position>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(tag = "type", content = "value", rename_all = "camelCase")]
+pub enum ComponentType {
+    List,
+    Form,
+    Details,
+    Search,
+    Tree,
+    Chart,
+    Table,
+    Button,
+    Link,
+    Menu,
+    Image,
+    Embedded,
+    Custom(String),
+}
+
+impl ComponentType {
+    /// Every builtin component type (the `Custom` fallback is not listed).
+    pub const ALL: &'static [ComponentType] = &[
+        ComponentType::List,
+        ComponentType::Form,
+        ComponentType::Details,
+        ComponentType::Search,
+        ComponentType::Tree,
+        ComponentType::Chart,
+        ComponentType::Table,
+        ComponentType::Button,
+        ComponentType::Link,
+        ComponentType::Menu,
+        ComponentType::Image,
+        ComponentType::Embedded,
+    ];
+
+    pub fn as_str(&self) -> &str {
+        match self {
+            ComponentType::List => "list",
+            ComponentType::Form => "form",
+            ComponentType::Details => "details",
+            ComponentType::Search => "search",
+            ComponentType::Tree => "tree",
+            ComponentType::Chart => "chart",
+            ComponentType::Table => "table",
+            ComponentType::Button => "button",
+            ComponentType::Link => "link",
+            ComponentType::Menu => "menu",
+            ComponentType::Image => "image",
+            ComponentType::Embedded => "embedded",
+            ComponentType::Custom(s) => s.as_str(),
+        }
+    }
+}
+
+impl From<&str> for ComponentType {
+    fn from(s: &str) -> Self {
+        match s.to_ascii_lowercase().as_str() {
+            "list" => ComponentType::List,
+            "form" => ComponentType::Form,
+            "details" => ComponentType::Details,
+            "search" => ComponentType::Search,
+            "tree" => ComponentType::Tree,
+            "chart" => ComponentType::Chart,
+            "table" => ComponentType::Table,
+            "button" => ComponentType::Button,
+            "link" => ComponentType::Link,
+            "menu" => ComponentType::Menu,
+            "image" => ComponentType::Image,
+            "embedded" => ComponentType::Embedded,
+            _ => ComponentType::Custom(s.to_string()),
+        }
+    }
+}
+
+impl FromStr for ComponentType {
+    type Err = Infallible;
+
+    /// Case-insensitive builtin match; an unknown word becomes `Custom` with
+    /// its original spelling.
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        Ok(Self::from(s))
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ComponentDeclaration {
+    pub name: String,
+    pub component_type: Option<ComponentType>,
+    pub spec: Option<ComponentSpec>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub properties: Vec<PropertyAssignment>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub events: Vec<EventHandler>,
+    pub condition: Option<Expression>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(tag = "type", content = "value", rename_all = "camelCase")]
+pub enum ComponentSpec {
+    Table(TableSpec),
+    Form(FormSpec),
+    Chart(ChartSpec),
+    /// Placement of a *modeled* chart authored elsewhere (e.g. codegraph's
+    /// `[charts]` table): the payload is a permissive name — resolution
+    /// against the model graph is the consumer's job, never the parser's.
+    ChartRef(String),
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct TableSpec {
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub columns: Vec<ColumnDef>,
+    pub pagination: bool,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(tag = "type", content = "value", rename_all = "camelCase")]
+pub enum ColumnDef {
+    Field {
+        label: String,
+        field: PropertyRef,
+    },
+    Lookup {
+        label: String,
+        field: PropertyRef,
+        lookup: String,
+    },
+    Expression {
+        label: String,
+        expr: Expression,
+    },
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PropertyRef {
+    pub entity: String,
+    pub property: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct FormSpec {
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub fields: Vec<FieldDef>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct FieldDef {
+    pub name: String,
+    pub input: InputFieldType,
+    pub required: bool,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub validations: Vec<Expression>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub values: Vec<String>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub messages: Vec<String>,
+}
+
+/// A `use "Module" as alias { ... };` statement instantiating a declared
+/// module inside a view or container body.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ModuleUse {
+    pub module: String,
+    pub alias: Option<String>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub properties: Vec<PropertyAssignment>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(tag = "type", content = "value", rename_all = "camelCase")]
+pub enum InputFieldType {
+    Text,
+    TextArea,
+    Password,
+    Email,
+    Number,
+    Date,
+    Time,
+    DateTime,
+    Dropdown,
+    RadioGroup,
+    Checkbox,
+    Toggle,
+    File,
+    Hidden,
+    Custom(String),
+}
+
+impl From<&str> for InputFieldType {
+    fn from(s: &str) -> Self {
+        match s.to_ascii_lowercase().as_str() {
+            "text" => InputFieldType::Text,
+            "textarea" => InputFieldType::TextArea,
+            "password" => InputFieldType::Password,
+            "email" => InputFieldType::Email,
+            "number" => InputFieldType::Number,
+            "date" => InputFieldType::Date,
+            "time" => InputFieldType::Time,
+            "datetime" => InputFieldType::DateTime,
+            "dropdown" => InputFieldType::Dropdown,
+            "radio" => InputFieldType::RadioGroup,
+            "checkbox" => InputFieldType::Checkbox,
+            "toggle" => InputFieldType::Toggle,
+            "file" => InputFieldType::File,
+            "hidden" => InputFieldType::Hidden,
+            _ => InputFieldType::Custom(s.to_string()),
+        }
+    }
+}
+
+impl InputFieldType {
+    /// Every builtin input type (the `Custom` fallback is not listed).
+    pub const ALL: &'static [InputFieldType] = &[
+        InputFieldType::Text,
+        InputFieldType::TextArea,
+        InputFieldType::Password,
+        InputFieldType::Email,
+        InputFieldType::Number,
+        InputFieldType::Date,
+        InputFieldType::Time,
+        InputFieldType::DateTime,
+        InputFieldType::Dropdown,
+        InputFieldType::RadioGroup,
+        InputFieldType::Checkbox,
+        InputFieldType::Toggle,
+        InputFieldType::File,
+        InputFieldType::Hidden,
+    ];
+
+    /// The surface spelling (`textarea`, `radio`, `datetime`, ...).
+    pub fn as_str(&self) -> &str {
+        match self {
+            InputFieldType::Text => "text",
+            InputFieldType::TextArea => "textarea",
+            InputFieldType::Password => "password",
+            InputFieldType::Email => "email",
+            InputFieldType::Number => "number",
+            InputFieldType::Date => "date",
+            InputFieldType::Time => "time",
+            InputFieldType::DateTime => "datetime",
+            InputFieldType::Dropdown => "dropdown",
+            InputFieldType::RadioGroup => "radio",
+            InputFieldType::Checkbox => "checkbox",
+            InputFieldType::Toggle => "toggle",
+            InputFieldType::File => "file",
+            InputFieldType::Hidden => "hidden",
+            InputFieldType::Custom(s) => s.as_str(),
+        }
+    }
+}
+
+impl FromStr for InputFieldType {
+    type Err = Infallible;
+
+    /// Case-insensitive builtin match; an unknown word becomes `Custom` with
+    /// its original spelling.
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        Ok(Self::from(s))
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ChartSpec {
+    pub kind: ChartKind,
+    /// Series charts only: the category axis field. Org charts carry the
+    /// ordered [`ChartSpec::label_fields`] projections instead.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub label_field: Option<String>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub value_fields: Vec<String>,
+    /// Org charts only: the self-referencing FK the hierarchy lowers over.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub hierarchy_field: Option<String>,
+    /// Org charts only: ordered node label projections.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub label_fields: Vec<String>,
+    /// Org charts only: ordered node detail projections.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub detail_fields: Vec<String>,
+    /// Org charts only: client-side render pruning.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub max_depth: Option<u32>,
+    /// Series charts only: aggregation applied to [`ChartSpec::value_fields`]
+    /// (`None` = unspecified; consumers apply their own default, e.g.
+    /// codegraph models `count`).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub aggregate: Option<ChartAggregate>,
+}
+
+/// Aggregation vocabulary for series charts (`bar | line | pie | radar |
+/// metric`), applied to the chart's `value_fields`. Serialized as bare
+/// lowercase camelCase strings.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub enum ChartAggregate {
+    Sum,
+    Avg,
+    Count,
+    Min,
+    Max,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub enum ChartKind {
+    Bar,
+    Line,
+    Pie,
+    Radar,
+    Metric,
+    Org,
+}
+
+impl ChartAggregate {
+    /// Every aggregation; the vocabulary is closed.
+    pub const ALL: &'static [ChartAggregate] = &[
+        ChartAggregate::Sum,
+        ChartAggregate::Avg,
+        ChartAggregate::Count,
+        ChartAggregate::Min,
+        ChartAggregate::Max,
+    ];
+
+    /// The surface spelling (lowercase).
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            ChartAggregate::Sum => "sum",
+            ChartAggregate::Avg => "avg",
+            ChartAggregate::Count => "count",
+            ChartAggregate::Min => "min",
+            ChartAggregate::Max => "max",
+        }
+    }
+}
+
+impl FromStr for ChartAggregate {
+    type Err = String;
+
+    /// Case-insensitive; unknown aggregates are errors (the parser/lowering
+    /// reject them, matching the historical grammar).
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s.to_ascii_lowercase().as_str() {
+            "sum" => Ok(ChartAggregate::Sum),
+            "avg" => Ok(ChartAggregate::Avg),
+            "count" => Ok(ChartAggregate::Count),
+            "min" => Ok(ChartAggregate::Min),
+            "max" => Ok(ChartAggregate::Max),
+            _ => Err(format!("unknown chart aggregate `{s}`")),
+        }
+    }
+}
+
+impl ChartKind {
+    /// Every chart kind; the vocabulary is closed and exact-case.
+    pub const ALL: &'static [ChartKind] = &[
+        ChartKind::Bar,
+        ChartKind::Line,
+        ChartKind::Pie,
+        ChartKind::Radar,
+        ChartKind::Metric,
+        ChartKind::Org,
+    ];
+
+    /// The surface spelling (lowercase).
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            ChartKind::Bar => "bar",
+            ChartKind::Line => "line",
+            ChartKind::Pie => "pie",
+            ChartKind::Radar => "radar",
+            ChartKind::Metric => "metric",
+            ChartKind::Org => "org",
+        }
+    }
+}
+
+impl FromStr for ChartKind {
+    type Err = String;
+
+    /// Exact-case and closed: unknown kinds are errors (there is no identifier
+    /// fallback, matching the historical grammar).
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s {
+            "bar" => Ok(ChartKind::Bar),
+            "line" => Ok(ChartKind::Line),
+            "pie" => Ok(ChartKind::Pie),
+            "radar" => Ok(ChartKind::Radar),
+            "metric" => Ok(ChartKind::Metric),
+            "org" => Ok(ChartKind::Org),
+            _ => Err(format!("unknown chart kind `{s}`")),
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PropertyAssignment {
+    pub key: String,
+    pub value: ValueExpression,
+    #[serde(skip, default)]
+    pub span: Option<(usize, usize)>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ObjectMember {
+    pub key: String,
+    pub value: ValueExpression,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(tag = "type", content = "value", rename_all = "camelCase")]
+pub enum ValueExpression {
+    Identifier(String),
+    String(String),
+    Number(Float),
+    Bool(bool),
+    Array(Vec<ValueExpression>),
+    Object(Vec<ObjectMember>),
+    Call(String, Vec<ValueExpression>),
+    FieldAccess {
+        object: Box<ValueExpression>,
+        field: String,
+    },
+    BinOp {
+        left: Box<ValueExpression>,
+        op: BinOp,
+        right: Box<ValueExpression>,
+    },
+    UnaryOp {
+        op: UnaryOp,
+        operand: Box<ValueExpression>,
+    },
+    Group(Box<ValueExpression>),
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct EventHandler {
+    pub event_type: EventType,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub params: Vec<String>,
+    /// Capability requirements declared as `requires: [CapA, CapB];` between
+    /// the event param and the if-condition; empty when unguarded.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub requires: Vec<String>,
+    pub condition: Option<Expression>,
+    pub action: EventAction,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(tag = "type", content = "value", rename_all = "camelCase")]
+pub enum EventType {
+    Select,
+    Submit,
+    Click,
+    Change,
+    Load,
+    Save,
+    Cancel,
+    Delete,
+    Confirm,
+    Back,
+    Custom(String),
+}
+
+#[allow(clippy::inherent_to_string)]
+impl EventType {
+    /// Every builtin event type (the `Custom` fallback is not listed).
+    pub const ALL: &'static [EventType] = &[
+        EventType::Select,
+        EventType::Submit,
+        EventType::Click,
+        EventType::Change,
+        EventType::Load,
+        EventType::Save,
+        EventType::Cancel,
+        EventType::Delete,
+        EventType::Confirm,
+        EventType::Back,
+    ];
+
+    pub fn as_str(&self) -> &str {
+        match self {
+            EventType::Select => "select",
+            EventType::Submit => "submit",
+            EventType::Click => "click",
+            EventType::Change => "change",
+            EventType::Load => "load",
+            EventType::Save => "save",
+            EventType::Cancel => "cancel",
+            EventType::Delete => "delete",
+            EventType::Confirm => "confirm",
+            EventType::Back => "back",
+            EventType::Custom(s) => s.as_str(),
+        }
+    }
+}
+
+impl From<&str> for EventType {
+    /// Exact-case match; anything else becomes `Custom` with its original
+    /// spelling. This is deliberate: changing it to case-insensitive would
+    /// change the IR.
+    fn from(s: &str) -> Self {
+        match s {
+            "select" => EventType::Select,
+            "submit" => EventType::Submit,
+            "click" => EventType::Click,
+            "change" => EventType::Change,
+            "load" => EventType::Load,
+            "save" => EventType::Save,
+            "cancel" => EventType::Cancel,
+            "delete" => EventType::Delete,
+            "confirm" => EventType::Confirm,
+            "back" => EventType::Back,
+            other => EventType::Custom(other.to_string()),
+        }
+    }
+}
+
+impl FromStr for EventType {
+    type Err = Infallible;
+
+    /// Exact-case; unknown words become `Custom`.
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        Ok(Self::from(s))
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(tag = "type", content = "value", rename_all = "camelCase")]
+pub enum EventAction {
+    Navigate {
+        target: String,
+        binding: Option<ParameterBinding>,
+    },
+    Refresh {
+        target: String,
+        binding: Option<ParameterBinding>,
+    },
+    ActionInvocation {
+        name: String,
+        body: Option<ActionBody>,
+    },
+    Stay,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ActionBody {
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub properties: Vec<PropertyAssignment>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub handlers: Vec<EventHandler>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ParameterDecl {
+    pub name: String,
+    pub type_ref: String,
+    #[serde(default)]
+    pub default: Option<ValueExpression>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ParameterBinding {
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub pairs: Vec<(String, Expression)>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(tag = "type", content = "value", rename_all = "camelCase")]
+pub enum Expression {
+    Ident(String),
+    StringLit(String),
+    NumLit(Float),
+    BoolLit(bool),
+    FieldExpr {
+        object: Box<Expression>,
+        field: String,
+    },
+    BinOp {
+        left: Box<Expression>,
+        op: BinOp,
+        right: Box<Expression>,
+    },
+    UnaryOp {
+        op: UnaryOp,
+        operand: Box<Expression>,
+    },
+    Group(Box<Expression>),
+    Call {
+        name: String,
+        args: Vec<Expression>,
+    },
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub enum BinOp {
+    Eq,
+    Ne,
+    Lt,
+    Le,
+    Gt,
+    Ge,
+    RegexMatch,
+    NegRegex,
+    Add,
+    Sub,
+    Mul,
+    Div,
+    Mod,
+    And,
+    Or,
+}
+
+impl BinOp {
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            BinOp::Eq => "==",
+            BinOp::Ne => "!=",
+            BinOp::Lt => "<",
+            BinOp::Le => "<=",
+            BinOp::Gt => ">",
+            BinOp::Ge => ">=",
+            BinOp::RegexMatch => "~=",
+            BinOp::NegRegex => "!~",
+            BinOp::Add => "+",
+            BinOp::Sub => "-",
+            BinOp::Mul => "*",
+            BinOp::Div => "/",
+            BinOp::Mod => "%",
+            BinOp::And => "&&",
+            BinOp::Or => "||",
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub enum UnaryOp {
+    Not,
+    Neg,
+}
+
+impl UnaryOp {
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            UnaryOp::Not => "!",
+            UnaryOp::Neg => "-",
+        }
+    }
+}
+
+/// Render an expression back to its DSL source form, deterministically:
+/// binary operators are surrounded by single spaces, unary prefixes bind
+/// directly, and explicit groups keep their parentheses.
+pub fn render_expression(expr: &Expression) -> String {
+    match expr {
+        Expression::Ident(s) => s.clone(),
+        Expression::StringLit(s) => format!("\"{s}\""),
+        Expression::NumLit(n) => n.value().to_string(),
+        Expression::BoolLit(b) => b.to_string(),
+        Expression::FieldExpr { object, field } => {
+            format!("{}.{}", render_expression(object), field)
+        }
+        Expression::BinOp { left, op, right } => format!(
+            "{} {} {}",
+            render_expression(left),
+            op.as_str(),
+            render_expression(right)
+        ),
+        Expression::UnaryOp { op, operand } => {
+            format!("{}{}", op.as_str(), render_expression(operand))
+        }
+        Expression::Group(inner) => format!("({})", render_expression(inner)),
+        Expression::Call { name, args } => {
+            let args_str: Vec<String> = args.iter().map(render_expression).collect();
+            format!("{}({})", name, args_str.join(", "))
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ActionDeclaration {
+    pub name: String,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub properties: Vec<PropertyAssignment>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub events: Vec<EventHandler>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ModuleDeclaration {
+    pub name: String,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub input_params: Vec<ParameterDecl>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub output_params: Vec<ParameterDecl>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub properties: Vec<PropertyAssignment>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub containers: Vec<ContainerDeclaration>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub components: Vec<ComponentDeclaration>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub events: Vec<EventHandler>,
+    /// `use "Module" as alias { ... };` statements inside the module body —
+    /// module composition. Cross-file resolution is a resolver concern; the
+    /// artifact carries the statements verbatim.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub module_uses: Vec<ModuleUse>,
+}
+
+/// A top-level `actor "Name" { ... }` declaration. Actors carry
+/// label-style properties only; event handlers and node persistence
+/// are deferred until the roles/permissions slice lands.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ActorDeclaration {
+    pub name: String,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub properties: Vec<PropertyAssignment>,
+}
+
+/// A top-level `command "Name" { ... }` declaration: the CLI interaction
+/// vocabulary of the same interaction model the views express. Commands
+/// bind to domain types and actions (through the shared
+/// [`EventHandler`] vocabulary, e.g. `on run -> action("CreateCustomer");`)
+/// rather than implementing business logic, so one artifact can describe a
+/// web experience and its terminal counterpart.
+///
+/// Body members: `argument`/`option`/`prompt` declarations, event
+/// handlers, `use` statements, and nested `command` subcommands
+/// (`command "customers" { command "list" { ... } }` — consumers render
+/// the joined path, e.g. `customers list`). `description` is extracted
+/// from the property bag (`description: "...";`); the remaining bag
+/// entries stay in [`CommandDeclaration::properties`].
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CommandDeclaration {
+    pub name: String,
+    #[serde(default)]
+    pub description: Option<String>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub arguments: Vec<CommandArgument>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub options: Vec<CommandOption>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub prompts: Vec<CommandPrompt>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub events: Vec<EventHandler>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub module_uses: Vec<ModuleUse>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub subcommands: Vec<CommandDeclaration>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub properties: Vec<PropertyAssignment>,
+    /// Capability requirements extracted from the property bag
+    /// (`requires: [CapA];`), the view-extraction discipline.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub requires: Vec<String>,
+    pub condition: Option<Expression>,
+}
+
+/// A positional `argument <name>: <Type>;` — required by nature; what is
+/// optional in a CLI is an option, not an argument.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CommandArgument {
+    pub name: String,
+    pub type_ref: String,
+}
+
+/// An `option <name>: <Type> (= default)?;` — optional by nature, which is
+/// why it carries a default and an argument does not.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CommandOption {
+    pub name: String,
+    pub type_ref: String,
+    #[serde(default)]
+    pub default: Option<ValueExpression>,
+}
+
+/// A `prompt <name>: <kind> (= default)?;` — interactive input collected
+/// while the command executes, as opposed to arguments/options supplied on
+/// the invocation line.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CommandPrompt {
+    pub name: String,
+    pub kind: PromptKind,
+    #[serde(default)]
+    pub default: Option<ValueExpression>,
+}
+
+/// The interaction kind of a [`CommandPrompt`] — presentation semantics
+/// (how the terminal asks), not a domain type. Custom kinds survive
+/// verbatim; evaluation stays deferred to generation time, as everywhere
+/// in this artifact.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(tag = "type", content = "value", rename_all = "camelCase")]
+pub enum PromptKind {
+    Text,
+    Secret,
+    Number,
+    Confirm,
+    Select,
+    MultiSelect,
+    Date,
+    Custom(String),
+}
+
+impl From<&str> for PromptKind {
+    fn from(s: &str) -> Self {
+        match s.to_ascii_lowercase().as_str() {
+            "text" => PromptKind::Text,
+            "secret" | "password" => PromptKind::Secret,
+            "number" => PromptKind::Number,
+            "confirm" | "boolean" => PromptKind::Confirm,
+            "select" => PromptKind::Select,
+            "multiselect" => PromptKind::MultiSelect,
+            "date" => PromptKind::Date,
+            _ => PromptKind::Custom(s.to_string()),
+        }
+    }
+}
+
+impl PromptKind {
+    /// Every builtin prompt kind (the `Custom` fallback is not listed).
+    pub const ALL: &'static [PromptKind] = &[
+        PromptKind::Text,
+        PromptKind::Secret,
+        PromptKind::Number,
+        PromptKind::Confirm,
+        PromptKind::Select,
+        PromptKind::MultiSelect,
+        PromptKind::Date,
+    ];
+
+    pub fn as_str(&self) -> &str {
+        match self {
+            PromptKind::Text => "text",
+            PromptKind::Secret => "secret",
+            PromptKind::Number => "number",
+            PromptKind::Confirm => "confirm",
+            PromptKind::Select => "select",
+            PromptKind::MultiSelect => "multiselect",
+            PromptKind::Date => "date",
+            PromptKind::Custom(s) => s.as_str(),
+        }
+    }
+}
+
+impl FromStr for PromptKind {
+    type Err = Infallible;
+
+    /// Case-insensitive builtin match (including the `password`/`boolean`
+    /// aliases); an unknown word becomes `Custom` with its original spelling.
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        Ok(Self::from(s))
+    }
+}
+
+/// The root of an IFML interaction model: a standalone, versioned wire
+/// artifact (see the [wire format contract](crate#wire-format-contract) and
+/// the [module docs](self)).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct IfmlModel {
+    /// Artifact format version. Always [`IFML_MODEL_FORMAT_VERSION`] for
+    /// artifacts this crate writes; [`IfmlModel::from_json`] rejects
+    /// anything else.
+    pub format_version: u32,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub domains: Vec<DomainDeclaration>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub views: Vec<ViewDeclaration>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub actions: Vec<ActionDeclaration>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub modules: Vec<ModuleDeclaration>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub actors: Vec<ActorDeclaration>,
+    /// Top-level `command "Name" { ... }` declarations — the CLI
+    /// interaction vocabulary. Subcommands nest inside
+    /// [`CommandDeclaration::subcommands`].
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub commands: Vec<CommandDeclaration>,
+    /// Raw string values of top-level `import "..."` statements, in source
+    /// order. Duplicates are preserved; resolution/dedup is a resolver
+    /// concern, not a parser concern.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub imports: Vec<String>,
+}
+
+impl IfmlModel {
+    /// Creates an IFML model artifact with [`IFML_MODEL_FORMAT_VERSION`]
+    /// stamped.
+    #[allow(clippy::too_many_arguments)]
+    pub fn new(
+        domains: Vec<DomainDeclaration>,
+        views: Vec<ViewDeclaration>,
+        actions: Vec<ActionDeclaration>,
+        modules: Vec<ModuleDeclaration>,
+        actors: Vec<ActorDeclaration>,
+        commands: Vec<CommandDeclaration>,
+        imports: Vec<String>,
+    ) -> Self {
+        Self {
+            format_version: IFML_MODEL_FORMAT_VERSION,
+            domains,
+            views,
+            actions,
+            modules,
+            actors,
+            commands,
+            imports,
+        }
+    }
+}
+
+crate::wire::versioned_artifact!(
+    IfmlModel,
+    IFML_MODEL_FORMAT_VERSION,
+    "the IFML artifact",
+    default = Self::new(
+        Vec::new(),
+        Vec::new(),
+        Vec::new(),
+        Vec::new(),
+        Vec::new(),
+        Vec::new(),
+        Vec::new()
+    )
+);
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn field(object: &str, name: &str) -> Expression {
+        Expression::FieldExpr {
+            object: Box::new(Expression::Ident(object.to_string())),
+            field: name.to_string(),
+        }
+    }
+
+    fn bin_op(left: Expression, op: BinOp, right: Expression) -> Expression {
+        Expression::BinOp {
+            left: Box::new(left),
+            op,
+            right: Box::new(right),
+        }
+    }
+
+    #[test]
+    fn test_render_literals() {
+        assert_eq!(render_expression(&Expression::Ident("x".to_string())), "x");
+        assert_eq!(
+            render_expression(&Expression::StringLit("admin".to_string())),
+            "\"admin\""
+        );
+        assert_eq!(render_expression(&Expression::NumLit(42.0.into())), "42");
+        assert_eq!(render_expression(&Expression::BoolLit(true)), "true");
+    }
+
+    #[test]
+    fn test_render_field_call_and_unary() {
+        assert_eq!(render_expression(&field("row", "active")), "row.active");
+        assert_eq!(
+            render_expression(&Expression::Call {
+                name: "today".to_string(),
+                args: vec![field("a", "b")],
+            }),
+            "today(a.b)"
+        );
+        assert_eq!(
+            render_expression(&Expression::UnaryOp {
+                op: UnaryOp::Not,
+                operand: Box::new(field("user", "locked")),
+            }),
+            "!user.locked"
+        );
+        assert_eq!(
+            render_expression(&Expression::UnaryOp {
+                op: UnaryOp::Neg,
+                operand: Box::new(Expression::NumLit(1.5.into())),
+            }),
+            "-1.5"
+        );
+    }
+
+    #[test]
+    fn test_render_bin_ops_and_grouping() {
+        let expr = bin_op(
+            bin_op(
+                field("user", "role"),
+                BinOp::Eq,
+                Expression::StringLit("admin".to_string()),
+            ),
+            BinOp::And,
+            bin_op(
+                field("account", "balance"),
+                BinOp::Ge,
+                Expression::NumLit(100.0.into()),
+            ),
+        );
+        assert_eq!(
+            render_expression(&expr),
+            "user.role == \"admin\" && account.balance >= 100"
+        );
+
+        let grouped = Expression::Group(Box::new(bin_op(
+            Expression::Ident("a".to_string()),
+            BinOp::Or,
+            Expression::Ident("b".to_string()),
+        )));
+        assert_eq!(render_expression(&grouped), "(a || b)");
+
+        let regex = bin_op(
+            field("row", "name"),
+            BinOp::NegRegex,
+            Expression::StringLit("^A".to_string()),
+        );
+        assert_eq!(render_expression(&regex), "row.name !~ \"^A\"");
+    }
+
+    #[test]
+    fn test_bin_op_and_unary_op_as_str() {
+        assert_eq!(BinOp::Eq.as_str(), "==");
+        assert_eq!(BinOp::RegexMatch.as_str(), "~=");
+        assert_eq!(BinOp::Mod.as_str(), "%");
+        assert_eq!(UnaryOp::Not.as_str(), "!");
+        assert_eq!(UnaryOp::Neg.as_str(), "-");
+    }
+
+    /// A small model exercising views, components, events, expressions, and
+    /// actors for the JSON tests below.
+    fn sample_model() -> IfmlModel {
+        IfmlModel::new(
+            vec![DomainDeclaration {
+                name: "sales".to_string(),
+                schema_name: "sales".to_string(),
+            }],
+            vec![ViewDeclaration {
+                name: "CustomerList".to_string(),
+                label: Some("Customers".to_string()),
+                is_landmark: true,
+                is_xor: false,
+                is_modal: false,
+                params: vec![ParameterDecl {
+                    name: "slug".to_string(),
+                    type_ref: "String".to_string(),
+                    default: Some(ValueExpression::String("home".to_string())),
+                }],
+                properties: vec![PropertyAssignment {
+                    key: "filter".to_string(),
+                    value: ValueExpression::BinOp {
+                        left: Box::new(ValueExpression::Identifier("status".to_string())),
+                        op: BinOp::Eq,
+                        right: Box::new(ValueExpression::String("active".to_string())),
+                    },
+                    // Parse-only: `span` is skipped on serialize, so serde
+                    // round trips always carry None (see
+                    // `parse_span_is_never_serialized`).
+                    span: None,
+                }],
+                containers: Vec::new(),
+                components: vec![ComponentDeclaration {
+                    name: "grid".to_string(),
+                    component_type: Some(ComponentType::List),
+                    spec: None,
+                    properties: Vec::new(),
+                    events: vec![EventHandler {
+                        event_type: EventType::Select,
+                        params: vec!["row".to_string()],
+                        requires: vec!["ViewCustomer".to_string()],
+                        condition: Some(field("row", "active")),
+                        action: EventAction::Navigate {
+                            target: "CustomerDetail".to_string(),
+                            binding: Some(ParameterBinding {
+                                pairs: vec![("customerId".to_string(), field("row", "id"))],
+                            }),
+                        },
+                    }],
+                    condition: None,
+                }],
+                events: Vec::new(),
+                module_uses: Vec::new(),
+                roles: vec!["admin".to_string()],
+                requires: Vec::new(),
+                condition: None,
+                position: None,
+            }],
+            Vec::new(),
+            Vec::new(),
+            vec![ActorDeclaration {
+                name: "Admin".to_string(),
+                properties: Vec::new(),
+            }],
+            Vec::new(),
+            vec!["phero/auth.actor".to_string()],
+        )
+    }
+
+    #[test]
+    fn new_and_default_stamp_format_version() {
+        assert_eq!(sample_model().format_version, IFML_MODEL_FORMAT_VERSION);
+        assert_eq!(
+            IfmlModel::default().format_version,
+            IFML_MODEL_FORMAT_VERSION
+        );
+        assert_eq!(IFML_MODEL_FORMAT_VERSION, 2);
+    }
+
+    /// The shared wire-contract characterization (see
+    /// `wire::tests::assert_wire_contract`): the write-side half of the
+    /// minimal-artifact claim — empty vec fields are omitted, so an empty
+    /// model serializes as exactly `{"formatVersion":2}` (byte-identical
+    /// to the empty ActorModel) — plus the gate, unknown-field tolerance,
+    /// and byte-stable round-trips of the populated interaction model
+    /// through both serializers.
+    #[test]
+    fn empty_model_serializes_as_exactly_the_format_version_marker() {
+        crate::wire::tests::assert_wire_contract(r#"{"formatVersion":2}"#, &sample_model());
+    }
+
+    /// A populated model round-trips even though its empty vec fields are
+    /// omitted on write: absent means empty on read.
+    #[test]
+    fn omitted_empty_vecs_round_trip_as_empty() {
+        let mut model = sample_model();
+        model.views[0].events.clear();
+        model.views[0].roles.clear();
+        let json = model.to_json().expect("serialize");
+        assert!(
+            !json.contains("\"events\":[]") && !json.contains("\"roles\":[]"),
+            "empty vecs are omitted: {json}"
+        );
+        let parsed = IfmlModel::from_json(&json).expect("deserialize");
+        assert_eq!(parsed, model);
+    }
+
+    // -----------------------------------------------------------------------
+    // Commands: the CLI interaction vocabulary
+    // -----------------------------------------------------------------------
+
+    /// One command exercising every CLI member: arguments, options with a
+    /// default, prompts, an `on run` handler, and a nested subcommand.
+    fn sample_command() -> CommandDeclaration {
+        CommandDeclaration {
+            name: "customers".to_string(),
+            description: Some("Manage customers".to_string()),
+            arguments: vec![CommandArgument {
+                name: "id".to_string(),
+                type_ref: "Uuid".to_string(),
+            }],
+            options: vec![CommandOption {
+                name: "limit".to_string(),
+                type_ref: "Int".to_string(),
+                default: Some(ValueExpression::Number(Float::new(20.0))),
+            }],
+            prompts: vec![CommandPrompt {
+                name: "email".to_string(),
+                kind: PromptKind::Select,
+                default: None,
+            }],
+            events: vec![EventHandler {
+                event_type: EventType::Custom("run".to_string()),
+                params: Vec::new(),
+                requires: Vec::new(),
+                condition: None,
+                action: EventAction::ActionInvocation {
+                    name: "CreateCustomer".to_string(),
+                    body: None,
+                },
+            }],
+            module_uses: Vec::new(),
+            subcommands: vec![CommandDeclaration {
+                name: "list".to_string(),
+                description: None,
+                arguments: Vec::new(),
+                options: Vec::new(),
+                prompts: Vec::new(),
+                events: Vec::new(),
+                module_uses: Vec::new(),
+                subcommands: Vec::new(),
+                properties: Vec::new(),
+                requires: Vec::new(),
+                condition: None,
+            }],
+            properties: Vec::new(),
+            requires: Vec::new(),
+            condition: None,
+        }
+    }
+
+    #[test]
+    fn commands_round_trip_through_from_json() {
+        let mut model = sample_model();
+        model.commands = vec![sample_command()];
+        let json = model.to_json_pretty().expect("serialize");
+        let parsed = IfmlModel::from_json(&json).expect("deserialize");
+        assert_eq!(parsed, model);
+        assert_eq!(parsed.to_json_pretty().expect("re-serialize"), json);
+    }
+
+    #[test]
+    fn command_wire_shape_is_camel_case_with_tagged_enums() {
+        let mut model = sample_model();
+        model.commands = vec![sample_command()];
+        let json = model.to_json().expect("serialize");
+        assert!(json.contains("\"commands\":[{"), "{json}");
+        assert!(
+            json.contains("\"description\":\"Manage customers\""),
+            "{json}"
+        );
+        assert!(
+            json.contains("\"arguments\":[{\"name\":\"id\",\"typeRef\":\"Uuid\"}]"),
+            "{json}"
+        );
+        assert!(
+            json.contains("\"default\":{\"type\":\"number\",\"value\":20.0}"),
+            "option defaults are ValueExpressions: {json}"
+        );
+        assert!(
+            json.contains("\"kind\":{\"type\":\"select\"}"),
+            "prompt kinds are adjacent-tagged like event types: {json}"
+        );
+        assert!(json.contains("\"subcommands\":[{"), "{json}");
+        assert!(
+            json.contains("\"eventType\":{\"type\":\"custom\",\"value\":\"run\"}"),
+            "command event handlers reuse the shared event vocabulary: {json}"
+        );
+    }
+
+    /// The serde-default discipline holds for the commands vec too: a model
+    /// without commands omits the field on write, and an artifact without
+    /// the field reads back with an empty vec — older artifacts stay
+    /// wire-identical and byte-goldens are untouched.
+    #[test]
+    fn absent_commands_field_reads_back_as_empty() {
+        let json = r#"{"formatVersion":2}"#;
+        let parsed = IfmlModel::from_json(json).expect("deserialize");
+        assert!(parsed.commands.is_empty());
+        assert_eq!(
+            parsed.to_json().expect("re-serialize"),
+            r#"{"formatVersion":2}"#,
+            "empty commands are omitted on write"
+        );
+    }
+
+    #[test]
+    fn wire_format_is_camel_case_with_type_value_tagged_enums() {
+        let json = sample_model().to_json().expect("serialize");
+        assert!(json.contains("\"formatVersion\":2"), "{json}");
+        assert!(json.contains("\"schemaName\":\"sales\""), "{json}");
+        assert!(json.contains("\"isLandmark\":true"), "{json}");
+        assert!(
+            json.contains("\"componentType\":{\"type\":\"list\"}"),
+            "{json}"
+        );
+        assert!(
+            json.contains("\"eventType\":{\"type\":\"select\"}"),
+            "{json}"
+        );
+        assert!(
+            json.contains(
+                "\"action\":{\"type\":\"navigate\",\"value\":{\"target\":\"CustomerDetail\""
+            ),
+            "{json}"
+        );
+        assert!(
+            json.contains("\"default\":{\"type\":\"string\",\"value\":\"home\"}"),
+            "ValueExpression payloads are adjacent-tagged too: {json}"
+        );
+    }
+
+    #[test]
+    fn unit_only_enums_serialize_as_bare_camel_case_strings() {
+        let spec = ChartSpec {
+            kind: ChartKind::Bar,
+            label_field: Some("month".to_string()),
+            value_fields: vec!["sales".to_string()],
+            hierarchy_field: None,
+            label_fields: Vec::new(),
+            detail_fields: Vec::new(),
+            max_depth: None,
+            aggregate: None,
+        };
+        let json = serde_json::to_string(&spec).expect("serialize chart spec");
+        assert_eq!(
+            json,
+            r#"{"kind":"bar","labelField":"month","valueFields":["sales"]}"#
+        );
+        let json = serde_json::to_string(&BinOp::RegexMatch).expect("serialize bin op");
+        assert_eq!(json, r#""regexMatch""#);
+    }
+
+    // -----------------------------------------------------------------------
+    // Chart vocabulary (issue #80): org kind, org payload fields, series
+    // aggregates, and modeled-chart references
+    // -----------------------------------------------------------------------
+
+    #[test]
+    fn org_chart_kind_serializes_as_bare_string() {
+        let json = serde_json::to_string(&ChartKind::Org).expect("serialize chart kind");
+        assert_eq!(json, r#""org""#);
+    }
+
+    #[test]
+    fn org_chart_spec_round_trips_with_payload_fields() {
+        let spec = ChartSpec {
+            kind: ChartKind::Org,
+            label_field: None,
+            value_fields: Vec::new(),
+            hierarchy_field: Some("managerId".to_string()),
+            label_fields: vec!["name".to_string(), "title".to_string()],
+            detail_fields: vec!["email".to_string()],
+            max_depth: Some(4),
+            aggregate: None,
+        };
+        let json = serde_json::to_string(&spec).expect("serialize org chart spec");
+        assert_eq!(
+            json,
+            r#"{"kind":"org","hierarchyField":"managerId","labelFields":["name","title"],"detailFields":["email"],"maxDepth":4}"#
+        );
+        let parsed: ChartSpec = serde_json::from_str(&json).expect("deserialize org chart spec");
+        assert_eq!(parsed, spec);
+    }
+
+    /// The serde-default discipline: a series chart that does not use the
+    /// new vocabulary serializes exactly as before the fields existed, so
+    /// byte-goldens and older readers are untouched.
+    #[test]
+    fn chart_spec_wire_shape_is_unchanged_when_org_fields_are_absent() {
+        let spec = ChartSpec {
+            kind: ChartKind::Bar,
+            label_field: Some("month".to_string()),
+            value_fields: vec!["sales".to_string()],
+            hierarchy_field: None,
+            label_fields: Vec::new(),
+            detail_fields: Vec::new(),
+            max_depth: None,
+            aggregate: None,
+        };
+        let json = serde_json::to_string(&spec).expect("serialize chart spec");
+        assert_eq!(
+            json,
+            r#"{"kind":"bar","labelField":"month","valueFields":["sales"]}"#
+        );
+        let parsed: ChartSpec = serde_json::from_str(&json).expect("deserialize chart spec");
+        assert_eq!(parsed, spec);
+    }
+
+    #[test]
+    fn chart_aggregate_vocabulary_serializes_lowercase() {
+        let expected = [
+            (ChartAggregate::Sum, "sum"),
+            (ChartAggregate::Avg, "avg"),
+            (ChartAggregate::Count, "count"),
+            (ChartAggregate::Min, "min"),
+            (ChartAggregate::Max, "max"),
+        ];
+        for (aggregate, wire) in expected {
+            let json = serde_json::to_string(&aggregate).expect("serialize aggregate");
+            assert_eq!(json, format!(r#""{wire}""#));
+            let parsed: ChartAggregate =
+                serde_json::from_str(&json).expect("deserialize aggregate");
+            assert_eq!(parsed, aggregate);
+        }
+    }
+
+    #[test]
+    fn chart_ref_component_spec_serializes_as_tagged_string() {
+        let spec = ComponentSpec::ChartRef("org".to_string());
+        let json = serde_json::to_string(&spec).expect("serialize chart ref");
+        assert_eq!(json, r#"{"type":"chartRef","value":"org"}"#);
+        let parsed: ComponentSpec = serde_json::from_str(&json).expect("deserialize chart ref");
+        assert_eq!(parsed, spec);
+    }
+
+    #[test]
+    fn chart_ref_component_round_trips_through_model_json() {
+        let mut model = sample_model();
+        model.views[0].components.push(ComponentDeclaration {
+            name: "modeled".to_string(),
+            component_type: Some(ComponentType::Chart),
+            spec: Some(ComponentSpec::ChartRef("headcount".to_string())),
+            properties: Vec::new(),
+            events: Vec::new(),
+            condition: None,
+        });
+        let json = model.to_json_pretty().expect("serialize");
+        let parsed = IfmlModel::from_json(&json).expect("deserialize");
+        assert_eq!(parsed, model);
+        assert_eq!(parsed.to_json_pretty().expect("re-serialize"), json);
+    }
+
+    #[test]
+    fn parse_span_is_never_serialized() {
+        let property = PropertyAssignment {
+            key: "mode".to_string(),
+            value: ValueExpression::Identifier("edit".to_string()),
+            span: Some((12, 34)),
+        };
+        let json = serde_json::to_string(&property).expect("serialize property");
+        assert_eq!(
+            json,
+            r#"{"key":"mode","value":{"type":"identifier","value":"edit"}}"#
+        );
+        // `skip` also means deserialize resets the field: spans are
+        // parse-only and never survive an artifact round trip.
+        let parsed: PropertyAssignment = serde_json::from_str(&json).expect("deserialize property");
+        assert_eq!(parsed.span, None);
+    }
+
+    // -----------------------------------------------------------------------
+    // Float: the ordered f64 newtype (wire contract rule 14)
+    // -----------------------------------------------------------------------
+
+    #[test]
+    fn float_serializes_as_the_bare_f64_and_round_trips() {
+        for value in [200.75f64, 1.0, -0.0] {
+            let json = serde_json::to_string(&Float::new(value)).expect("serialize");
+            assert_eq!(
+                json,
+                serde_json::to_string(&value).expect("plain f64"),
+                "transparent layout: {json}"
+            );
+            let back: Float = serde_json::from_str(&json).expect("deserialize");
+            assert_eq!(back, Float::new(value));
+            assert_eq!(back.value(), value);
+        }
+    }
+
+    #[test]
+    fn float_equality_is_bit_pattern_equality() {
+        // Reflexive even for NaN; a NaN equals only its own bit pattern.
+        assert_eq!(Float::new(f64::NAN), Float::new(f64::NAN));
+        assert_ne!(
+            Float::new(f64::NAN),
+            Float::new(f64::from_bits(f64::NAN.to_bits() + 1))
+        );
+        // Intended: -0.0 is its own value, distinct from 0.0.
+        assert_ne!(Float::new(-0.0), Float::new(0.0));
+        assert_eq!(
+            Position {
+                x: 1.5.into(),
+                y: 2.5.into()
+            },
+            Position {
+                x: 1.5.into(),
+                y: 2.5.into()
+            }
+        );
+        assert_ne!(
+            Position {
+                x: 1.5.into(),
+                y: 2.5.into()
+            },
+            Position {
+                x: 1.5.into(),
+                y: (-2.5).into()
+            }
+        );
+    }
+
+    #[test]
+    fn float_hash_is_consistent_with_equality() {
+        use std::collections::hash_map::DefaultHasher;
+        use std::hash::{Hash, Hasher};
+        fn hash_of(value: f64) -> u64 {
+            let mut hasher = DefaultHasher::new();
+            Float::new(value).hash(&mut hasher);
+            hasher.finish()
+        }
+        assert_eq!(hash_of(2.5), hash_of(2.5));
+        assert_ne!(hash_of(-0.0), hash_of(0.0));
+        assert_ne!(
+            hash_of(f64::NAN),
+            hash_of(f64::from_bits(f64::NAN.to_bits() + 1))
+        );
+    }
+
+    #[test]
+    fn float_orders_like_total_cmp() {
+        let mut values = [
+            Float::new(2.5),
+            Float::new(f64::NAN),
+            Float::new(0.0),
+            Float::new(-0.0),
+        ];
+        values.sort();
+        // Bit patterns, because -0.0 == 0.0 under plain f64 equality.
+        let bits: Vec<u64> = values.iter().map(|value| value.value().to_bits()).collect();
+        assert_eq!(
+            bits,
+            vec![
+                (-0.0f64).to_bits(),
+                0.0f64.to_bits(),
+                2.5f64.to_bits(),
+                f64::NAN.to_bits(),
+            ]
+        );
+    }
+}
+
+#[cfg(test)]
+mod vocabulary_tests {
+    use super::*;
+    use std::str::FromStr;
+
+    #[test]
+    fn component_types_round_trip_case_insensitively() {
+        for value in ComponentType::ALL {
+            assert_eq!(ComponentType::from(value.as_str()), *value);
+            assert_eq!(
+                ComponentType::from_str(&value.as_str().to_ascii_uppercase()).unwrap(),
+                *value
+            );
+        }
+        assert_eq!(ComponentType::from("LIST"), ComponentType::List);
+        assert_eq!(
+            ComponentType::from("Widget"),
+            ComponentType::Custom("Widget".into()),
+            "Custom preserves the original spelling"
+        );
+        assert_eq!(
+            ComponentType::ALL,
+            &[
+                ComponentType::List,
+                ComponentType::Form,
+                ComponentType::Details,
+                ComponentType::Search,
+                ComponentType::Tree,
+                ComponentType::Chart,
+                ComponentType::Table,
+                ComponentType::Button,
+                ComponentType::Link,
+                ComponentType::Menu,
+                ComponentType::Image,
+                ComponentType::Embedded,
+            ]
+        );
+    }
+
+    #[test]
+    fn input_field_types_round_trip_case_insensitively() {
+        for value in InputFieldType::ALL {
+            assert_eq!(InputFieldType::from(value.as_str()), *value);
+            assert_eq!(
+                InputFieldType::from_str(&value.as_str().to_ascii_uppercase()).unwrap(),
+                *value
+            );
+        }
+        assert_eq!(InputFieldType::from("RADIO"), InputFieldType::RadioGroup);
+        assert_eq!(
+            InputFieldType::from("Wysiwyg"),
+            InputFieldType::Custom("Wysiwyg".into())
+        );
+        assert_eq!(InputFieldType::ALL.len(), 14);
+    }
+
+    #[test]
+    fn prompt_kinds_round_trip_with_aliases() {
+        for value in PromptKind::ALL {
+            assert_eq!(PromptKind::from(value.as_str()), *value);
+        }
+        assert_eq!(PromptKind::from("PASSWORD"), PromptKind::Secret);
+        assert_eq!(PromptKind::from("boolean"), PromptKind::Confirm);
+        assert_eq!(
+            PromptKind::from("Wizard"),
+            PromptKind::Custom("Wizard".into())
+        );
+        assert_eq!(PromptKind::ALL.len(), 7);
+    }
+
+    #[test]
+    fn event_types_are_exact_case() {
+        for value in EventType::ALL {
+            assert_eq!(EventType::from(value.as_str()), *value);
+            assert_eq!(EventType::from_str(value.as_str()).unwrap(), *value);
+        }
+        assert_eq!(
+            EventType::from("SELECT"),
+            EventType::Custom("SELECT".into()),
+            "case-insensitive matching would change the IR"
+        );
+        assert_eq!(EventType::ALL.len(), 10);
+    }
+
+    #[test]
+    fn chart_kinds_are_closed_and_exact_case() {
+        for value in ChartKind::ALL {
+            assert_eq!(ChartKind::from_str(value.as_str()).unwrap(), *value);
+        }
+        assert!(ChartKind::from_str("BAR").is_err());
+        assert!(ChartKind::from_str("bubble").is_err());
+        assert_eq!(ChartKind::ALL.len(), 6);
+    }
+
+    #[test]
+    fn chart_aggregates_are_case_insensitive_and_closed() {
+        for value in ChartAggregate::ALL {
+            assert_eq!(ChartAggregate::from_str(value.as_str()).unwrap(), *value);
+        }
+        assert_eq!(
+            ChartAggregate::from_str("SUM").unwrap(),
+            ChartAggregate::Sum
+        );
+        assert!(ChartAggregate::from_str("median").is_err());
+        assert_eq!(ChartAggregate::ALL.len(), 5);
+    }
+
+    #[test]
+    fn every_table_has_no_duplicate_surface_spelling() {
+        fn unique(words: &[&str]) -> bool {
+            let mut seen = std::collections::BTreeSet::new();
+            words.iter().all(|word| seen.insert(*word))
+        }
+        assert!(unique(
+            &ComponentType::ALL
+                .iter()
+                .map(|v| v.as_str())
+                .collect::<Vec<_>>()
+        ));
+        assert!(unique(
+            &InputFieldType::ALL
+                .iter()
+                .map(|v| v.as_str())
+                .collect::<Vec<_>>()
+        ));
+        assert!(unique(
+            &PromptKind::ALL
+                .iter()
+                .map(|v| v.as_str())
+                .collect::<Vec<_>>()
+        ));
+        assert!(unique(
+            &EventType::ALL
+                .iter()
+                .map(|v| v.as_str())
+                .collect::<Vec<_>>()
+        ));
+        assert!(unique(
+            &ChartKind::ALL
+                .iter()
+                .map(|v| v.as_str())
+                .collect::<Vec<_>>()
+        ));
+        assert!(unique(
+            &ChartAggregate::ALL
+                .iter()
+                .map(|v| v.as_str())
+                .collect::<Vec<_>>()
+        ));
+    }
+}

@@ -6,19 +6,19 @@ executable; the sections below stay as the design record. The `"rosetta"`
 body target still carries the declaration's ends-trimmed verbatim source
 (wire contract rule 15); statement-bearing functions additionally carry the
 driver-checked `"rune"` statement body (sigil mapping rule 8),
-`rex-backend-rust` emits it as straight-line Rust — the `todo!()` stub
+`phero-backend-rust` emits it as straight-line Rust — the `todo!()` stub
 remains only for functions without a `"rune"` target (#61 is closed) — and
 the bare-call surface is open (#63).
 
-The sigil side of this contract lives in the `rex-driver` sigil module docs
-(`crates/rex-driver/src/sigil.rs`, mapping rule 8); the Rust-backend stub
+The sigil side of this contract lives in the `phero-driver` sigil module docs
+(`crates/phero-driver/src/sigil.rs`, mapping rule 8); the Rust-backend stub
 policy lives in `docs/BACKENDS.md`.
 
 ## Problem
 
 `Package::functions` carries signature-only operations. Their behavior
 exists only as Rune source text: `func` bodies are built from statement
-forms rex-expr does not have, and nothing in rexlang parses or executes
+forms phero-expr does not have, and nothing in Phero Lang parses or executes
 them. Concretely, a body is:
 
 - **Accumulation statements** — `set root (-> feature)*: expr` and
@@ -38,7 +38,7 @@ them. Concretely, a body is:
   is one declaration per surviving name, head included.
 
 The expression *fragments* inside these statements overlap heavily with
-rex-expr (navigation, arithmetic, `exists`/`choice`, functional operators);
+phero-expr (navigation, arithmetic, `exists`/`choice`, functional operators);
 only the statement layer is missing.
 
 ## The CEL verdict (recorded from #58)
@@ -52,15 +52,15 @@ Adopting CEL (via `cel-rust`) was evaluated and **rejected**:
   writing a CEL→target codegen anyway (so CEL buys nothing) or embedding a
   runtime dependency in every generated crate (contrary to the backend's
   self-contained-output contract).
-- CEL's semantics fork from every other rexlang surface: null/optional
+- CEL's semantics fork from every other Phero Lang surface: null/optional
   handling and arithmetic would diverge from R1–R4
   (`docs/EXPRESSIONS.md`), giving the same expression different meaning in
   a Rune body than in an `expr` body.
 
 ## Statement IR
 
-rex-expr keeps owning expressions (parse, typecheck, lower). A new
-statement layer sits above it, in `rex-expr` (so every surface can share
+phero-expr keeps owning expressions (parse, typecheck, lower). A new
+statement layer sits above it, in `phero-expr` (so every surface can share
 it) with a neutral serialization:
 
 ```
@@ -79,7 +79,7 @@ RuneBody {
 - Statement lowering is deterministic source-order: guards, aliases, and
   steps keep declaration order (Rune semantics are sequential for alias
   reuse; guards are order-pinned for diagnostics).
-- Expressions inside every slot are rex-expr programs, so they reuse the
+- Expressions inside every slot are phero-expr programs, so they reuse the
   existing parser/typechecker/lowerings unchanged.
 
 ## Dispatch semantics
@@ -101,7 +101,7 @@ one operation per branch.
 
 ## Typechecking
 
-Everything checks against `rex_expr::DomainTypes` — extended, never a
+Everything checks against `phero_expr::DomainTypes` — extended, never a
 synthesized `Model`:
 
 - `DomainTypes::insert_functions(package, name, signature)` joins the
@@ -131,7 +131,7 @@ synthesized `Model`:
 
 ## Per-backend lowering order
 
-1. **rex-backend-rust** (landed): a present `"rune"` target emits
+1. **phero-backend-rust** (landed): a present `"rune"` target emits
    straight-line Rust — guards → `assert!(expr, "guard '<name>' failed")`
    (unnamed guards carry the checker's phase-derived slot labels, `unnamed
    pre guard` / `unnamed post guard`), `alias` bindings → sequential
@@ -149,7 +149,7 @@ synthesized `Model`:
    re-check, or lower is a hard generate-time error naming the function and
    the slot — artifact corruption, not deferral, because the driver never
    attaches an unchecked body.
-2. **rex-backend-jsonschema**: unaffected — functions never enter schemas;
+2. **phero-backend-jsonschema**: unaffected — functions never enter schemas;
    instances stay class-shaped.
 3. Later backends consume the same statement IR; nobody re-parses the
    `"rosetta"` text.
@@ -158,7 +158,7 @@ synthesized `Model`:
 
 The Rune body above is the sigil-lowered shape; `.ddd` service/repository
 operations are the first **hand-authored** consumer of the shared statement
-layer, `rex_expr::stmt` (issue rexlang#178):
+layer, `phero_expr::stmt` (issue pherolang#178):
 
 - `StmtBody { stmts }` is a sequential statement IR beside `RuneBody`:
   `let`, `let … else error …`, assignment, `guard … else error …`,
@@ -166,11 +166,11 @@ layer, `rex_expr::stmt` (issue rexlang#178):
   (two arguments) / `Conflict` (one argument).
 - Expression slots are **source text**, exactly like the Rune body's: the
   `.ddd` parser captures each slot's byte span, the driver re-parses and
-  type-checks it with `rex_expr::check_stmt_body`, and the artifact carries
+  type-checks it with `phero_expr::check_stmt_body`, and the artifact carries
   the checked body as the canonical JSON of `StmtBody` under the operation's
   `bodies["stmt"]` target (a service body also records `bodyReceiver`).
   Consumers never re-parse the raw source for meaning.
-- The typing index is `rex_expr::DomainTypes`: the driver registers
+- The typing index is `phero_expr::DomainTypes`: the driver registers
   synthetic repository classes (empty features, the repository's operations
   plus synthesized `findById`/`findAll`/`save`/`delete` signatures) and
   binds `self`/injected-repository names as class-typed receivers.
@@ -180,7 +180,7 @@ layer, `rex_expr::stmt` (issue rexlang#178):
   never attached.
 
 The wire shapes and rules live in `docs/DDD.md`; the IR module docs
-(`crates/rex-ir/src/ddd.rs`) pin the additive `bodies`/`bodyReceiver`
+(`crates/phero-ir/src/ddd.rs`) pin the additive `bodies`/`bodyReceiver`
 fields.
 
 ## Implementation stages
@@ -189,20 +189,20 @@ fields.
    sigil AST shapes above are the reference), typechecked against the
    extended `DomainTypes`; the driver lowers at sigil time and attaches the
    neutral body beside the verbatim `"rosetta"` one.
-   — landed as `rex_expr::body::RuneBody` plus the `"rune"` wire target
+   — landed as `phero_expr::body::RuneBody` plus the `"rune"` wire target
    (rule 15) and the driver's checked lowering (sigil mapping rule 8:
    dispatch heads lower as the leading synthetic pre guard; a deferral
    attaches no target and emits one warning naming the function).
-2. rex-backend-rust emits bodies instead of stubs; the stub remains only
+2. phero-backend-rust emits bodies instead of stubs; the stub remains only
    for functions whose statements could not be checked (the documented
    generation-time deferral contract, mirroring the `.ifml` checker's).
    — landed as `codegen::rune_body`: the stub only where no `"rune"`
    target exists; a present-but-invalid target is a generate-time error
    (the per-backend lowering order above pins the emission shapes).
-3. The call surface (#63): rex-expr resolves `name(...)` against union
+3. The call surface (#63): phero-expr resolves `name(...)` against union
    package functions; `.uc` steps and IFML handlers decide their
    subject-free-step question with the typing index in place.
-   — landed as the bare-call surface: rex-expr resolves and types
+   — landed as the bare-call surface: phero-expr resolves and types
    `name(...)` (return multiplicity included — `List`/`Option`/plain,
    mirroring the parameter mapping) and the Rust backend emits the matching
    shapes and passes `res` when the callee needs the arena; the `.uc`/IFML

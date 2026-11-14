@@ -1,7 +1,7 @@
 import "basic.mox";
 
 application Instruments {
-    base rex.sigil.fixture
+    base phero.sigil.fixture
     module instruments {
         entity Instrument
         service InstrumentService {

@@ -1,0 +1,17 @@
+//! One handler module per `pherolang` subcommand.
+
+pub(crate) mod artifact;
+pub(crate) mod build;
+pub(crate) mod check;
+pub(crate) mod completions;
+pub(crate) mod explain;
+pub(crate) mod fmt;
+pub(crate) mod gen;
+pub(crate) mod graph;
+pub(crate) mod integrity;
+pub(crate) mod ir;
+pub(crate) mod lsp;
+pub(crate) mod manifest;
+pub(crate) mod pipeline;
+pub(crate) mod verify;
+pub(crate) mod vocab;

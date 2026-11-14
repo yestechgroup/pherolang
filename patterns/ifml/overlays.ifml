@@ -1,4 +1,4 @@
-// rexlang reference pattern library — overlays.
+// Phero Lang reference pattern library — overlays.
 // Floating surfaces: modals, drawers, popovers, confirmations, and toasts.
 
 module "Modal" {

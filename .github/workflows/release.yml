@@ -1,0 +1,207 @@
+name: Release
+
+# Tag-driven release (epic #270, R3). Cutting a release is a tag, not a
+# branch: the operator runbook is docs/RELEASE-0.3.0.md.
+#
+# `workflow_dispatch` exists for re-running a release after a fix. It must be
+# dispatched ON THE TAG REF (`gh workflow run release.yml --ref v0.3.0`),
+# because GITHUB_REF_NAME is what names the archives, the checksum manifest,
+# and the published release. A dispatch from a branch fails the "Resolve
+# version" step by construction.
+on:
+  push:
+    tags: ['v[0-9]+.[0-9]+.[0-9]+']
+  workflow_dispatch:
+
+# The only permission this workflow needs: creating/updating the GitHub
+# Release and uploading its assets. Everything else is the default-deny.
+permissions:
+  contents: write
+
+env:
+  # Same profile reasoning as ci.yml: the release build is one-shot, and
+  # incremental state plus debuginfo would bloat the runner's disk without
+  # changing the shipped binary's behavior.
+  CARGO_INCREMENTAL: "0"
+  CARGO_TERM_COLOR: always
+  RUSTFLAGS: "-C debuginfo=0"
+
+jobs:
+  build:
+    name: ${{ matrix.target }}
+    strategy:
+      # One broken leg must not cancel the other four: a partial matrix tells
+      # the operator which platform regressed, and the release job still waits
+      # for every leg before publishing.
+      fail-fast: false
+      matrix:
+        # Asset-naming contract, shared with `.github/workflows/site.yml`:
+        #   pherolang-<version>-<target>.tar.gz  (unix)
+        #   pherolang-<version>-<target>.zip     (windows)
+        #   SHA256SUMS                           (one line per archive)
+        # site.yml's PHEROLANG_ASSET_PATTERN must match
+        # `pherolang-*-x86_64-unknown-linux-gnu.tar.gz`; if the naming here
+        # changes, that pattern changes in the same commit or the site's
+        # binary download silently 404s.
+        #
+        # Every leg runs on a native or standard runner, so no leg needs an
+        # emulator: the one honest exception is aarch64-linux, which links a
+        # GNU cross toolchain on the x86_64 runner (the target is standard,
+        # the host is not).
+        include:
+          - target: x86_64-unknown-linux-gnu
+            os: ubuntu-latest
+            binary: pherolang
+          - target: aarch64-unknown-linux-gnu
+            os: ubuntu-latest
+            binary: pherolang
+          - target: x86_64-apple-darwin
+            os: macos-13
+            binary: pherolang
+          - target: aarch64-apple-darwin
+            os: macos-14
+            binary: pherolang
+          - target: x86_64-pc-windows-msvc
+            os: windows-latest
+            binary: pherolang.exe
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+
+      # The version comes from the tag, never from the workspace manifest:
+      # `--locked` already pins the build to the committed Cargo.lock, so the
+      # tag and the manifest version must agree before the first step runs.
+      - name: Resolve version
+        id: version
+        shell: bash
+        run: |
+          set -euo pipefail
+          version="${GITHUB_REF_NAME#v}"
+          if [[ ! "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "::error::ref '$GITHUB_REF_NAME' is not a vX.Y.Z tag; dispatch on the tag ref"
+            exit 1
+          fi
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+
+      # Only the cross leg needs the extra C toolchain; rustc's own backend is
+      # already installed by the toolchain action below.
+      - name: Install aarch64 cross linker
+        if: matrix.target == 'aarch64-unknown-linux-gnu'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends gcc-aarch64-linux-gnu
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+      - uses: Swatinem/rust-cache@v2
+
+      - name: Build
+        shell: bash
+        env:
+          # Consumed only by the aarch64-unknown-linux-gnu target; an empty
+          # value on the other legs is inert.
+          CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_LINKER: ${{ matrix.target == 'aarch64-unknown-linux-gnu' && 'aarch64-linux-gnu-gcc' || '' }}
+        run: cargo build --release --locked -p phero-cli --target '${{ matrix.target }}'
+
+      # Packaging below names the binary by path. Assert it exists here so a
+      # future Cargo layout change fails this job instead of shipping an
+      # empty or half-built archive.
+      - name: Verify binary
+        shell: bash
+        run: |
+          set -euo pipefail
+          bin="target/${{ matrix.target }}/release/${{ matrix.binary }}"
+          test -f "$bin" || { echo "::error::expected binary missing: $bin"; exit 1; }
+          ls -l "$bin"
+
+      - name: Package archive (unix)
+        if: runner.os != 'Windows'
+        shell: bash
+        run: |
+          set -euo pipefail
+          version='${{ steps.version.outputs.version }}'
+          target='${{ matrix.target }}'
+          asset="pherolang-${version}-${target}.tar.gz"
+          mkdir -p dist
+          # The binary sits at the archive root, so `tar -xzf` followed by
+          # `./pherolang` works without a cd into a platform-named directory.
+          tar -czf "dist/${asset}" -C "target/${target}/release" 'pherolang'
+          # GNU coreutils has sha256sum; macOS ships shasum instead. Both print
+          # "<hex>  <name>", the only format `sha256sum -c` reads.
+          if command -v sha256sum >/dev/null 2>&1; then
+            (cd dist && sha256sum "$asset" > "$asset.sha256")
+          else
+            (cd dist && shasum -a 256 "$asset" > "$asset.sha256")
+          fi
+          cat "dist/${asset}.sha256"
+
+      - name: Package archive (windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $version = '${{ steps.version.outputs.version }}'
+          $target = '${{ matrix.target }}'
+          $asset = "pherolang-$version-$target.zip"
+          New-Item -ItemType Directory -Force -Path dist | Out-Null
+          # -Path on a file puts pherolang.exe at the archive root.
+          Compress-Archive -Path "target/$target/release/pherolang.exe" -DestinationPath "dist/$asset"
+          # LF endings and lowercase hex on purpose: `sha256sum -c` on
+          # linux/macOS reads a trailing CR as part of the filename and fails
+          # the whole manifest.
+          $hash = (Get-FileHash -Algorithm SHA256 "dist/$asset").Hash.ToLowerInvariant()
+          [IO.File]::WriteAllText("dist/$asset.sha256", "$hash  $asset`n")
+          Get-Content "dist/$asset.sha256"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: pherolang-${{ matrix.target }}
+          path: dist/*
+          if-no-files-found: error
+
+  release:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+
+      - name: Assemble SHA256SUMS
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd dist
+          archives=$(ls pherolang-*.tar.gz pherolang-*.zip)
+          found=$(printf '%s\n' "$archives" | wc -l | tr -d ' ')
+          # Five matrix legs: four unix .tar.gz plus one windows .zip. A
+          # missing leg would otherwise publish a release that looks complete.
+          if [ "$found" -ne 5 ]; then
+            echo "::error::expected 5 archives (four unix + one windows), found $found"
+            ls -l
+            exit 1
+          fi
+          # One `sha256sum -c`-compatible line per archive, sorted by file
+          # name so the manifest is byte-stable across re-runs.
+          cat ./*.sha256 | LC_ALL=C sort -k2 > SHA256SUMS
+          # Verify the concatenation against the files before publishing it:
+          # a truncated download artifact is caught here, not by a user.
+          sha256sum -c SHA256SUMS
+          cat SHA256SUMS
+
+      # Notes are generated from the merged PRs rather than pasted from
+      # CHANGELOG.md. The changelog stays the source of truth for drift, and
+      # the generator links every PR it credits — hand-pasting is how a
+      # release note and the changelog start disagreeing.
+      - name: Publish release
+        uses: softprops/action-gh-release@v2
+        with:
+          name: Phero Lang ${{ github.ref_name }}
+          generate_release_notes: true
+          fail_on_unmatched_files: true
+          files: |
+            dist/pherolang-*.tar.gz
+            dist/pherolang-*.zip
+            dist/SHA256SUMS

@@ -1,6 +1,6 @@
 // Lending decisions over primitive inputs only: the architecture-first
 // reference example — the decision requirements graph is the product and
-// the logic is an attachment, one table among five decisions (rexlang#78).
+// the logic is an attachment, one table among five decisions (pherolang#78).
 decision_model Lending {
     namespace nz.example.lending;
     inputs {

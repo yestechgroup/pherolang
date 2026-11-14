@@ -1,6 +1,6 @@
-# rexlang documentation
+# Phero Lang documentation
 
-rexlang is a multi-surface modeling language: every surface follows the same
+Phero Lang is a multi-surface modeling language: every surface follows the same
 pipeline (`check` → `ir` → backends) and compiles to its own versioned JSON
 artifact. This index routes to the right document.
 
@@ -17,20 +17,24 @@ artifact. This index routes to the right document.
 | [CMMN.md](CMMN.md) | `.cmmn` | CMMN 1.1 case management: cases, case files, plans, sentry criteria — and the cmmn-rs seam |
 | [DMN.md](DMN.md) | `.dmn` | DMN 1.6-style decision models: the decision-requirements graph, external markdown decision tables, decision services — and the `.ddd` decision link |
 | [IFML.md](IFML.md) | `.ifml` | Interaction flows: views, components, events, the reference pattern library |
-| [VERSIONING.md](VERSIONING.md) | all | The versioning/release policy: what 0.x promises, what 1.0 freezes, what a release consists of |
+| [VERSIONING.md](VERSIONING.md) | all | The versioning/release policy: what 0.x promises, what 1.0 freezes, what a release consists of, and the one allowed pre-1.0 wire break |
+| [NAMING.md](NAMING.md) | all | The normative spelling contract: product name, wordmark, binary, crate names, env vars, wire keys — every other document links here instead of restating a rule |
 
 ## For consumers and contributors
 
 | Document | Read it when… |
 |---|---|
-| [../README.md](../README.md) | you want the overview: what rexlang is, status, CLI usage, integration styles |
+| [../README.md](../README.md) | you want the overview: what Phero Lang is, status, CLI usage, integration styles |
 | [../examples/README.md](../examples/README.md) | you learn from working code — the canonical examples compile one domain through every surface, CI-enforced |
-| [BACKENDS.md](BACKENDS.md) | you write a backend (in or out of tree) that consumes rexlang artifacts |
-| [GRAPH.md](GRAPH.md) | you want one queryable artifact spanning every surface — the semantic graph's node/edge vocabulary, its import-connected applications, `rexlang graph build`, the artifact-only `graph query` surface and cross-policy analytics, and the node table the editor shares with it (the union integrity pass, the navigation span tables, the LSP contract) |
+| [BACKENDS.md](BACKENDS.md) | you write a backend (in or out of tree) that consumes Phero Lang artifacts |
+| [GRAPH.md](GRAPH.md) | you want one queryable artifact spanning every surface — the semantic graph's node/edge vocabulary, its import-connected applications, `pherolang graph build`, the artifact-only `graph query` surface and cross-policy analytics, and the node table the editor shares with it (the union integrity pass, the navigation span tables, the LSP contract) |
 | [RUNE-BODIES.md](RUNE-BODIES.md) | you care about executing imported Rune (`.rosetta`) logic — the design RFC for lowering Rune bodies |
 | [SEMANTICS.md](SEMANTICS.md) | you want the claim ladder: what the program claims, the per-surface judgments, theorem S and its assumptions, and the explicit non-goals with their reversal triggers |
 | [VERIFICATION.md](VERIFICATION.md) | you need the proof-obligation register: every claim, its status (`proved`/`tested`/`argued`/`assumed`), its evidence pointer and review date — generated from `docs/verification/register.json`, gated by CI |
 | [../AGENTS.md](../AGENTS.md) | you change the compiler itself: crate ownership, commands, testing quirks, gotchas |
+| [REBRAND.md](REBRAND.md) | you are migrating a 0.2 consumer — the old → new command, env-var, crate, path and wire tables, and the operator checklist that is not a repository diff |
+| [RELEASE-0.3.0.md](RELEASE-0.3.0.md) | you are cutting the 0.3.0 release: the gate, the repository rename, the tag, and the install smoke test |
+| [adr/](adr/README.md) | you are asking *why* — the architecture decision records, starting with the rename itself |
 
 ## Reading paths
 
@@ -41,7 +45,7 @@ artifact. This index routes to the right document.
   [../examples/](../examples/) walks domain → policy → design → events →
   use cases → flows → deployment → case; the README's walkthrough compiles
   each layer by hand.
-- **"I want to consume rexlang from my tool"** → [BACKENDS.md](BACKENDS.md)
+- **"I want to consume Phero Lang from my tool"** → [BACKENDS.md](BACKENDS.md)
   (artifact contract), or the root README's integration styles.
 - **"I want evidence, not assurances"** → [SEMANTICS.md](SEMANTICS.md) for
   what is claimed and refused, [VERIFICATION.md](VERIFICATION.md) for each

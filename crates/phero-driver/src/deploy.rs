@@ -1,0 +1,1571 @@
+//! Semantic lowering and validation for `.deploy` deployment sources: the
+//! `.deploy` counterpart of [`crate::events`] and [`crate::ddd`].
+//!
+//! This module is salsa-free; [`compile_deploy_str`](crate::compile_deploy_str)
+//! parses via the tracked [`parse_deploy_query`](crate::parse_deploy_query)
+//! and calls into [`compile_deploy_file`] directly (there is no domain
+//! lowering to memoize — a deployment references pre-compiled design/flow
+//! artifacts, not domain texts). The normative contract — entry points,
+//! resolution semantics, and the validation rules — is documented on
+//! [`compile_deploy_str`](crate::compile_deploy_str).
+//!
+//! The engine mirrors [`crate::events::compile_evt_file`]: parse
+//! diagnostics propagate under the deploy file's path, its own diagnostics
+//! are tagged with its path in declaration order, and any error-severity
+//! diagnostic drops the artifact.
+//!
+//! Targets are implementation-provided: the capability, engine, and
+//! setting tables below are the closed semantic core the issue-specified
+//! "validate before generating" rule runs against. Everything
+//! platform-specific (capability names beyond the closed vocabulary,
+//! mapping resources, policy expressions) is carried as authored.
+
+use std::collections::BTreeMap;
+
+use phero_ir::ddd::DddModel;
+use phero_ir::deploy::{
+    ComponentKind, DeployApplication, DeployComponent, DeployConnection, DeployDeployment,
+    DeployEnv, DeployMapping, DeployModel, DeployPolicy, DeployProfile, DeploySetting,
+    DeployTarget, DeployValue,
+};
+use phero_ir::ifml::IfmlModel;
+use phero_syntax::ast as dsl;
+use phero_syntax::Span;
+
+use crate::conditions::{
+    check_condition, ConditionSpanning, ConditionTriage, ConditionWording, LintWording,
+    ParseErrorPolicy,
+};
+use crate::diagnostic::Diagnostic;
+use crate::engine_common;
+use crate::import_matches;
+use crate::pipeline;
+
+/// The closed capability vocabulary a component's `requires` clause may
+/// name (extensible per target implementation, but validated so a typo is
+/// an error, not a silently-vacuous requirement).
+///
+/// This table is also the graph's platform-capability node vocabulary
+/// (issue pherolang#262): the semantic graph emits one `platformCapability`
+/// node per used word — a name no model file declares — and the editor
+/// lands on the first written `requires` mention.
+pub const PLATFORM_CAPABILITIES: [&str; 8] = [
+    "longRunningProcess",
+    "persistentFilesystem",
+    "sqlDatabase",
+    "container",
+    "backgroundWorker",
+    "horizontalScaling",
+    "edgeExecution",
+    "statefulProcess",
+];
+
+/// Whether `name` is one of the closed [`PLATFORM_CAPABILITIES`] — the words
+/// a `.deploy` `requires` clause may name.
+pub fn is_platform_capability(name: &str) -> bool {
+    PLATFORM_CAPABILITIES.contains(&name)
+}
+
+/// The deploy targets that provide `capability`, in target order. Empty for
+/// a word outside the closed vocabulary.
+pub fn platform_capability_targets(capability: &str) -> Vec<DeployTarget> {
+    [
+        DeployTarget::Standalone,
+        DeployTarget::DockerCompose,
+        DeployTarget::Kubernetes,
+        DeployTarget::CloudflareWorkers,
+    ]
+    .into_iter()
+    .filter(|target| target_capabilities(*target).contains(&capability))
+    .collect()
+}
+
+/// The capabilities each target provides. These tables — not the DSL — are
+/// the authority: a target's capabilities are defined by its
+/// implementation, never authored in a `.deploy` source.
+fn target_capabilities(target: DeployTarget) -> &'static [&'static str] {
+    match target {
+        DeployTarget::Standalone => &[
+            "longRunningProcess",
+            "persistentFilesystem",
+            "sqlDatabase",
+            "backgroundWorker",
+            "statefulProcess",
+        ],
+        DeployTarget::DockerCompose | DeployTarget::Kubernetes => &[
+            "longRunningProcess",
+            "persistentFilesystem",
+            "sqlDatabase",
+            "backgroundWorker",
+            "statefulProcess",
+            "container",
+            "horizontalScaling",
+        ],
+        DeployTarget::CloudflareWorkers => &["sqlDatabase", "horizontalScaling", "edgeExecution"],
+    }
+}
+
+/// The capabilities a component kind intrinsically requires, whatever its
+/// settings say.
+fn kind_required_capabilities(kind: ComponentKind) -> &'static [&'static str] {
+    match kind {
+        ComponentKind::Worker => &["longRunningProcess"],
+        ComponentKind::Database => &["sqlDatabase"],
+        _ => &[],
+    }
+}
+
+/// The database engines each target can host. A managed/external engine
+/// (postgres on the cluster, D1 at the edge) counts as the target hosting
+/// it — the check rejects *incompatible* engines rather than enumerating
+/// hosting topologies.
+fn target_engines(target: DeployTarget) -> &'static [&'static str] {
+    match target {
+        DeployTarget::Standalone => &["sqlite"],
+        DeployTarget::DockerCompose => &["sqlite", "postgres"],
+        DeployTarget::Kubernetes => &["postgres"],
+        DeployTarget::CloudflareWorkers => &["d1"],
+    }
+}
+
+/// The value shape of one setting in a kind's vocabulary.
+enum SettingSpec {
+    /// An integer setting (`replicas`).
+    Int,
+    /// A free-text setting (`entrypoint`).
+    Text,
+    /// A closed word setting (`runtime`, `engine`, ...) with its allowed
+    /// values.
+    Word(&'static [&'static str]),
+}
+
+const CONTAINER_OR_EMBEDDED_OR_WORKER: &[&str] = &["embedded", "container", "worker", "external"];
+const CONTAINER_OR_EMBEDDED_OR_EXTERNAL: &[&str] = &["embedded", "container", "external"];
+const ENGINES: &[&str] = &["sqlite", "postgres", "d1"];
+const STORAGES: &[&str] = &["local", "volume", "external", "managed"];
+const SCALINGS: &[&str] = &["singleInstance", "replicated", "autoscaled"];
+const FRONTEND_RUNTIMES: &[&str] = &["static", "worker", "container"];
+
+/// The setting vocabulary of one component kind: the closed semantic core.
+/// A setting path not listed here (for the component's kind) is an error,
+/// and a word value outside its list is an error.
+///
+/// The operational vocabulary (issue #135) rides the same tables: `port`
+/// (an integer listener port, every kind), `health` (a health-check path,
+/// the request-processing kinds `api`/`worker`), and `cors` (a
+/// comma-separated origin list, the browser-facing kinds `api`/
+/// `frontend`). Because the policy universe is built from these tables,
+/// typed policies over them (`require (api.port == 18082)`) come free.
+fn component_settings(kind: ComponentKind) -> Vec<(&'static str, SettingSpec)> {
+    match kind {
+        ComponentKind::Api => vec![
+            (
+                "runtime",
+                SettingSpec::Word(CONTAINER_OR_EMBEDDED_OR_WORKER),
+            ),
+            ("replicas", SettingSpec::Int),
+            ("scaling", SettingSpec::Word(SCALINGS)),
+            ("port", SettingSpec::Int),
+            ("health", SettingSpec::Text),
+            ("cors", SettingSpec::Text),
+        ],
+        ComponentKind::Worker => vec![
+            (
+                "runtime",
+                SettingSpec::Word(CONTAINER_OR_EMBEDDED_OR_EXTERNAL),
+            ),
+            ("replicas", SettingSpec::Int),
+            ("port", SettingSpec::Int),
+            ("health", SettingSpec::Text),
+        ],
+        ComponentKind::Database => vec![
+            ("engine", SettingSpec::Word(ENGINES)),
+            ("storage", SettingSpec::Word(STORAGES)),
+            (
+                "runtime",
+                SettingSpec::Word(CONTAINER_OR_EMBEDDED_OR_EXTERNAL),
+            ),
+            ("port", SettingSpec::Int),
+        ],
+        ComponentKind::Queue => vec![
+            (
+                "runtime",
+                SettingSpec::Word(CONTAINER_OR_EMBEDDED_OR_EXTERNAL),
+            ),
+            ("replicas", SettingSpec::Int),
+            ("port", SettingSpec::Int),
+        ],
+        ComponentKind::ObjectStore => vec![
+            ("storage", SettingSpec::Word(STORAGES)),
+            ("port", SettingSpec::Int),
+        ],
+        ComponentKind::Frontend => vec![
+            ("runtime", SettingSpec::Word(FRONTEND_RUNTIMES)),
+            ("entrypoint", SettingSpec::Text),
+            ("port", SettingSpec::Int),
+            ("cors", SettingSpec::Text),
+        ],
+    }
+}
+
+/// Lowers and validates one parsed `.deploy` file against the pre-compiled
+/// design and flow artifacts its imports resolve to. Returns the
+/// deployment artifact (or `None` when any error-severity diagnostic was
+/// produced) plus the diagnostics, each tagged with the deploy file's
+/// path.
+///
+/// The engine is four stage passes composed in this exact order — the
+/// diagnostic interleave is pinned by `tests/deploy_stages.rs`, and moving
+/// a group means moving its stage, never reordering the calls:
+///
+/// 1. [`stage_imports`] — every import resolves to a provided design or
+///    flow (rule 2);
+/// 2. [`stage_applications`] — per application, components, settings, env,
+///    bindings, and connections (rules 3–6);
+/// 3. [`stage_profiles`] — per profile, target, shape-valid defaults,
+///    mappings, and the verbatim policy expressions (rule 7);
+/// 4. [`stage_deployments`] — per deployment, effective settings
+///    (component baselines ⊕ profile defaults ⊕ overrides), capabilities,
+///    engines, and policy evaluation (rules 8–11).
+///
+/// The file-local diagnostics accumulate in `local` in stage order and are
+/// appended after the parse diagnostics by the shared engine tail; any
+/// error anywhere drops the artifact.
+///
+/// See [`compile_deploy_str`](crate::compile_deploy_str) for the normative
+/// contract.
+pub(crate) fn compile_deploy_file(
+    path: &str,
+    source: &str,
+    ast: Option<&dsl::DeployFile>,
+    parse_diagnostics: &[Diagnostic],
+    designs: &[(String, DddModel)],
+    flows: &[(String, IfmlModel)],
+) -> (Option<DeployModel>, Vec<(String, Diagnostic)>) {
+    let diags: Vec<(String, Diagnostic)> = parse_diagnostics
+        .iter()
+        .map(|diagnostic| (path.to_string(), diagnostic.clone()))
+        .collect();
+
+    let Some(ast) = ast else {
+        return (None, diags);
+    };
+
+    let mut local: Vec<Diagnostic> = Vec::new();
+    let mut model = DeployModel::new();
+
+    stage_imports(path, ast, designs, flows, &mut local);
+    stage_applications(path, ast, designs, flows, &mut model, &mut local);
+    stage_profiles(source, ast, &mut model, &mut local);
+    stage_deployments(ast, &mut model, &mut local);
+
+    pipeline::engine_finish(path, local, diags, model)
+}
+
+/// Stage 1 — imports (rule 2): every import must name a provided `.ddd`
+/// design or `.ifml` flow (exact string or lexical resolution, the
+/// `.actor` rule); an import that resolves to some other extension is
+/// rejected inside the same per-import pass, so a file mixing missing and
+/// unsupported imports keeps the interleaving.
+fn stage_imports(
+    path: &str,
+    ast: &dsl::DeployFile,
+    designs: &[(String, DddModel)],
+    flows: &[(String, IfmlModel)],
+    local: &mut Vec<Diagnostic>,
+) {
+    let hits = engine_common::two_bucket_hits(&ast.imports, path, designs, flows);
+    let import_diagnostics = engine_common::import_hit_diagnostics(
+        &ast.imports,
+        &hits,
+        Some("imports must name a .ddd design or an .ifml flow the host provides"),
+        None,
+        |import| {
+            if !import.path.ends_with(".ddd") && !import.path.ends_with(".ifml") {
+                Some(
+                    Diagnostic::error(
+                        format!(
+                            "unsupported import \"{}\" (expected a .ddd design or an .ifml flow)",
+                            import.path
+                        ),
+                        Some(import.span),
+                    )
+                    .with_help("a deployment composes .ddd designs and .ifml flows"),
+                )
+            } else {
+                None
+            }
+        },
+    );
+    local.extend(import_diagnostics);
+}
+
+/// Stage 2 — applications: unique names; per application, unique
+/// component names, validated kinds/capabilities/settings/env/bindings,
+/// and known connection endpoints.
+fn stage_applications(
+    path: &str,
+    ast: &dsl::DeployFile,
+    designs: &[(String, DddModel)],
+    flows: &[(String, IfmlModel)],
+    model: &mut DeployModel,
+    local: &mut Vec<Diagnostic>,
+) {
+    let mut application_names: Vec<(String, Span)> = Vec::new();
+    for application in &ast.applications {
+        engine_common::register_unique_declared(
+            &mut application_names,
+            &application.name.text,
+            application.name.span,
+            "application",
+            local,
+        );
+
+        let mut out = DeployApplication::new(application.name.text.clone());
+        // Components keyed by name for connection and setting resolution,
+        // with the component-name spans for component-level diagnostics
+        // assembled after the AST is gone.
+        let mut components: Vec<(String, ComponentKind, Span)> = Vec::new();
+        for component in &application.components {
+            if components
+                .iter()
+                .any(|(name, _, _)| *name == component.name.text)
+            {
+                local.push(
+                    Diagnostic::error(
+                        format!(
+                            "duplicate component '{}' in application '{}'",
+                            component.name.text, application.name.text
+                        ),
+                        Some(component.name.span),
+                    )
+                    .with_help("a component is declared once per application"),
+                );
+                continue;
+            }
+
+            // Rule 3 — the kind must be in the closed vocabulary.
+            let kind = match ComponentKind::from_keyword(&component.kind.text) {
+                Some(kind) => kind,
+                None => {
+                    local.push(
+                        Diagnostic::error(
+                            format!("unknown component kind '{}'", component.kind.text),
+                            Some(component.kind.span),
+                        )
+                        .with_help(format!(
+                            "known kinds: {}",
+                            [
+                                "api",
+                                "worker",
+                                "database",
+                                "queue",
+                                "objectStore",
+                                "frontend"
+                            ]
+                            .join(", ")
+                        )),
+                    );
+                    continue;
+                }
+            };
+
+            // Rule 4 — capability names must be in the closed vocabulary.
+            for capability in &component.requires {
+                if !PLATFORM_CAPABILITIES.contains(&capability.text.as_str()) {
+                    local.push(
+                        Diagnostic::error(
+                            format!("unknown capability '{}'", capability.text),
+                            Some(capability.span),
+                        )
+                        .with_help(format!(
+                            "known capabilities: {}",
+                            PLATFORM_CAPABILITIES.join(", ")
+                        )),
+                    );
+                }
+            }
+
+            // Rule 5 — baseline settings use single-segment paths from the
+            // kind's vocabulary.
+            let mut seen_settings: Vec<String> = Vec::new();
+            let mut settings: Vec<DeploySetting> = Vec::new();
+            for setting in &component.settings {
+                validate_setting_path_len(&setting.path, 1, local);
+                let name = setting.path.segments.last().map(|name| name.text.as_str());
+                if let Some(name) = name {
+                    if !engine_common::register_unique(
+                        &mut seen_settings,
+                        name,
+                        setting.path.span,
+                        format!(
+                            "duplicate setting '{}' on component '{}'",
+                            name, component.name.text
+                        ),
+                        Some("a setting is declared once per level"),
+                        local,
+                    ) {
+                        continue;
+                    }
+                }
+                let Some(value) = check_setting_value(&setting.path, &setting.value, kind, local)
+                else {
+                    continue;
+                };
+                settings.push(DeploySetting {
+                    path: setting.path.full_name(),
+                    value,
+                });
+            }
+
+            // Rule 5b — env entries are opaque strings lowered verbatim
+            // (author order kept). Env is deliberately not a setting: it
+            // never joins the effective-settings map and is never
+            // policy-addressable, so the only checks here are syntactic —
+            // an empty or duplicated name on one component.
+            let mut seen_env: Vec<String> = Vec::new();
+            let mut env_out: Vec<DeployEnv> = Vec::new();
+            for entry in &component.env {
+                if entry.name.text.is_empty() {
+                    local.push(
+                        Diagnostic::error("env name must not be empty", Some(entry.name.span))
+                            .with_help("env entries are `NAME = \"value\"` pairs"),
+                    );
+                    continue;
+                }
+                if !engine_common::register_unique(
+                    &mut seen_env,
+                    &entry.name.text,
+                    entry.name.span,
+                    format!(
+                        "duplicate env '{}' on component '{}'",
+                        entry.name.text, component.name.text
+                    ),
+                    Some("an env name is declared once per component"),
+                    local,
+                ) {
+                    continue;
+                }
+                env_out.push(DeployEnv::new(entry.name.text.clone(), entry.value.clone()));
+            }
+
+            // Rule 6 — bindings must resolve against the provided
+            // artifacts: the path (as written) must be an import of this
+            // file, and a `#<Module>` suffix must name a module there.
+            let mut designs_out = Vec::new();
+            let mut flows_out = Vec::new();
+            for binding in &component.designs {
+                let resolved = phero_ir::deploy::DesignBinding::parse(&binding.reference);
+                if let Some(diagnostic) = check_design_binding(&resolved, path, component, designs)
+                {
+                    local.push(diagnostic);
+                }
+                designs_out.push(resolved);
+            }
+            for binding in &component.flows {
+                let resolved = phero_ir::deploy::FlowBinding::parse(&binding.reference);
+                if let Some(diagnostic) = check_flow_binding(&resolved, path, component, flows) {
+                    local.push(diagnostic);
+                }
+                flows_out.push(resolved);
+            }
+
+            components.push((component.name.text.clone(), kind, component.name.span));
+            let mut component_out = DeployComponent::new(component.name.text.clone(), kind);
+            component_out.requires = component
+                .requires
+                .iter()
+                .map(|capability| capability.text.clone())
+                .collect();
+            component_out.settings = settings;
+            component_out.env = env_out;
+            component_out.designs = designs_out;
+            component_out.flows = flows_out;
+            out.components.push(component_out);
+        }
+
+        for connection in &application.connections {
+            for endpoint in [&connection.from, &connection.to] {
+                if endpoint.text.is_empty() {
+                    continue; // parser recovery; the syntax error fired
+                }
+                if !components.iter().any(|(name, _, _)| *name == endpoint.text) {
+                    local.push(
+                        Diagnostic::error(
+                            format!(
+                                "unknown component '{}' in connection from '{}' to '{}'",
+                                endpoint.text, connection.from.text, connection.to.text
+                            ),
+                            Some(endpoint.span),
+                        )
+                        .with_help(format!(
+                            "connections must reference components of application '{}'",
+                            application.name.text
+                        )),
+                    );
+                }
+            }
+            out.connections.push(DeployConnection::new(
+                connection.from.text.clone(),
+                connection.to.text.clone(),
+            ));
+        }
+
+        model.applications.push(out);
+    }
+}
+
+/// Stage 3 — profiles: unique names, a known target, shape-valid defaults,
+/// validated mapping kinds. Defaults are application-independent here —
+/// their vocabulary validation runs per deployment
+/// ([`stage_deployments`], via [`apply_settings`]).
+fn stage_profiles(
+    source: &str,
+    ast: &dsl::DeployFile,
+    model: &mut DeployModel,
+    local: &mut Vec<Diagnostic>,
+) {
+    // Profiles: unique names, a known target, shape-valid defaults,
+    // validated mapping kinds.
+    let mut profile_names: Vec<(String, Span)> = Vec::new();
+    for profile in &ast.profiles {
+        engine_common::register_unique_declared(
+            &mut profile_names,
+            &profile.name.text,
+            profile.name.span,
+            "profile",
+            local,
+        );
+
+        // Rule 7 — a profile selects an implementation-provided target.
+        let target = match profile.target.as_ref() {
+            Some(target) => match DeployTarget::from_keyword(&target.text) {
+                Some(target) => target,
+                None => {
+                    local.push(
+                        Diagnostic::error(
+                            format!("unknown deployment target '{}'", target.text),
+                            Some(target.span),
+                        )
+                        .with_help(format!(
+                            "known targets: {}",
+                            [
+                                "standalone",
+                                "dockerCompose",
+                                "kubernetes",
+                                "cloudflareWorkers"
+                            ]
+                            .join(", ")
+                        )),
+                    );
+                    continue;
+                }
+            },
+            None => {
+                local.push(
+                    Diagnostic::error(
+                        format!("profile '{}' declares no `target:` line", profile.name.text),
+                        Some(profile.name.span),
+                    )
+                    .with_help(
+                        "add `target: standalone | dockerCompose | kubernetes | cloudflareWorkers`",
+                    ),
+                );
+                continue;
+            }
+        };
+
+        let mut profile_out = DeployProfile::new(profile.name.text.clone(), target);
+
+        // Defaults are shape-validated here (two-segment paths, no
+        // duplicates); the vocabulary/type validation runs per deployment,
+        // against the application the profile is being applied to.
+        let mut seen_defaults: Vec<String> = Vec::new();
+        for setting in &profile.defaults {
+            validate_setting_path_len(&setting.path, 2, local);
+            if let Some(full) = Some(setting.path.full_name()) {
+                if !engine_common::register_unique(
+                    &mut seen_defaults,
+                    &full,
+                    setting.path.span,
+                    format!(
+                        "duplicate default '{}' in profile '{}'",
+                        full, profile.name.text
+                    ),
+                    Some("a setting is declared once per level"),
+                    local,
+                ) {
+                    continue;
+                }
+            }
+            profile_out.defaults.push(DeploySetting {
+                path: setting.path.full_name(),
+                value: setting_value_as_authored(&setting.value),
+            });
+        }
+
+        for policy in &profile.policies {
+            let expression = policy_text(source, &policy.expr);
+            let expression = match expression {
+                Some(expression) => expression,
+                None => continue, // recovery placeholder; the syntax error fired
+            };
+            profile_out.policies.push(if policy.prohibit {
+                DeployPolicy::prohibit(expression)
+            } else {
+                DeployPolicy::require(expression)
+            });
+        }
+
+        for mapping in &profile.mappings {
+            let kind = match ComponentKind::from_keyword(&mapping.kind.text) {
+                Some(kind) => kind,
+                None => {
+                    local.push(
+                        Diagnostic::error(
+                            format!("unknown component kind '{}' in mapping", mapping.kind.text),
+                            Some(mapping.kind.span),
+                        )
+                        .with_help(format!(
+                            "known kinds: {}",
+                            [
+                                "api",
+                                "worker",
+                                "database",
+                                "queue",
+                                "objectStore",
+                                "frontend"
+                            ]
+                            .join(", ")
+                        )),
+                    );
+                    continue;
+                }
+            };
+            if mapping.resource.segments.is_empty() {
+                continue; // parser recovery; the syntax error fired
+            }
+            profile_out
+                .mappings
+                .push(DeployMapping::new(kind, mapping.resource.full_name()));
+        }
+
+        model.profiles.push(profile_out);
+    }
+}
+
+/// Stage 4 — deployments: unique names, known application and profile,
+/// then the per-deployment rules — effective settings (component
+/// baselines ⊕ profile defaults ⊕ overrides), capabilities, engines, and
+/// policy enforcement.
+fn stage_deployments(ast: &dsl::DeployFile, model: &mut DeployModel, local: &mut Vec<Diagnostic>) {
+    // Deployments: unique names, known application and profile, then the
+    // per-deployment rules — effective settings, capabilities, engines,
+    // and policy enforcement.
+    let mut deployment_names: Vec<(String, Span)> = Vec::new();
+    // Component-name spans per application, for component-level diagnostics
+    // assembled after the AST application is out of scope.
+    let mut component_spans: BTreeMap<String, BTreeMap<String, Span>> = BTreeMap::new();
+    for application in &ast.applications {
+        let spans = component_spans
+            .entry(application.name.text.clone())
+            .or_default();
+        for component in &application.components {
+            spans.insert(component.name.text.clone(), component.name.span);
+        }
+    }
+    for deployment in &ast.deployments {
+        engine_common::register_unique_declared(
+            &mut deployment_names,
+            &deployment.name.text,
+            deployment.name.span,
+            "deployment",
+            local,
+        );
+
+        let application = match model
+            .applications
+            .iter()
+            .find(|candidate| candidate.name == deployment.application.text)
+        {
+            Some(application) => application.clone(),
+            None => {
+                if !deployment.application.text.is_empty() {
+                    local.push(
+                        Diagnostic::error(
+                            format!(
+                                "unknown application '{}' in deployment '{}'",
+                                deployment.application.text, deployment.name.text
+                            ),
+                            Some(deployment.application.span),
+                        )
+                        .with_help("deployments must reference applications of this file"),
+                    );
+                }
+                continue;
+            }
+        };
+        let profile_name = match &deployment.profile {
+            Some(profile) if !profile.text.is_empty() => profile.text.clone(),
+            Some(_) | None => {
+                // The parser reported the missing `use` line; recover with
+                // no profile so the remaining rules still see the file.
+                String::new()
+            }
+        };
+        let profile = match model
+            .profiles
+            .iter()
+            .find(|candidate| candidate.name == profile_name)
+        {
+            Some(profile) => Some(profile.clone()),
+            None => {
+                if !profile_name.is_empty() {
+                    local.push(
+                        Diagnostic::error(
+                            format!(
+                                "unknown profile '{}' in deployment '{}'",
+                                profile_name, deployment.name.text
+                            ),
+                            Some(
+                                deployment
+                                    .profile
+                                    .as_ref()
+                                    .map(|profile| profile.span)
+                                    .unwrap_or(deployment.span),
+                            ),
+                        )
+                        .with_help("deployments must reference profiles of this file"),
+                    );
+                }
+                None
+            }
+        };
+
+        // Rule 8 — effective settings: component baselines, then the
+        // profile's defaults, then the deployment's overrides. Every
+        // default/override must name a component of the application and a
+        // setting from that component kind's vocabulary. Both levels are
+        // validated from the AST settings (which carry spans).
+        let mut effective: BTreeMap<String, BTreeMap<String, DeployValue>> = BTreeMap::new();
+        for component in &application.components {
+            let mut settings = BTreeMap::new();
+            for setting in &component.settings {
+                settings.insert(setting.path.clone(), setting.value.clone());
+            }
+            effective.insert(component.name.clone(), settings);
+        }
+        if let Some(profile) = &profile {
+            if let Some(ast_profile) = ast
+                .profiles
+                .iter()
+                .find(|candidate| candidate.name.text == profile.name)
+            {
+                apply_settings(
+                    &ast_profile.defaults,
+                    &application,
+                    &mut effective,
+                    local,
+                    SettingsLevel::Default(&profile.name),
+                );
+            }
+        }
+        let mut seen_configure: Vec<String> = Vec::new();
+        let mut configure_out = Vec::new();
+        for setting in &deployment.configure {
+            validate_setting_path_len(&setting.path, 2, local);
+            let full = setting.path.full_name();
+            if !engine_common::register_unique(
+                &mut seen_configure,
+                &full,
+                setting.path.span,
+                format!(
+                    "duplicate override '{}' in deployment '{}'",
+                    full, deployment.name.text
+                ),
+                Some("a setting is declared once per level"),
+                local,
+            ) {
+                continue;
+            }
+            if let Some(value) = check_setting_against_application(
+                &setting.path,
+                &setting.value,
+                &application,
+                local,
+                &SettingsLevel::Override(&deployment.name.text),
+            ) {
+                if let Some((component, name)) = split_setting_path(&full) {
+                    effective
+                        .entry(component.to_string())
+                        .or_default()
+                        .insert(name.to_string(), value.clone());
+                }
+                configure_out.push(DeploySetting { path: full, value });
+            }
+        }
+
+        let Some(profile) = &profile else {
+            continue; // unknown profile: the remaining rules need a target
+        };
+
+        // Rule 9 — capability validation: each component's intrinsic and
+        // declared requirements must be covered by the target.
+        for component in &application.components {
+            let settings = &effective[&component.name];
+            let span = component_spans
+                .get(&deployment.application.text)
+                .and_then(|spans| spans.get(&component.name))
+                .copied()
+                .unwrap_or(deployment.span);
+            let mut required: Vec<&'static str> =
+                kind_required_capabilities(component.kind).to_vec();
+            if effective_word(settings, "engine") == Some("sqlite") {
+                required.push("persistentFilesystem");
+            }
+            if effective_word(settings, "runtime") == Some("container") {
+                required.push("container");
+            }
+            for capability in &component.requires {
+                // The closed vocabulary was already validated at the
+                // application, so this is only a lookup convenience.
+                if let Some(capability) = PLATFORM_CAPABILITIES
+                    .iter()
+                    .find(|known| *known == capability)
+                {
+                    if !required.contains(capability) {
+                        required.push(capability);
+                    }
+                }
+            }
+            for capability in required {
+                if !target_capabilities(profile.target).contains(&capability) {
+                    local.push(
+                        Diagnostic::error(
+                            format!(
+                                "component '{}' requires capability '{}', which target '{}' \
+                                 does not provide",
+                                component.name,
+                                capability,
+                                profile.target.keyword()
+                            ),
+                            Some(span),
+                        )
+                        .with_help(format!(
+                            "target '{}' provides: {}",
+                            profile.target.keyword(),
+                            target_capabilities(profile.target).join(", ")
+                        )),
+                    );
+                }
+            }
+
+            // Rule 10 — engine/target compatibility: the issue's D1 rule —
+            // a postgres database is not silently mapped onto a target
+            // that cannot host it.
+            if component.kind == ComponentKind::Database {
+                if let Some(engine) = effective_word(settings, "engine") {
+                    if !target_engines(profile.target).contains(&engine) {
+                        local.push(
+                            Diagnostic::error(
+                                format!(
+                                    "database '{}' engine '{}' is not available on target '{}'",
+                                    component.name,
+                                    engine,
+                                    profile.target.keyword()
+                                ),
+                                Some(span),
+                            )
+                            .with_help(format!(
+                                "target '{}' hosts: {}",
+                                profile.target.keyword(),
+                                target_engines(profile.target).join(", ")
+                            )),
+                        );
+                    }
+                }
+            }
+        }
+
+        // Rule 11 — policies: parsed and typed with phero-expr (the
+        // `when`-condition pattern), then evaluated against the effective
+        // settings. `require` conditions must hold; `prohibit` conditions
+        // must not.
+        for policy in &profile.policies {
+            check_policy(policy, &application, deployment, &effective, local);
+        }
+
+        let mut deployment_out = DeployDeployment::new(
+            deployment.name.text.clone(),
+            deployment.application.text.clone(),
+            profile_name,
+        );
+        deployment_out.configure = configure_out;
+        model.deployments.push(deployment_out);
+    }
+}
+
+/// The two-segment split of a `component.setting` path.
+fn split_setting_path(path: &str) -> Option<(&str, &str)> {
+    let (component, setting) = path.split_once('.')?;
+    Some((component, setting))
+}
+
+/// A word-valued setting from an effective-settings map.
+fn effective_word<'a>(settings: &'a BTreeMap<String, DeployValue>, name: &str) -> Option<&'a str> {
+    match settings.get(name)? {
+        DeployValue::Word(word) => Some(word.as_str()),
+        DeployValue::Text(text) => Some(text.as_str()),
+        DeployValue::Int(_) => None,
+    }
+}
+
+/// The source text of a policy condition, strictly inside the parens (the
+/// `when`-condition convention). `None` for the recovery placeholder.
+fn policy_text(source: &str, expr: &Span) -> Option<String> {
+    if expr.end >= expr.start + 2 {
+        Some(source[expr.start + 1..expr.end - 1].trim().to_string())
+    } else {
+        None
+    }
+}
+
+/// Rejects a setting path with the wrong segment count for its level
+/// (component baselines are single-segment; defaults/overrides are
+/// `component.setting` pairs).
+fn validate_setting_path_len(
+    path: &dsl::QualifiedName,
+    expected: usize,
+    local: &mut Vec<Diagnostic>,
+) {
+    if path.segments.len() != expected {
+        local.push(
+            Diagnostic::error(
+                format!(
+                    "setting path '{}' must have exactly {} segment{}",
+                    path.full_name(),
+                    expected,
+                    if expected == 1 { "" } else { "s" }
+                ),
+                Some(path.span),
+            )
+            .with_help(if expected == 1 {
+                "component settings are `name: value` lines"
+            } else {
+                "defaults and overrides are `component.setting: value` lines"
+            }),
+        );
+    }
+}
+
+/// Validates one baseline component setting against its kind's vocabulary
+/// and lowers the value. `None` when a diagnostic was emitted.
+fn check_setting_value(
+    path: &dsl::QualifiedName,
+    value: &dsl::DeploySettingValue,
+    kind: ComponentKind,
+    local: &mut Vec<Diagnostic>,
+) -> Option<DeployValue> {
+    let name = path.segments.last()?.text.clone();
+    check_setting(&name, path.span, value, kind, local)
+}
+
+/// Validates one default/override setting against the application the
+/// profile/deployment applies to: the path's first segment must name a
+/// component, the second a setting from that component kind's vocabulary.
+fn check_setting_against_application(
+    path: &dsl::QualifiedName,
+    value: &dsl::DeploySettingValue,
+    application: &DeployApplication,
+    local: &mut Vec<Diagnostic>,
+    level: &SettingsLevel<'_>,
+) -> Option<DeployValue> {
+    let segments: Vec<&str> = path
+        .segments
+        .iter()
+        .map(|segment| segment.text.as_str())
+        .collect();
+    let [component_name, setting_name] = segments.as_slice() else {
+        return None; // the segment-count diagnostic already fired
+    };
+    let Some(component) = application
+        .components
+        .iter()
+        .find(|component| component.name == *component_name)
+    else {
+        local.push(
+            Diagnostic::error(
+                format!(
+                    "{} names unknown component '{}' — application '{}' has no such component",
+                    level.label(),
+                    component_name,
+                    application.name
+                ),
+                Some(path.span),
+            )
+            .with_help("defaults and overrides must name components of the deployed application"),
+        );
+        return None;
+    };
+    check_setting(setting_name, path.span, value, component.kind, local)
+}
+
+/// Which settings list a diagnostic is about (for the message's wording).
+enum SettingsLevel<'a> {
+    Default(&'a str),
+    Override(&'a str),
+}
+
+impl SettingsLevel<'_> {
+    /// The diagnostic prefix: `default of profile 'p'` /
+    /// `override of deployment 'd'`.
+    fn label(&self) -> String {
+        match self {
+            SettingsLevel::Default(name) => format!("default of profile '{name}'"),
+            SettingsLevel::Override(name) => format!("override of deployment '{name}'"),
+        }
+    }
+}
+
+/// Validates a setting name/value pair against one kind's vocabulary.
+fn check_setting(
+    name: &str,
+    span: Span,
+    value: &dsl::DeploySettingValue,
+    kind: ComponentKind,
+    local: &mut Vec<Diagnostic>,
+) -> Option<DeployValue> {
+    let Some((_, spec)) = component_settings(kind)
+        .into_iter()
+        .find(|(known, _)| *known == name)
+    else {
+        let known = component_settings(kind)
+            .into_iter()
+            .map(|(known, _)| known)
+            .collect::<Vec<_>>()
+            .join(", ");
+        local.push(
+            Diagnostic::error(
+                format!("unknown setting '{}' for kind '{}'", name, kind.keyword()),
+                Some(span),
+            )
+            .with_help(format!("{} settings: {}", kind.keyword(), known)),
+        );
+        return None;
+    };
+    match (&spec, value) {
+        (SettingSpec::Int, dsl::DeploySettingValue::Int(value)) => Some(DeployValue::Int(*value)),
+        (SettingSpec::Int, _) => {
+            local.push(
+                Diagnostic::error(format!("setting '{name}' expects an integer"), Some(span))
+                    .with_help("integer settings take a plain integer literal"),
+            );
+            None
+        }
+        (SettingSpec::Text, dsl::DeploySettingValue::Str(text)) => {
+            Some(DeployValue::Text(text.clone()))
+        }
+        (SettingSpec::Text, _) => {
+            local.push(
+                Diagnostic::error(format!("setting '{name}' expects a string"), Some(span))
+                    .with_help("text settings take a double-quoted string"),
+            );
+            None
+        }
+        (SettingSpec::Word(allowed), dsl::DeploySettingValue::Word(word)) => {
+            if allowed.contains(&word.text.as_str()) {
+                Some(DeployValue::Word(word.text.clone()))
+            } else {
+                local.push(
+                    Diagnostic::error(format!("invalid {} '{}'", name, word.text), Some(word.span))
+                        .with_help(format!("expected one of: {}", allowed.join(", "))),
+                );
+                None
+            }
+        }
+        (SettingSpec::Word(_), _) => {
+            local.push(
+                Diagnostic::error(format!("setting '{name}' expects a word"), Some(span))
+                    .with_help("word settings take a bare name (the enum-value spelling)"),
+            );
+            None
+        }
+    }
+}
+
+/// The authored value of a profile default, before any per-deployment
+/// validation (profiles are application-independent at compile time).
+fn setting_value_as_authored(value: &dsl::DeploySettingValue) -> DeployValue {
+    match value {
+        dsl::DeploySettingValue::Int(value) => DeployValue::Int(*value),
+        dsl::DeploySettingValue::Str(text) => DeployValue::Text(text.clone()),
+        dsl::DeploySettingValue::Word(word) => DeployValue::Word(word.text.clone()),
+    }
+}
+
+/// Applies a profile's defaults (or a deployment's overrides) onto the
+/// effective-settings map, validating each AST setting against the
+/// application: two-segment paths, no duplicates, and the component kind's
+/// vocabulary.
+fn apply_settings(
+    settings: &[dsl::DeploySettingDecl],
+    application: &DeployApplication,
+    effective: &mut BTreeMap<String, BTreeMap<String, DeployValue>>,
+    local: &mut Vec<Diagnostic>,
+    level: SettingsLevel<'_>,
+) {
+    let mut seen: Vec<String> = Vec::new();
+    for setting in settings {
+        validate_setting_path_len(&setting.path, 2, local);
+        let full = setting.path.full_name();
+        if !engine_common::register_unique(
+            &mut seen,
+            &full,
+            setting.path.span,
+            format!(
+                "duplicate {} '{}' — a setting is declared once per level",
+                level.label(),
+                full
+            ),
+            None,
+            local,
+        ) {
+            continue;
+        }
+        let Some(value) = check_setting_against_application(
+            &setting.path,
+            &setting.value,
+            application,
+            local,
+            &level,
+        ) else {
+            continue;
+        };
+        if let Some((component_name, setting_name)) = split_setting_path(&full) {
+            effective
+                .entry(component_name.to_string())
+                .or_default()
+                .insert(setting_name.to_string(), value);
+        }
+    }
+}
+
+/// The artifact-side of a rule 6 binding: the noun the diagnostics spell
+/// (`design`/`flow`) and the module list an imported artifact declares
+/// (both the existence check and the "modules of ..." help).
+trait BoundArtifact {
+    /// The binding noun in diagnostics: `design` or `flow`.
+    fn kind_word() -> &'static str;
+
+    /// The module names the artifact declares, in declaration order.
+    fn module_names(&self) -> Vec<&str>;
+}
+
+impl BoundArtifact for DddModel {
+    fn kind_word() -> &'static str {
+        "design"
+    }
+
+    fn module_names(&self) -> Vec<&str> {
+        self.modules
+            .iter()
+            .map(|module| module.name.as_str())
+            .collect()
+    }
+}
+
+impl BoundArtifact for IfmlModel {
+    fn kind_word() -> &'static str {
+        "flow"
+    }
+
+    fn module_names(&self) -> Vec<&str> {
+        self.modules
+            .iter()
+            .map(|module| module.name.as_str())
+            .collect()
+    }
+}
+
+/// Rule 6 — the shared binding core of [`check_design_binding`] and
+/// [`check_flow_binding`]: the reference (as written) must resolve through
+/// [`import_matches`] to one of the provided artifacts, and a `#<Module>`
+/// suffix must name a module there. Only the nouns differ between the
+/// twins; the resolution, module check, and wording shape are shared.
+fn check_binding<B: BoundArtifact>(
+    source: &str,
+    module: Option<&str>,
+    deploy_path: &str,
+    component: &dsl::DeployComponentDecl,
+    artifacts: &[(String, B)],
+) -> Option<Diagnostic> {
+    let resolved = artifacts
+        .iter()
+        .find(|(provided, _)| import_matches(source, deploy_path, provided));
+    let Some((_, artifact)) = resolved else {
+        return Some(
+            Diagnostic::error(
+                format!(
+                    "component '{}' binds unknown {} \"{}\"",
+                    component.name.text,
+                    B::kind_word(),
+                    source
+                ),
+                Some(component.span),
+            )
+            .with_help(format!(
+                "a {} binding's path must match one of this file's imports",
+                B::kind_word()
+            )),
+        );
+    };
+    let module = module?;
+    let modules = artifact.module_names();
+    if !modules.contains(&module) {
+        return Some(
+            Diagnostic::error(
+                format!(
+                    "{} \"{}\" declares no module '{}' (component '{}')",
+                    B::kind_word(),
+                    source,
+                    module,
+                    component.name.text
+                ),
+                Some(component.span),
+            )
+            .with_help(format!("modules of {}: {}", source, modules.join(", "))),
+        );
+    }
+    None
+}
+
+/// Rule 6 — a design binding must reference one of the file's `.ddd`
+/// imports (exact string or lexical resolution) and, when it names a
+/// module, that module must exist in the imported design.
+fn check_design_binding(
+    binding: &phero_ir::deploy::DesignBinding,
+    deploy_path: &str,
+    component: &dsl::DeployComponentDecl,
+    designs: &[(String, DddModel)],
+) -> Option<Diagnostic> {
+    check_binding(
+        &binding.source,
+        binding.module.as_deref(),
+        deploy_path,
+        component,
+        designs,
+    )
+}
+
+/// Rule 6 — the flow-binding twin of [`check_design_binding`].
+fn check_flow_binding(
+    binding: &phero_ir::deploy::FlowBinding,
+    deploy_path: &str,
+    component: &dsl::DeployComponentDecl,
+    flows: &[(String, IfmlModel)],
+) -> Option<Diagnostic> {
+    check_binding(
+        &binding.source,
+        binding.module.as_deref(),
+        deploy_path,
+        component,
+        flows,
+    )
+}
+
+/// Rule 11 — one policy condition, end to end: parse (phero-expr), type-check
+/// against the application's components (the synthetic-settings-class
+/// pattern), then evaluate against the deployment's effective settings.
+/// A violated `require` or satisfied `prohibit` is an error.
+fn check_policy(
+    policy: &DeployPolicy,
+    application: &DeployApplication,
+    deployment: &dsl::DeployDeploymentDecl,
+    effective: &BTreeMap<String, BTreeMap<String, DeployValue>>,
+    local: &mut Vec<Diagnostic>,
+) {
+    let checker =
+        phero_expr::TypeChecker::new(policy_universe(application)).with_self("", &application.name);
+    let policy_help = format!(
+        "in `{} ({})`",
+        if policy.prohibit {
+            "prohibit"
+        } else {
+            "require"
+        },
+        policy.expression
+    );
+    let wording = ConditionWording {
+        parse_errors: ParseErrorPolicy::Emit,
+        parse_prefix: "invalid policy condition: ".to_string(),
+        type_errors_raw: false,
+        boolean_prefix: "policy condition ".to_string(),
+        lint: LintWording::Skip,
+        parse_help: Some(policy_help.clone()),
+        typed_help: Some(policy_help),
+    };
+    let outcome = check_condition(
+        &policy.expression,
+        ConditionSpanning::Fixed(deployment.span),
+        wording,
+        Some(checker),
+        None,
+        local,
+    );
+    // A policy only evaluates when it typed as boolean; every other
+    // triage verdict has been diagnosed above.
+    if outcome.triage != ConditionTriage::Boolean {
+        return;
+    }
+    let ast = outcome
+        .ast
+        .expect("the boolean verdict implies a parsed tree");
+    enforce_policy(policy, deployment, &ast, effective, local);
+}
+
+/// The synthetic policy universe of [`check_policy`]: one class per
+/// component (features = the kind's setting vocabulary), plus the
+/// application as a root class whose features are the components.
+/// `api.replicas` is then plain feature navigation from `self` — no fake
+/// `Model` assembled.
+fn policy_universe(application: &DeployApplication) -> phero_expr::DomainTypes {
+    let mut types = phero_expr::DomainTypes::default();
+    for component in &application.components {
+        let features = component_settings(component.kind)
+            .into_iter()
+            .map(|(name, spec)| {
+                phero_ir::Feature::new(
+                    name,
+                    phero_ir::FeatureKind::Attribute,
+                    match spec {
+                        SettingSpec::Int => {
+                            phero_ir::TypeRef::Primitive(phero_ir::PrimitiveType::Int)
+                        }
+                        SettingSpec::Text | SettingSpec::Word(_) => {
+                            phero_ir::TypeRef::Primitive(phero_ir::PrimitiveType::String)
+                        }
+                    },
+                    phero_ir::Multiplicity::REQUIRED,
+                )
+            })
+            .collect();
+        types.insert_class("", &component.name, Vec::new(), features, Vec::new());
+    }
+    let root_features = application
+        .components
+        .iter()
+        .map(|component| {
+            phero_ir::Feature::new(
+                component.name.clone(),
+                phero_ir::FeatureKind::Attribute,
+                phero_ir::TypeRef::Class {
+                    package: String::new(),
+                    name: component.name.clone(),
+                },
+                phero_ir::Multiplicity::REQUIRED,
+            )
+        })
+        .collect();
+    types.insert_class("", &application.name, Vec::new(), root_features, Vec::new());
+    types
+}
+
+/// Rule 11 — the require/prohibit half of [`check_policy`]: the condition
+/// already parsed and typed as boolean, so evaluate it against the
+/// deployment's effective settings and diagnose evaluation failures and
+/// violations.
+fn enforce_policy(
+    policy: &DeployPolicy,
+    deployment: &dsl::DeployDeploymentDecl,
+    ast: &phero_expr::Expr,
+    effective: &BTreeMap<String, BTreeMap<String, DeployValue>>,
+    local: &mut Vec<Diagnostic>,
+) {
+    let value = match evaluate(ast, effective) {
+        Ok(value) => value,
+        Err(message) => {
+            local.push(
+                Diagnostic::error(
+                    format!("cannot evaluate policy condition: {message}"),
+                    Some(deployment.span),
+                )
+                .with_help(format!(
+                    "in `{} ({})`",
+                    if policy.prohibit {
+                        "prohibit"
+                    } else {
+                        "require"
+                    },
+                    policy.expression
+                )),
+            );
+            return;
+        }
+    };
+    let EvalValue::Bool(holds) = value else {
+        local.push(
+            Diagnostic::error(
+                "policy condition did not evaluate to a boolean",
+                Some(deployment.span),
+            )
+            .with_help("policies are boolean conditions over the effective settings"),
+        );
+        return;
+    };
+    let violation = match (policy.prohibit, holds) {
+        (false, false) => Some("require"),
+        (true, true) => Some("prohibit"),
+        _ => None,
+    };
+    if let Some(keyword) = violation {
+        local.push(
+            Diagnostic::error(
+                format!(
+                    "policy violated in deployment '{}': {} ({})",
+                    deployment.name.text, keyword, policy.expression
+                ),
+                Some(deployment.span),
+            )
+            .with_help(match keyword {
+                "require" => "overrides and defaults must satisfy every `require` of the profile",
+                _ => "overrides and defaults must not satisfy any `prohibit` of the profile",
+            }),
+        );
+    }
+}
+
+/// A policy evaluation value (settings carry no floats and no options).
+enum EvalValue {
+    Int(i64),
+    Text(String),
+    Bool(bool),
+}
+
+/// The constant evaluator for policy conditions: literals, `component.setting`
+/// paths, comparisons, boolean logic, and integer arithmetic with the
+/// expression rules R1 (checked arithmetic) and R4 (no zero divisor). The
+/// evaluated settings come from the deployment's effective settings map.
+fn evaluate(
+    expr: &phero_expr::Expr,
+    effective: &BTreeMap<String, BTreeMap<String, DeployValue>>,
+) -> Result<EvalValue, String> {
+    match &expr.kind {
+        phero_expr::ExprKind::Int(value) => Ok(EvalValue::Int(*value)),
+        phero_expr::ExprKind::String(text) => Ok(EvalValue::Text(text.clone())),
+        phero_expr::ExprKind::Bool(value) => Ok(EvalValue::Bool(*value)),
+        phero_expr::ExprKind::Name(name) => Err(format!(
+            "component '{name}' is used bare — reference its settings as '{name}.<setting>'"
+        )),
+        phero_expr::ExprKind::FeatureAccess {
+            receiver,
+            name,
+            optional_safe: false,
+        } => {
+            let phero_expr::ExprKind::Name(component) = &receiver.kind else {
+                return Err(
+                    "only `component.setting` paths are supported, found a nested receiver"
+                        .to_string(),
+                );
+            };
+            let settings = effective.get(component).ok_or_else(|| {
+                format!("unknown component '{component}' in application settings")
+            })?;
+            let value = settings.get(&name.value).ok_or_else(|| {
+                format!(
+                    "component '{component}' has no effective setting '{}'",
+                    name.value
+                )
+            })?;
+            Ok(match value {
+                DeployValue::Int(value) => EvalValue::Int(*value),
+                DeployValue::Text(text) => EvalValue::Text(text.clone()),
+                DeployValue::Word(word) => EvalValue::Text(word.clone()),
+            })
+        }
+        phero_expr::ExprKind::Binary { op, lhs, rhs } => {
+            let lhs = evaluate(lhs, effective)?;
+            let rhs = evaluate(rhs, effective)?;
+            evaluate_binary(*op, lhs, rhs)
+        }
+        phero_expr::ExprKind::Unary { op, expr: inner } => {
+            let inner = evaluate(inner, effective)?;
+            match (*op, inner) {
+                (phero_expr::UnOp::Not, EvalValue::Bool(value)) => Ok(EvalValue::Bool(!value)),
+                (phero_expr::UnOp::Neg, EvalValue::Int(value)) => {
+                    let negated = value.checked_neg();
+                    negated
+                        .map(EvalValue::Int)
+                        .ok_or_else(|| "integer overflow in policy condition (rule R1)".to_string())
+                }
+                (op, _) => Err(format!("operator `{op}` applied to a non-matching value")),
+            }
+        }
+        _ => Err(
+            "only literals, `component.setting` paths, comparisons, boolean logic, and \
+             integer arithmetic are supported in policy conditions"
+                .to_string(),
+        ),
+    }
+}
+
+/// Evaluates one binary operation with the expression rules R1/R4.
+fn evaluate_binary(
+    op: phero_expr::BinOp,
+    lhs: EvalValue,
+    rhs: EvalValue,
+) -> Result<EvalValue, String> {
+    use phero_expr::BinOp;
+    match op {
+        BinOp::And | BinOp::Or => match (lhs, rhs) {
+            (EvalValue::Bool(lhs), EvalValue::Bool(rhs)) => {
+                Ok(EvalValue::Bool(if op == BinOp::And {
+                    lhs && rhs
+                } else {
+                    lhs || rhs
+                }))
+            }
+            _ => Err(format!("operator `{op}` expects boolean operands")),
+        },
+        BinOp::Eq | BinOp::Ne => {
+            let equal = match (&lhs, &rhs) {
+                (EvalValue::Int(lhs), EvalValue::Int(rhs)) => lhs == rhs,
+                (EvalValue::Text(lhs), EvalValue::Text(rhs)) => lhs == rhs,
+                (EvalValue::Bool(lhs), EvalValue::Bool(rhs)) => lhs == rhs,
+                _ => return Err(format!("operator `{op}` compared mismatched value kinds")),
+            };
+            Ok(EvalValue::Bool(if op == BinOp::Eq {
+                equal
+            } else {
+                !equal
+            }))
+        }
+        BinOp::Lt | BinOp::Le | BinOp::Gt | BinOp::Ge => match (lhs, rhs) {
+            (EvalValue::Int(lhs), EvalValue::Int(rhs)) => Ok(EvalValue::Bool(match op {
+                BinOp::Lt => lhs < rhs,
+                BinOp::Le => lhs <= rhs,
+                BinOp::Gt => lhs > rhs,
+                _ => lhs >= rhs,
+            })),
+            _ => Err(format!("operator `{op}` expects integer operands")),
+        },
+        BinOp::Add | BinOp::Sub | BinOp::Mul | BinOp::Div => match (lhs, rhs) {
+            (EvalValue::Int(lhs), EvalValue::Int(rhs)) => {
+                let value = match op {
+                    BinOp::Add => lhs.checked_add(rhs),
+                    BinOp::Sub => lhs.checked_sub(rhs),
+                    BinOp::Mul => lhs.checked_mul(rhs),
+                    _ => {
+                        if rhs == 0 {
+                            return Err("division by zero (rule R4)".to_string());
+                        }
+                        lhs.checked_div(rhs)
+                    }
+                };
+                value
+                    .map(EvalValue::Int)
+                    .ok_or_else(|| "integer overflow in policy condition (rule R1)".to_string())
+            }
+            _ => Err(format!("operator `{op}` expects integer operands")),
+        },
+    }
+}

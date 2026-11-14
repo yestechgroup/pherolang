@@ -1,4 +1,4 @@
-namespace rex.sigil.funcs
+namespace phero.sigil.funcs
 version "1.0.0"
 
 type Underlier: <"A referenced underlier.">

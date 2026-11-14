@@ -4,12 +4,12 @@
 
 A `.cmmn` file declares a **case**: the adaptive, event-and-condition-driven
 work coordinated around a domain — the CMMN 1.1 (OMG formal/2016-06-01)
-notion of case management, in rexlang idiom. A case is *not* a workflow and
-*not* a state machine: its plan declares the work that is **available**
-(tasks, service tasks, milestones, grouped into stages) and the **criteria**
-under which each item activates, without prescribing a sequence. Sibling
-tasks are concurrent by default; ordering exists only where a criterion
-imposes it.
+notion of case management, in the Phero Lang idiom. A case is *not* a
+workflow and *not* a state machine: its plan declares the work that is
+**available** (tasks, service tasks, milestones, grouped into stages) and
+the **criteria** under which each item activates, without prescribing a
+sequence. Sibling tasks are concurrent by default; ordering exists only
+where a criterion imposes it.
 
 The division of responsibility this surface codifies:
 
@@ -17,7 +17,7 @@ The division of responsibility this surface codifies:
 - The **domain lifecycle** (`.ddd` machines) owns an aggregate's valid state
   transitions.
 - The **case** owns the work: who does what, when, and why.
-- The **engine** executes — rexlang authors and validates, the
+- The **engine** executes — Phero Lang authors and validates, the
   [cmmn-rs](https://github.com/yestechgroup/cmmn-rs) engine runs compiled
   definitions (see the [backend](#tooling)).
 
@@ -102,7 +102,7 @@ case CommercialLoan {
   case-file transition (`create`, `update`, `delete`, `addChild`,
   `removeChild`) — or a bare `name` naming an event of an imported `.evt`
   contract. All on-parts must occur for the criterion to satisfy; the
-  optional `when (...)` if-part is a boolean rex-expr condition over the
+  optional `when (...)` if-part is a boolean phero-expr condition over the
   case file, type-checked at compile time (below). Milestones carry no
   exit criteria.
 - **Flags** — `required;` (the containing stage cannot complete without
@@ -114,11 +114,11 @@ case CommercialLoan {
 
 ## Artifact wire format
 
-`rexlang ir file.cmmn` emits the standalone
-[`rex_ir::cmmn::CmmnModel`](../crates/rex-ir/src/cmmn.rs) artifact — the
-versioned wire format in the rexlang artifact family
+`pherolang ir file.cmmn` emits the standalone
+[`phero_ir::cmmn::CmmnModel`](../crates/phero-ir/src/cmmn.rs) artifact — the
+versioned wire format in the Phero Lang artifact family
 (`CMMN_MODEL_FORMAT_VERSION`, camelCase keys, adjacent tagging, an empty
-artifact serializing as exactly `{"formatVersion":1}`). The wire carries
+artifact serializing as exactly `{"formatVersion":2}`). The wire carries
 **names as written and `when` conditions verbatim** (the wire rule 9
 convention); resolution and expression semantics are driver concerns, never
 wire concerns. The plan is a **flat graph**: stages reference children by
@@ -127,9 +127,9 @@ name, and a case's root items are the ones no stage lists.
 ## Grammar
 
 The normative EBNF lives once in the parser module docs
-([`crates/rex-syntax/src/parser/mod.rs`](../crates/rex-syntax/src/parser/mod.rs),
-section "`.cmmn` case management sources"); `rexlang fmt` canonicalizes to
-the layout documented on [`format_cmmn`](../crates/rex-syntax/src/fmt.rs).
+([`crates/phero-syntax/src/parser/mod.rs`](../crates/phero-syntax/src/parser/mod.rs),
+section "`.cmmn` case management sources"); `pherolang fmt` canonicalizes to
+the layout documented on [`format_cmmn`](../crates/phero-syntax/src/fmt.rs).
 Every `case` word is a contextual identifier (escapable with `^`);
 `import`, `as`, `on`, and `when` are real lexer keywords. The transition
 vocabularies are deliberately **not** syntax — both segments of an on-part
@@ -139,7 +139,7 @@ tables (the `.deploy` vocabulary discipline).
 ## Resolution & validation
 
 `compile_cmmn_str` (normative contract on
-[`crates/rex-driver/src/lib.rs`](../crates/rex-driver/src/lib.rs)) resolves a
+[`crates/phero-driver/src/lib.rs`](../crates/phero-driver/src/lib.rs)) resolves a
 `.cmmn` file against **five import buckets**: raw `.mox` domains, plus
 pre-compiled `EventModel`, `ActorModel`, `DddModel`, and `DmnModel` pairs
 the host provides. Imports match by exact path or lexical resolution relative
@@ -212,7 +212,7 @@ diagnostics for `inputs`/`outputs` on a non-decision item).
 
 - **Version pins.** The `invokes` clause may carry `version compatible`
   or `version "X.Y.Z"` — the same pin grammar and resolution rules the
-  `.ddd` decision references use (rexlang#154; see the `.dmn` surface's
+  `.ddd` decision references use (pherolang#154; see the `.dmn` surface's
   Versioning section): an exact pin resolves to the same-name service at
   that version, `compatible` to the highest declared version in the
   highest major present, and an unsatisfiable pin names the service, the
@@ -235,7 +235,7 @@ diagnostics for `inputs`/`outputs` on a non-decision item).
   type (`Verdict` above is a boolean guard); a **multi-output decision**
   inserts a class named by the decision whose fields are its named
   outputs (`LoanAssessment.outcome`). Unresolved tasks contribute nothing.
-  The universe is assembled on the `rex_expr::DomainTypes`
+  The universe is assembled on the `phero_expr::DomainTypes`
   (`insert_class`) — never a fake model.
 
 **Documented deferrals.** There is no type-agreement check between the
@@ -250,13 +250,13 @@ input/output mapping to that registry; it invents no engine fields.
 ## Tooling
 
 ```sh
-rexlang fmt file.cmmn            # canonical layout (also --check)
-rexlang check tests/conformance/ # directory batch: every surface, then the union integrity pass per application
-rexlang ir file.cmmn -o case.json        # the CmmnModel artifact
-rexlang artifact check case.json         # classifies + lint-checks the artifact
+pherolang fmt file.cmmn            # canonical layout (also --check)
+pherolang check tests/conformance/ # directory batch: every surface, then the union integrity pass per application
+pherolang ir file.cmmn -o case.json        # the CmmnModel artifact
+pherolang artifact check case.json         # classifies + lint-checks the artifact
 ```
 
-**The cmmn-rs backend** (`rex-backend-cmmn`) lowers a compiled `CmmnModel`
+**The cmmn-rs backend** (`phero-backend-cmmn`) lowers a compiled `CmmnModel`
 plus its domain model into the engine's `CaseDefinition` JSON — the case
 file items (multiplicity vocabulary, domain-class features as properties),
 a synthetic root stage, generated sentries, `User` tasks with
@@ -264,7 +264,7 @@ a synthetic root stage, generated sentries, `User` tasks with
 keyed by their binding (the `execute` reference and the **authored**
 `invokes` name respectively — the engine's executor-seam `processRef`), and
 discretionary tasks as planning tables. `when` conditions translate
-rex-expr → FEEL within a documented subset (`&&`→`and`, `size()`→`count`,
+phero-expr → FEEL within a documented subset (`&&`→`and`, `size()`→`count`,
 `case_file.x`→`x`, `if/then/else`, …); everything outside the subset is a
 **named generate-time error** (the Cedar-backend convention), as are the
 two engine gaps the surface accepts today: bare `.evt` event on-parts (the
@@ -282,9 +282,9 @@ The canonical fixture set lives in `tests/conformance/cmmn/`:
 `lending.cmmn` (the case above, over `lending.mox`/`lending.evt`/
 `lending.actor`/`lending.ddd`) compiles clean, byte-matches the
 `lending.cmmn.json` artifact golden, and round-trips through `from_json`
-(`crates/rex-driver/tests/cmmn_golden.rs`); the backend lowers the same
+(`crates/phero-driver/tests/cmmn_golden.rs`); the backend lowers the same
 artifact to the engine's `CaseDefinition` JSON, byte-pinned at
-`lending.case.json` (`crates/rex-backend-cmmn/tests/generate.rs`).
+`lending.case.json` (`crates/phero-backend-cmmn/tests/generate.rs`).
 `decision.cmmn` (the decision-task fixture, over `decision.mox` and
 `decision.dmn`) pins the `decision` kind end to end — binding, resolution,
 universe — with its own `decision.cmmn.json` artifact golden and the
@@ -294,6 +294,6 @@ buckets, whose `execute` binding names a real `support.ddd` service
 operation, and whose decision task invokes `support.dmn`'s
 `RefundDecisions.AssessRefund` service — byte-pinned under
 `examples/artifacts/` (`examples_artifacts.rs`, plus the engine-definition
-golden in `rex-backend-cmmn`'s examples test). The CI fmt gate covers
+golden in `phero-backend-cmmn`'s examples test). The CI fmt gate covers
 `tests/conformance/cmmn/*.cmmn` and `examples/*/*.cmmn`. Regenerate goldens
-with `REX_UPDATE_FIXTURES=1 cargo test --workspace`.
+with `PHERO_UPDATE_FIXTURES=1 cargo test --workspace`.

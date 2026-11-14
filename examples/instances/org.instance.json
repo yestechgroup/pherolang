@@ -1,6 +1,6 @@
 {
-  "$type": "rex.instance",
-  "formatVersion": 1,
+  "$type": "phero.instance",
+  "formatVersion": 2,
   "model": "nz.example.org",
   "objects": [
     {

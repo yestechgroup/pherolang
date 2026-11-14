@@ -1,4 +1,4 @@
-// The decision-link version pins (rexlang#154): a `compatible` pin on
+// The decision-link version pins (pherolang#154): a `compatible` pin on
 // the inject line and the first invokes entry, an exact pin on the
 // second. The driver test pools the versioned lending pair
 // (tests/conformance/dmn/lending-1.dmn at 1.5.0, lending-2.dmn at

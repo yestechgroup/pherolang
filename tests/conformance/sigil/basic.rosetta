@@ -1,4 +1,4 @@
-namespace rex.sigil.fixture
+namespace phero.sigil.fixture
 version "1.0.0"
 
 type Instrument: <"A tradable financial instrument.">

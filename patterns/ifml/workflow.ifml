@@ -1,4 +1,4 @@
-// rexlang reference pattern library — workflow.
+// Phero Lang reference pattern library — workflow.
 // Task-flow patterns: wizards, work queues with bulk assignment, approval
 // queues, and progress indicators.
 

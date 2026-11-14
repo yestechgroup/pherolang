@@ -1,7 +1,7 @@
 # The unified semantic graph
 
-`rexlang graph build` compiles a tree of model files into **one queryable,
-versioned artifact**: `rex_ir::graph::GraphModel`. It is the substrate for
+`pherolang graph build` compiles a tree of model files into **one queryable,
+versioned artifact**: `phero_ir::graph::GraphModel`. It is the substrate for
 impact analysis, `graph query`, the MCP server (v0.6), Studio, and AI
 agents — the answer to "what is affected if I change capability X" is a
 query, not a human reading eight artifacts.
@@ -9,24 +9,24 @@ query, not a human reading eight artifacts.
 The artifact is **derived, never parsed**: it is built from the compiled
 artifacts of every surface after checking, plus the import edges only the
 host can resolve (wire artifacts are span-free and, except `.ifml`
-imports, path-free). The builder lives in `rex_driver::graph`; the wire
-shape lives in `crates/rex-ir/src/graph.rs`.
+imports, path-free). The builder lives in `phero_driver::graph`; the wire
+shape lives in `crates/phero-ir/src/graph.rs`.
 
 ## Wire contract
 
-The [wire format contract](../crates/rex-ir/src/lib.rs) applies unchanged,
+The [wire format contract](../crates/phero-ir/src/lib.rs) applies unchanged,
 with `GRAPH_MODEL_FORMAT_VERSION` as the independent marker (wire contract
 rule 10, the `ActorModel`/`IfmlManifest` precedent):
 
 | Rule | Expectation |
 |---|---|
 | Casing | struct fields `camelCase`; `kind` values bare `camelCase` (`serviceOperation`, `caseFileItem`, `opaqueGrant`, …) |
-| Tagging | `effect` / `sessionKind` reuse `rex_ir::GrantEffect` / `rex_ir::SessionKind` as bare strings; no adjacent tagging in this root |
+| Tagging | `effect` / `sessionKind` reuse `phero_ir::GrantEffect` / `phero_ir::SessionKind` as bare strings; no adjacent tagging in this root |
 | Empty | `GraphModel::default()` serializes as **exactly** `{"formatVersion":1}` |
 | Gate | `GraphModel::from_json` rejects absent and non-1 versions with `IrError::UnsupportedFormatVersion` |
 | Forward compat | unknown JSON fields are ignored; unknown `kind` values survive a round-trip |
 | Equality | `Eq` — the graph carries no floating-point values |
-| Provenance | **no** `rexVersion` stamp — goldens must not churn on release bumps |
+| Provenance | **no** `pheroVersion` stamp — goldens must not churn on release bumps |
 
 ### The open kind vocabulary
 
@@ -34,7 +34,7 @@ Node and edge kinds are **string-typed**, not a closed Rust enum — the one
 deliberate departure from the house enum style. A closed enum cannot grow
 additively (serde rejects unknown tags), and this artifact must not need a
 breaking change before the v0.7 freeze. The v1 constants live in
-`rex_ir::graph::kinds`; new kinds are new string values.
+`phero_ir::graph::kinds`; new kinds are new string values.
 
 **Additive-change policy.** Growth is additive only:
 
@@ -69,7 +69,7 @@ carries one (`.dmn`'s `decision_model <name>`, a `.ddd`'s
 
 Import-connected applications are the union-find components over
 canonicalized import paths — the same relation `check`'s union integrity
-pass uses (`rex_driver::applications`). A `.mox` file that other surfaces
+pass uses (`phero_driver::applications`). A `.mox` file that other surfaces
 import is a **bridge node**: it joins its importers into one application
 without contributing nodes of its own beyond its domain declarations.
 Unrelated applications in one tree never cross-check, and an import that
@@ -77,8 +77,8 @@ leaves the checked set contributes no edge.
 
 **Pools follow the application, not the directory.** The compile-time
 joins — the `.ddd` capability clause against `.actor` policies
-(rexlang#128), the `.ddd` `invokes`/`inject decision` links against `.dmn`
-models (rexlang#78), and the `.actor` grant coverage against `.ddd`
+(pherolang#128), the `.ddd` `invokes`/`inject decision` links against `.dmn`
+models (pherolang#78), and the `.actor` grant coverage against `.ddd`
 designs — resolve inside the compiled file's application component only.
 Two applications sharing a directory (or a checked tree) never see each
 other's capabilities, decisions, or designs, and a file whose application
@@ -89,10 +89,10 @@ from the open document's directory snapshot, scoped by the same relation.
 `applications[].id` is the component's smallest member path;
 `applications[].files` and `.packages` are sorted.
 
-## The `rexlang graph build` command
+## The `pherolang graph build` command
 
 ```sh
-rexlang graph build <paths>... [-o <file>]
+pherolang graph build <paths>... [-o <file>]
 ```
 
 `graph` is a pure namespace with two required verbs — `build` (this section)
@@ -113,7 +113,7 @@ files compile in their own context, like `build`.
 already-computed typed artifact and resolved imports — one `GraphInputs`
 bucket per surface, `GraphFile` rows carrying the display path, the
 host-normalized key, and the imports the surface's reader resolved
-(`SurfaceOutcome.artifact`/`.imports` in `crates/rex-cli/src/commands/`;
+(`SurfaceOutcome.artifact`/`.imports` in `crates/phero-cli/src/commands/`;
 `.ifml`'s imports ride the same field). The builder never re-reads a source
 or re-compiles a file, and `check`/`ir`/`build` ignore those two fields, so
 their output stays byte-identical.
@@ -126,11 +126,11 @@ the compiler's diagnostic, not a guessed binding.
 
 ### One surface table, one compile pipeline
 
-Classification lives in **one surface table**, `rex_driver::SurfaceKind`
-(`crates/rex-driver/src/surface.rs`): the CLI's `is_*_file` helpers, its
+Classification lives in **one surface table**, `phero_driver::SurfaceKind`
+(`crates/phero-driver/src/surface.rs`): the CLI's `is_*_file` helpers, its
 project snapshot's written-import dispatch, `verify`'s receipt kinds, and the
 LSP's `surface_for`/`surface_of_path` all delegate to it (the LSP's wrapper
-adds only the "not a rexlang surface" case).
+adds only the "not a Phero Lang surface" case).
 
 `commands/pipeline.rs::compile_one` is the CLI's single per-surface
 dispatch — an exhaustive match with no `_` arm, pinned by
@@ -164,16 +164,16 @@ base `examples/` — every surface, the support stack, and the unrelated
 applications clustered together:
 
 ```sh
-rexlang graph build examples/ -o /tmp/examples.graph.json
+pherolang graph build examples/ -o /tmp/examples.graph.json
 diff /tmp/examples.graph.json examples/artifacts/examples.graph.json
-REX_UPDATE_FIXTURES=1 cargo test -p rex-cli --test cli graph
+PHERO_UPDATE_FIXTURES=1 cargo test -p phero-cli --test cli graph
 ```
 
 Every file under the tree compiles and every application is coherent, so
 both `graph build examples/` and `check examples/` exit `0`: `orders.ddd` no
 longer resolves its `PlaceOrder` capability against `support.actor`'s names
-(the two files belong to different applications — rexlang#249), and each
-application's events/actions are wired to its own design (rexlang#258). The
+(the two files belong to different applications — pherolang#249), and each
+application's events/actions are wired to its own design (pherolang#258). The
 best-effort emission path (a failing file renders its diagnostics, the
 artifact covers the compiling subset, the command exits `1`) is still the
 contract; it is just not exercised by `examples/` any more.
@@ -223,12 +223,12 @@ contract; it is just not exercised by `examples/` any more.
 | `deployComponent` | `.deploy` component | `<App>.<Component>` |
 | `deployProfile` | `.deploy` profile | `<Profile>` |
 | `deployment` | `.deploy` deployment | `<App>.<Deployment>` |
-| `platformCapability` | one word of the `.deploy` closed target-capability vocabulary a component's `requires` clause names (no model file declares it — see [Platform capabilities](#platform-capabilities-rexlang262)) | the word as written (`longRunningProcess`) |
+| `platformCapability` | one word of the `.deploy` closed target-capability vocabulary a component's `requires` clause names (no model file declares it — see [Platform capabilities](#platform-capabilities-pherolang262)) | the word as written (`longRunningProcess`) |
 
-### Platform capabilities (rexlang#262)
+### Platform capabilities (pherolang#262)
 
 A `.deploy` component's `requires` clause names the **closed platform
-vocabulary** in `crates/rex-driver/src/deploy.rs`
+vocabulary** in `crates/phero-driver/src/deploy.rs`
 (`longRunningProcess`, `persistentFilesystem`, `sqlDatabase`, `container`,
 `backgroundWorker`, `horizontalScaling`, `edgeExecution`,
 `statefulProcess`) — not a `.actor` capability. The graph keeps the two
@@ -343,7 +343,7 @@ The graph mirrors the compiler; it never invents a binding:
 - Components sort by their smallest member path; `applications[].files`
   and `.packages` sort.
 - Reversed or shuffled input order produces byte-identical JSON.
-- No absolute paths, no `\` separators, no `rexVersion`.
+- No absolute paths, no `\` separators, no `pheroVersion`.
 
 ## Queries
 
@@ -352,14 +352,14 @@ recompile, no import resolver. It is the contract the v0.6 MCP `graph query`
 tool and Studio wrap, so it is versioned and deterministic.
 
 ```sh
-rexlang graph query <graph.json|-> node <ref> [--edges] [--pretty]
-rexlang graph query <graph.json|-> list [--kind K] [--file F] [--application A] [--pretty]
-rexlang graph query <graph.json|-> affected-by <ref> [--kinds K,…] [--direction dependents|dependencies] [--pretty]
-rexlang graph query <graph.json|-> dependencies <ref> [--pretty]
+pherolang graph query <graph.json|-> node <ref> [--edges] [--pretty]
+pherolang graph query <graph.json|-> list [--kind K] [--file F] [--application A] [--pretty]
+pherolang graph query <graph.json|-> affected-by <ref> [--kinds K,…] [--direction dependents|dependencies] [--pretty]
+pherolang graph query <graph.json|-> dependencies <ref> [--pretty]
 ```
 
 `-` reads the artifact from stdin. `--pretty` changes whitespace only.
-`rexlang graph build <paths>...` (compile) and `rexlang graph query …`
+`pherolang graph build <paths>...` (compile) and `pherolang graph query …`
 (query) are sibling verbs under the `graph` namespace: one is always
 required, so an input path can never be mistaken for a verb (a directory
 literally named `query` is an ordinary `build` input).
@@ -369,15 +369,15 @@ literally named `query` is an ordinary `build` input).
 A `<ref>` resolves **exact id → exact name → unique name suffix**:
 
 ```sh
-rexlang graph query g.json node 'capability:support/support.actor#Support.RaiseRefund'  # id
-rexlang graph query g.json node 'Support.RaiseRefund'                           # name
-rexlang graph query g.json node 'TicketService.raiseRefund'                     # suffix
+pherolang graph query g.json node 'capability:support/support.actor#Support.RaiseRefund'  # id
+pherolang graph query g.json node 'Support.RaiseRefund'                           # name
+pherolang graph query g.json node 'TicketService.raiseRefund'                     # suffix
 ```
 
 One match binds. Several are **ambiguous** — never guessed — and the CLI
 exits `1` with the sorted candidates on stderr. No match is **unknown**, and
 the did-you-mean candidates (also sorted) come from the adaptive name/id
-suggestion policy in `rex-diagnostics`.
+suggestion policy in `phero-diagnostics`.
 
 Both resolutions are **indexed, never scanned**: exact ids, exact
 `(kind, name)` pairs, every proper `.`-suffix of every node name, and the
@@ -467,25 +467,25 @@ affected" rather than stopping at the first non-deployment hop).
   edge kind.
 - The same artifact answers byte-identically across runs, and the
   deserialized artifact answers exactly like the in-memory model
-  (`crates/rex-driver/tests/graph.rs` pins both).
+  (`crates/phero-driver/tests/graph.rs` pins both).
 
 The committed query goldens live under `tests/conformance/graph/queries/`
 (`examples.node.*`, `examples.affected-by.*`), regenerated with
-`REX_UPDATE_FIXTURES=1 cargo test -p rex-cli --test cli graph`.
+`PHERO_UPDATE_FIXTURES=1 cargo test -p phero-cli --test cli graph`.
 
 ## Cross-policy analytics
 
 Four analytics answer the cross-policy questions the compiler's diagnostics
-can only ask one file at a time (issue rexlang#246). They run on the artifact
+can only ask one file at a time (issue pherolang#246). They run on the artifact
 **alone** — no sources, no recompile — and answer in the same versioned
 envelope as the structural queries:
 
 ```sh
-rexlang graph query <graph.json|-> separation-of-duty [--pair A B] [--actor a] [--session human|agent] [--fail-on-findings] [--pretty]
-rexlang graph query <graph.json|-> monotonicity [--actor a] [--fail-on-findings] [--pretty]
-rexlang graph query <graph.json|-> dead-capabilities [--session human|agent] [--fail-on-findings] [--pretty]
-rexlang graph query <graph.json|-> reachability --from-actor A --to Class.feature [--fail-on-findings] [--pretty]
-rexlang graph query <graph.json|-> reachability --from-capability C --to Class.feature [--fail-on-findings] [--pretty]
+pherolang graph query <graph.json|-> separation-of-duty [--pair A B] [--actor a] [--session human|agent] [--fail-on-findings] [--pretty]
+pherolang graph query <graph.json|-> monotonicity [--actor a] [--fail-on-findings] [--pretty]
+pherolang graph query <graph.json|-> dead-capabilities [--session human|agent] [--fail-on-findings] [--pretty]
+pherolang graph query <graph.json|-> reachability --from-actor A --to Class.feature [--fail-on-findings] [--pretty]
+pherolang graph query <graph.json|-> reachability --from-capability C --to Class.feature [--fail-on-findings] [--pretty]
 ```
 
 Every parameter is echoed as the id it resolved to (`reference`-style suffix
@@ -497,7 +497,7 @@ only when a **definite** finding exists (see the table below).
 ### Shared terms
 
 The analytics rederive the compiler's policy semantics from the artifact
-(`crates/rex-driver/src/lower/actors.rs` is the reference; the artifact's
+(`crates/phero-driver/src/lower/actors.rs` is the reference; the artifact's
 edges are the source):
 
 | term | definition |
@@ -601,13 +601,13 @@ expected — the gap is the analytic's subject, so the fixture does not deny
 warnings. Regenerate with:
 
 ```sh
-REX_UPDATE_FIXTURES=1 cargo test -p rex-driver --test graph_analytics
-REX_UPDATE_FIXTURES=1 cargo test -p rex-cli --test cli graph
+PHERO_UPDATE_FIXTURES=1 cargo test -p phero-driver --test graph_analytics
+PHERO_UPDATE_FIXTURES=1 cargo test -p phero-cli --test cli graph
 ```
 
 ### Validation
 
-`rexlang artifact check` classifies a graph artifact by its `nodes` array —
+`pherolang artifact check` classifies a graph artifact by its `nodes` array —
 a rule that must run **before** the deployment rule, because a graph also
 carries an `applications` array. The checker validates the version gate, the
 `applications`/`nodes`/`edges` shapes (non-empty ids and edge endpoints),
@@ -617,15 +617,15 @@ documented empty-form limitation shared by every standalone artifact.
 
 ## Union integrity
 
-`rex_driver::check_integrity` (issue #114, register row **V12**) is the
-cross-surface pass `rexlang check <dir>` hosts after the per-file checks: a
+`phero_driver::check_integrity` (issue #114, register row **V12**) is the
+cross-surface pass `pherolang check <dir>` hosts after the per-file checks: a
 pure function over path-tagged artifact buckets
 (`DddModel`/`ActorModel`/`EventModel`/`DeployModel`/`IfmlModel`) that
 publishes no artifact of its own. Every diagnostic is span-less (the wire
 artifacts are span-free by contract) and tags the owning file; the code
 table — messages, severities, help — is generated into
 [DIAGNOSTICS.md](DIAGNOSTICS.md) (`driver.integrity`, `X0001`–`X0008`;
-`rexlang explain X0006` resolves one).
+`pherolang explain X0006` resolves one).
 
 | code | check | severity |
 |---|---|---|
@@ -638,7 +638,7 @@ table — messages, severities, help — is generated into
 | `X0007` | every `.evt` subscription consumer names a declared deploy component | error |
 | `X0008` | every `.ifml` `requires:`/`roles:` name resolves against the actor layer | error |
 
-The two capability checks are **warnings since rexlang#128**: their joins
+The two capability checks are **warnings since pherolang#128**: their joins
 resolve at compile time with spans (`unknownCapability`; the actor engine's
 `grantedCapabilityUncarried` for coverage), so this pass is their lint
 channel for hosts that gather artifacts without compiling. Each check is
@@ -654,7 +654,7 @@ pass is phase 2 only — each successful file's artifact is retained, the
 contributions cluster by import, and the capability lint stays unprinted for
 files phase 1 already failed. The compile-time joins pool the same relation
 from the project snapshot (`Project::sibling_actors`/`sibling_designs`/
-`sibling_decisions`, built on `Project::application_of`, rexlang#249), and
+`sibling_decisions`, built on `Project::application_of`, pherolang#249), and
 the LSP pools it over its directory snapshot; an empty sibling set is
 exactly the plain behavior.
 
@@ -666,8 +666,8 @@ action→operation binding is ASCII-case-insensitive (`ApproveRefund` ↔
 
 ## Span tables
 
-Every surface's navigation index lives in `rex_driver::navigation`
-(`crates/rex-driver/src/navigation/`) behind one contract (`surface.rs`):
+Every surface's navigation index lives in `phero_driver::navigation`
+(`crates/phero-driver/src/navigation/`) behind one contract (`surface.rs`):
 `IndexedDefinition`, `IndexedReference`, `ReferenceContext`, and the
 `SurfaceLookup` answer type. Each builder is a pure function of source text
 that returns an **empty index, never a panic**, on a source that does not
@@ -715,14 +715,14 @@ parse.
 **The anti-drift gate** is
 `every_indexed_definition_maps_to_exactly_one_graph_node` plus
 `span_slices_equal_the_written_name` in
-`crates/rex-driver/tests/navigation.rs`, over **all nine** surfaces of the
+`crates/phero-driver/tests/navigation.rs`, over **all nine** surfaces of the
 `examples/support/support.*` stack (plus
 `tests/conformance/models/actors.mox` for inline actors and the two
 conformance designs). Exactly three node kinds are excluded, each naming a
 fact a source-only index cannot know: the `file` node (a display path), the
 `.ifml` `flow` node (the file stem), and the `.deploy` `platformCapability`
 node (one word of the driver's closed target vocabulary — see [platform
-capabilities](#platform-capabilities-rexlang262)). Transitions are the one
+capabilities](#platform-capabilities-pherolang262)). Transitions are the one
 composite node key, so the span test skips the `->`; `.ifml` spans are the
 quoted string token. The unit-test fixture is the self-contained
 `tests/conformance/graph/app.*` application
@@ -733,24 +733,24 @@ quoted string token. The unit-test fixture is the self-contained
 The artifact and the editor share **one node table**: every spanned
 `SurfaceIndex` definition's `(kind, name)` is the graph builder's node
 key, pinned by the anti-drift test in
-`crates/rex-driver/tests/navigation.rs`. Spans are per surface; resolution
+`crates/phero-driver/tests/navigation.rs`. Spans are per surface; resolution
 is the graph's.
 
 Dispatch is by URI extension through `SurfaceKind` (`surface_for`,
-`crates/rex-lsp/src/server/mod.rs`): `.mox` drives the salsa session and its
-own `NavigationIndex`, `.ifml` the rex-ifml one-shot compile (resolver +
+`crates/phero-lsp/src/server/mod.rs`): `.mox` drives the salsa session and its
+own `NavigationIndex`, `.ifml` the phero-ifml one-shot compile (resolver +
 typed checker) *and* its own outline/hover, and **every other surface**
 (`.ddd`, `.actor`, `.evt`, `.deploy`, `.uc`, `.cmmn`, `.dmn`) navigates
 through the graph snapshot [below](#one-snapshot-one-index).
 
 The server classifies open documents and directory siblings through the same
-`rex_driver::SurfaceKind` table the CLI uses (its `Surface` type only adds the
-"not a rexlang surface" case); the span tables live in `rex_driver::navigation`
-(`crates/rex-driver/src/navigation/`): one builder per surface, a pure
-function of source text that yields an empty index (never a panic) on a
-source that does not parse. The graph's node names are derived by the
-builder's own helpers (`graph::ids`), and the indexes call the same helpers —
-a naming rule is written once.
+`phero_driver::SurfaceKind` table the CLI uses (its `Surface` type only adds
+the "not a Phero Lang surface" case); the span tables live in
+`phero_driver::navigation` (`crates/phero-driver/src/navigation/`): one
+builder per surface, a pure function of source text that yields an empty
+index (never a panic) on a source that does not parse. The graph's node
+names are derived by the builder's own helpers (`graph::ids`), and the
+indexes call the same helpers — a naming rule is written once.
 
 | surface | builder | definitions (the graph's nodes) |
 |---|---|---|
@@ -775,7 +775,7 @@ node per compiled file (its name is the display path, a host fact a
 source-only index cannot know), one `flow` node per `.ifml` file (its name is
 the file stem — the same host fact), and one `platformCapability` node per
 application and closed-vocabulary word (its name is a driver table entry, not
-a declaration — [platform capabilities](#platform-capabilities-rexlang262)).
+a declaration — [platform capabilities](#platform-capabilities-pherolang262)).
 Every other node has exactly one spanned definition site.
 
 Each `IndexedReference` carries the name **as written** and a
@@ -805,9 +805,9 @@ graph index decides the binding.
 ### One snapshot, one index
 
 The server answers every navigation capability from one **graph snapshot**
-(`crates/rex-lsp/src/server/graph.rs`): the compiled artifacts of the open
+(`crates/phero-lsp/src/server/graph.rs`): the compiled artifacts of the open
 document, its open-document siblings, and the disk siblings of its
-**directory**, fed to `rex_driver::graph::build`; plus each participating
+**directory**, fed to `phero_driver::graph::build`; plus each participating
 file's spanned index. Resolution is the graph index's (`GraphIndex`),
 locations are the span tables'. A reference whose target the graph cannot
 resolve yields **no location** — never an error, never a guess: the
@@ -825,10 +825,10 @@ The scope is the directory, not a project root: a tree that spreads one
 application across directories resolves within the opened file's directory
 only.
 
-**Incremental invalidation (rexlang#254).** A snapshot rebuild recompiles
+**Incremental invalidation (pherolang#254).** A snapshot rebuild recompiles
 only the candidates whose **content key** moved; every other file's
 compiled artifact and spanned index are reused from a per-file memo
-(`GraphMemo` in `crates/rex-lsp/src/server/graph.rs`). The key is a hash of
+(`GraphMemo` in `crates/phero-lsp/src/server/graph.rs`). The key is a hash of
 the file's own text plus the **open-or-disk text of every import it
 resolves** (`resolved_imports`, plus a `.mox` file's `import
 schema`/`import sigil` paths, which are not application edges) — so one
@@ -850,7 +850,7 @@ artifact, its diagnostics kept) and retried when its key moves.
 from their own compile pipelines, `.ddd`/`.actor`/`.dmn` from their compiles
 with the sibling-artifact joins, and `.evt`/`.deploy`/`.uc`/`.cmmn` — whose
 only compile is this snapshot's — from the memoized entry's own-file
-diagnostics (rexlang#255). Publishing therefore adds **no compile**: a
+diagnostics (pherolang#255). Publishing therefore adds **no compile**: a
 same-text change re-publishes the stored set and compiles nothing. A
 document with no directory (a non-file URI) has no snapshot and publishes
 nothing rather than a bogus empty set; a clean document publishes an empty
@@ -867,17 +867,17 @@ several are ambiguous and the editor answers "no location"
 
 **Application pooling.** The `.ddd` capability and `.ddd` decision joins
 pool the open document's import-connected application
-(rexlang#249) *inside* its directory snapshot:
-`crates/rex-lsp/src/server/pipeline.rs` builds `ApplicationFile`s from the
+(pherolang#249) *inside* its directory snapshot:
+`crates/phero-lsp/src/server/pipeline.rs` builds `ApplicationFile`s from the
 directory candidates' resolved imports and filters them through
-`rex_driver::applications`, mirroring `graph.rs::resolved_imports`. Open
+`phero_driver::applications`, mirroring `graph.rs::resolved_imports`. Open
 documents win over their disk copies and a non-compiling sibling contributes
 nothing.
 
 ### Definition targets
 
 One row per surface and grammatical position. Every row names the test that
-proves it in `crates/rex-lsp/src/server/tests/graph.rs` (the **Test** column);
+proves it in `crates/phero-lsp/src/server/tests/graph.rs` (the **Test** column);
 the `definition_matrix_names_the_tests_that_cover_it` test reads this table
 and fails when a row and its test drift apart.
 
@@ -928,7 +928,7 @@ reference **in that document** that the graph binds to it; `.ifml`'s
 free-string names (modules, views) keep their cross-file rename, and `.mox`
 keeps its navigation-index rename (same file).
 
-A `platformCapability` is refused outright (issue rexlang#262): it is one
+A `platformCapability` is refused outright (issue pherolang#262): it is one
 word of the closed `.deploy` vocabulary, so a rename could only produce an
 unknown-capability compile error — `cannot rename platformCapability
 'longRunningProcess': it is part of the closed deploy capability

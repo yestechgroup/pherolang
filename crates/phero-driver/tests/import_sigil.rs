@@ -1,0 +1,1953 @@
+//! Integration tests for `import sigil` declarations: a `.mox` file may
+//! import a Rune DSL (`.rosetta`) file, whose namespaces lower into
+//! synthetic pherolang packages (see the `sigil` module's normative contract).
+//!
+//! The driver is filesystem-free: rosetta content arrives through
+//! [`phero_driver::SigilImports`], keyed by `(mox file path, import path)`.
+//! Additional entries for the same mox path are candidates; the driver
+//! selects the transitive namespace closure the named file needs.
+
+use phero_driver::diagnostic::Severity;
+use phero_driver::{compile_files, compile_str, render};
+use phero_ir::{FeatureKind, TypeRef};
+
+const MOX: &str = "demo.mox";
+const TRADE: &str = "oracle/trade.rosetta";
+
+fn trade_rosetta() -> String {
+    concat!(
+        "namespace oracle.basic\n\n",
+        "type Trade:\n",
+        "    id string (1..1) <\"The trade identifier.\">\n",
+        "    quantity number (1..1)\n",
+        "    legs Trade (1..*)\n"
+    )
+    .to_string()
+}
+
+fn sigil_imports() -> phero_driver::SigilImports {
+    phero_driver::SigilImports::new().provide(MOX, TRADE, trade_rosetta())
+}
+
+/// Compiles `files` with no schema content and the given sigil content.
+fn compile_with_sigil(
+    files: &[(String, String)],
+    sigil: &phero_driver::SigilImports,
+) -> phero_driver::MultiCompilation {
+    compile_files(
+        files,
+        &phero_driver::DomainImports {
+            schemas: phero_driver::SchemaImports::new(),
+            sigil: sigil.clone(),
+        },
+    )
+}
+
+fn mox_with_sigil() -> String {
+    concat!(
+        "package demo\n\n",
+        "import sigil \"oracle/trade.rosetta\"\n\n",
+        "class Book {\n",
+        "    refers oracle.basic.Trade about\n",
+        "}\n"
+    )
+    .to_string()
+}
+
+fn compile_clean(compilation: &phero_driver::MultiCompilation) -> &phero_ir::Model {
+    let sources = [(MOX, mox_with_sigil()), (TRADE, trade_rosetta())];
+    let mut all: Vec<(String, phero_driver::Diagnostic)> = compilation.diagnostics.clone();
+    all.extend(compilation.sigil_diagnostics.clone());
+    assert!(
+        all.is_empty(),
+        "expected a clean compilation:\n{}",
+        all.iter()
+            .map(|(path, diagnostic)| render(
+                path,
+                sources
+                    .iter()
+                    .find(|(name, _)| *name == path.as_str())
+                    .map(|(_, source)| source.as_str())
+                    .unwrap_or(""),
+                std::slice::from_ref(diagnostic),
+            ))
+            .collect::<String>()
+    );
+    compilation.model.as_ref().expect("model lowered")
+}
+
+// --- the mapping contract ---------------------------------------------------
+
+#[test]
+fn data_lowers_to_a_class_with_cardinalities_and_primitive_references() {
+    let compilation = compile_with_sigil(&[(MOX.to_string(), mox_with_sigil())], &sigil_imports());
+    let model = compile_clean(&compilation);
+    assert_eq!(model.packages.len(), 2);
+    assert_eq!(model.packages[0].name, "demo");
+    assert_eq!(model.packages[1].name, "oracle.basic");
+
+    let trade = &model.packages[1].classes[0];
+    assert_eq!(trade.name, "Trade");
+    // `id string (1..1)` with the attribute definition as the description.
+    assert_eq!(trade.features[0].name, "id");
+    assert_eq!(trade.features[0].kind, FeatureKind::Attribute);
+    assert_eq!(
+        trade.features[0].type_,
+        TypeRef::Primitive(phero_ir::PrimitiveType::String)
+    );
+    assert_eq!(trade.features[0].multiplicity.lower, 1);
+    assert_eq!(
+        trade.features[0].multiplicity.upper,
+        phero_ir::Upper::Finite(1)
+    );
+    assert_eq!(
+        trade.features[0].description.as_deref(),
+        Some("The trade identifier.")
+    );
+    // `number` maps to the `double` primitive.
+    assert_eq!(
+        trade.features[1].type_,
+        TypeRef::Primitive(phero_ir::PrimitiveType::Double)
+    );
+    // `legs Trade[1..*]` — an `n..m` cardinality and a same-namespace class
+    // reference.
+    assert_eq!(
+        trade.features[2].type_,
+        TypeRef::Class {
+            package: "oracle.basic".to_string(),
+            name: "Trade".to_string(),
+        }
+    );
+    assert_eq!(trade.features[2].multiplicity.lower, 1);
+    assert_eq!(
+        trade.features[2].multiplicity.upper,
+        phero_ir::Upper::Unbounded
+    );
+}
+
+#[test]
+fn zero_to_many_and_bounded_cardinalities_map_verbatim() {
+    let rosetta = concat!(
+        "namespace oracle.card\n\n",
+        "type Bag:\n",
+        "    items string (0..*)\n",
+        "    pair string (2..10)\n"
+    );
+    let compilation = compile_with_sigil(
+        &[(
+            MOX.to_string(),
+            "package demo\n\nimport sigil \"bag.rosetta\"\n\nclass C { String x }\n".to_string(),
+        )],
+        &phero_driver::SigilImports::new().provide(MOX, "bag.rosetta", rosetta),
+    );
+    let model = compile_clean(&compilation);
+    let bag = &model.packages[1].classes[0];
+    assert_eq!(bag.features[0].multiplicity.lower, 0);
+    assert_eq!(
+        bag.features[0].multiplicity.upper,
+        phero_ir::Upper::Unbounded
+    );
+    assert_eq!(bag.features[1].multiplicity.lower, 2);
+    assert_eq!(
+        bag.features[1].multiplicity.upper,
+        phero_ir::Upper::Finite(10)
+    );
+}
+
+#[test]
+fn choice_lowers_to_an_interface_and_data_extends_it() {
+    let rosetta = concat!(
+        "namespace oracle.choice\n\n",
+        "type Product extends ProductIdentifier:\n",
+        "    kind ProductIdentifier (1..1)\n",
+        "\n",
+        "choice ProductIdentifier:\n",
+        "    Isin\n",
+        "\n",
+        "type Isin:\n",
+        "    value string (1..1)\n"
+    );
+    let compilation = compile_with_sigil(
+        &[(
+            MOX.to_string(),
+            "package demo\n\nimport sigil \"choice.rosetta\"\n\nclass C { String x }\n".to_string(),
+        )],
+        &phero_driver::SigilImports::new().provide(MOX, "choice.rosetta", rosetta),
+    );
+    let model = compile_clean(&compilation);
+    let package = &model.packages[1];
+    let product = package
+        .classes
+        .iter()
+        .find(|class| class.name == "Product")
+        .expect("the Product class");
+    assert_eq!(
+        product.extends,
+        vec![TypeRef::Interface {
+            package: "oracle.choice".to_string(),
+            name: "ProductIdentifier".to_string(),
+        }]
+    );
+    let choice = &package.interfaces[0];
+    assert_eq!(choice.name, "ProductIdentifier");
+    let isin = package
+        .classes
+        .iter()
+        .find(|class| class.name == "Isin")
+        .expect("the Isin class");
+    // Choice options are skipped (an interface declares no features); the
+    // option's implicit `(0..1)` cardinality never becomes observable.
+    assert!(choice_has_no_features_shape(package));
+    assert_eq!(isin.features[0].multiplicity.lower, 1);
+}
+
+/// pherolang interfaces carry no features: a choice lowers to a name only.
+fn choice_has_no_features_shape(package: &phero_ir::Package) -> bool {
+    package
+        .interfaces
+        .iter()
+        .all(|interface| interface.name == "ProductIdentifier")
+}
+
+#[test]
+fn enumeration_lowers_with_synthesized_values_and_display_labels() {
+    let rosetta = concat!(
+        "namespace oracle.enum\n\n",
+        "enum QuotingType: <\"How the quote was made.\">\n",
+        "    ORDER <\"Quoted by order.\">\n",
+        "    TRADE displayName \"By trade\" <\"Quoted by trade.\">\n",
+        "    COUNTER\n"
+    );
+    let compilation = compile_with_sigil(
+        &[(
+            MOX.to_string(),
+            "package demo\n\nimport sigil \"quoting.rosetta\"\n\nclass C { String x }\n"
+                .to_string(),
+        )],
+        &phero_driver::SigilImports::new().provide(MOX, "quoting.rosetta", rosetta),
+    );
+    let model = compile_clean(&compilation);
+    let enum_def = &model.packages[1].enums[0];
+    assert_eq!(enum_def.name, "QuotingType");
+    assert_eq!(
+        enum_def.description.as_deref(),
+        Some("How the quote was made.")
+    );
+    let values: Vec<(String, Option<String>, i64)> = enum_def
+        .literals
+        .iter()
+        .map(|literal| (literal.name.clone(), literal.label.clone(), literal.value))
+        .collect();
+    assert_eq!(
+        values,
+        vec![
+            ("ORDER".to_string(), None, 0),
+            ("TRADE".to_string(), Some("By trade".to_string()), 1),
+            ("COUNTER".to_string(), None, 2),
+        ]
+    );
+    assert_eq!(
+        enum_def.literals[1].description.as_deref(),
+        Some("Quoted by trade.")
+    );
+}
+
+#[test]
+fn type_alias_lowers_to_a_datatype_wrapping_the_primitive() {
+    let rosetta = concat!(
+        "namespace oracle.alias\n\n",
+        "typeAlias CurrencyCode: <\"An ISO currency code.\">\n",
+        "    string\n"
+    );
+    let compilation = compile_with_sigil(
+        &[(
+            MOX.to_string(),
+            "package demo\n\nimport sigil \"alias.rosetta\"\n\nclass C { String x }\n".to_string(),
+        )],
+        &phero_driver::SigilImports::new().provide(MOX, "alias.rosetta", rosetta),
+    );
+    let model = compile_clean(&compilation);
+    let datatype = &model.packages[1].datatypes[0];
+    assert_eq!(datatype.name, "CurrencyCode");
+    assert_eq!(datatype.platform.as_deref(), Some("string"));
+    assert_eq!(
+        datatype.description.as_deref(),
+        Some("An ISO currency code.")
+    );
+}
+
+#[test]
+fn builtin_primitives_map_to_their_pherolang_counterparts() {
+    let rosetta = concat!(
+        "namespace oracle.builtin\n\n",
+        "type All:\n",
+        "    a boolean (1..1)\n",
+        "    b string (1..1)\n",
+        "    c int (1..1)\n",
+        "    d number (1..1)\n",
+        "    e date (1..1)\n"
+    );
+    let compilation = compile_with_sigil(
+        &[(
+            MOX.to_string(),
+            "package demo\n\nimport sigil \"all.rosetta\"\n\nclass C { String x }\n".to_string(),
+        )],
+        &phero_driver::SigilImports::new().provide(MOX, "all.rosetta", rosetta),
+    );
+    let model = compile_clean(&compilation);
+    // No `com.rosetta.model` package: every reference mapped to a primitive.
+    assert_eq!(
+        model.packages.len(),
+        2,
+        "{:?}",
+        model.packages.iter().map(|p| &p.name).collect::<Vec<_>>()
+    );
+    let all = &model.packages[1].classes[0];
+    let expected = [
+        (phero_ir::PrimitiveType::Boolean, "a"),
+        (phero_ir::PrimitiveType::String, "b"),
+        (phero_ir::PrimitiveType::Int, "c"),
+        (phero_ir::PrimitiveType::Double, "d"),
+        (phero_ir::PrimitiveType::Date, "e"),
+    ];
+    for (feature, (primitive, name)) in all.features.iter().zip(expected) {
+        assert_eq!(feature.name, name);
+        assert_eq!(feature.type_, TypeRef::Primitive(primitive));
+    }
+}
+
+#[test]
+fn unmapped_builtins_lower_to_opaque_datatypes_only_when_referenced() {
+    let rosetta = concat!(
+        "namespace oracle.when\n\n",
+        "type Moment:\n",
+        "    at time (1..1)\n",
+        "    regex pattern (0..1)\n"
+    );
+    let compilation = compile_with_sigil(
+        &[(
+            MOX.to_string(),
+            "package demo\n\nimport sigil \"moment.rosetta\"\n\nclass C { String x }\n".to_string(),
+        )],
+        &phero_driver::SigilImports::new().provide(MOX, "moment.rosetta", rosetta),
+    );
+    let model = compile_clean(&compilation);
+    // `time` and `pattern` are referenced, so the `com.rosetta.model`
+    // package joins with exactly those two opaque datatypes.
+    let builtin = model
+        .packages
+        .iter()
+        .find(|package| package.name == "com.rosetta.model")
+        .expect("the builtin package is emitted when referenced");
+    assert_eq!(builtin.datatypes.len(), 2, "{:?}", builtin.datatypes);
+    assert!(builtin
+        .datatypes
+        .iter()
+        .any(|d| d.name == "time" && d.platform.is_none()));
+    assert!(builtin
+        .datatypes
+        .iter()
+        .any(|d| d.name == "pattern" && d.platform.is_none()));
+    assert!(builtin.enums.is_empty() && builtin.classes.is_empty());
+    let moment = &model.packages[1].classes[0];
+    assert_eq!(
+        moment.features[0].type_,
+        TypeRef::Datatype {
+            package: "com.rosetta.model".to_string(),
+            name: "time".to_string(),
+        }
+    );
+}
+
+#[test]
+fn builtin_namespace_is_absent_when_nothing_from_it_is_referenced() {
+    let rosetta = "namespace oracle.pure\n\ntype Plain:\n    x int (1..1)\n";
+    let compilation = compile_with_sigil(
+        &[(
+            MOX.to_string(),
+            "package demo\n\nimport sigil \"plain.rosetta\"\n\nclass C { String x }\n".to_string(),
+        )],
+        &phero_driver::SigilImports::new().provide(MOX, "plain.rosetta", rosetta),
+    );
+    let model = compile_clean(&compilation);
+    assert_eq!(model.packages.len(), 2);
+    assert!(model
+        .packages
+        .iter()
+        .all(|package| package.name != "com.rosetta.model"));
+}
+
+#[test]
+fn references_to_skipped_kinds_are_clean_errors() {
+    let rosetta = concat!(
+        "namespace oracle.rules\n\n",
+        "reporting rule Bad:\n",
+        "    True\n",
+        "\n",
+        "type Holder:\n",
+        "    thing Bad (1..1)\n"
+    );
+    let compilation = compile_with_sigil(
+        &[(
+            MOX.to_string(),
+            "package demo\n\nimport sigil \"rules.rosetta\"\n\nclass C { String x }\n".to_string(),
+        )],
+        &phero_driver::SigilImports::new().provide(MOX, "rules.rosetta", rosetta),
+    );
+    assert!(
+        compilation.model.is_none(),
+        "a reference to a skipped kind blocks the artifact"
+    );
+    let all: Vec<&phero_driver::Diagnostic> = compilation
+        .sigil_diagnostics
+        .iter()
+        .map(|(_, diagnostic)| diagnostic)
+        .collect();
+    assert!(
+        all.iter().any(|diagnostic| diagnostic.is_error()),
+        "expected a blocking error, got: {all:?}"
+    );
+}
+
+// --- namespaces -------------------------------------------------------------
+
+#[test]
+fn the_same_namespace_across_files_merges_into_one_package() {
+    let named = concat!(
+        "namespace oracle.merged\n\n",
+        "import oracle.extra.*\n\n",
+        "type First:\n",
+        "    other Extra (1..1)\n"
+    );
+    let extra = "namespace oracle.extra\n\ntype Extra:\n    x int (1..1)\n";
+    // The named file plus a candidate: the namespace import pulls the
+    // candidate in transitively.
+    let compilation = compile_with_sigil(
+        &[(
+            MOX.to_string(),
+            "package demo\n\nimport sigil \"first.rosetta\"\n\nclass C { String x }\n".to_string(),
+        )],
+        &phero_driver::SigilImports::new()
+            .provide(MOX, "first.rosetta", named)
+            .provide(MOX, "extra/extra.rosetta", extra),
+    );
+    let model = compile_clean(&compilation);
+    assert_eq!(model.packages.len(), 3);
+    assert_eq!(model.packages[1].name, "oracle.merged");
+    assert_eq!(model.packages[2].name, "oracle.extra");
+    let merged = &model.packages[1];
+    assert_eq!(merged.classes.len(), 1);
+    assert_eq!(
+        merged.classes[0].features[0].type_,
+        TypeRef::Class {
+            package: "oracle.extra".to_string(),
+            name: "Extra".to_string(),
+        }
+    );
+}
+
+#[test]
+fn same_namespace_files_without_imports_still_see_each_other() {
+    let named = "namespace oracle.sibling\n\ntype Mine:\n    yours Theirs (1..1)\n";
+    let sibling = "namespace oracle.sibling\n\ntype Theirs:\n    x int (1..1)\n";
+    let compilation = compile_with_sigil(
+        &[(
+            MOX.to_string(),
+            "package demo\n\nimport sigil \"mine.rosetta\"\n\nclass C { String x }\n".to_string(),
+        )],
+        &phero_driver::SigilImports::new()
+            .provide(MOX, "mine.rosetta", named)
+            .provide(MOX, "theirs.rosetta", sibling),
+    );
+    let model = compile_clean(&compilation);
+    assert_eq!(model.packages.len(), 2);
+    assert_eq!(
+        model.packages[1].classes.len(),
+        2,
+        "same-namespace siblings merge"
+    );
+}
+
+#[test]
+fn unselected_candidates_never_leak_into_the_artifact() {
+    let named = "namespace oracle.only\n\ntype Only:\n    x int (1..1)\n";
+    let unrelated = "namespace oracle.other\n\ntype Other:\n    x int (1..1)\n";
+    let compilation = compile_with_sigil(
+        &[(
+            MOX.to_string(),
+            "package demo\n\nimport sigil \"only.rosetta\"\n\nclass C { String x }\n".to_string(),
+        )],
+        &phero_driver::SigilImports::new()
+            .provide(MOX, "only.rosetta", named)
+            .provide(MOX, "other/other.rosetta", unrelated),
+    );
+    let model = compile_clean(&compilation);
+    assert_eq!(model.packages.len(), 2);
+    assert_eq!(model.packages[1].name, "oracle.only");
+}
+
+#[test]
+fn namespace_collision_with_a_declared_package_is_an_error_naming_both() {
+    let rosetta = "namespace demo\n\ntype Clashing:\n    x int (1..1)\n";
+    let compilation = compile_with_sigil(
+        &[(
+            MOX.to_string(),
+            "package demo\n\nimport sigil \"clash.rosetta\"\n\nclass C { String x }\n".to_string(),
+        )],
+        &phero_driver::SigilImports::new().provide(MOX, "clash.rosetta", rosetta),
+    );
+    assert!(compilation.model.is_none());
+    let (_, diagnostic) = compilation
+        .sigil_diagnostics
+        .iter()
+        .find(|(_, diagnostic)| diagnostic.message.contains("collides"))
+        .expect("the collision error");
+    assert!(
+        diagnostic.message.contains("demo") && diagnostic.message.contains(MOX),
+        "the error must name both sources: {}",
+        diagnostic.message
+    );
+    assert_eq!(
+        compilation.sigil_diagnostics[0].0, MOX,
+        "collision errors are tagged with the importing .mox file"
+    );
+}
+
+// --- diagnostics propagation --------------------------------------------------
+
+#[test]
+fn a_sigil_parse_error_surfaces_tagged_with_the_rosetta_path() {
+    let compilation = compile_with_sigil(
+        &[(
+            MOX.to_string(),
+            "package demo\n\nimport sigil \"oracle/trade.rosetta\"\n\nclass C { String x }\n"
+                .to_string(),
+        )],
+        &phero_driver::SigilImports::new().provide(
+            MOX,
+            TRADE,
+            "namespace oracle.basic\n\ntype Trade:\n    id (1..1)\n",
+        ),
+    );
+    assert!(
+        compilation.model.is_none(),
+        "parse errors block the artifact"
+    );
+    let (path, diagnostic) = compilation
+        .sigil_diagnostics
+        .iter()
+        .find(|(_, diagnostic)| diagnostic.is_error())
+        .expect("a tagged error");
+    assert_eq!(path, TRADE);
+    assert!(
+        diagnostic.span.is_some(),
+        "the span points into the rosetta text"
+    );
+}
+
+#[test]
+fn a_sigil_resolution_error_surfaces_tagged_with_the_rosetta_path() {
+    let compilation = compile_with_sigil(
+        &[(
+            MOX.to_string(),
+            "package demo\n\nimport sigil \"oracle/trade.rosetta\"\n\nclass C { String x }\n"
+                .to_string(),
+        )],
+        &phero_driver::SigilImports::new().provide(
+            MOX,
+            TRADE,
+            "namespace oracle.basic\n\ntype Trade:\n    who NoSuchType (1..1)\n",
+        ),
+    );
+    assert!(
+        compilation.model.is_none(),
+        "resolution errors block the artifact"
+    );
+    let (path, diagnostic) = compilation
+        .sigil_diagnostics
+        .iter()
+        .find(|(_, diagnostic)| diagnostic.is_error())
+        .expect("a tagged error");
+    assert_eq!(path, TRADE);
+    assert!(
+        diagnostic.message.contains("NoSuchType"),
+        "the error names the unresolved type: {}",
+        diagnostic.message
+    );
+}
+
+#[test]
+fn an_imported_namespace_no_file_declares_is_an_error() {
+    let named = concat!(
+        "namespace oracle.missing\n\n",
+        "import oracle.nowhere.*\n\n",
+        "type Lonely:\n",
+        "    other Phantom (1..1)\n"
+    );
+    let compilation = compile_with_sigil(
+        &[(
+            MOX.to_string(),
+            "package demo\n\nimport sigil \"lonely.rosetta\"\n\nclass C { String x }\n".to_string(),
+        )],
+        &phero_driver::SigilImports::new().provide(MOX, "lonely.rosetta", named),
+    );
+    assert!(compilation.model.is_none());
+    assert!(compilation
+        .sigil_diagnostics
+        .iter()
+        .any(|(path, diagnostic)| {
+            path == "lonely.rosetta"
+                && diagnostic.is_error()
+                && diagnostic.message.contains("Phantom")
+        }));
+}
+
+#[test]
+fn unselected_candidates_with_parse_errors_do_not_block_the_model() {
+    let named = "namespace oracle.fine\n\ntype Fine:\n    x int (1..1)\n";
+    let broken = "namespace oracle.broken\n\ntype Broken:\n    x (1..1)\n";
+    let compilation = compile_with_sigil(
+        &[(
+            MOX.to_string(),
+            "package demo\n\nimport sigil \"fine.rosetta\"\n\nclass C { String x }\n".to_string(),
+        )],
+        &phero_driver::SigilImports::new()
+            .provide(MOX, "fine.rosetta", named)
+            .provide(MOX, "broken/broken.rosetta", broken),
+    );
+    let model = compile_clean(&compilation);
+    assert_eq!(model.packages[1].name, "oracle.fine");
+}
+
+// --- provider contract ---------------------------------------------------------
+
+#[test]
+fn missing_content_is_an_error_with_the_schema_wording() {
+    let compilation = compile_with_sigil(
+        &[(
+            MOX.to_string(),
+            "package demo\n\nimport sigil \"oracle/trade.rosetta\"\n\nclass C { String x }\n"
+                .to_string(),
+        )],
+        &phero_driver::SigilImports::new(),
+    );
+    assert!(compilation.model.is_none());
+    let (path, diagnostic) = compilation
+        .sigil_diagnostics
+        .iter()
+        .find(|(_, diagnostic)| diagnostic.message.contains("was not provided"))
+        .expect("the not-provided diagnostic");
+    assert_eq!(
+        path, MOX,
+        "import-level errors are tagged with the .mox file"
+    );
+    assert_eq!(
+        diagnostic.message,
+        "imported sigil 'oracle/trade.rosetta' was not provided"
+    );
+}
+
+#[test]
+fn content_provided_for_another_file_does_not_satisfy_the_import() {
+    let compilation = compile_with_sigil(
+        &[
+            (MOX.to_string(), mox_with_sigil()),
+            (
+                "other.mox".to_string(),
+                "package other\n\nclass Unrelated { String x }\n".to_string(),
+            ),
+        ],
+        &phero_driver::SigilImports::new().provide("other.mox", TRADE, trade_rosetta()),
+    );
+    assert!(
+        compilation.sigil_diagnostics.iter().any(
+            |(path, diagnostic)| path == MOX && diagnostic.message.contains("was not provided")
+        ),
+        "content keyed by another .mox file must not satisfy the import: {:?}",
+        compilation.sigil_diagnostics
+    );
+}
+
+#[test]
+fn compile_str_and_compile_files_error_without_imports() {
+    let compilation = phero_driver::compile_str(
+        MOX,
+        "package demo\n\nimport sigil \"x.rosetta\"\n\nclass C { String x }\n",
+        &phero_driver::DomainImports::default(),
+    );
+    assert!(compilation.model.is_none());
+    assert!(
+        compilation
+            .sigil_diagnostics
+            .iter()
+            .any(|(path, diagnostic)| path == MOX
+                && diagnostic.message == "imported sigil 'x.rosetta' was not provided"),
+        "{:?}",
+        compilation.sigil_diagnostics
+    );
+    let compilation = compile_files(
+        &[(
+            MOX.to_string(),
+            "package demo\n\nimport sigil \"x.rosetta\"\n\nclass C { String x }\n".to_string(),
+        )],
+        &phero_driver::DomainImports::default(),
+    );
+    assert!(compilation.model.is_none());
+    assert!(
+        compilation
+            .sigil_diagnostics
+            .iter()
+            .any(|(_, diagnostic)| diagnostic.message.contains("was not provided")),
+        "{:?}",
+        compilation.sigil_diagnostics
+    );
+}
+
+#[test]
+fn compile_files_is_unchanged_without_sigil_imports() {
+    // Byte compatibility: a model without `import sigil` compiles to the
+    // identical IR and diagnostics whether or not the new API is used.
+    let files = vec![
+        (
+            "a.mox".to_string(),
+            "package a\n\nclass Book { String title }".to_string(),
+        ),
+        (
+            "b.mox".to_string(),
+            "package b\n\nclass Shelf { refers a.Book[] links }".to_string(),
+        ),
+    ];
+    let plain = compile_files(&files, &phero_driver::DomainImports::default());
+    let with = compile_files(
+        &files,
+        &phero_driver::DomainImports {
+            schemas: phero_driver::SchemaImports::new(),
+            sigil: phero_driver::SigilImports::new(),
+        },
+    );
+    assert_eq!(
+        plain
+            .model
+            .as_ref()
+            .map(|model| model.to_json_pretty().expect("serialize")),
+        with.model
+            .as_ref()
+            .map(|model| model.to_json_pretty().expect("serialize")),
+        "IR must be identical without import-sigil declarations"
+    );
+    assert_eq!(plain.diagnostics, with.diagnostics);
+    assert!(with.sigil_diagnostics.is_empty());
+}
+
+// --- importing-package interaction -----------------------------------------------
+
+#[test]
+fn the_importing_package_resolves_bare_and_qualified_references() {
+    let compilation = compile_with_sigil(
+        &[(
+            MOX.to_string(),
+            concat!(
+                "package demo\n\n",
+                "import sigil \"oracle/trade.rosetta\"\n\n",
+                "class Book {\n",
+                "    refers Trade bare\n",
+                "    refers oracle.basic.Trade qualified\n",
+                "}\n"
+            )
+            .to_string(),
+        )],
+        &sigil_imports(),
+    );
+    let model = compile_clean(&compilation);
+    let book = &model.packages[0].classes[0];
+    assert_eq!(
+        book.features[0].type_,
+        TypeRef::Class {
+            package: "oracle.basic".to_string(),
+            name: "Trade".to_string(),
+        }
+    );
+    assert_eq!(book.features[1].type_, book.features[0].type_);
+}
+
+#[test]
+fn a_bare_name_collision_with_a_mox_class_is_the_ambiguous_type_error() {
+    let compilation = compile_with_sigil(
+        &[(
+            MOX.to_string(),
+            concat!(
+                "package demo\n\n",
+                "import sigil \"oracle/trade.rosetta\"\n\n",
+                "class Trade { String x }\n\n",
+                "class Book {\n",
+                "    refers Trade ambiguous\n",
+                "}\n"
+            )
+            .to_string(),
+        )],
+        &sigil_imports(),
+    );
+    assert!(compilation.model.is_none());
+    let (_, diagnostic) = compilation
+        .diagnostics
+        .iter()
+        .find(|(_, diagnostic)| diagnostic.message.contains("ambiguous type `Trade`"))
+        .expect("the existing ambiguous-type error");
+    assert!(
+        diagnostic.message.contains("qualify as"),
+        "{:?}",
+        diagnostic.message
+    );
+}
+
+#[test]
+fn cross_package_mox_declarations_resolve_sigil_names_too() {
+    let rosetta = "namespace oracle.shared\n\ntype Shared:\n    x int (1..1)\n";
+    let compilation = compile_with_sigil(
+        &[
+            (
+                "a.mox".to_string(),
+                "package a\n\nimport sigil \"shared.rosetta\"\n\nclass Holder { refers Shared s }\n"
+                    .to_string(),
+            ),
+            (
+                "b.mox".to_string(),
+                "package b\n\nclass Other { refers oracle.shared.Shared s }\n".to_string(),
+            ),
+        ],
+        &phero_driver::SigilImports::new().provide("a.mox", "shared.rosetta", rosetta),
+    );
+    assert!(
+        compilation.diagnostics.is_empty() && compilation.sigil_diagnostics.is_empty(),
+        "sigil namespaces join the whole compilation's union namespace: {:?}",
+        compilation.diagnostics
+    );
+    let model = compilation.model.expect("model lowered");
+    assert_eq!(model.packages.len(), 3);
+    assert_eq!(model.packages[2].name, "oracle.shared");
+}
+
+#[test]
+fn namespaces_order_by_first_appearance_across_import_declarations() {
+    let alpha = "namespace oracle.alpha\n\ntype A:\n    x int (1..1)\n";
+    let beta = concat!(
+        "namespace oracle.beta\n\n",
+        "import oracle.alpha.*\n\n",
+        "type B:\n",
+        "    a A (1..1)\n"
+    );
+    // `beta` is declared first but its closure pulls `alpha` in; the
+    // first-appearance order is by the namespaces the named files declare.
+    let compilation = compile_with_sigil(
+        &[(
+            MOX.to_string(),
+            concat!(
+                "package demo\n\n",
+                "import sigil \"beta.rosetta\"\n\n",
+                "class C { String x }\n"
+            )
+            .to_string(),
+        )],
+        &phero_driver::SigilImports::new()
+            .provide(MOX, "beta.rosetta", beta)
+            .provide(MOX, "alpha/alpha.rosetta", alpha),
+    );
+    let model = compile_clean(&compilation);
+    assert_eq!(model.packages.len(), 3);
+    assert_eq!(model.packages[1].name, "oracle.beta");
+    assert_eq!(model.packages[2].name, "oracle.alpha");
+}
+
+// --- single-file pipeline ---------------------------------------------------------
+
+#[test]
+fn the_single_file_pipeline_switches_to_the_union_scope_with_sigil_namespaces() {
+    let compilation = compile_str(
+        MOX,
+        &mox_with_sigil(),
+        &phero_driver::DomainImports {
+            schemas: phero_driver::SchemaImports::new(),
+            sigil: sigil_imports(),
+        },
+    );
+    assert!(
+        compilation.diagnostics.is_empty() && compilation.sigil_diagnostics.is_empty(),
+        "{:?} {:?}",
+        compilation.diagnostics,
+        compilation.sigil_diagnostics
+    );
+    let model = compilation.model.expect("model lowered");
+    assert_eq!(model.packages.len(), 2);
+    let book = &model.packages[0].classes[0];
+    assert_eq!(
+        book.features[0].type_,
+        TypeRef::Class {
+            package: "oracle.basic".to_string(),
+            name: "Trade".to_string(),
+        }
+    );
+}
+
+// --- .actor union path ---------------------------------------------------------
+
+#[test]
+fn a_domain_with_a_sigil_import_errors_cleanly_in_the_actor_path() {
+    // Sigil imports are not lowered in the `.actor`/`.ddd` union path yet;
+    // declaring one is the not-provided error on the declaring domain.
+    let domain = concat!(
+        "package demo\n\n",
+        "import sigil \"oracle/trade.rosetta\"\n\n",
+        "class Wrapper { String x }\n"
+    );
+    let actor = concat!(
+        "import \"demo.mox\"\n\n",
+        "actors Ops {\n",
+        "    actor Agent\n",
+        "    capability Touch on Wrapper\n",
+        "    grant Agent { permit Touch }\n",
+        "}\n"
+    );
+    let compilation = phero_driver::compile_actors_str(
+        "ops.actor",
+        actor,
+        &[("demo.mox".to_string(), domain.to_string())],
+        &phero_driver::DomainImports::default(),
+    );
+    assert!(compilation.model.is_none());
+    assert!(
+        compilation
+            .diagnostics
+            .iter()
+            .any(|(path, diagnostic)| path == "demo.mox"
+                && diagnostic.message == "imported sigil 'oracle/trade.rosetta' was not provided"),
+        "{:?}",
+        compilation.diagnostics
+    );
+}
+
+// --- the .actor and .ddd pipelines over sigil-importing domains ---------------
+
+fn actor_source() -> String {
+    concat!(
+        "import \"demo.mox\"\n\n",
+        "actors Ops {\n",
+        "    actor Agent\n",
+        "    capability TouchTrade on Trade\n",
+        "    grant Agent {\n",
+        "        permit TouchTrade when (id == \"T1\")\n",
+        "    }\n",
+        "}\n"
+    )
+    .to_string()
+}
+
+#[test]
+fn actor_pipeline_resolves_sigil_domain_types() {
+    // The capability targets a lowered rosetta class and its `when`
+    // condition type-checks against a rosetta feature.
+    let compilation = phero_driver::compile_actors_str(
+        "ops.actor",
+        &actor_source(),
+        &[(MOX.to_string(), mox_with_sigil())],
+        &phero_driver::DomainImports {
+            schemas: phero_driver::SchemaImports::new(),
+            sigil: sigil_imports(),
+        },
+    );
+    // Clean except the use-based guard lint (issue #142): `id` is a plain
+    // String rosetta feature compared to a literal in the capability
+    // `when`, so the comparison warns that the field could be an enum.
+    // A warning, not an error — the actor model still lowers.
+    let warnings: Vec<_> = compilation
+        .diagnostics
+        .iter()
+        .filter(|(_, diagnostic)| diagnostic.severity == Severity::Warning)
+        .map(|(_, diagnostic)| &diagnostic.message)
+        .collect();
+    assert_eq!(warnings.len(), 1, "{:?}", compilation.diagnostics);
+    assert!(warnings[0].contains("`id`"), "{warnings:?}");
+    assert!(
+        compilation
+            .diagnostics
+            .iter()
+            .all(|(_, diagnostic)| diagnostic.severity != Severity::Error),
+        "expected no errors: {:?}",
+        compilation.diagnostics
+    );
+    let model = compilation.model.expect("actor model lowered");
+    let block = &model.blocks[0];
+    assert_eq!(block.capabilities[0].name, "TouchTrade");
+    assert_eq!(
+        block.capabilities[0].class,
+        phero_ir::TypeRef::Class {
+            package: "oracle.basic".to_string(),
+            name: "Trade".to_string(),
+        }
+    );
+    // The union model carries the synthetic packages for Cedar lookup.
+    let domains_model = compilation.domains_model.expect("domains lowered");
+    assert!(domains_model
+        .packages
+        .iter()
+        .any(|package| package.name == "oracle.basic"));
+}
+
+#[test]
+fn ddd_pipeline_designs_sigil_domain_types() {
+    // A rosetta class with no containment into it is an aggregate root: a
+    // repository is legal, and a search over its string feature type-checks.
+    let design = concat!(
+        "import \"demo.mox\"\n",
+        "\n",
+        "application Trading {\n",
+        "    base oracle.basic\n",
+        "\n",
+        "    module trade {\n",
+        "        entity Trade repository TradeRepository {\n",
+        "            findAll;\n",
+        "            Trade findById(String id);\n",
+        "        }\n",
+        "        search TradeSearch {\n",
+        "            entity Trade\n",
+        "            text {\n",
+        "                id\n",
+        "            }\n",
+        "        }\n",
+        "    }\n",
+        "}\n",
+    );
+    let compilation = phero_driver::compile_ddd_str(
+        "design.ddd",
+        design,
+        &[(MOX.to_string(), mox_with_sigil())],
+        &phero_driver::DomainImports {
+            schemas: phero_driver::SchemaImports::new(),
+            sigil: sigil_imports(),
+        },
+    );
+    assert!(
+        compilation.diagnostics.is_empty(),
+        "unexpected diagnostics: {:?}",
+        compilation.diagnostics
+    );
+    let model = compilation.model.expect("design lowered");
+    let design = &model.modules[0].designs[0];
+    assert_eq!(design.class, "Trade");
+    assert!(design.repository.is_some());
+    // The union model carries the synthetic packages for consumers.
+    let domains_model = compilation.domains_model.expect("domains lowered");
+    assert!(domains_model
+        .packages
+        .iter()
+        .any(|package| package.name == "oracle.basic"));
+}
+
+#[test]
+fn missing_sigil_content_blocks_the_actor_domain() {
+    let compilation = phero_driver::compile_actors_str(
+        "ops.actor",
+        &actor_source(),
+        &[(MOX.to_string(), mox_with_sigil())],
+        &phero_driver::DomainImports::default(),
+    );
+    assert!(
+        compilation
+            .diagnostics
+            .iter()
+            .any(|(path, diagnostic)| path == MOX
+                && diagnostic
+                    .message
+                    .contains("imported sigil 'oracle/trade.rosetta' was not provided")),
+        "the not-provided error names the domain: {:?}",
+        compilation.diagnostics
+    );
+    assert!(compilation.model.is_none());
+    assert!(compilation.domains_model.is_none());
+}
+
+#[test]
+fn actor_pipeline_resolves_declared_schema_and_sigil_names_from_one_domain() {
+    // The model is the single source of the domain's kind registry: one
+    // domain file contributes its declared class (Wrapper), its
+    // `import schema` nominal class (TodoItem), and a synthetic sigil
+    // package (oracle.basic.Trade) — capabilities on all three resolve.
+    let domain = concat!(
+        "package demo\n\n",
+        "import schema \"schemas/todo_item.json\" as TodoItem\n",
+        "import sigil \"oracle/trade.rosetta\"\n\n",
+        "class Wrapper { String x }\n"
+    );
+    let actor = concat!(
+        "import \"demo.mox\"\n\n",
+        "actors Ops {\n",
+        "    actor Agent\n",
+        "    capability TouchWrapper on Wrapper\n",
+        "    capability TouchItem on TodoItem\n",
+        "    capability TouchTrade on Trade\n",
+        "    grant Agent { permit TouchWrapper }\n",
+        "    grant Agent { permit TouchItem }\n",
+        "    grant Agent { permit TouchTrade }\n",
+        "}\n"
+    );
+    let compilation = phero_driver::compile_actors_str(
+        "ops.actor",
+        actor,
+        &[(MOX.to_string(), domain.to_string())],
+        &phero_driver::DomainImports {
+            schemas: phero_driver::SchemaImports::new().provide(
+                MOX,
+                "schemas/todo_item.json",
+                "{\"title\": \"Todo item\"}",
+            ),
+            sigil: sigil_imports(),
+        },
+    );
+    assert!(
+        compilation.diagnostics.is_empty(),
+        "unexpected diagnostics: {:?}",
+        compilation.diagnostics
+    );
+    let model = compilation.model.expect("actor model lowered");
+    let block = &model.blocks[0];
+    assert_eq!(
+        block.capabilities[0].class,
+        TypeRef::Class {
+            package: "demo".to_string(),
+            name: "Wrapper".to_string(),
+        }
+    );
+    assert_eq!(
+        block.capabilities[1].class,
+        TypeRef::Class {
+            package: "demo".to_string(),
+            name: "TodoItem".to_string(),
+        }
+    );
+    assert_eq!(
+        block.capabilities[2].class,
+        TypeRef::Class {
+            package: "oracle.basic".to_string(),
+            name: "Trade".to_string(),
+        }
+    );
+}
+
+#[test]
+fn sigil_content_errors_surface_tagged_with_the_rosetta_path() {
+    // A rosetta attribute typed by an unknown name fails resolution; the
+    // diagnostic is keyed by the rosetta path and blocks the artifact.
+    let broken = concat!(
+        "namespace oracle.basic\n\n",
+        "type Trade:\n",
+        "    id bogus (1..1)\n"
+    );
+    let compilation = phero_driver::compile_ddd_str(
+        "design.ddd",
+        concat!(
+            "import \"demo.mox\"\n",
+            "\n",
+            "application Trading {\n",
+            "    module trade {\n",
+            "        entity Trade\n",
+            "    }\n",
+            "}\n",
+        ),
+        &[(MOX.to_string(), mox_with_sigil())],
+        &phero_driver::DomainImports {
+            schemas: phero_driver::SchemaImports::new(),
+            sigil: phero_driver::SigilImports::new().provide(MOX, TRADE, broken),
+        },
+    );
+    assert!(
+        compilation
+            .diagnostics
+            .iter()
+            .any(|(path, _)| path == TRADE),
+        "sigil diagnostics are keyed by the rosetta path: {:?}",
+        compilation.diagnostics
+    );
+    assert!(compilation.model.is_none());
+    assert!(compilation.domains_model.is_none());
+}
+
+// --- per-namespace blocking -------------------------------------------------------
+
+/// The two-domain actor harness for the blocking tests: `a.mox` and
+/// `b.mox` are compiled through the `.actor` union path, and the actor
+/// file's `capability ... on <target>` must resolve against whatever
+/// domains survived. `target` names the capability's class (a plain alpha
+/// class, or a rosetta class lowered through `a.mox`'s import).
+fn two_domain_actor(
+    target: &str,
+    sigil: &phero_driver::SigilImports,
+) -> phero_driver::ActorCompilation {
+    let domain_a = concat!(
+        "package alpha\n\n",
+        "import sigil \"good.rosetta\"\n\n",
+        "class Wrapper { String x }\n"
+    );
+    let domain_b = concat!(
+        "package beta\n\n",
+        "import sigil \"bad.rosetta\"\n\n",
+        "class Other { String x }\n"
+    );
+    let actor = format!(
+        concat!(
+            "import \"a.mox\"\n",
+            "import \"b.mox\"\n\n",
+            "actors Ops {{\n",
+            "    actor Agent\n",
+            "    capability Touch on {target}\n",
+            "    grant Agent {{ permit Touch }}\n",
+            "}}\n"
+        ),
+        target = target
+    );
+    phero_driver::compile_actors_str(
+        "ops.actor",
+        &actor,
+        &[
+            ("a.mox".to_string(), domain_a.to_string()),
+            ("b.mox".to_string(), domain_b.to_string()),
+        ],
+        &phero_driver::DomainImports {
+            schemas: phero_driver::SchemaImports::new(),
+            sigil: sigil.clone(),
+        },
+    )
+}
+
+fn good_rosetta() -> &'static str {
+    "namespace oracle.good\n\ntype Fine:\n    x int (1..1)\n"
+}
+
+/// The only error must be the failing namespace's, keyed by its rosetta
+/// path: no fallout in the surviving domain (`a.mox`) or the actor file
+/// (`capability on <target>` resolved, so the model survived), and the
+/// declaring domain's own model dropped (the domain union is incomplete).
+fn assert_only_the_rosetta_error_remains(
+    compilation: &phero_driver::ActorCompilation,
+    key: &str,
+    needle: &str,
+) {
+    assert!(
+        compilation.model.is_some(),
+        "the actor artifact depends on nothing that failed: {:?}",
+        compilation.diagnostics
+    );
+    assert!(
+        compilation.domains_model.is_none(),
+        "the declaring domain's model must have dropped"
+    );
+    let errors: Vec<&(String, phero_driver::Diagnostic)> = compilation
+        .diagnostics
+        .iter()
+        .filter(|(_, diagnostic)| diagnostic.is_error())
+        .collect();
+    assert_eq!(errors.len(), 1, "{:?}", compilation.diagnostics);
+    assert_eq!(errors[0].0, key, "keyed by the rosetta path");
+    assert!(
+        errors[0].1.message.contains(needle),
+        "{:?}",
+        errors[0].1.message
+    );
+    assert!(
+        compilation
+            .diagnostics
+            .iter()
+            .all(|(path, _)| path != "a.mox" && path != "ops.actor"),
+        "no fallout in the surviving domain or the actor file: {:?}",
+        compilation.diagnostics
+    );
+}
+
+#[test]
+fn a_failing_rosetta_namespace_blocks_only_its_declaring_file() {
+    // beta's rosetta fails resolution; alpha's namespace lowers cleanly.
+    // The capability targets alpha's own class: alpha's model must have
+    // survived (under the old coarse blocking it dropped too, and the
+    // capability resolution would add a second error).
+    let compilation = two_domain_actor(
+        "Wrapper",
+        &phero_driver::SigilImports::new()
+            .provide("a.mox", "good.rosetta", good_rosetta())
+            .provide(
+                "b.mox",
+                "bad.rosetta",
+                "namespace oracle.bad\n\ntype Broken:\n    who NoSuchType (1..1)\n",
+            ),
+    );
+    assert_only_the_rosetta_error_remains(&compilation, "bad.rosetta", "NoSuchType");
+}
+
+#[test]
+fn the_surviving_domains_synthetic_packages_stay_resolvable() {
+    // As above, but the capability targets the rosetta class itself: the
+    // successful namespace's synthetic package must have joined the union
+    // namespace through the surviving domain's model.
+    let compilation = two_domain_actor(
+        "Fine",
+        &phero_driver::SigilImports::new()
+            .provide("a.mox", "good.rosetta", good_rosetta())
+            .provide(
+                "b.mox",
+                "bad.rosetta",
+                "namespace oracle.bad\n\ntype Broken:\n    who NoSuchType (1..1)\n",
+            ),
+    );
+    assert_only_the_rosetta_error_remains(&compilation, "bad.rosetta", "NoSuchType");
+}
+
+#[test]
+fn an_unparseable_rosetta_file_blocks_only_its_declaring_file() {
+    // A parse failure names no namespace: only beta's model drops.
+    let compilation = two_domain_actor(
+        "Wrapper",
+        &phero_driver::SigilImports::new()
+            .provide("a.mox", "good.rosetta", good_rosetta())
+            .provide(
+                "b.mox",
+                "bad.rosetta",
+                "namespace oracle.bad\n\ntype Broken:\n    who (1..1)\n",
+            ),
+    );
+    assert_only_the_rosetta_error_remains(&compilation, "bad.rosetta", "expected");
+}
+
+#[test]
+fn a_domain_without_sigil_imports_survives_another_domains_sigil_failure() {
+    // alpha declares no sigil import at all; beta's rosetta fails. alpha's
+    // model must survive (the old coarse blocking dropped every domain).
+    let domain_a = "package alpha\n\nclass Wrapper { String x }\n".to_string();
+    let domain_b = concat!(
+        "package beta\n\n",
+        "import sigil \"bad.rosetta\"\n\n",
+        "class Other { String x }\n"
+    )
+    .to_string();
+    let actor = concat!(
+        "import \"a.mox\"\n",
+        "import \"b.mox\"\n\n",
+        "actors Ops {\n",
+        "    actor Agent\n",
+        "    capability Touch on Wrapper\n",
+        "    grant Agent { permit Touch }\n",
+        "}\n"
+    );
+    let compilation = phero_driver::compile_actors_str(
+        "ops.actor",
+        actor,
+        &[
+            ("a.mox".to_string(), domain_a),
+            ("b.mox".to_string(), domain_b),
+        ],
+        &phero_driver::DomainImports {
+            schemas: phero_driver::SchemaImports::new(),
+            sigil: phero_driver::SigilImports::new().provide(
+                "b.mox",
+                "bad.rosetta",
+                "namespace oracle.bad\n\ntype Broken:\n    who NoSuchType (1..1)\n",
+            ),
+        },
+    );
+    assert_only_the_rosetta_error_remains(&compilation, "bad.rosetta", "NoSuchType");
+}
+
+#[test]
+fn references_into_a_failed_namespace_error_on_the_referencing_file() {
+    // The failed namespace's names stay out of the union resolution
+    // namespace: beta's reference to its own (failed) rosetta type errors
+    // on beta, while alpha and the actor file stay clean.
+    let domain_a = concat!(
+        "package alpha\n\n",
+        "import sigil \"good.rosetta\"\n\n",
+        "class Wrapper { String x }\n"
+    )
+    .to_string();
+    let domain_b = concat!(
+        "package beta\n\n",
+        "import sigil \"bad.rosetta\"\n\n",
+        "class Other { refers oracle.bad.Broken x }\n"
+    )
+    .to_string();
+    let actor = concat!(
+        "import \"a.mox\"\n",
+        "import \"b.mox\"\n\n",
+        "actors Ops {\n",
+        "    actor Agent\n",
+        "    capability Touch on Wrapper\n",
+        "    grant Agent { permit Touch }\n",
+        "}\n"
+    );
+    let compilation = phero_driver::compile_actors_str(
+        "ops.actor",
+        actor,
+        &[
+            ("a.mox".to_string(), domain_a),
+            ("b.mox".to_string(), domain_b),
+        ],
+        &phero_driver::DomainImports {
+            schemas: phero_driver::SchemaImports::new(),
+            sigil: phero_driver::SigilImports::new()
+                .provide("a.mox", "good.rosetta", good_rosetta())
+                .provide(
+                    "b.mox",
+                    "bad.rosetta",
+                    "namespace oracle.bad\n\ntype Broken:\n    who NoSuchType (1..1)\n",
+                ),
+        },
+    );
+    assert!(compilation.model.is_none());
+    // beta's own reference error, tagged with its file; the sigil content
+    // error, keyed by the rosetta path; nothing else.
+    assert!(compilation.diagnostics.iter().any(|(path, diagnostic)| {
+        path == "b.mox"
+            && diagnostic.is_error()
+            && diagnostic
+                .message
+                .contains("unknown type 'oracle.bad.Broken'")
+    }));
+    assert!(compilation
+        .diagnostics
+        .iter()
+        .any(|(path, _)| path == "bad.rosetta"));
+    assert!(compilation
+        .diagnostics
+        .iter()
+        .all(|(path, _)| path != "a.mox" && path != "ops.actor"));
+}
+
+// --- rule 8: func / library function lowering ------------------------------
+
+/// A user-namespace `func` lowers to a signature-only pherolang operation:
+/// inputs → parameters (with cardinalities), output → return type,
+/// definition → description, the declaration's complete Rune source rides
+/// verbatim as the `"rosetta"` body target, and the type-checked statement
+/// body rides beside it as the `"rune"` target (the pinned canonical JSON).
+#[test]
+fn a_user_function_lowers_to_a_signature_only_operation() {
+    let rosetta = concat!(
+        "namespace oracle.func\n\n",
+        "type Trade:\n",
+        "    price number (1..1)\n",
+        "\n",
+        "func Rate: <\"Compute the rate of a trade.\">\n",
+        "    inputs:\n",
+        "        trade Trade (1..1)\n",
+        "        tags string (0..*)\n",
+        "    output:\n",
+        "        rate number (1..1)\n",
+        "\n",
+        "    set rate:\n",
+        "        trade -> price\n"
+    );
+    let compilation = compile_with_sigil(
+        &[(
+            MOX.to_string(),
+            "package demo\n\nimport sigil \"f.rosetta\"\n\nclass C { String x }\n".to_string(),
+        )],
+        &phero_driver::SigilImports::new().provide(MOX, "f.rosetta", rosetta),
+    );
+    let model = compile_clean(&compilation);
+    let package = &model.packages[1];
+    assert_eq!(package.name, "oracle.func");
+    assert_eq!(package.functions.len(), 1, "one func, one operation");
+    let function = &package.functions[0];
+    assert_eq!(function.name, "Rate");
+    assert_eq!(
+        function.description.as_deref(),
+        Some("Compute the rate of a trade.")
+    );
+    assert_eq!(
+        function.return_type,
+        TypeRef::Primitive(phero_ir::PrimitiveType::Double)
+    );
+    assert_eq!(function.params.len(), 2);
+    assert_eq!(function.params[0].name, "trade");
+    assert_eq!(
+        function.params[0].type_,
+        TypeRef::Class {
+            package: "oracle.func".to_string(),
+            name: "Trade".to_string()
+        }
+    );
+    // The required `(1..1)` stays unset (the domain-operation convention);
+    // `0..*` lowers verbatim.
+    assert_eq!(function.params[0].multiplicity, None);
+    assert_eq!(function.params[1].name, "tags");
+    assert_eq!(
+        function.params[1].multiplicity,
+        Some(phero_ir::Multiplicity {
+            lower: 0,
+            upper: phero_ir::Upper::Unbounded
+        })
+    );
+    // The verbatim body is the complete declaration text, ends-trimmed
+    // (contract rule 8): sigil spans consume trailing whitespace, and the
+    // artifact never carries the declaration's trailing blank line.
+    let body = function.bodies.get("rosetta").expect("rosetta body");
+    assert!(body.starts_with("func Rate:"), "{body:?}");
+    assert!(body.contains("set rate:"), "{body:?}");
+    assert!(!body.ends_with(char::is_whitespace), "{body:?}");
+    // The statement body lowers beside it: one `set` step navigating the
+    // input's feature, serialized in the pinned canonical shape.
+    assert_eq!(
+        function.bodies.get("rune").map(String::as_str),
+        Some("{\"steps\":[{\"kind\":\"set\",\"root\":\"rate\",\"expr\":\"trade.price\"}]}"),
+        "{:?}",
+        function.bodies
+    );
+}
+
+/// The funcs-fixture shape: a named pre condition over the inputs plus a
+/// `set` of the output slot. The guard serializes with its written name and
+/// the `pre` phase; the fixture's canonical golden carries the same bytes.
+#[test]
+fn a_statement_bearing_function_lowers_guard_and_set_into_a_rune_body() {
+    let rosetta = concat!(
+        "namespace oracle.rate\n\n",
+        "func calcRate:\n",
+        "    inputs:\n",
+        "        notional number (1..1)\n",
+        "    output:\n",
+        "        rate number (1..1)\n",
+        "\n",
+        "    condition PositiveNotional:\n",
+        "        notional > 0.0\n",
+        "\n",
+        "    set rate:\n",
+        "        notional\n"
+    );
+    let compilation = compile_with_sigil(
+        &[(
+            MOX.to_string(),
+            "package demo\n\nimport sigil \"c.rosetta\"\n\nclass C { String x }\n".to_string(),
+        )],
+        &phero_driver::SigilImports::new().provide(MOX, "c.rosetta", rosetta),
+    );
+    let model = compile_clean(&compilation);
+    let function = &model.packages[1].functions[0];
+    assert_eq!(function.name, "calcRate");
+    assert_eq!(
+        function.bodies.get("rune").map(String::as_str),
+        Some("{\"guards\":[{\"expr\":\"notional > 0.0\",\"name\":\"PositiveNotional\",\"phase\":\"pre\"}],\"steps\":[{\"kind\":\"set\",\"root\":\"rate\",\"expr\":\"notional\"}]}"),
+        "{:?}",
+        function.bodies
+    );
+}
+
+/// A statement fragment phero-expr cannot type defers the whole `"rune"`
+/// body: ONE warning names the function and the failing slot, the
+/// `"rosetta"` text is untouched, the operation still lowers, and no error
+/// blocks the namespace (the documented generation-time deferral contract).
+#[test]
+fn a_function_with_untypeable_statements_defers_the_rune_body_with_a_warning() {
+    let rosetta = concat!(
+        "namespace oracle.defer\n\n",
+        "type Trade:\n",
+        "    price number (1..1)\n",
+        "\n",
+        "func Rate:\n",
+        "    inputs:\n",
+        "        trade Trade (1..1)\n",
+        "    output:\n",
+        "        rate number (1..1)\n",
+        "\n",
+        "    condition Present:\n",
+        "        trade exists\n",
+        "\n",
+        "    set rate:\n",
+        "        1.0\n"
+    );
+    let compilation = compile_with_sigil(
+        &[(
+            MOX.to_string(),
+            "package demo\n\nimport sigil \"d.rosetta\"\n\nclass C { String x }\n".to_string(),
+        )],
+        &phero_driver::SigilImports::new().provide(MOX, "d.rosetta", rosetta),
+    );
+    // No error blocks the namespace.
+    assert!(
+        compilation
+            .sigil_diagnostics
+            .iter()
+            .chain(compilation.diagnostics.iter())
+            .all(|(_, diagnostic)| !diagnostic.is_error()),
+        "{:?}",
+        compilation.sigil_diagnostics
+    );
+    // ONE warning names the function and the failing slot (`trade exists`
+    // has no phero-expr form).
+    let warnings: Vec<_> = compilation
+        .sigil_diagnostics
+        .iter()
+        .filter(|(path, diagnostic)| path == "d.rosetta" && !diagnostic.is_error())
+        .collect();
+    assert_eq!(warnings.len(), 1, "{warnings:?}");
+    assert!(
+        warnings[0].1.message.contains("Rate")
+            && warnings[0].1.message.contains("rune")
+            && warnings[0].1.message.contains("guard 'Present'"),
+        "{:?}",
+        warnings[0].1.message
+    );
+    // The operation still lowers; the verbatim body stays, no rune body.
+    let model = compilation.model.as_ref().expect("namespace still lowers");
+    let function = &model
+        .packages
+        .iter()
+        .find(|p| p.name == "oracle.defer")
+        .expect("namespace package")
+        .functions[0];
+    assert_eq!(function.name, "Rate");
+    assert!(function.bodies.contains_key("rosetta"));
+    assert!(
+        !function.bodies.contains_key("rune"),
+        "{:?}",
+        function.bodies
+    );
+}
+
+/// A typecheck failure defers the `"rune"` body with the same warning
+/// shape: the guard types, but the step writes a `string` into a `double`
+/// slot.
+#[test]
+fn a_failing_statement_typecheck_defers_the_rune_body_with_a_warning() {
+    let rosetta = concat!(
+        "namespace oracle.mismatch\n\n",
+        "func Bad:\n",
+        "    inputs:\n",
+        "        legId string (1..1)\n",
+        "    output:\n",
+        "        rate number (1..1)\n",
+        "\n",
+        "    set rate:\n",
+        "        legId\n"
+    );
+    let compilation = compile_with_sigil(
+        &[(
+            MOX.to_string(),
+            "package demo\n\nimport sigil \"m.rosetta\"\n\nclass C { String x }\n".to_string(),
+        )],
+        &phero_driver::SigilImports::new().provide(MOX, "m.rosetta", rosetta),
+    );
+    let warnings: Vec<_> = compilation
+        .sigil_diagnostics
+        .iter()
+        .filter(|(path, diagnostic)| path == "m.rosetta" && !diagnostic.is_error())
+        .collect();
+    assert_eq!(warnings.len(), 1, "{warnings:?}");
+    assert!(
+        warnings[0].1.message.contains("Bad") && warnings[0].1.message.contains("set 'rate'"),
+        "{:?}",
+        warnings[0].1.message
+    );
+    let model = compilation.model.as_ref().expect("namespace still lowers");
+    let function = &model
+        .packages
+        .iter()
+        .find(|p| p.name == "oracle.mismatch")
+        .expect("namespace package")
+        .functions[0];
+    assert!(!function.bodies.contains_key("rune"));
+}
+
+/// A `library function` carries no statements in the sigil AST and a
+/// statement-less `func` carries none either: neither ever grows a `"rune"`
+/// body — the `"rosetta"` verbatim target is the only body.
+#[test]
+fn statement_less_functions_never_carry_a_rune_body() {
+    let rosetta = concat!(
+        "namespace oracle.plain\n\n",
+        "library function Round(x number, cents int[]) boolean <\"Round a number.\">\n",
+        "\n",
+        "func tradeIds:\n",
+        "    inputs:\n",
+        "        legId string (1..1)\n",
+        "    output:\n",
+        "        ids string (0..*)\n"
+    );
+    let compilation = compile_with_sigil(
+        &[(
+            MOX.to_string(),
+            "package demo\n\nimport sigil \"p.rosetta\"\n\nclass C { String x }\n".to_string(),
+        )],
+        &phero_driver::SigilImports::new().provide(MOX, "p.rosetta", rosetta),
+    );
+    let model = compile_clean(&compilation);
+    for function in &model.packages[1].functions {
+        assert_eq!(
+            function.bodies.len(),
+            1,
+            "{} carries only the rosetta body: {:?}",
+            function.name,
+            function.bodies
+        );
+        assert!(function.bodies.contains_key("rosetta"));
+    }
+}
+
+/// A `library function` lowers the same way; an `is_array` parameter carries
+/// a `0..*` multiplicity.
+#[test]
+fn a_user_library_function_lowers_to_a_signature_only_operation() {
+    let rosetta = concat!(
+        "namespace oracle.lib\n\n",
+        "library function Round(x number, cents int[]) boolean <\"Round a number.\">\n"
+    );
+    let compilation = compile_with_sigil(
+        &[(
+            MOX.to_string(),
+            "package demo\n\nimport sigil \"l.rosetta\"\n\nclass C { String x }\n".to_string(),
+        )],
+        &phero_driver::SigilImports::new().provide(MOX, "l.rosetta", rosetta),
+    );
+    let model = compile_clean(&compilation);
+    let function = &model.packages[1].functions[0];
+    assert_eq!(function.name, "Round");
+    assert_eq!(function.description.as_deref(), Some("Round a number."));
+    assert_eq!(
+        function.return_type,
+        TypeRef::Primitive(phero_ir::PrimitiveType::Boolean)
+    );
+    assert_eq!(function.params.len(), 2);
+    assert_eq!(function.params[0].multiplicity, None);
+    assert_eq!(
+        function.params[1].multiplicity,
+        Some(phero_ir::Multiplicity {
+            lower: 0,
+            upper: phero_ir::Upper::Unbounded
+        })
+    );
+    assert!(function
+        .bodies
+        .get("rosetta")
+        .expect("rosetta body")
+        .starts_with("library function Round"));
+}
+
+/// A func's output cardinality lowers into the operation's return
+/// multiplicity: `(0..*)` and `(0..1)` lower verbatim, the required `(1..1)`
+/// stays unset (the single-valued convention), and a `library function` —
+/// whose return carries no cardinality in the sigil AST — always stays
+/// unset too.
+#[test]
+fn a_function_output_cardinality_lowers_a_return_multiplicity() {
+    let rosetta = concat!(
+        "namespace oracle.ret\n\n",
+        "func Rates:\n",
+        "    inputs:\n",
+        "        legId string (1..1)\n",
+        "    output:\n",
+        "        rates number (0..*)\n",
+        "\n",
+        "func MaybeRate:\n",
+        "    inputs:\n",
+        "        legId string (1..1)\n",
+        "    output:\n",
+        "        rate number (0..1)\n",
+        "\n",
+        "func ScalarRate:\n",
+        "    inputs:\n",
+        "        legId string (1..1)\n",
+        "    output:\n",
+        "        rate number (1..1)\n",
+        "\n",
+        "library function Any(xs number[]) boolean\n"
+    );
+    let compilation = compile_with_sigil(
+        &[(
+            MOX.to_string(),
+            "package demo\n\nimport sigil \"r.rosetta\"\n\nclass C { String x }\n".to_string(),
+        )],
+        &phero_driver::SigilImports::new().provide(MOX, "r.rosetta", rosetta),
+    );
+    let model = compile_clean(&compilation);
+    let functions = &model.packages[1].functions;
+    assert_eq!(
+        functions
+            .iter()
+            .map(|f| f.name.as_str())
+            .collect::<Vec<_>>(),
+        ["Rates", "MaybeRate", "ScalarRate", "Any"]
+    );
+    assert_eq!(
+        functions[0].return_multiplicity,
+        Some(phero_ir::Multiplicity {
+            lower: 0,
+            upper: phero_ir::Upper::Unbounded
+        }),
+        "the (0..*) output lowers verbatim"
+    );
+    assert_eq!(
+        functions[1].return_multiplicity,
+        Some(phero_ir::Multiplicity::OPTIONAL),
+        "the (0..1) output lowers verbatim"
+    );
+    assert_eq!(
+        functions[2].return_multiplicity, None,
+        "the required (1..1) stays unset"
+    );
+    assert_eq!(
+        functions[3].return_multiplicity, None,
+        "a library function's return carries no cardinality in the sigil AST"
+    );
+}
+
+/// Builtin (`com.rosetta.model`) library functions stay skipped: rule 6
+/// keeps that namespace minimal, and it is still emitted only when
+/// referenced.
+#[test]
+fn builtin_library_functions_stay_skipped() {
+    // The builtin library namespace is implicitly present; a user namespace
+    // that references nothing from `com.rosetta.model` must not grow it.
+    let rosetta = "namespace oracle.pure\n\nfunc Alone:\n\tinputs:\n\t\tx int (1..1)\n\toutput:\n\t\ty int (1..1)\n";
+    let compilation = compile_with_sigil(
+        &[(
+            MOX.to_string(),
+            "package demo\n\nimport sigil \"p.rosetta\"\n\nclass C { String x }\n".to_string(),
+        )],
+        &phero_driver::SigilImports::new().provide(MOX, "p.rosetta", rosetta),
+    );
+    let model = compile_clean(&compilation);
+    assert_eq!(
+        model
+            .packages
+            .iter()
+            .map(|p| p.name.as_str())
+            .collect::<Vec<_>>(),
+        ["demo", "oracle.pure"],
+        "no builtin package may appear"
+    );
+    assert_eq!(model.packages[1].functions.len(), 1);
+    assert_eq!(model.packages[1].functions[0].name, "Alone");
+}
+
+/// Functions are not types: a `.mox` attribute typed by a sigil function
+/// stays an error (sigil `E0106`), and the function name never joins the
+/// resolution namespace.
+#[test]
+fn functions_are_not_referencable_as_types() {
+    let rosetta = concat!(
+        "namespace oracle.typ\n\n",
+        "func Maker:\n",
+        "    inputs:\n",
+        "        x int (1..1)\n",
+        "    output:\n",
+        "        y int (1..1)\n"
+    );
+    let compilation = compile_with_sigil(
+        &[(
+            MOX.to_string(),
+            "package demo\n\nimport sigil \"t.rosetta\"\n\nclass C { oracle.typ.Maker m }\n"
+                .to_string(),
+        )],
+        &phero_driver::SigilImports::new().provide(MOX, "t.rosetta", rosetta),
+    );
+    let mut all: Vec<_> = compilation.diagnostics.clone();
+    all.extend(compilation.sigil_diagnostics.clone());
+    assert!(
+        all.iter()
+            .any(|(path, diagnostic)| path == MOX && diagnostic.is_error()),
+        "typing an attribute by a function must error: {all:?}"
+    );
+    assert!(compilation.model.is_none());
+}
+
+/// A func with a dispatch head lowers to ONE operation whose `"rune"` body
+/// leads with the synthetic pre guard `attr == VALUE` (the head's value
+/// binds as an enum-typed name; the head survives in the verbatim body too)
+/// — the Rosetta multi-branch spelling is same-name functions, which sigil
+/// resolution itself rejects as duplicates.
+#[test]
+fn a_dispatch_function_lowers_to_one_operation_with_a_verbatim_head() {
+    let rosetta = concat!(
+        "namespace oracle.dispatch\n\n",
+        "enum Kind:\n",
+        "    FIRST\n",
+        "    SECOND\n",
+        "\n",
+        "func Pick(t: Kind->FIRST):\n",
+        "    inputs:\n",
+        "        t Kind (1..1)\n",
+        "    output:\n",
+        "        r int (1..1)\n",
+        "\n",
+        "    set r:\n",
+        "        1\n"
+    );
+    let compilation = compile_with_sigil(
+        &[(
+            MOX.to_string(),
+            "package demo\n\nimport sigil \"d.rosetta\"\n\nclass C { String x }\n".to_string(),
+        )],
+        &phero_driver::SigilImports::new().provide(MOX, "d.rosetta", rosetta),
+    );
+    let model = compile_clean(&compilation);
+    let functions = &model.packages[1].functions;
+    assert_eq!(functions.len(), 1, "one declaration, one operation");
+    assert_eq!(functions[0].name, "Pick");
+    assert_eq!(functions[0].params.len(), 1);
+    let body = functions[0].bodies.get("rosetta").expect("rosetta body");
+    assert!(body.contains("Kind->FIRST"), "{body:?}");
+    // The head lowers into the synthetic pre guard leading the rune body:
+    // the branch predicate first, then the steps.
+    assert_eq!(
+        functions[0].bodies.get("rune").map(String::as_str),
+        Some("{\"guards\":[{\"expr\":\"t == FIRST\",\"name\":\"FIRST\",\"phase\":\"pre\"}],\"steps\":[{\"kind\":\"set\",\"root\":\"r\",\"expr\":\"1\"}]}"),
+        "{:?}",
+        functions[0].bodies
+    );
+}
+
+/// A func without an output cannot become an operation (pherolang operations
+/// always return): it is skipped with a warning naming it; the namespace
+/// still lowers.
+#[test]
+fn an_output_less_function_is_skipped_with_a_warning() {
+    let rosetta = concat!(
+        "namespace oracle.void\n\n",
+        "func OnlySideEffect:\n",
+        "    inputs:\n",
+        "        x int (1..1)\n",
+        "\n",
+        "func Real:\n",
+        "    inputs:\n",
+        "        x int (1..1)\n",
+        "    output:\n",
+        "        y int (1..1)\n"
+    );
+    let compilation = compile_with_sigil(
+        &[(
+            MOX.to_string(),
+            "package demo\n\nimport sigil \"v.rosetta\"\n\nclass C { String x }\n".to_string(),
+        )],
+        &phero_driver::SigilImports::new().provide(MOX, "v.rosetta", rosetta),
+    );
+    // The namespace lowers; the warning is content-keyed and non-blocking.
+    let model = compilation.model.as_ref().expect("namespace still lowers");
+    let functions = &model
+        .packages
+        .iter()
+        .find(|p| p.name == "oracle.void")
+        .expect("namespace package")
+        .functions;
+    assert_eq!(
+        functions
+            .iter()
+            .map(|f| f.name.as_str())
+            .collect::<Vec<_>>(),
+        ["Real"],
+        "only the output-carrying function lowers"
+    );
+    let warning = compilation
+        .sigil_diagnostics
+        .iter()
+        .find(|(path, diagnostic)| path == "v.rosetta" && !diagnostic.is_error())
+        .expect("a warning names the skipped function");
+    assert!(
+        warning.1.message.contains("OnlySideEffect"),
+        "{:?}",
+        warning.1.message
+    );
+}

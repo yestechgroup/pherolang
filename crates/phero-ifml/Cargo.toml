@@ -1,0 +1,26 @@
+[package]
+name = "phero-ifml"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "IFML interaction-flow DSL: chumsky parser producing phero-ir IfmlModel artifacts"
+repository.workspace = true
+
+[lints]
+workspace = true
+
+[dependencies]
+phero-diagnostics = { workspace = true }
+phero-ir = { workspace = true }
+phero-expr = { workspace = true }
+phero-parser = { workspace = true }
+phero-strings = { workspace = true }
+chumsky = { workspace = true }
+logos = { workspace = true }
+thiserror = { workspace = true }
+
+[dev-dependencies]
+proptest = { workspace = true }
+phero-driver = { workspace = true }
+phero-syntax = { workspace = true }
+serde_json = { workspace = true }

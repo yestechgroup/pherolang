@@ -1,0 +1,88 @@
+#!/bin/bash
+# The rebrand guard (epic pherolang#270, task P0-03).
+#
+# Fails the gate if the pre-0.3 name appears anywhere in the tracked tree
+# outside an explicit allowlist. This is the only mechanism that notices a
+# revived old spelling: the golden-fixture and claim-drift gates keep the
+# site honest, this one keeps the rename finished.
+#
+# The detector is deliberately blunt — a word-boundary `rex` in either case
+# (`\b[Rr]ex`). That catches `rexlang`, `rex-*`, `rex_*`, `REX_*`, `RexBackend`,
+# `rexVersion`, `rex.instance`, `urn:rex:…`, `rex.conformance.*`, and
+# `.rex.json` with one rule, so a new spelling of the old name cannot slip
+# through a pattern gap. Legitimate occurrences are allowlisted by path
+# below; a *new* legitimate occurrence (a test fixture that must carry the
+# old wire key, say) is an allowlist row in this file, not a wordlist patch.
+#
+# Allowlist, and why each entry earns it:
+#   CHANGELOG.md                  past releases are history, not branding
+#   docs/REBRAND.md               the old → new migration tables
+#   docs/NAMING.md                the naming contract's own history section
+#   docs/adr/*                    the decision record, which quotes both names
+#   this script                   the detector and this allowlist
+#   the legacy artifact fixture   a deliberate 0.2-era artifact (see R2)
+#   the legacy-detection module   the only code that must spell the old keys
+#
+# Usage: scripts/check-rebrand.sh [--allowlist] [--verbose]
+#
+# Exit codes: 0 clean, 1 old-name tokens found, 2 usage error.
+set -u
+cd "$(dirname "$0")/.." || exit 1
+
+# One pattern, one place. `git grep` sees tracked files only, so build
+# output, target/ and .git can neither false-positive nor slow the gate.
+PATTERN='\b[Rr]ex'
+
+ALLOWED_PATHS=(
+  ':(exclude)CHANGELOG.md'
+  ':(exclude)docs/REBRAND.md'
+  ':(exclude)docs/NAMING.md'
+  ':(exclude)docs/adr/*'
+  ':(exclude)scripts/check-rebrand.sh'
+  ':(exclude)crates/phero-cli/src/artifact_check/legacy.rs'
+  ':(exclude)tests/conformance/artifacts/legacy-0.2.rex.json'
+)
+
+case "${1:-}" in
+  --allowlist)
+    printf '%s\n' "${ALLOWED_PATHS[@]}" | sed 's/^:(exclude)//'
+    exit 0
+    ;;
+  --verbose) verbose=1 ;;
+  '') verbose=0 ;;
+  *)
+    echo "usage: scripts/check-rebrand.sh [--allowlist] [--verbose]" >&2
+    exit 2
+    ;;
+esac
+
+# `-I` skips binary files, `-n` gives the line so the report is actionable,
+# `-E` keeps the pattern readable, `-i` is folded into the pattern itself.
+if hits=$(git grep -nIE "$PATTERN" -- . "${ALLOWED_PATHS[@]}"); then
+  count=$(printf '%s\n' "$hits" | wc -l | tr -d ' ')
+  files=$(printf '%s\n' "$hits" | cut -d: -f1 | sort -u | wc -l | tr -d ' ')
+  {
+    echo "REBRAND-FAIL: the pre-0.3 name appears in $count place(s) across $files file(s)."
+    echo
+    printf '%s\n' "$hits" | head -60
+    if [ "$count" -gt 60 ]; then
+      echo "… and $((count - 60)) more."
+    fi
+    echo
+    echo "The spelling contract is docs/NAMING.md: the product is \"Phero Lang\","
+    echo "the binary is pherolang, crates are phero-*, env vars are PHERO_*, and"
+    echo "the wire provenance key is pheroVersion."
+    echo
+    echo "If (and only if) the occurrence is history or a deliberately-legacy"
+    echo "fixture, add its path to ALLOWED_PATHS in scripts/check-rebrand.sh —"
+    echo "with a reason beside it."
+  } >&2
+  exit 1
+fi
+
+if [ "$verbose" = 1 ]; then
+  echo "checked $(git ls-files | wc -l | tr -d ' ') tracked files; no old-name tokens outside the allowlist."
+  echo "allowlisted:"
+  printf '  %s\n' "${ALLOWED_PATHS[@]}"
+fi
+echo "REBRAND-OK"

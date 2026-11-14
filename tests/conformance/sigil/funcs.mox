@@ -1,12 +1,12 @@
-package rex.conformance.funcs
+package phero.conformance.funcs
 
 import sigil "funcs.rosetta"
 
 /// A desk referencing the lowered sigil types beside the lowered functions.
 class Desk {
-    refers rex.sigil.funcs.Underlier underlier
-    rex.sigil.funcs.RateType defaultRateType
-    op double doubleRate(rex.sigil.funcs.Underlier u) {
+    refers phero.sigil.funcs.Underlier underlier
+    phero.sigil.funcs.RateType defaultRateType
+    op double doubleRate(phero.sigil.funcs.Underlier u) {
         expr { calcRate(2.0, ["leg-1"]) }
     }
 }

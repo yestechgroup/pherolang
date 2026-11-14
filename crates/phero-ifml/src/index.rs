@@ -1,0 +1,716 @@
+//! The parse span index: a side-table of byte-offset sites (module
+//! declarations, module uses, views, actions, actors) collected by the
+//! syntax-tree lowering ([`crate::lower`]), so the index and the IR can
+//! never disagree about what was written.
+//!
+//! [`crate::parse_ifml`] discards spans; [`parse_ifml_indexed`] returns the
+//! **same** [`IfmlModel`] plus an [`IfmlIndex`] so tooling (LSP navigation,
+//! the resolver in [`crate::resolve`]) can reason about *where* things are
+//! declared and used. The index is a plain in-memory struct — it is never
+//! serialized and never part of the wire artifact, so artifacts stay
+//! byte-identical.
+//!
+//! Layout: `index.files[0]` is the parsed file; every site carries the
+//! `file` it belongs to (an index into `files`). Within a file, sites
+//! appear in source order; files appear in compilation order (main file
+//! first, then imports depth-first — see [`crate::resolve`]). A module use
+//! resolved against a module declaration references it as
+//! `(file index, decl index within that file)` via
+//! [`ModuleUseSite::resolved_module`]; [`IfmlIndex::module_decl`] maps that
+//! reference back to the site.
+
+use phero_ir::ifml::IfmlModel;
+
+/// A file in the compilation: path and full source text.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct IndexFile {
+    /// Path as the compilation keys it (the main file's `path` argument, or
+    /// the import string for imported files). Empty for
+    /// [`parse_ifml_indexed`], which receives bare text.
+    pub path: String,
+    /// The file's full source text; spans index into it.
+    pub text: String,
+}
+
+/// One module input parameter as recorded by the index: name, declared
+/// type, byte span of the `parameter_decl`, and whether a default literal
+/// is present (the resolver's "requires input" check).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct IndexParam {
+    /// Parameter name.
+    pub name: String,
+    /// Declared type as written (`String`, `Int`, `Uuid`, a custom
+    /// identifier, ...).
+    pub type_ref: String,
+    /// Byte span of the whole `parameter_decl` in the file's text.
+    pub span: (usize, usize),
+    /// Whether the parameter declares a `= default` literal.
+    pub has_default: bool,
+}
+
+/// The kind of literal an override value is (structurally): what the
+/// resolver's trivial literal-vs-type sanity check consumes. Non-literal
+/// values (identifiers, calls, arrays, objects) record `None`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum LiteralKind {
+    /// A quoted string literal.
+    Str,
+    /// A numeric literal (optionally negated).
+    Num,
+    /// `true` / `false`.
+    Bool,
+}
+
+/// One property override inside a `use` body, recorded for resolution.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct UseOverride {
+    /// Overridden property/input name.
+    pub name: String,
+    /// Byte span of the whole `property_assignment` in the file's text.
+    pub span: (usize, usize),
+    /// The literal kind of the assigned value, when it is a bare literal.
+    pub literal: Option<LiteralKind>,
+}
+
+/// A `module "Name" { ... }` declaration site.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ModuleDeclSite {
+    /// File the module is declared in (index into [`IfmlIndex::files`]).
+    pub file: usize,
+    /// Module name (the unescaped `module "..."` string).
+    pub name: String,
+    /// Byte span of the `"..."` name token itself — the precise hover /
+    /// selection range.
+    pub name_span: (usize, usize),
+    /// Byte span of the whole `module_declaration` in the file's text.
+    pub span: (usize, usize),
+    /// The module's `input` parameters, in source order.
+    pub input_params: Vec<IndexParam>,
+    /// Names of the module's own property assignments, in source order
+    /// (override targets besides the input parameters).
+    pub properties: Vec<String>,
+}
+
+/// A `use "Target" as alias { ... };` statement site, wherever it appears
+/// (view body, container body, or module body).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ModuleUseSite {
+    /// File the use appears in (index into [`IfmlIndex::files`]).
+    pub file: usize,
+    /// The targeted module name (the `use "..."` string).
+    pub target: String,
+    /// Byte span of the `"..."` target token itself — the precise
+    /// hover / selection range.
+    pub name_span: (usize, usize),
+    /// The `as` alias, when present.
+    pub alias: Option<String>,
+    /// Byte span of the whole `module_use_statement` in the file's text.
+    pub span: (usize, usize),
+    /// Property overrides inside the use body, in source order.
+    pub overrides: Vec<UseOverride>,
+    /// Resolution result set by the resolver
+    /// ([`crate::compile_ifml_str`]): the referenced module declaration as
+    /// `(file index, decl index within that file)`, or `None` while
+    /// unresolved (unknown target, ambiguous target, or a use in an
+    /// imported file, which the resolver does not validate).
+    pub resolved_module: Option<(usize, usize)>,
+}
+
+/// A named top-level declaration site: a view, an action, or an actor.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct NamedSite {
+    /// File the declaration appears in (index into [`IfmlIndex::files`]).
+    pub file: usize,
+    /// Declaration name (the unescaped `"..."` string).
+    pub name: String,
+    /// Byte span of the `"..."` name token itself — the precise hover /
+    /// selection range.
+    pub name_span: (usize, usize),
+    /// Byte span of the whole declaration in the file's text.
+    pub span: (usize, usize),
+}
+
+/// A navigation/action string reference inside an event handler —
+/// `navigate("View")`, `refresh("grid")`, `action("Update")`. `target` is
+/// the unescaped string; for `navigate` it names a view (rename/references
+/// follow it), for the others it is an opaque action id.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct TargetSite {
+    /// File the reference appears in (index into [`IfmlIndex::files`]).
+    pub file: usize,
+    /// The referenced name (the unescaped `"..."` string).
+    pub target: String,
+    /// The action keyword as written (`navigate`, `refresh`, `action`).
+    pub action: String,
+    /// Byte span of the `"..."` string token itself.
+    pub name_span: (usize, usize),
+}
+
+/// What an [`AuthSite`] name references.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum AuthKind {
+    /// A `requires: [Cap, ...]` capability name.
+    Capability,
+    /// A `roles: [role, ...]` role name.
+    Role,
+}
+
+/// One `requires:`/`roles:` authorization name: a view-level
+/// `requires:`/`roles:` property or an event-level `requires:` prefix.
+/// [`crate::check_ifml_with_actors`] resolves every main-file site against
+/// the actor models the host provides; the sites are exactly the shapes
+/// the lowering extracts, so the index and the IR can never disagree.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct AuthSite {
+    /// File the site appears in (index into [`IfmlIndex::files`]).
+    pub file: usize,
+    /// What the name references.
+    pub kind: AuthKind,
+    /// The referenced capability or role name.
+    pub name: String,
+    /// Byte span of the name token itself — the editor squiggle.
+    pub name_span: (usize, usize),
+}
+
+/// One component's `data:` binding: the bare identifier the component
+/// binds (`data: Customer`), wherever a component is declared. Exactly
+/// the values that lower to `ValueExpression::Identifier` — the shape the
+/// checker's `data:` resolution reads — so the index and the IR can never
+/// disagree about what is a data site. Compound values (`data: a.b`,
+/// `data: x == y`), literals, and calls are not data sites.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct DataSite {
+    /// File the site appears in (index into [`IfmlIndex::files`]).
+    pub file: usize,
+    /// The bound name (the identifier as written).
+    pub name: String,
+    /// Byte span of the name token itself — the editor squiggle.
+    pub name_span: (usize, usize),
+}
+
+/// What [`IfmlIndex::at`] found at a byte offset: one of the site kinds
+/// the index tracks.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum AtSite<'a> {
+    /// A `module "Name" { ... }` declaration.
+    ModuleDecl(&'a ModuleDeclSite),
+    /// A named `view`/`action`/`actor` declaration.
+    Named(&'a NamedSite),
+    /// A `use "Target" ...` statement site.
+    Use(&'a ModuleUseSite),
+}
+
+/// The span side-table for one compilation: every file, every module
+/// declaration/use, and every named view/action/actor, with byte-offset
+/// spans into each file's text. Plain struct — never serialized.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct IfmlIndex {
+    /// Every file in the compilation, in compilation order (main file
+    /// first, then imports depth-first in source order).
+    pub files: Vec<IndexFile>,
+    /// Module declaration sites across all files, in compilation order
+    /// (contiguous per file, source order within a file).
+    pub module_decls: Vec<ModuleDeclSite>,
+    /// Module use sites across all files, in compilation order (contiguous
+    /// per file, source order within a file).
+    pub module_uses: Vec<ModuleUseSite>,
+    /// Navigation/action string references, in compilation order.
+    pub action_targets: Vec<TargetSite>,
+    /// `requires:`/`roles:` authorization names, in compilation order.
+    pub auth_sites: Vec<AuthSite>,
+    /// Component `data:` binding names, in compilation order.
+    pub data_sites: Vec<DataSite>,
+    /// View declaration sites.
+    pub views: Vec<NamedSite>,
+    /// Action declaration sites.
+    pub actions: Vec<NamedSite>,
+    /// Actor declaration sites.
+    pub actors: Vec<NamedSite>,
+    /// Component declaration sites (view, container, and module bodies —
+    /// in compilation order, source order within a file).
+    pub components: Vec<NamedSite>,
+    /// Container declaration sites (view, container, and module bodies —
+    /// in compilation order, source order within a file).
+    pub containers: Vec<NamedSite>,
+    /// Command declaration sites (top-level and nested subcommands, in
+    /// source order — nesting flattens).
+    pub commands: Vec<NamedSite>,
+}
+
+/// `at`'s merge step: keeps the narrowest containing span.
+fn consider_site<'a>(
+    best: &mut Option<AtSite<'a>>,
+    best_width: &mut usize,
+    site: AtSite<'a>,
+    span: (usize, usize),
+    offset: usize,
+) {
+    if span.0 <= offset && offset < span.1 && span.1 - span.0 < *best_width {
+        *best = Some(site);
+        *best_width = span.1 - span.0;
+    }
+}
+
+impl IfmlIndex {
+    /// An index holding exactly one file with no sites.
+    pub(crate) fn single_file(path: &str, text: &str) -> Self {
+        Self {
+            files: vec![IndexFile {
+                path: path.to_string(),
+                text: text.to_string(),
+            }],
+            module_decls: Vec::new(),
+            module_uses: Vec::new(),
+            action_targets: Vec::new(),
+            auth_sites: Vec::new(),
+            data_sites: Vec::new(),
+            views: Vec::new(),
+            actions: Vec::new(),
+            actors: Vec::new(),
+            components: Vec::new(),
+            containers: Vec::new(),
+            commands: Vec::new(),
+        }
+    }
+
+    /// Merges a parsed import's index (always exactly one file, relabeled
+    /// from index 0 to `file`) into this compilation index.
+    pub(crate) fn absorb(&mut self, file: usize, other: IfmlIndex) {
+        self.files.extend(other.files);
+        for mut decl in other.module_decls {
+            decl.file = file;
+            self.module_decls.push(decl);
+        }
+        for mut use_site in other.module_uses {
+            use_site.file = file;
+            self.module_uses.push(use_site);
+        }
+        for mut named in other.views {
+            named.file = file;
+            self.views.push(named);
+        }
+        for mut named in other.actions {
+            named.file = file;
+            self.actions.push(named);
+        }
+        for mut named in other.actors {
+            named.file = file;
+            self.actors.push(named);
+        }
+        for mut named in other.components {
+            named.file = file;
+            self.components.push(named);
+        }
+        for mut named in other.containers {
+            named.file = file;
+            self.containers.push(named);
+        }
+        for mut named in other.commands {
+            named.file = file;
+            self.commands.push(named);
+        }
+        for mut target in other.action_targets {
+            target.file = file;
+            self.action_targets.push(target);
+        }
+        for mut site in other.auth_sites {
+            site.file = file;
+            self.auth_sites.push(site);
+        }
+        for mut site in other.data_sites {
+            site.file = file;
+            self.data_sites.push(site);
+        }
+    }
+
+    /// The path of file `file`, if it exists in the compilation.
+    pub fn file_path(&self, file: usize) -> Option<&str> {
+        self.files.get(file).map(|f| f.path.as_str())
+    }
+
+    /// The declaration or use site whose span contains `offset` in `file`'s
+    /// text, if any — the single lookup behind hover and go-to-definition.
+    /// The narrowest containing span wins, so a `use` inside a view
+    /// resolves to the use, not the view.
+    pub fn at(&self, file: usize, offset: usize) -> Option<AtSite<'_>> {
+        let mut best: Option<AtSite<'_>> = None;
+        let mut best_width = usize::MAX;
+        for site in &self.module_decls {
+            if site.file == file {
+                consider_site(
+                    &mut best,
+                    &mut best_width,
+                    AtSite::ModuleDecl(site),
+                    site.span,
+                    offset,
+                );
+            }
+        }
+        for site in self
+            .views
+            .iter()
+            .chain(&self.actions)
+            .chain(&self.actors)
+            .chain(&self.containers)
+            .chain(&self.commands)
+        {
+            if site.file == file {
+                consider_site(
+                    &mut best,
+                    &mut best_width,
+                    AtSite::Named(site),
+                    site.span,
+                    offset,
+                );
+            }
+        }
+        for site in &self.module_uses {
+            if site.file == file {
+                consider_site(
+                    &mut best,
+                    &mut best_width,
+                    AtSite::Use(site),
+                    site.span,
+                    offset,
+                );
+            }
+        }
+        best
+    }
+
+    /// Maps a resolution reference — `(file index, decl index within that
+    /// file)` — back to the module declaration site, or `None` when the
+    /// reference is out of bounds.
+    pub fn module_decl(&self, reference: (usize, usize)) -> Option<&ModuleDeclSite> {
+        let (file, decl) = reference;
+        let mut seen = 0usize;
+        for site in &self.module_decls {
+            if site.file != file {
+                continue;
+            }
+            if seen == decl {
+                return Some(site);
+            }
+            seen += 1;
+        }
+        None
+    }
+}
+
+/// Parses an IFML source and returns the model together with its span
+/// index — the same model [`crate::parse_ifml`] produces, plus the
+/// [`IfmlIndex`] side-table. The single file is recorded with an empty
+/// path; [`crate::compile_ifml_str`] is the path-aware entry point.
+pub fn parse_ifml_indexed(text: &str) -> Result<(IfmlModel, IfmlIndex), crate::IfmlParseError> {
+    crate::parser::parse_model_with_path("", text)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn indexes_commands_and_their_uses() {
+        let text = r#"
+command "customers" {
+    use "WorkQueue" as queue { filter: Pending; };
+
+    command "list" {
+        output: table;
+    }
+}
+
+module "WorkQueue" {
+    input { filter: String = "open" }
+    output { n: Int }
+}
+"#;
+        let (_, index) = parse_ifml_indexed(text).unwrap();
+        assert_eq!(index.commands.len(), 2, "nested commands index too");
+        assert_eq!(index.commands[0].name, "customers");
+        assert_eq!(index.commands[1].name, "list");
+        assert_eq!(
+            index.module_uses.len(),
+            1,
+            "a use inside a command body is collected"
+        );
+        assert_eq!(index.module_uses[0].target, "WorkQueue");
+        assert_eq!(index.module_uses[0].alias.as_deref(), Some("queue"));
+
+        // The command declaration is an `at` site with a name span.
+        let command = &index.commands[0];
+        assert!(
+            text[command.span.0..command.span.1].starts_with("command \"customers\""),
+            "{:?}",
+            &text[command.span.0..command.span.1]
+        );
+        let name_mid = (command.name_span.0 + command.name_span.1) / 2;
+        assert!(matches!(index.at(0, name_mid), Some(AtSite::Named(_))));
+    }
+
+    #[test]
+    fn containers_are_indexed_with_spans() {
+        let text = r#"
+view "Wizard" {
+    container "stepOne" {
+        default: true;
+        container "nested" {
+            component "entry" { type: form; }
+        }
+    }
+    container "stepTwo" {
+        component "review" { type: details; }
+    }
+}
+
+module "Pager" {
+    input { page: Int = 1 }
+    output { n: Int }
+
+    container "page" {
+        component "pager" { type: list; }
+    }
+}
+"#;
+        let (_, index) = parse_ifml_indexed(text).unwrap();
+        assert_eq!(index.containers.len(), 4, "{:?}", index.containers);
+        assert_eq!(index.containers[0].name, "stepOne");
+        assert_eq!(index.containers[1].name, "nested");
+        assert_eq!(index.containers[2].name, "stepTwo");
+        assert_eq!(index.containers[3].name, "page", "module containers too");
+        // Spans are byte offsets that slice back to the declaration.
+        for site in &index.containers {
+            let slice = &text[site.span.0..site.span.1];
+            assert!(slice.starts_with("container "), "{slice:?}");
+            let mid = (site.name_span.0 + site.name_span.1) / 2;
+            assert!(matches!(index.at(0, mid), Some(AtSite::Named(_))));
+        }
+    }
+
+    #[test]
+    fn empty_source_indexes_one_file_and_no_sites() {
+        let (model, index) = parse_ifml_indexed("").unwrap();
+        assert_eq!(model, IfmlModel::default());
+        assert_eq!(index.files.len(), 1);
+        assert_eq!(index.files[0].path, "");
+        assert!(index.module_decls.is_empty());
+        assert!(index.module_uses.is_empty());
+        assert!(index.views.is_empty());
+        assert!(index.actions.is_empty());
+        assert!(index.actors.is_empty());
+        assert!(index.components.is_empty());
+        assert!(index.containers.is_empty());
+    }
+
+    #[test]
+    fn indexes_views_actions_actors_modules_and_uses_with_spans() {
+        let text = r#"
+view "List" {
+    use "Pagination" as pager { page_size: 25; };
+    container "Step" {
+        use "Footer";
+    }
+    component "grid" { type: list; data: Item; }
+}
+
+action "DoIt" {
+    target: Customer;
+}
+
+actor "Admin" {
+    role: admin;
+}
+
+module "Pagination" {
+    input { page: Int = 1, pageSize: Int }
+    output { total: Int }
+
+    title: "Pager";
+
+    use "Footer" as foot;
+
+    component "pager" { type: list; data: Item; }
+}
+"#;
+        let (_, index) = parse_ifml_indexed(text).unwrap();
+
+        assert_eq!(index.views.len(), 1);
+        assert_eq!(index.views[0].name, "List");
+        assert_eq!(index.actions.len(), 1);
+        assert_eq!(index.actions[0].name, "DoIt");
+        assert_eq!(index.actors.len(), 1);
+        assert_eq!(index.actors[0].name, "Admin");
+
+        // components across view and module bodies, in source order
+        assert_eq!(index.components.len(), 2);
+        assert_eq!(index.components[0].name, "grid");
+        assert_eq!(index.components[1].name, "pager");
+        for site in &index.components {
+            assert!(site.name_span.0 < site.name_span.1, "{site:?}");
+        }
+        assert_eq!(
+            &text[index.components[0].name_span.0..index.components[0].name_span.1],
+            "\"grid\""
+        );
+
+        assert_eq!(index.module_decls.len(), 1);
+        let decl = &index.module_decls[0];
+        assert_eq!(decl.name, "Pagination");
+        assert_eq!(decl.input_params.len(), 2);
+        assert_eq!(decl.input_params[0].name, "page");
+        assert_eq!(decl.input_params[0].type_ref, "Int");
+        assert!(decl.input_params[0].has_default);
+        assert_eq!(decl.input_params[1].name, "pageSize");
+        assert!(!decl.input_params[1].has_default);
+        assert_eq!(decl.properties, vec!["title".to_string()]);
+
+        // view use, container use, module-internal use — in source order
+        assert_eq!(index.module_uses.len(), 3);
+        assert_eq!(index.module_uses[0].target, "Pagination");
+        assert_eq!(index.module_uses[0].alias.as_deref(), Some("pager"));
+        assert!(index.module_uses[0].resolved_module.is_none());
+        assert_eq!(index.module_uses[1].target, "Footer");
+        assert_eq!(index.module_uses[1].alias, None);
+        assert_eq!(index.module_uses[2].target, "Footer");
+        assert_eq!(index.module_uses[2].alias.as_deref(), Some("foot"));
+
+        // spans are byte offsets that slice back to the exact source text
+        assert_eq!(
+            &text[index.module_uses[0].span.0..index.module_uses[0].span.1],
+            "use \"Pagination\" as pager { page_size: 25; };"
+        );
+        assert_eq!(
+            &text[index.module_uses[1].span.0..index.module_uses[1].span.1],
+            "use \"Footer\";"
+        );
+        assert_eq!(
+            &text[index.module_uses[2].span.0..index.module_uses[2].span.1],
+            "use \"Footer\" as foot;"
+        );
+        let decl_slice = &text[decl.span.0..decl.span.1];
+        assert_eq!(decl_slice.lines().next(), Some("module \"Pagination\" {"));
+        assert_eq!(decl_slice.lines().last(), Some("}"));
+        let param = &decl.input_params[1];
+        // v2 spans are exact: no trailing inter-token whitespace.
+        assert_eq!(&text[param.span.0..param.span.1], "pageSize: Int");
+
+        // overrides record literal kinds; non-literals record None
+        let overrides = &index.module_uses[0].overrides;
+        assert_eq!(overrides.len(), 1);
+        assert_eq!(overrides[0].name, "page_size");
+        assert_eq!(overrides[0].literal, Some(LiteralKind::Num));
+        assert_eq!(
+            &text[overrides[0].span.0..overrides[0].span.1],
+            "page_size: 25;"
+        );
+    }
+
+    #[test]
+    fn indexes_view_and_event_authorization_sites() {
+        let text = r#"
+view "Edit" {
+    requires: [ManageCustomer];
+    roles: [admin, manager];
+
+    component "form" {
+        on save(v) requires: [ApproveCustomer] -> stay;
+    }
+}
+"#;
+        let (_, index) = parse_ifml_indexed(text).unwrap();
+        assert_eq!(index.auth_sites.len(), 4, "{:?}", index.auth_sites);
+
+        assert_eq!(index.auth_sites[0].kind, AuthKind::Capability);
+        assert_eq!(index.auth_sites[0].name, "ManageCustomer");
+        assert_eq!(index.auth_sites[1].kind, AuthKind::Role);
+        assert_eq!(index.auth_sites[1].name, "admin");
+        assert_eq!(index.auth_sites[2].kind, AuthKind::Role);
+        assert_eq!(index.auth_sites[2].name, "manager");
+        assert_eq!(index.auth_sites[3].kind, AuthKind::Capability);
+        assert_eq!(index.auth_sites[3].name, "ApproveCustomer");
+
+        // spans are byte offsets onto the referenced name tokens
+        assert_eq!(
+            &text[index.auth_sites[0].name_span.0..index.auth_sites[0].name_span.1],
+            "ManageCustomer"
+        );
+        assert_eq!(
+            &text[index.auth_sites[1].name_span.0..index.auth_sites[1].name_span.1],
+            "admin"
+        );
+        assert_eq!(
+            &text[index.auth_sites[3].name_span.0..index.auth_sites[3].name_span.1],
+            "ApproveCustomer"
+        );
+    }
+
+    #[test]
+    fn properties_named_roles_outside_views_are_not_authorization_sites() {
+        // A use override or module property that happens to be named
+        // `roles`/`requires` is ordinary data — only view-level properties
+        // and event-level `requires:` prefixes are authorization sites.
+        let text = r#"view "List" {
+    use "Grid" as grid { roles: "all"; };
+}
+
+module "Grid" {
+    input { size: Int }
+    output { rows: Int }
+
+    roles: "all";
+    requires: "none";
+}
+"#;
+        let (_, index) = parse_ifml_indexed(text).unwrap();
+        assert!(index.auth_sites.is_empty(), "{:?}", index.auth_sites);
+    }
+
+    #[test]
+    fn module_decl_maps_resolution_references_back_to_sites() {
+        let (_, index) = parse_ifml_indexed(
+            "module \"A\" { input { x: Int } output { y: Int } }\nmodule \"B\" { input { x: Int } output { y: Int } }",
+        )
+        .unwrap();
+        assert_eq!(index.module_decl((0, 0)).unwrap().name, "A");
+        assert_eq!(index.module_decl((0, 1)).unwrap().name, "B");
+        assert!(index.module_decl((0, 2)).is_none());
+        assert!(index.module_decl((1, 0)).is_none());
+    }
+}
+
+#[cfg(test)]
+mod at_tests {
+    use super::*;
+
+    #[test]
+    fn at_finds_narrowest_site_and_name_spans() {
+        let source = r#"import "pager.ifml";
+
+view "Catalogue" {
+    use "Pager" as pager { };
+}
+
+module "Pager" {
+    input { pageSize: Int = 25 }
+    output { total: Int }
+}
+"#;
+        let (_model, index) = parse_ifml_indexed(source).unwrap();
+        assert_eq!(index.views.len(), 1, "views indexed");
+        assert_eq!(index.module_decls.len(), 1, "modules indexed");
+        assert_eq!(index.module_uses.len(), 1, "uses indexed");
+        let view = &index.views[0];
+        assert_eq!(view.file, 0);
+        assert_eq!(view.name, "Catalogue");
+        assert!(view.name_span.0 < view.name_span.1);
+        // The use site is inside the view span.
+        let use_site = &index.module_uses[0];
+        assert!(use_site.span.0 >= view.span.0 && use_site.span.1 <= view.span.1);
+        // `at` picks the use (narrower) inside the view.
+        let mid_use = (use_site.span.0 + use_site.span.1) / 2;
+        assert!(matches!(index.at(0, mid_use), Some(AtSite::Use(_))));
+        // `at` picks the view outside the use but inside the view span.
+        let view_name_mid = (view.name_span.0 + view.name_span.1) / 2;
+        assert!(matches!(index.at(0, view_name_mid), Some(AtSite::Named(_))));
+    }
+}

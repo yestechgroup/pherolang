@@ -2,7 +2,7 @@
 
 ## Overview
 
-A deployment-projection layer over the other rexlang artifacts. The `.mox`
+A deployment-projection layer over the other Phero Lang artifacts. The `.mox`
 domain model defines the data, `.ddd` designs the application services, and
 `.ifml` the interaction flows; the `.deploy` model declares the **logical
 architecture** (an `application` of named components and their
@@ -10,9 +10,9 @@ architecture** (an `application` of named components and their
 resource mappings), and **deployments** (one application projected through
 one profile with per-application `configure` overrides) — with nothing
 about containers, manifests, or clouds written down. Parsed by
-**rex-syntax** (`parse_deploy`, the chumsky parser) at compile time and
-lowered and validated by **rex-driver** (`compile_deploy_str`) into the
-versioned `rex_ir::deploy::DeployModel` artifact (the rex-ir crate).
+**phero-syntax** (`parse_deploy`, the chumsky parser) at compile time and
+lowered and validated by **phero-driver** (`compile_deploy_str`) into the
+versioned `phero_ir::deploy::DeployModel` artifact (the phero-ir crate).
 
 The separation the surface enforces is the issue-#49 discipline:
 
@@ -42,7 +42,7 @@ artifact (the deployment-plan resource graph is the planned intermediate);
 the artifact deliberately carries authored intent only in slice 1.
 
 The normative contract — entry points, resolution semantics, and the
-validation rules — is documented on `rex_driver::compile_deploy_str`; this
+validation rules — is documented on `phero_driver::compile_deploy_str`; this
 page is the language reference.
 
 ---
@@ -92,7 +92,7 @@ deployment production for Svc {
 ## Artifact wire format
 
 `DeployModel` is a standalone, versioned wire artifact following the
-rex-ir [wire format contract](BACKENDS.md) (see also the `rex_ir::deploy`
+phero-ir [wire format contract](BACKENDS.md) (see also the `phero_ir::deploy`
 module docs):
 
 - Versioned independently of the domain-model marker via
@@ -126,14 +126,14 @@ module docs):
   must keep the `#[serde(default)]` + skip discipline.
 
 Minimal artifact: an empty model serializes as exactly
-`{"formatVersion":1}`.
+`{"formatVersion":2}`.
 
 ```rust
-let designs: Vec<(String, rex_ir::ddd::DddModel)> = vec![];
-let flows: Vec<(String, rex_ir::ifml::IfmlModel)> = vec![];
-let compilation = rex_driver::compile_deploy_str("svc.deploy", source, &designs, &flows);
+let designs: Vec<(String, phero_ir::ddd::DddModel)> = vec![];
+let flows: Vec<(String, phero_ir::ifml::IfmlModel)> = vec![];
+let compilation = phero_driver::compile_deploy_str("svc.deploy", source, &designs, &flows);
 let json = compilation.model.unwrap().to_json_pretty()?; // versioned artifact
-let model = rex_ir::deploy::DeployModel::from_json(&json)?; // version-gated reload
+let model = phero_ir::deploy::DeployModel::from_json(&json)?; // version-gated reload
 ```
 
 ---
@@ -142,12 +142,12 @@ let model = rex_ir::deploy::DeployModel::from_json(&json)?; // version-gated rel
 
 The normative EBNF for the `.deploy` surface lives exactly once, in the
 parser module docs under [*`.deploy` deployment
-sources*](https://docs.rs/rex-syntax/latest/rex_syntax/parser/index.html)
-(`crates/rex-syntax/src/parser/mod.rs`) — the single authority for
+sources*](https://docs.rs/phero-syntax/latest/phero_syntax/parser/index.html)
+(`crates/phero-syntax/src/parser/mod.rs`) — the single authority for
 `deploy_file`, `application_decl`, `component_decl`, `profile_decl`,
 `policy_decl`, `deployment_decl`, and the setting/mapping productions;
 this page keeps only the language-level rules. The `.deploy` keyword
-tables in `crates/rex-syntax/src/deploy.rs` are the keyword authority the
+tables in `crates/phero-syntax/src/deploy.rs` are the keyword authority the
 parser and the formatter share.
 
 Language-level rules:
@@ -167,7 +167,7 @@ Language-level rules:
 - **`deployment <name> for <application> { use <profile> configure {
   ... } }`** — one projection. `configure` overrides beat profile
   defaults, which beat component baselines.
-- **Policies are rex-expr conditions** over the effective settings:
+- **Policies are phero-expr conditions** over the effective settings:
   `api.replicas >= 3`, `db.storage == "local"`, `&&`/`||`/`!`, integer
   arithmetic. They are parsed and type-checked against the deployed
   application's components (an unknown component or setting is a type
@@ -234,7 +234,7 @@ are quoted strings only.
 A deployment file is self-contained for names (applications, profiles,
 components, deployments resolve within the file) and composition-open for
 content (design/flow artifacts arrive pre-compiled — the CLI gathers and
-compiles them exactly like `rexlang check` on those surfaces). The driver
+compiles them exactly like `pherolang check` on those surfaces). The driver
 stays filesystem-free.
 
 Validation rules (any error-severity diagnostic drops the artifact;
@@ -278,7 +278,7 @@ warnings do not):
 
    The closed vocabulary is also the semantic graph's `platformCapability`
    node kind: one node per application and word, with no declaration site
-   (see [the graph's platform capabilities](GRAPH.md#platform-capabilities-rexlang262)).
+   (see [the graph's platform capabilities](GRAPH.md#platform-capabilities-pherolang262)).
 9. **Engines** — a database's effective engine must be one the target
    hosts (`standalone`: sqlite; `dockerCompose`: sqlite, postgres;
    `kubernetes`: postgres; `cloudflareWorkers`: d1). A postgres database
@@ -293,8 +293,8 @@ the file's semantic diagnostics in declaration order (applications,
 profiles, deployments — each in source order).
 
 Components are also the anchor the `.evt` subscription layer resolves
-against: in a checked application (`rexlang check <dir>`, the union
-integrity pass `rex_driver::check_integrity`, register row **V12**) a
+against: in a checked application (`pherolang check <dir>`, the union
+integrity pass `phero_driver::check_integrity`, register row **V12**) a
 subscription consumer must name a declared component — any application's
 — else the event contract's delivery is a dead inbox and the batch
 errors. The deploy file itself is never changed by that pass; checking a
@@ -304,15 +304,15 @@ deployment alone stays per-surface and silent.
 
 ## Tooling
 
-- `rexlang check <file>.deploy` — compile and render diagnostics
+- `pherolang check <file>.deploy` — compile and render diagnostics
   (including the imported designs/flows, which are gathered and compiled
-  exactly like `rexlang check` on them; a non-compiling import is a clean
+  exactly like `pherolang check` on them; a non-compiling import is a clean
   error).
-- `rexlang ir <file>.deploy [-o out]` — emit the versioned
+- `pherolang ir <file>.deploy [-o out]` — emit the versioned
   `DeployModel` JSON.
-- `rexlang fmt <file>.deploy` — the token-based formatter (canonical
+- `pherolang fmt <file>.deploy` — the token-based formatter (canonical
   section order, one member per line, verbatim policy conditions).
-- `rexlang artifact check svc.deploy.json` — wire-format validation; the
+- `pherolang artifact check svc.deploy.json` — wire-format validation; the
   artifact classifies as the `DeployModel` kind.
 - The LSP does not publish `.deploy` diagnostics yet (the `.evt`
   precedent): the surface compiles through the same one-shot entry
@@ -322,4 +322,4 @@ The `examples/` side ships `support.deploy` — one logical application
 bound to `support.ddd#desk` and `support.ifml`, projected through a
 kubernetes profile (postgres, mappings, policies) and a cloudflareWorkers
 profile (D1) — byte-pinned against `examples/artifacts/` by
-`crates/rex-driver/tests/examples_artifacts.rs`.
+`crates/phero-driver/tests/examples_artifacts.rs`.

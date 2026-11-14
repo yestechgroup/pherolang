@@ -1,0 +1,16 @@
+[package]
+name = "phero-testkit"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description.workspace = true
+repository.workspace = true
+publish = false
+
+[lints]
+workspace = true
+
+[dependencies]
+phero-driver = { workspace = true }
+phero-ir = { workspace = true }
+phero-ifml = { workspace = true }

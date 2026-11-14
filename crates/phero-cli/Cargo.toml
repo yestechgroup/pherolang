@@ -1,0 +1,39 @@
+[package]
+name = "phero-cli"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description.workspace = true
+repository.workspace = true
+
+[lints]
+workspace = true
+
+[[bin]]
+name = "pherolang"
+path = "src/main.rs"
+
+[dependencies]
+phero-diagnostics = { workspace = true }
+phero-syntax = { workspace = true }
+phero-ir = { workspace = true }
+phero-driver = { workspace = true }
+phero-ifml = { workspace = true }
+phero-evidence = { workspace = true }
+phero-lsp = { workspace = true }
+phero-backend-rust = { workspace = true }
+phero-backend-jsonschema = { workspace = true }
+phero-backend-cedar = { workspace = true }
+phero-backend-common = { workspace = true }
+phero-runtime = { workspace = true }
+phero-vocab = { workspace = true }
+clap = { workspace = true }
+clap_complete = { workspace = true }
+clap_mangen = { workspace = true }
+walkdir = { workspace = true }
+anyhow = { workspace = true }
+serde_json = { workspace = true }
+
+[dev-dependencies]
+serde_json = { workspace = true }
+phero-vocab = { workspace = true }

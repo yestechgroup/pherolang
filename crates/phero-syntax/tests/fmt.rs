@@ -1,0 +1,1242 @@
+//! Tests for the comment-preserving formatter (`phero_syntax::fmt`).
+//!
+//! The formatter is token-stream based: it never parses, so sources with
+//! syntax errors still format, but sources with *lex* errors are rejected.
+
+use phero_syntax::fmt::{format, FormatError};
+
+fn fmt(source: &str) -> String {
+    format(source).expect("format succeeds")
+}
+
+// --- basic layout ------------------------------------------------------------
+
+#[test]
+fn empty_input_formats_to_empty_output() {
+    assert_eq!(fmt(""), "");
+    assert_eq!(fmt("   \n\t\n  "), "");
+}
+
+#[test]
+fn normalizes_spacing_one_decl_per_line() {
+    assert_eq!(
+        fmt("class   Book  { int   pages }"),
+        "class Book {\n    int pages\n}\n"
+    );
+}
+
+#[test]
+fn raw_op_body_braces_nest_on_one_line() {
+    // The raw `{ ... }` body of an op is not grammar; its balanced braces
+    // stay inline on the feature's line.
+    assert_eq!(
+        fmt("class S { op int f() { if x { y } } }"),
+        "class S {\n    op int f() { if x { y } }\n}\n"
+    );
+}
+
+#[test]
+fn empty_class_stays_inline() {
+    assert_eq!(fmt("class Empty { }"), "class Empty {}\n");
+    assert_eq!(fmt("class Empty {}"), "class Empty {}\n");
+    assert_eq!(fmt("class Empty {}"), fmt("class Empty {}"));
+}
+
+#[test]
+fn empty_vocabulary_stays_inline() {
+    assert_eq!(
+        fmt("vocabulary V from \"u:v\" {}"),
+        "vocabulary V from \"u:v\" {}\n"
+    );
+}
+
+// --- spacing details ---------------------------------------------------------
+
+#[test]
+fn qualified_names_have_no_spaces_around_dots() {
+    assert_eq!(
+        fmt("class B { contains nz . example . Book [ ] b }"),
+        "class B {\n    contains nz.example.Book[] b\n}\n"
+    );
+}
+
+#[test]
+fn extends_list_spacing() {
+    assert_eq!(
+        fmt("class A extends B , C { }"),
+        "class A extends B, C {}\n"
+    );
+}
+
+#[test]
+fn op_params_spacing() {
+    assert_eq!(
+        fmt("class S { op Book get( String title,int pages ) }"),
+        "class S {\n    op Book get(String title, int pages)\n}\n"
+    );
+}
+
+#[test]
+fn default_value_spacing() {
+    assert_eq!(
+        fmt("class B { String name=\"x\" int n = 3 }"),
+        "class B {\n    String name = \"x\"\n    int n = 3\n}\n"
+    );
+}
+
+#[test]
+fn default_value_may_be_a_name() {
+    assert_eq!(
+        fmt("class B { String status = active }"),
+        "class B {\n    String status = active\n}\n"
+    );
+}
+
+// --- multiplicities ----------------------------------------------------------
+
+#[test]
+fn multiplicity_zero_to_star_normalizes_to_empty_brackets() {
+    assert_eq!(
+        fmt("class L { contains Book [0..*] books }"),
+        "class L {\n    contains Book[] books\n}\n"
+    );
+    assert_eq!(
+        fmt("class L { contains Book [ 0 .. * ] books }"),
+        "class L {\n    contains Book[] books\n}\n"
+    );
+}
+
+#[test]
+fn other_multiplicities_are_preserved() {
+    for mult in ["[3]", "[0..1]", "[1..*]", "[3..5]"] {
+        let source = format!("class L {{ contains Book {mult} books }}");
+        assert_eq!(
+            fmt(&source),
+            format!("class L {{\n    contains Book{mult} books\n}}\n"),
+            "multiplicity {mult} must be preserved"
+        );
+    }
+}
+
+// --- modifiers ---------------------------------------------------------------
+
+#[test]
+fn modifiers_normalize_to_id_first() {
+    assert_eq!(
+        fmt("class B { readonly id String x }"),
+        "class B {\n    id readonly String x\n}\n"
+    );
+    assert_eq!(
+        fmt("class B { readonly readonly String y id  id String x }"),
+        "class B {\n    readonly String y\n    id String x\n}\n"
+    );
+}
+
+#[test]
+fn all_feature_kinds_format() {
+    let source = concat!(
+        "class B {\n",
+        "  contains Item[] parts opposite owner\n",
+        "  refers Tag[0..1] tag opposite thing\n",
+        "  container Box box opposite content\n",
+        "  op int size(String unit)\n",
+        "  derived String label\n",
+        "  String name\n",
+        "}\n"
+    );
+    let expected = concat!(
+        "class B {\n",
+        "    contains Item[] parts opposite owner\n",
+        "    refers Tag[0..1] tag opposite thing\n",
+        "    container Box box opposite content\n",
+        "    op int size(String unit)\n",
+        "    derived String label\n",
+        "    String name\n",
+        "}\n"
+    );
+    assert_eq!(fmt(source), expected);
+}
+
+#[test]
+fn escaped_identifiers_are_preserved_verbatim() {
+    assert_eq!(
+        fmt("class ^class { String ^id }"),
+        "class ^class {\n    String ^id\n}\n"
+    );
+}
+
+// --- enums -------------------------------------------------------------------
+
+#[test]
+fn enum_literals_normalize_and_keep_optional_parts_only_if_present() {
+    assert_eq!(
+        fmt("enum E { A as \"a\" = 1   B   C as \"c\" }"),
+        "enum E {\n    A as \"a\" = 1\n    B\n    C as \"c\"\n}\n"
+    );
+}
+
+// --- type / interface / annotation / package ---------------------------------
+
+#[test]
+fn datatype_with_bindings_body() {
+    assert_eq!(
+        fmt("type Date wraps opaque { rust   \"chrono::NaiveDate\" csharp \"System.DateOnly\" }"),
+        concat!(
+            "type Date wraps opaque {\n",
+            "    rust \"chrono::NaiveDate\"\n",
+            "    csharp \"System.DateOnly\"\n",
+            "}\n"
+        )
+    );
+}
+
+#[test]
+fn datatype_wrapping_a_named_type_has_no_body() {
+    assert_eq!(fmt("type Foo wraps a.Bar"), "type Foo wraps a.Bar\n");
+}
+
+#[test]
+fn interface_bindings_one_per_line() {
+    assert_eq!(
+        fmt("interface I { rust \"x\" java \"y\" }"),
+        "interface I {\n    rust \"x\"\n    java \"y\"\n}\n"
+    );
+}
+
+#[test]
+fn annotation_decl() {
+    assert_eq!(
+        fmt("annotation \"deprecated\" as Old"),
+        "annotation \"deprecated\" as Old\n"
+    );
+    assert_eq!(fmt("annotation \"x\""), "annotation \"x\"\n");
+}
+
+// --- vocabulary --------------------------------------------------------------
+
+#[test]
+fn vocabulary_body_items_one_per_line() {
+    assert_eq!(
+        fmt(concat!(
+            "vocabulary  Currency  from  \"iso:4217\" { ",
+            "version \"2024-01-01\" key alpha3 facet String symbol facet int minorUnits }"
+        )),
+        concat!(
+            "vocabulary Currency from \"iso:4217\" {\n",
+            "    version \"2024-01-01\"\n",
+            "    key alpha3\n",
+            "    facet String symbol\n",
+            "    facet int minorUnits\n",
+            "}\n"
+        )
+    );
+}
+
+// --- actors ------------------------------------------------------------------
+
+#[test]
+fn actors_body_items_one_per_line() {
+    // Deliberately messy one-liner: the formatter must normalize it to one
+    // item per line, grant entries included, `never_both` inline.
+    assert_eq!(
+        fmt(concat!(
+            "actors  Support  { actor Customer actor Agent extends Customer ",
+            "capability ReadTicket on  Ticket grant  Customer { permit ReadTicket ",
+            "permit RaiseRefund when (amount<=1000) obligation audit } ",
+            "never_both { RaiseRefund , ApproveRefund } }"
+        )),
+        concat!(
+            "actors Support {\n",
+            "    actor Customer\n",
+            "    actor Agent extends Customer\n",
+            "    capability ReadTicket on Ticket\n",
+            "    grant Customer {\n",
+            "        permit ReadTicket\n",
+            "        permit RaiseRefund when (amount<=1000) obligation audit\n",
+            "    }\n",
+            "    never_both { RaiseRefund, ApproveRefund }\n",
+            "}\n"
+        )
+    );
+}
+
+#[test]
+fn empty_grant_stays_inline() {
+    assert_eq!(
+        fmt("actors S { grant G { } }"),
+        "actors S {\n    grant G {}\n}\n"
+    );
+}
+
+#[test]
+fn actors_interior_blank_line_groups_survive_once() {
+    // Unlike class/vocabulary bodies, `actors` and `grant` bodies keep
+    // grouping blank lines (collapsed to at most one).
+    assert_eq!(
+        fmt("actors S {\n    actor A\n\n\n    actor B\n}"),
+        "actors S {\n    actor A\n\n    actor B\n}\n"
+    );
+    assert_eq!(
+        fmt("actors S {\n    grant G {\n        permit A\n\n\n        permit B\n    }\n}"),
+        "actors S {\n    grant G {\n        permit A\n\n        permit B\n    }\n}\n"
+    );
+}
+
+#[test]
+fn when_condition_bytes_are_preserved_verbatim() {
+    // Inner spacing survives verbatim; only the boundary whitespace next to
+    // the parens is collapsed (mirroring the ends-trimmed target bodies).
+    let formatted = fmt("actors S { grant G { permit C when ( x  <=  f(1,2) ) } }");
+    assert_eq!(
+        formatted,
+        "actors S {\n    grant G {\n        permit C when (x  <=  f(1,2))\n    }\n}\n"
+    );
+    assert_eq!(fmt(&formatted), formatted, "not a fixpoint");
+}
+
+#[test]
+fn session_kind_modifiers_format_canonically() {
+    // The modifier rides the entry's line between effect and capability.
+    let messy = "actors S { grant G { permit  human C forbid agent D permit E } }";
+    let canonical = concat!(
+        "actors S {\n",
+        "    grant G {\n",
+        "        permit human C\n",
+        "        forbid agent D\n",
+        "        permit E\n",
+        "    }\n",
+        "}\n",
+    );
+    assert_eq!(fmt(messy), canonical);
+    assert_eq!(fmt(canonical), canonical, "not a fixpoint");
+
+    // The ambiguity rule, formatter side: `human` before a keyword is a
+    // capability name, not a modifier.
+    let human_named = "actors S { grant G { permit human when (a > 0) } }";
+    let human_named_canonical =
+        "actors S {\n    grant G {\n        permit human when (a > 0)\n    }\n}\n";
+    assert_eq!(fmt(human_named), human_named_canonical);
+    assert_eq!(fmt(human_named_canonical), human_named_canonical);
+
+    // The same modifier handling inside a delegation body (and the escaped
+    // `^agent` capability never reads as a modifier).
+    assert_eq!(
+        fmt("actors S { delegation D { from A to B permit human C permit ^agent } }"),
+        concat!(
+            "actors S {\n",
+            "    delegation D {\n",
+            "        from A\n",
+            "        to B\n",
+            "        permit human C\n",
+            "        permit ^agent\n",
+            "    }\n",
+            "}\n",
+        )
+    );
+}
+
+#[test]
+fn cedar_entry_formats_like_target_bodies() {
+    let formatted = fmt("actors S { grant G { cedar { if x { y } } } }");
+    assert_eq!(
+        formatted,
+        "actors S {\n    grant G {\n        cedar { if x { y } }\n    }\n}\n"
+    );
+    assert_eq!(fmt(&formatted), formatted, "not a fixpoint");
+}
+
+#[test]
+fn purpose_items_format_one_per_line() {
+    assert_eq!(
+        fmt(concat!(
+            "actors  A  { actor H purpose  P1 capability C on T grant H { permit C } ",
+            "purpose P2 never_both { C , C2 } }"
+        )),
+        concat!(
+            "actors A {\n",
+            "    actor H\n",
+            "    purpose P1\n",
+            "    capability C on T\n",
+            "    grant H {\n",
+            "        permit C\n",
+            "    }\n",
+            "    purpose P2\n",
+            "    never_both { C, C2 }\n",
+            "}\n"
+        )
+    );
+    let once = fmt("actors A { purpose P }");
+    assert_eq!(once, "actors A {\n    purpose P\n}\n");
+    assert_eq!(fmt(&once), once, "not a fixpoint");
+}
+
+#[test]
+fn delegation_purpose_line_formats_after_to() {
+    let messy = "actors A { delegation Triage { from SupportUser to TriageAgent purpose customer_support\n\npermit RaiseTicket obligation audit } }";
+    let canonical = concat!(
+        "actors A {\n",
+        "    delegation Triage {\n",
+        "        from SupportUser\n",
+        "        to TriageAgent\n",
+        "        purpose customer_support\n",
+        "\n",
+        "        permit RaiseTicket obligation audit\n",
+        "    }\n",
+        "}\n",
+    );
+    assert_eq!(fmt(messy), canonical);
+    assert_eq!(fmt(canonical), canonical, "not a fixpoint");
+}
+
+#[test]
+fn delegation_without_purpose_stays_byte_identical() {
+    assert_eq!(
+        fmt("actors A { delegation Triage { from SupportUser to TriageAgent permit RaiseTicket obligation audit } }"),
+        concat!(
+            "actors A {\n",
+            "    delegation Triage {\n",
+            "        from SupportUser\n",
+            "        to TriageAgent\n",
+            "        permit RaiseTicket obligation audit\n",
+            "    }\n",
+            "}\n",
+        )
+    );
+}
+
+// --- blank lines -------------------------------------------------------------
+
+#[test]
+fn blank_lines_collapse_between_top_level_decls() {
+    assert_eq!(
+        fmt("package a\n\n\n\nclass B { int x }\n\n\nclass C {}\n\n\n"),
+        "package a\n\nclass B {\n    int x\n}\n\nclass C {}\n"
+    );
+}
+
+#[test]
+fn no_blank_line_at_document_start_and_single_newline_at_eof() {
+    assert_eq!(fmt("\n\npackage a\n"), "package a\n");
+}
+
+#[test]
+fn blank_lines_inside_bodies_are_removed() {
+    assert_eq!(
+        fmt("class B {\n    int x\n\n\n    int y\n\n}"),
+        "class B {\n    int x\n    int y\n}\n"
+    );
+}
+
+// --- comments ----------------------------------------------------------------
+
+#[test]
+fn own_line_comment_attaches_to_following_line_indent() {
+    assert_eq!(
+        fmt("class B {\n  // the page count\n  int   pages\n}"),
+        "class B {\n    // the page count\n    int pages\n}\n"
+    );
+}
+
+#[test]
+fn trailing_comment_stays_on_the_same_line() {
+    assert_eq!(
+        fmt("class B {\n    int pages // inline note\n}"),
+        "class B {\n    int pages // inline note\n}\n"
+    );
+}
+
+#[test]
+fn consecutive_own_line_comments_form_a_block() {
+    assert_eq!(
+        fmt("class B {\n    // one\n\n\n    // two\n    int x\n}"),
+        "class B {\n    // one\n    // two\n    int x\n}\n"
+    );
+}
+
+#[test]
+fn multiline_block_comment_keeps_internal_newlines_and_indents_first_line_only() {
+    let source = "class B {\n    /* spans\n   several\n lines */\n    int x\n}";
+    assert_eq!(
+        fmt(source),
+        "class B {\n    /* spans\n   several\n lines */\n    int x\n}\n"
+    );
+}
+
+#[test]
+fn inline_block_comment_stays_inline() {
+    assert_eq!(
+        fmt("class B { int /* count */ pages }"),
+        "class B {\n    int /* count */ pages\n}\n"
+    );
+}
+
+#[test]
+fn own_line_block_comment_gets_its_own_line() {
+    assert_eq!(
+        fmt("class B {\n    /* note */\n    int x\n}"),
+        "class B {\n    /* note */\n    int x\n}\n"
+    );
+}
+
+#[test]
+fn comment_content_is_preserved_verbatim() {
+    assert_eq!(
+        fmt("class B {\n    //   spaced    out   *\n    int x\n}"),
+        "class B {\n    //   spaced    out   *\n    int x\n}\n"
+    );
+}
+
+#[test]
+fn comment_block_before_a_top_level_decl_sits_after_the_blank_line() {
+    assert_eq!(
+        fmt("package a\n\n// Books are things\nclass B { int x }"),
+        "package a\n\n// Books are things\nclass B {\n    int x\n}\n"
+    );
+}
+
+#[test]
+fn comment_at_document_start_gets_no_leading_blank() {
+    assert_eq!(fmt("// header\npackage a\n"), "// header\npackage a\n");
+}
+
+#[test]
+fn comment_before_closing_brace_keeps_body_indent() {
+    assert_eq!(
+        fmt("class B {\n    int x\n    // end of class\n}"),
+        "class B {\n    int x\n    // end of class\n}\n"
+    );
+}
+
+#[test]
+fn comment_at_eof_is_separated_by_a_blank_line() {
+    assert_eq!(
+        fmt("class B { int x }\n// bye"),
+        "class B {\n    int x\n}\n\n// bye\n"
+    );
+}
+
+#[test]
+fn trailing_comment_after_closing_brace_line() {
+    assert_eq!(
+        fmt("class B { int x } // trailing\n"),
+        "class B {\n    int x\n} // trailing\n"
+    );
+}
+
+// --- robustness (token-based, no parsing) ------------------------------------
+
+#[test]
+fn parse_errors_still_format() {
+    // `int` alone is not a valid feature (missing name) but lexes fine.
+    assert_eq!(fmt("class B { int }"), "class B {\n    int\n}\n");
+}
+
+#[test]
+fn lex_errors_are_reported() {
+    // The `Other` catch-all makes almost everything lexable; the one true
+    // lex error is an integer literal that overflows `i64`.
+    let result = format("class B { int x = 99999999999999999999999 }");
+    assert!(matches!(result, Err(FormatError::Lex(_))), "got {result:?}");
+}
+
+// --- idempotency -------------------------------------------------------------
+
+fn assert_idempotent(source: &str) {
+    let once = fmt(source);
+    let twice = fmt(&once);
+    assert_eq!(once, twice, "formatting must be a fixpoint for:\n{source}");
+}
+
+#[test]
+fn idempotent_on_conformance_library() {
+    assert_idempotent(include_str!(
+        "../../../tests/conformance/models/library.mox"
+    ));
+}
+
+#[test]
+fn table_annotation_renders_on_the_class_line_and_fixpoints() {
+    // The `table "…"` annotation stays on the declaration's first line,
+    // between the class name and any `extends` clause.
+    let formatted = fmt("class PayRunType\n\ntable  \"pay_run_type\"\n{\n    String name\n}");
+    assert_eq!(
+        formatted,
+        "class PayRunType table \"pay_run_type\" {\n    String name\n}\n"
+    );
+    assert_eq!(fmt(&formatted), formatted, "not a fixpoint");
+
+    // Before `extends`.
+    let formatted = fmt("class A table \"a\" extends B { }");
+    assert_eq!(formatted, "class A table \"a\" extends B {}\n");
+    assert_eq!(fmt(&formatted), formatted, "not a fixpoint");
+
+    // An escaped `^table` is a name, never the annotation.
+    let formatted = fmt("class ^table { int n }");
+    assert_eq!(formatted, "class ^table {\n    int n\n}\n");
+}
+
+#[test]
+fn idempotent_on_conformance_currency() {
+    assert_idempotent(include_str!(
+        "../../../tests/conformance/models/currency.mox"
+    ));
+}
+
+#[test]
+fn idempotent_on_conformance_actors() {
+    assert_idempotent(include_str!("../../../tests/conformance/models/actors.mox"));
+}
+
+#[test]
+fn idempotent_on_conformance_register() {
+    assert_idempotent(include_str!(
+        "../../../tests/conformance/models/register.mox"
+    ));
+}
+
+#[test]
+fn idempotent_on_conformance_actors_file() {
+    let source = include_str!("../../../tests/conformance/models/actors.actor");
+    let once = phero_syntax::fmt::format_actors(source).expect("format succeeds");
+    let twice = phero_syntax::fmt::format_actors(&once).expect("format succeeds");
+    assert_eq!(once, twice, "formatting must be a fixpoint for:\n{source}");
+}
+
+#[test]
+fn idempotent_on_examples_library() {
+    assert_idempotent(include_str!("../../../examples/library/library.mox"));
+}
+
+#[test]
+fn idempotent_gnarly_weird_spacing() {
+    assert_idempotent("package   a.b\n\n\nclass    Book{\n\nint    pages\n   String  title\n}\n\n\nclass  Empty{}\n");
+}
+
+#[test]
+fn idempotent_gnarly_comments_everywhere() {
+    assert_idempotent(concat!(
+        "// doc header\n",
+        "package a // trailing after package\n",
+        "\n",
+        "/* block\n   before class */\n",
+        "class B { // after brace\n",
+        "    // own line\n",
+        "    /* inline */ int x // trailing\n",
+        "    int y\n",
+        "    // before close\n",
+        "}\n",
+        "// at eof\n"
+    ));
+}
+
+#[test]
+fn idempotent_gnarly_all_features_with_modifiers() {
+    assert_idempotent(concat!(
+        "class B {\n",
+        "  readonly id String a = \"x\"\n",
+        "  id contains Item[0..*] parts opposite owner\n",
+        "  readonly refers Tag[0..1] tag\n",
+        "  container Box box opposite content\n",
+        "  id readonly op int size(String u, int n) { return n }\n",
+        "  derived String label\n",
+        "  id int n = 3\n",
+        "}\n"
+    ));
+}
+
+#[test]
+fn idempotent_gnarly_vocabulary_with_facets() {
+    assert_idempotent(concat!(
+        "vocabulary Currency from \"iso:4217\" {\n",
+        "  version   \"2024-01-01\"\n",
+        "  key   alpha3\n",
+        "  facet String symbol\n",
+        "  facet int minorUnits\n",
+        "}\n"
+    ));
+}
+
+#[test]
+fn idempotent_gnarly_enum_with_labels_and_values() {
+    assert_idempotent("enum E {  A as \"a\" =  1 B as \"b\" C = 2 D }\n");
+}
+
+#[test]
+fn idempotent_gnarly_multiplicity_shapes() {
+    assert_idempotent(concat!(
+        "class L {\n",
+        "  contains Book[0..*] a\n",
+        "  contains Book [3] b\n",
+        "  refers W [0..1] c\n",
+        "  refers W [1..*] d\n",
+        "  refers W [3..5] e\n",
+        "}\n"
+    ));
+}
+
+#[test]
+fn idempotent_gnarly_multiline_block_comment() {
+    assert_idempotent(concat!(
+        "class L {\n",
+        "  /* first\n",
+        "     second\n",
+        "   third */\n",
+        "  int x\n",
+        "}\n"
+    ));
+}
+
+#[test]
+fn idempotent_gnarly_blank_line_chaos() {
+    assert_idempotent("\n\n\npackage a\n\n\n\n\nannotation \"x\"\n\n\n\nclass B { }\n\n\n\n");
+}
+
+#[test]
+fn idempotent_gnarly_qualified_names_and_escapes() {
+    assert_idempotent("class B {\n  contains nz.example.deep . Book [] b\n  String ^type\n}\n");
+}
+
+#[test]
+fn idempotent_gnarly_extends_and_type_decls() {
+    assert_idempotent(concat!(
+        "class A extends B , nz.example.C {}\n",
+        "type D wraps opaque {\n",
+        "  rust \"a::B\"\n",
+        "}\n",
+        "type E wraps f.G\n"
+    ));
+}
+
+// --- Tier 1: target-tagged op bodies and datatype create/convert blocks ------
+//
+// Body formatting rule (see the module docs in src/fmt.rs): the op's `{`
+// closes its line; each `<target> {` sits at the next indent. A single-line
+// body renders inline; a multi-line body's inner bytes are kept VERBATIM
+// (only ends trimmed) between the `<target> {` line and a `}` at the
+// `<target>` indent. Verbatim bytes make re-formatting a fixpoint.
+
+#[test]
+fn op_single_line_target_body_renders_inline() {
+    let formatted = fmt("class S { op Book get(String t) { rust { find(t) } } }");
+    assert_eq!(
+        formatted,
+        "class S {\n    op Book get(String t) {\n        rust { find(t) }\n    }\n}\n"
+    );
+    assert_eq!(fmt(&formatted), formatted, "not a fixpoint");
+}
+
+#[test]
+fn op_multiline_target_body_keeps_bytes_verbatim() {
+    let source = "class S {\n\
+                  \x20   op Book get(String t) {\n\
+                  \x20       rust {\n\
+                  \x20           res.books.iter().find_map(|b| {\n\
+                  \x20               (b.title == t).then_some(*b)\n\
+                  \x20           })\n\
+                  \x20       }\n\
+                  \x20   }\n\
+                  }";
+    let formatted = fmt(source);
+    assert_eq!(
+        formatted,
+        "class S {\n\
+         \x20   op Book get(String t) {\n\
+         \x20       rust {\n\
+         \x20           res.books.iter().find_map(|b| {\n\
+         \x20               (b.title == t).then_some(*b)\n\
+         \x20           })\n\
+         \x20       }\n\
+         \x20   }\n\
+         }\n"
+    );
+    assert_eq!(fmt(&formatted), formatted, "not a fixpoint");
+}
+
+#[test]
+fn op_multiple_target_bodies_each_get_their_own_block() {
+    let source = "class S { op Book get(String t) { rust { find(t) } java { jfind(t) } } }";
+    let formatted = fmt(source);
+    assert_eq!(
+        formatted,
+        "class S {\n\
+         \x20   op Book get(String t) {\n\
+         \x20       rust { find(t) }\n\
+         \x20       java { jfind(t) }\n\
+         \x20   }\n\
+         }\n"
+    );
+    assert_eq!(fmt(&formatted), formatted, "not a fixpoint");
+}
+
+#[test]
+fn bare_op_body_still_renders_on_one_line() {
+    // Bare (untagged) bodies are a driver error, but formatting must be
+    // stable regardless.
+    let formatted = fmt("class S { op int f() { if x { y } } }");
+    assert_eq!(formatted, "class S {\n    op int f() { if x { y } }\n}\n");
+    assert_eq!(fmt(&formatted), formatted);
+}
+
+#[test]
+fn datatype_create_convert_blocks_render_and_fixpoint() {
+    let source = "type D wraps opaque {\n\
+                  \x20   rust \"a::D\"\n\
+                  \x20   create { rust { D(it) } csharp { new D(it) } }\n\
+                  \x20   convert { rust { self.0.clone() } }\n\
+                  }";
+    let formatted = fmt(source);
+    assert_eq!(
+        formatted,
+        "type D wraps opaque {\n\
+         \x20   rust \"a::D\"\n\
+         \x20   create {\n\
+         \x20       rust { D(it) }\n\
+         \x20       csharp { new D(it) }\n\
+         \x20   }\n\
+         \x20   convert {\n\
+         \x20       rust { self.0.clone() }\n\
+         \x20   }\n\
+         }\n"
+    );
+    assert_eq!(fmt(&formatted), formatted, "not a fixpoint");
+}
+
+#[test]
+fn idempotent_gnarly_target_bodies_with_odd_indentation() {
+    // The body bytes (including their original indentation) survive
+    // verbatim; the surrounding scaffolding is normalized once and then
+    // never changes again.
+    let source = "class S {\n\
+                  \x20 op Book get(String t) { rust {\n\
+                  \x20     if x {\n\
+                  \x20   y\n\
+                  \x20     }\n\
+                  \x20 } }\n\
+                  }";
+    let formatted = fmt(source);
+    assert_eq!(fmt(&formatted), formatted, "not a fixpoint");
+    assert!(
+        formatted.contains("      if x {\n    y\n      }\n"),
+        "body bytes must survive verbatim (only ends trimmed):\n{formatted}"
+    );
+}
+
+// --- stability: output parses when the input did -----------------------------
+
+fn assert_still_parses(source: &str) {
+    let before = phero_syntax::parse(source);
+    let output = fmt(source);
+    let after = phero_syntax::parse(&output);
+    assert!(
+        after.errors.is_empty(),
+        "formatted output of a parseable input must parse cleanly, got {:?}\n--- formatted ---\n{output}",
+        after.errors
+    );
+    // The declarational facts must survive: format(parse(x)) is a fixpoint.
+    assert_eq!(fmt(&output), output, "formatted output is not a fixpoint");
+    let _ = before; // `source` is parseable by construction in callers
+}
+
+#[test]
+fn stable_on_conformance_models() {
+    assert_still_parses(include_str!(
+        "../../../tests/conformance/models/library.mox"
+    ));
+    assert_still_parses(include_str!(
+        "../../../tests/conformance/models/currency.mox"
+    ));
+    assert_still_parses(include_str!("../../../tests/conformance/models/actors.mox"));
+    assert_still_parses(include_str!(
+        "../../../tests/conformance/models/register.mox"
+    ));
+}
+
+#[test]
+fn stable_on_inline_models() {
+    assert_still_parses("package a.b\nclass Book { int pages }");
+    assert_still_parses("class B { readonly id String a contains Item[] items opposite owner }");
+    assert_still_parses("enum E { A as \"a\" = 1 B }");
+    assert_still_parses("vocabulary V from \"u:v\" { version \"1\" key k facet int f }");
+    assert_still_parses("type D wraps opaque { rust \"a::B\" }");
+    assert_still_parses("interface I { rust \"x\" }");
+    assert_still_parses("annotation \"dep\" as Old");
+    assert_still_parses("class A extends B, C { op int get(String k) }");
+    assert_still_parses("actors S { agent B delegation D { from A to B permit C obligation o } }");
+}
+
+#[test]
+fn stable_on_constraint_blocks() {
+    assert_still_parses("class P { String sku { pattern \"[A-Z]{3}\" minLength 3 } }");
+    assert_still_parses("class P { int n { minimum 0 maximum 10 } }");
+    assert_still_parses("class P { String[] tags { unique } }");
+    assert_still_parses("class P { String[] tags { unique minLength 1 } }");
+}
+
+// --- golden fixtures ---------------------------------------------------------
+
+/// The formatter a golden entry uses: `.mox` sources go through `format`,
+/// `.actor` sources through `format_actors`, `.evt` sources through
+/// `format_evt`, `.deploy` sources through `format_deploy`, `.uc` sources
+/// through `format_usecases`.
+type Formatter = fn(&str) -> Result<String, FormatError>;
+
+const GOLDENS: &[(&str, &str, Formatter)] = &[
+    (
+        "tests/conformance/models/library.mox",
+        "tests/conformance/fmt/library.fmt.mox",
+        format,
+    ),
+    (
+        "tests/conformance/models/currency.mox",
+        "tests/conformance/fmt/currency.fmt.mox",
+        format,
+    ),
+    (
+        "tests/conformance/models/actors.mox",
+        "tests/conformance/fmt/actors.fmt.mox",
+        format,
+    ),
+    (
+        "tests/conformance/models/register.mox",
+        "tests/conformance/fmt/register.fmt.mox",
+        format,
+    ),
+    (
+        "tests/conformance/models/actors.actor",
+        "tests/conformance/fmt/actors.fmt.actor",
+        phero_syntax::fmt::format_actors,
+    ),
+    (
+        "tests/conformance/models/events.evt",
+        "tests/conformance/fmt/events.fmt.evt",
+        phero_syntax::fmt::format_evt,
+    ),
+    (
+        "tests/conformance/models/deploy.deploy",
+        "tests/conformance/fmt/deploy.fmt.deploy",
+        phero_syntax::fmt::format_deploy,
+    ),
+    (
+        "tests/conformance/models/usecases.uc",
+        "tests/conformance/fmt/usecases.fmt.uc",
+        phero_syntax::fmt::format_usecases,
+    ),
+    (
+        "tests/conformance/models/cmmn.cmmn",
+        "tests/conformance/fmt/cmmn.fmt.cmmn",
+        phero_syntax::fmt::format_cmmn,
+    ),
+    (
+        "tests/conformance/models/dmn.dmn",
+        "tests/conformance/fmt/dmn.fmt.dmn",
+        phero_syntax::fmt::format_dmn,
+    ),
+];
+
+/// Workspace root (two levels above the phero-syntax crate).
+fn workspace_root() -> std::path::PathBuf {
+    std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("../..")
+        .canonicalize()
+        .expect("workspace root")
+}
+
+#[test]
+fn conformance_models_match_golden_formatting() {
+    for (model, golden, format_source) in GOLDENS {
+        let formatted = format_source(&model_source(model)).expect("format conformance fixture");
+        let golden_path = workspace_root().join(golden);
+        if std::env::var("PHERO_UPDATE_FIXTURES").is_ok() {
+            std::fs::create_dir_all(golden_path.parent().unwrap()).unwrap();
+            std::fs::write(&golden_path, &formatted).unwrap();
+            eprintln!("updated {}", golden_path.display());
+            continue;
+        }
+        let expected = std::fs::read_to_string(&golden_path).unwrap_or_else(|_| {
+            panic!(
+                "missing golden formatting {}; regenerate with PHERO_UPDATE_FIXTURES=1",
+                golden_path.display()
+            )
+        });
+        assert_eq!(
+            formatted, expected,
+            "formatting of {model} drifted from the golden file"
+        );
+    }
+}
+
+/// Reads a workspace-relative fixture path at runtime.
+fn model_source(relative: &str) -> String {
+    std::fs::read_to_string(workspace_root().join(relative)).expect("read conformance model")
+}
+
+// ---------------------------------------------------------------------------
+// Constraint blocks
+// ---------------------------------------------------------------------------
+
+#[test]
+fn constraint_blocks_render_single_spaced_on_the_feature_line() {
+    let formatted =
+        format("class Product { String sku { pattern \"[A-Z]{3}\"   minLength 3  maxLength 12 } }")
+            .unwrap();
+    assert_eq!(
+        formatted,
+        "class Product {\n    String sku { pattern \"[A-Z]{3}\" minLength 3 maxLength 12 }\n}\n"
+    );
+    // Fixpoint: formatting the output changes nothing.
+    assert_eq!(format(&formatted).unwrap(), formatted);
+}
+
+#[test]
+fn numeric_constraint_blocks_normalize_and_empty_blocks_collapse() {
+    let formatted = format("class P { int stock { minimum 0  maximum 10 } int tag { } }").unwrap();
+    assert_eq!(
+        formatted,
+        "class P {\n    int stock { minimum 0 maximum 10 }\n    int tag {}\n}\n"
+    );
+    assert_eq!(format(&formatted).unwrap(), formatted);
+}
+
+#[test]
+fn constraint_blocks_survive_as_written_inside_the_block() {
+    // Comments inside the block are preserved; the block's pairs re-join
+    // canonically. The shape must still be a fixpoint.
+    let source = "class P {\n    String sku {\n        // note\n        pattern \"x\"\n    }\n}\n";
+    let once = format(source).unwrap();
+    let twice = format(&once).unwrap();
+    assert_eq!(
+        once, twice,
+        "constraint-block formatting must be a fixpoint"
+    );
+    assert!(once.contains("// note"), "interior comments are preserved");
+}
+
+// ---------------------------------------------------------------------------
+// Doc comments
+// ---------------------------------------------------------------------------
+
+#[test]
+fn doc_comments_are_preserved_above_declarations_and_features() {
+    let source = "\
+/// A book.
+class Book {
+    /// The title.
+    String title
+}
+";
+    let formatted = format(source).unwrap();
+    assert_eq!(formatted, source, "doc comments survive formatting");
+}
+
+// ---------------------------------------------------------------------------
+// `import schema` declarations
+// ---------------------------------------------------------------------------
+
+#[test]
+fn import_schema_renders_after_the_package_before_other_declarations() {
+    // Canonical form: the package first, then the import-schema section
+    // (tight, one declaration per line), then every other declaration.
+    let source = "\
+package demo
+
+class Book { String title }
+
+import schema \"../schemas/todo_item.json\" as TodoItem
+import schema \"../schemas/todo_list.json\"
+";
+    let formatted = fmt(source);
+    assert_eq!(
+        formatted,
+        "\
+package demo
+
+import schema \"../schemas/todo_item.json\" as TodoItem
+import schema \"../schemas/todo_list.json\"
+
+class Book {
+    String title
+}
+"
+    );
+    // Fixpoint: the canonical form reformats to itself (`fmt --check` gate).
+    assert_eq!(fmt(&formatted), formatted);
+}
+
+#[test]
+fn import_schema_is_a_fixpoint_when_already_canonical() {
+    let source = "package demo\n\nimport schema \"a.json\" as A\n\nclass B {}\n";
+    assert_eq!(fmt(source), source);
+}
+
+#[test]
+fn import_schema_without_alias_and_with_comments() {
+    let source = "package demo\n\nimport   schema   \"a.json\"\nimport schema \"b.json\"  as  B\n";
+    assert_eq!(
+        fmt(source),
+        "package demo\n\nimport schema \"a.json\"\nimport schema \"b.json\" as B\n"
+    );
+}
+
+#[test]
+fn qualified_and_keyword_names_stay_in_place_around_import_hoisting() {
+    // A keyword inside a dotted reference (`nz.package.Thing`) and an
+    // identifier sequence that merely looks like an import (`import.schema.X`
+    // or `import.sigil.X` as a name segment) must never be mistaken for
+    // import declarations and hoisted to the top.
+    let source = "\
+package demo
+
+class A extends nz.package.Thing {}
+
+class B extends nz.import.schema.Thing {}
+
+class C extends nz.import.sigil.Thing {}
+";
+    assert_eq!(fmt(source), source);
+}
+
+#[test]
+fn import_sigil_hoists_alongside_schema_imports_in_source_order() {
+    // Canonical form: the package first, then the import section — both
+    // kinds interleaved in source order (tight, one declaration per line) —
+    // then every other declaration.
+    let source = "\
+package demo
+
+class Book { String title }
+
+import schema \"../schemas/todo_item.json\" as TodoItem
+import sigil \"../sigils/cdm.rosetta\"
+import sigil \"../sigils/lex.rosetta\"
+";
+    let formatted = fmt(source);
+    assert_eq!(
+        formatted,
+        "\
+package demo
+
+import schema \"../schemas/todo_item.json\" as TodoItem
+import sigil \"../sigils/cdm.rosetta\"
+import sigil \"../sigils/lex.rosetta\"
+
+class Book {
+    String title
+}
+"
+    );
+    // Fixpoint: the canonical form reformats to itself (`fmt --check` gate).
+    assert_eq!(fmt(&formatted), formatted);
+}
+
+#[test]
+fn import_sigil_is_a_fixpoint_when_already_canonical() {
+    let source =
+        "package demo\n\nimport sigil \"s.rosetta\"\nimport schema \"a.json\" as A\n\nclass B {}\n";
+    assert_eq!(fmt(source), source);
+}
+
+#[test]
+fn import_sigil_normalizes_spacing() {
+    let source = "package demo\n\nimport   sigil   \"a.rosetta\"\nimport sigil \"b.rosetta\"\n";
+    assert_eq!(
+        fmt(source),
+        "package demo\n\nimport sigil \"a.rosetta\"\nimport sigil \"b.rosetta\"\n"
+    );
+}
+
+// --- `register` declarations (issue pherolang#181, part A) ---------------------
+
+#[test]
+fn register_decl_formats_like_a_class() {
+    // The canonical layout mirrors a class: the declaration header always
+    // expands, one attribute per line, `}` at the parent indent.
+    let formatted = fmt("register Role{String display_name\nCostCenter cost_center}");
+    assert_eq!(
+        formatted,
+        "register Role {\n    String display_name\n    CostCenter cost_center\n}\n"
+    );
+    assert_eq!(fmt(&formatted), formatted, "not a fixpoint");
+}
+
+#[test]
+fn idempotent_on_gnarly_register_declarations() {
+    assert_idempotent(concat!(
+        "package   a.b\n",
+        "\n",
+        "/// A role in the organisation.\n",
+        "register Role {\n",
+        "    /// The role's display name.\n",
+        "    String display_name\n",
+        "    String[0..1] badge = \"none\"\n",
+        "    String code { pattern \"[A-Z]{2,8}\" minLength 2 }\n",
+        "}\n",
+        "\n",
+        "register  Empty{}\n",
+        "\n",
+        "register Lead extends Nothing { int x }\n"
+    ));
+}
+
+#[test]
+fn import_hoisting_keeps_register_declarations_in_place() {
+    // A register declaration after an import must not ride the import
+    // section: imports hoist directly after the package, every other
+    // declaration keeps its relative order.
+    let source = concat!(
+        "package p\n",
+        "\n",
+        "class A { int x }\n",
+        "\n",
+        "import schema \"x.json\" as X\n",
+        "\n",
+        "register R { int y }\n"
+    );
+    let formatted = fmt(source);
+    assert_eq!(
+        formatted,
+        concat!(
+            "package p\n",
+            "\n",
+            "import schema \"x.json\" as X\n",
+            "\n",
+            "class A {\n",
+            "    int x\n",
+            "}\n",
+            "\n",
+            "register R {\n",
+            "    int y\n",
+            "}\n"
+        ),
+        "the register declaration must keep its place behind `class A`:\n{formatted}"
+    );
+    assert_eq!(fmt(&formatted), formatted, "not a fixpoint");
+}
+
+#[test]
+fn class_named_register_keeps_import_hoisting_working() {
+    // `class register { ... }` — the class's *name* is the contextual word.
+    // The declaration must stay one item for the import section split, so a
+    // following import still hoists to the canonical position.
+    let source = concat!(
+        "package p\n",
+        "\n",
+        "class register { int x }\n",
+        "\n",
+        "import schema \"x.json\" as X\n"
+    );
+    let formatted = fmt(source);
+    assert_eq!(
+        formatted,
+        concat!(
+            "package p\n",
+            "\n",
+            "import schema \"x.json\" as X\n",
+            "\n",
+            "class register {\n",
+            "    int x\n",
+            "}\n"
+        ),
+        "the import must hoist above the class:\n{formatted}"
+    );
+    assert_eq!(fmt(&formatted), formatted, "not a fixpoint");
+}
