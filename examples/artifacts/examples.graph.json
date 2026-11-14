@@ -24,7 +24,8 @@
       "files": [
         "ecommerce.evt",
         "ecommerce.ifml",
-        "ecommerce.mox"
+        "ecommerce.mox",
+        "orders.ddd"
       ],
       "packages": [
         "nz.example.shop"
@@ -1315,6 +1316,237 @@
       "kind": "file",
       "name": "ecommerce.mox",
       "file": "ecommerce.mox",
+      "application": "ecommerce.evt"
+    },
+    {
+      "id": "designApplication:orders.ddd#Orders",
+      "kind": "designApplication",
+      "name": "Orders",
+      "file": "orders.ddd",
+      "application": "ecommerce.evt"
+    },
+    {
+      "id": "file:orders.ddd#orders.ddd",
+      "kind": "file",
+      "name": "orders.ddd",
+      "file": "orders.ddd",
+      "application": "ecommerce.evt"
+    },
+    {
+      "id": "module:orders.ddd#Orders.customers",
+      "kind": "module",
+      "name": "Orders.customers",
+      "file": "orders.ddd",
+      "application": "ecommerce.evt"
+    },
+    {
+      "id": "module:orders.ddd#Orders.ordering",
+      "kind": "module",
+      "name": "Orders.ordering",
+      "file": "orders.ddd",
+      "application": "ecommerce.evt"
+    },
+    {
+      "id": "repository:orders.ddd#Orders.customers.CustomerRepository",
+      "kind": "repository",
+      "name": "Orders.customers.CustomerRepository",
+      "file": "orders.ddd",
+      "application": "ecommerce.evt"
+    },
+    {
+      "id": "repository:orders.ddd#Orders.ordering.OrderRepository",
+      "kind": "repository",
+      "name": "Orders.ordering.OrderRepository",
+      "file": "orders.ddd",
+      "application": "ecommerce.evt"
+    },
+    {
+      "id": "repository:orders.ddd#Orders.ordering.ProductRepository",
+      "kind": "repository",
+      "name": "Orders.ordering.ProductRepository",
+      "file": "orders.ddd",
+      "application": "ecommerce.evt"
+    },
+    {
+      "id": "repositoryOperation:orders.ddd#Orders.customers.CustomerRepository.delete",
+      "kind": "repositoryOperation",
+      "name": "Orders.customers.CustomerRepository.delete",
+      "file": "orders.ddd",
+      "application": "ecommerce.evt"
+    },
+    {
+      "id": "repositoryOperation:orders.ddd#Orders.customers.CustomerRepository.findAll",
+      "kind": "repositoryOperation",
+      "name": "Orders.customers.CustomerRepository.findAll",
+      "file": "orders.ddd",
+      "application": "ecommerce.evt"
+    },
+    {
+      "id": "repositoryOperation:orders.ddd#Orders.customers.CustomerRepository.findById",
+      "kind": "repositoryOperation",
+      "name": "Orders.customers.CustomerRepository.findById",
+      "file": "orders.ddd",
+      "application": "ecommerce.evt"
+    },
+    {
+      "id": "repositoryOperation:orders.ddd#Orders.customers.CustomerRepository.save",
+      "kind": "repositoryOperation",
+      "name": "Orders.customers.CustomerRepository.save",
+      "file": "orders.ddd",
+      "application": "ecommerce.evt"
+    },
+    {
+      "id": "repositoryOperation:orders.ddd#Orders.ordering.OrderRepository.delete",
+      "kind": "repositoryOperation",
+      "name": "Orders.ordering.OrderRepository.delete",
+      "file": "orders.ddd",
+      "application": "ecommerce.evt"
+    },
+    {
+      "id": "repositoryOperation:orders.ddd#Orders.ordering.OrderRepository.findAll",
+      "kind": "repositoryOperation",
+      "name": "Orders.ordering.OrderRepository.findAll",
+      "file": "orders.ddd",
+      "application": "ecommerce.evt"
+    },
+    {
+      "id": "repositoryOperation:orders.ddd#Orders.ordering.OrderRepository.findById",
+      "kind": "repositoryOperation",
+      "name": "Orders.ordering.OrderRepository.findById",
+      "file": "orders.ddd",
+      "application": "ecommerce.evt"
+    },
+    {
+      "id": "repositoryOperation:orders.ddd#Orders.ordering.OrderRepository.findByNumber",
+      "kind": "repositoryOperation",
+      "name": "Orders.ordering.OrderRepository.findByNumber",
+      "file": "orders.ddd",
+      "application": "ecommerce.evt"
+    },
+    {
+      "id": "repositoryOperation:orders.ddd#Orders.ordering.OrderRepository.save",
+      "kind": "repositoryOperation",
+      "name": "Orders.ordering.OrderRepository.save",
+      "file": "orders.ddd",
+      "application": "ecommerce.evt"
+    },
+    {
+      "id": "repositoryOperation:orders.ddd#Orders.ordering.ProductRepository.delete",
+      "kind": "repositoryOperation",
+      "name": "Orders.ordering.ProductRepository.delete",
+      "file": "orders.ddd",
+      "application": "ecommerce.evt"
+    },
+    {
+      "id": "repositoryOperation:orders.ddd#Orders.ordering.ProductRepository.findAll",
+      "kind": "repositoryOperation",
+      "name": "Orders.ordering.ProductRepository.findAll",
+      "file": "orders.ddd",
+      "application": "ecommerce.evt"
+    },
+    {
+      "id": "repositoryOperation:orders.ddd#Orders.ordering.ProductRepository.findByExample",
+      "kind": "repositoryOperation",
+      "name": "Orders.ordering.ProductRepository.findByExample",
+      "file": "orders.ddd",
+      "application": "ecommerce.evt"
+    },
+    {
+      "id": "repositoryOperation:orders.ddd#Orders.ordering.ProductRepository.findById",
+      "kind": "repositoryOperation",
+      "name": "Orders.ordering.ProductRepository.findById",
+      "file": "orders.ddd",
+      "application": "ecommerce.evt"
+    },
+    {
+      "id": "repositoryOperation:orders.ddd#Orders.ordering.ProductRepository.findByKeys",
+      "kind": "repositoryOperation",
+      "name": "Orders.ordering.ProductRepository.findByKeys",
+      "file": "orders.ddd",
+      "application": "ecommerce.evt"
+    },
+    {
+      "id": "repositoryOperation:orders.ddd#Orders.ordering.ProductRepository.save",
+      "kind": "repositoryOperation",
+      "name": "Orders.ordering.ProductRepository.save",
+      "file": "orders.ddd",
+      "application": "ecommerce.evt"
+    },
+    {
+      "id": "search:orders.ddd#Orders.ordering.OrderSearch",
+      "kind": "search",
+      "name": "Orders.ordering.OrderSearch",
+      "file": "orders.ddd",
+      "application": "ecommerce.evt"
+    },
+    {
+      "id": "service:orders.ddd#Orders.customers.CustomerService",
+      "kind": "service",
+      "name": "Orders.customers.CustomerService",
+      "file": "orders.ddd",
+      "application": "ecommerce.evt"
+    },
+    {
+      "id": "service:orders.ddd#Orders.ordering.OrderService",
+      "kind": "service",
+      "name": "Orders.ordering.OrderService",
+      "file": "orders.ddd",
+      "application": "ecommerce.evt"
+    },
+    {
+      "id": "serviceOperation:orders.ddd#Orders.customers.CustomerService.findByName",
+      "kind": "serviceOperation",
+      "name": "Orders.customers.CustomerService.findByName",
+      "file": "orders.ddd",
+      "application": "ecommerce.evt"
+    },
+    {
+      "id": "serviceOperation:orders.ddd#Orders.customers.CustomerService.register",
+      "kind": "serviceOperation",
+      "name": "Orders.customers.CustomerService.register",
+      "file": "orders.ddd",
+      "application": "ecommerce.evt"
+    },
+    {
+      "id": "serviceOperation:orders.ddd#Orders.ordering.Order.addLine",
+      "kind": "serviceOperation",
+      "name": "Orders.ordering.Order.addLine",
+      "file": "orders.ddd",
+      "application": "ecommerce.evt"
+    },
+    {
+      "id": "serviceOperation:orders.ddd#Orders.ordering.Order.removeLine",
+      "kind": "serviceOperation",
+      "name": "Orders.ordering.Order.removeLine",
+      "file": "orders.ddd",
+      "application": "ecommerce.evt"
+    },
+    {
+      "id": "serviceOperation:orders.ddd#Orders.ordering.Order.saveLine",
+      "kind": "serviceOperation",
+      "name": "Orders.ordering.Order.saveLine",
+      "file": "orders.ddd",
+      "application": "ecommerce.evt"
+    },
+    {
+      "id": "serviceOperation:orders.ddd#Orders.ordering.OrderService.findOrders",
+      "kind": "serviceOperation",
+      "name": "Orders.ordering.OrderService.findOrders",
+      "file": "orders.ddd",
+      "application": "ecommerce.evt"
+    },
+    {
+      "id": "serviceOperation:orders.ddd#Orders.ordering.OrderService.place",
+      "kind": "serviceOperation",
+      "name": "Orders.ordering.OrderService.place",
+      "file": "orders.ddd",
+      "application": "ecommerce.evt"
+    },
+    {
+      "id": "serviceOperation:orders.ddd#Orders.ordering.OrderService.saveOrder",
+      "kind": "serviceOperation",
+      "name": "Orders.ordering.OrderService.saveOrder",
+      "file": "orders.ddd",
       "application": "ecommerce.evt"
     },
     {
@@ -3522,6 +3754,11 @@
       "kind": "imports"
     },
     {
+      "from": "file:orders.ddd#orders.ddd",
+      "to": "file:ecommerce.mox#ecommerce.mox",
+      "kind": "imports"
+    },
+    {
       "from": "file:support.actor#support.actor",
       "to": "file:support.mox#support.mox",
       "kind": "imports"
@@ -3703,6 +3940,16 @@
       "kind": "memberOf"
     },
     {
+      "from": "module:orders.ddd#Orders.customers",
+      "to": "designApplication:orders.ddd#Orders",
+      "kind": "memberOf"
+    },
+    {
+      "from": "module:orders.ddd#Orders.ordering",
+      "to": "designApplication:orders.ddd#Orders",
+      "kind": "memberOf"
+    },
+    {
       "from": "module:support.ddd#SupportDesk.desk",
       "to": "designApplication:support.ddd#SupportDesk",
       "kind": "memberOf"
@@ -3824,6 +4071,45 @@
       "kind": "memberOf"
     },
     {
+      "from": "repository:orders.ddd#Orders.customers.CustomerRepository",
+      "to": "class:ecommerce.mox#nz.example.shop.Customer",
+      "kind": "designs",
+      "attributes": {
+        "via": "repository"
+      }
+    },
+    {
+      "from": "repository:orders.ddd#Orders.customers.CustomerRepository",
+      "to": "module:orders.ddd#Orders.customers",
+      "kind": "memberOf"
+    },
+    {
+      "from": "repository:orders.ddd#Orders.ordering.OrderRepository",
+      "to": "class:ecommerce.mox#nz.example.shop.Order",
+      "kind": "designs",
+      "attributes": {
+        "via": "repository"
+      }
+    },
+    {
+      "from": "repository:orders.ddd#Orders.ordering.OrderRepository",
+      "to": "module:orders.ddd#Orders.ordering",
+      "kind": "memberOf"
+    },
+    {
+      "from": "repository:orders.ddd#Orders.ordering.ProductRepository",
+      "to": "class:ecommerce.mox#nz.example.shop.Product",
+      "kind": "designs",
+      "attributes": {
+        "via": "repository"
+      }
+    },
+    {
+      "from": "repository:orders.ddd#Orders.ordering.ProductRepository",
+      "to": "module:orders.ddd#Orders.ordering",
+      "kind": "memberOf"
+    },
+    {
       "from": "repository:support.ddd#SupportDesk.desk.TicketRepository",
       "to": "class:support.mox#nz.example.support.Ticket",
       "kind": "designs",
@@ -3834,6 +4120,89 @@
     {
       "from": "repository:support.ddd#SupportDesk.desk.TicketRepository",
       "to": "module:support.ddd#SupportDesk.desk",
+      "kind": "memberOf"
+    },
+    {
+      "from": "repositoryOperation:orders.ddd#Orders.customers.CustomerRepository.delete",
+      "to": "repository:orders.ddd#Orders.customers.CustomerRepository",
+      "kind": "memberOf"
+    },
+    {
+      "from": "repositoryOperation:orders.ddd#Orders.customers.CustomerRepository.findAll",
+      "to": "repository:orders.ddd#Orders.customers.CustomerRepository",
+      "kind": "memberOf"
+    },
+    {
+      "from": "repositoryOperation:orders.ddd#Orders.customers.CustomerRepository.findById",
+      "to": "repository:orders.ddd#Orders.customers.CustomerRepository",
+      "kind": "memberOf"
+    },
+    {
+      "from": "repositoryOperation:orders.ddd#Orders.customers.CustomerRepository.save",
+      "to": "repository:orders.ddd#Orders.customers.CustomerRepository",
+      "kind": "memberOf"
+    },
+    {
+      "from": "repositoryOperation:orders.ddd#Orders.ordering.OrderRepository.delete",
+      "to": "repository:orders.ddd#Orders.ordering.OrderRepository",
+      "kind": "memberOf"
+    },
+    {
+      "from": "repositoryOperation:orders.ddd#Orders.ordering.OrderRepository.findAll",
+      "to": "repository:orders.ddd#Orders.ordering.OrderRepository",
+      "kind": "memberOf"
+    },
+    {
+      "from": "repositoryOperation:orders.ddd#Orders.ordering.OrderRepository.findById",
+      "to": "repository:orders.ddd#Orders.ordering.OrderRepository",
+      "kind": "memberOf"
+    },
+    {
+      "from": "repositoryOperation:orders.ddd#Orders.ordering.OrderRepository.findByNumber",
+      "to": "repository:orders.ddd#Orders.ordering.OrderRepository",
+      "kind": "memberOf"
+    },
+    {
+      "from": "repositoryOperation:orders.ddd#Orders.ordering.OrderRepository.findByNumber",
+      "to": "class:ecommerce.mox#nz.example.shop.Order",
+      "kind": "typeOf",
+      "attributes": {
+        "role": "return"
+      }
+    },
+    {
+      "from": "repositoryOperation:orders.ddd#Orders.ordering.OrderRepository.save",
+      "to": "repository:orders.ddd#Orders.ordering.OrderRepository",
+      "kind": "memberOf"
+    },
+    {
+      "from": "repositoryOperation:orders.ddd#Orders.ordering.ProductRepository.delete",
+      "to": "repository:orders.ddd#Orders.ordering.ProductRepository",
+      "kind": "memberOf"
+    },
+    {
+      "from": "repositoryOperation:orders.ddd#Orders.ordering.ProductRepository.findAll",
+      "to": "repository:orders.ddd#Orders.ordering.ProductRepository",
+      "kind": "memberOf"
+    },
+    {
+      "from": "repositoryOperation:orders.ddd#Orders.ordering.ProductRepository.findByExample",
+      "to": "repository:orders.ddd#Orders.ordering.ProductRepository",
+      "kind": "memberOf"
+    },
+    {
+      "from": "repositoryOperation:orders.ddd#Orders.ordering.ProductRepository.findById",
+      "to": "repository:orders.ddd#Orders.ordering.ProductRepository",
+      "kind": "memberOf"
+    },
+    {
+      "from": "repositoryOperation:orders.ddd#Orders.ordering.ProductRepository.findByKeys",
+      "to": "repository:orders.ddd#Orders.ordering.ProductRepository",
+      "kind": "memberOf"
+    },
+    {
+      "from": "repositoryOperation:orders.ddd#Orders.ordering.ProductRepository.save",
+      "to": "repository:orders.ddd#Orders.ordering.ProductRepository",
       "kind": "memberOf"
     },
     {
@@ -3878,6 +4247,43 @@
       "from": "repositoryOperation:support.ddd#SupportDesk.desk.TicketRepository.save",
       "to": "repository:support.ddd#SupportDesk.desk.TicketRepository",
       "kind": "memberOf"
+    },
+    {
+      "from": "search:orders.ddd#Orders.ordering.OrderSearch",
+      "to": "class:ecommerce.mox#nz.example.shop.Order",
+      "kind": "designs",
+      "attributes": {
+        "via": "search"
+      }
+    },
+    {
+      "from": "search:orders.ddd#Orders.ordering.OrderSearch",
+      "to": "module:orders.ddd#Orders.ordering",
+      "kind": "memberOf"
+    },
+    {
+      "from": "search:orders.ddd#Orders.ordering.OrderSearch",
+      "to": "feature:ecommerce.mox#nz.example.shop.Order.currency",
+      "kind": "readsFeature",
+      "attributes": {
+        "via": "filter"
+      }
+    },
+    {
+      "from": "search:orders.ddd#Orders.ordering.OrderSearch",
+      "to": "feature:ecommerce.mox#nz.example.shop.Order.orderNo",
+      "kind": "readsFeature",
+      "attributes": {
+        "via": "sort"
+      }
+    },
+    {
+      "from": "search:orders.ddd#Orders.ordering.OrderSearch",
+      "to": "feature:ecommerce.mox#nz.example.shop.Order.orderNo",
+      "kind": "readsFeature",
+      "attributes": {
+        "via": "text"
+      }
     },
     {
       "from": "search:support.ddd#SupportDesk.desk.TicketSearch",
@@ -3930,6 +4336,26 @@
       }
     },
     {
+      "from": "service:orders.ddd#Orders.customers.CustomerService",
+      "to": "repository:orders.ddd#Orders.customers.CustomerRepository",
+      "kind": "injects"
+    },
+    {
+      "from": "service:orders.ddd#Orders.customers.CustomerService",
+      "to": "module:orders.ddd#Orders.customers",
+      "kind": "memberOf"
+    },
+    {
+      "from": "service:orders.ddd#Orders.ordering.OrderService",
+      "to": "repository:orders.ddd#Orders.ordering.OrderRepository",
+      "kind": "injects"
+    },
+    {
+      "from": "service:orders.ddd#Orders.ordering.OrderService",
+      "to": "module:orders.ddd#Orders.ordering",
+      "kind": "memberOf"
+    },
+    {
       "from": "service:support.ddd#SupportDesk.desk.TicketService",
       "to": "repository:support.ddd#SupportDesk.desk.TicketRepository",
       "kind": "injects"
@@ -3937,6 +4363,113 @@
     {
       "from": "service:support.ddd#SupportDesk.desk.TicketService",
       "to": "module:support.ddd#SupportDesk.desk",
+      "kind": "memberOf"
+    },
+    {
+      "from": "serviceOperation:orders.ddd#Orders.customers.CustomerService.findByName",
+      "to": "service:orders.ddd#Orders.customers.CustomerService",
+      "kind": "memberOf"
+    },
+    {
+      "from": "serviceOperation:orders.ddd#Orders.customers.CustomerService.findByName",
+      "to": "class:ecommerce.mox#nz.example.shop.Customer",
+      "kind": "typeOf",
+      "attributes": {
+        "role": "return"
+      }
+    },
+    {
+      "from": "serviceOperation:orders.ddd#Orders.customers.CustomerService.register",
+      "to": "repositoryOperation:orders.ddd#Orders.customers.CustomerRepository.save",
+      "kind": "forwardsTo",
+      "attributes": {
+        "operation": "save"
+      }
+    },
+    {
+      "from": "serviceOperation:orders.ddd#Orders.customers.CustomerService.register",
+      "to": "service:orders.ddd#Orders.customers.CustomerService",
+      "kind": "memberOf"
+    },
+    {
+      "from": "serviceOperation:orders.ddd#Orders.ordering.Order.addLine",
+      "to": "module:orders.ddd#Orders.ordering",
+      "kind": "memberOf"
+    },
+    {
+      "from": "serviceOperation:orders.ddd#Orders.ordering.Order.addLine",
+      "to": "class:ecommerce.mox#nz.example.shop.OrderLine",
+      "kind": "typeOf",
+      "attributes": {
+        "field": "line",
+        "role": "param"
+      }
+    },
+    {
+      "from": "serviceOperation:orders.ddd#Orders.ordering.Order.addLine",
+      "to": "class:ecommerce.mox#nz.example.shop.OrderLine",
+      "kind": "typeOf",
+      "attributes": {
+        "role": "return"
+      }
+    },
+    {
+      "from": "serviceOperation:orders.ddd#Orders.ordering.Order.removeLine",
+      "to": "module:orders.ddd#Orders.ordering",
+      "kind": "memberOf"
+    },
+    {
+      "from": "serviceOperation:orders.ddd#Orders.ordering.Order.saveLine",
+      "to": "module:orders.ddd#Orders.ordering",
+      "kind": "memberOf"
+    },
+    {
+      "from": "serviceOperation:orders.ddd#Orders.ordering.Order.saveLine",
+      "to": "class:ecommerce.mox#nz.example.shop.OrderLine",
+      "kind": "typeOf",
+      "attributes": {
+        "field": "line",
+        "role": "param"
+      }
+    },
+    {
+      "from": "serviceOperation:orders.ddd#Orders.ordering.OrderService.findOrders",
+      "to": "service:orders.ddd#Orders.ordering.OrderService",
+      "kind": "memberOf"
+    },
+    {
+      "from": "serviceOperation:orders.ddd#Orders.ordering.OrderService.place",
+      "to": "service:orders.ddd#Orders.ordering.OrderService",
+      "kind": "memberOf"
+    },
+    {
+      "from": "serviceOperation:orders.ddd#Orders.ordering.OrderService.place",
+      "to": "class:ecommerce.mox#nz.example.shop.Customer",
+      "kind": "typeOf",
+      "attributes": {
+        "field": "forCustomer",
+        "role": "param"
+      }
+    },
+    {
+      "from": "serviceOperation:orders.ddd#Orders.ordering.OrderService.place",
+      "to": "class:ecommerce.mox#nz.example.shop.Order",
+      "kind": "typeOf",
+      "attributes": {
+        "role": "return"
+      }
+    },
+    {
+      "from": "serviceOperation:orders.ddd#Orders.ordering.OrderService.saveOrder",
+      "to": "repositoryOperation:orders.ddd#Orders.ordering.OrderRepository.save",
+      "kind": "forwardsTo",
+      "attributes": {
+        "operation": "save"
+      }
+    },
+    {
+      "from": "serviceOperation:orders.ddd#Orders.ordering.OrderService.saveOrder",
+      "to": "service:orders.ddd#Orders.ordering.OrderService",
       "kind": "memberOf"
     },
     {

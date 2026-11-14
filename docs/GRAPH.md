@@ -75,6 +75,17 @@ without contributing nodes of its own beyond its domain declarations.
 Unrelated applications in one tree never cross-check, and an import that
 leaves the checked set contributes no edge.
 
+**Pools follow the application, not the directory.** The compile-time
+joins — the `.ddd` capability clause against `.actor` policies
+(rexlang#128), the `.ddd` `invokes`/`inject decision` links against `.dmn`
+models (rexlang#78), and the `.actor` grant coverage against `.ddd`
+designs — resolve inside the compiled file's application component only.
+Two applications sharing a directory (or a checked tree) never see each
+other's capabilities, decisions, or designs, and a file whose application
+holds no counterpart surface keeps the plain compile behavior (the join is
+silent). The CLI pools from its project snapshot's component; the LSP pools
+from the open document's directory snapshot, scoped by the same relation.
+
 `applications[].id` is the component's smallest member path;
 `applications[].files` and `.packages` are sorted.
 
@@ -89,8 +100,9 @@ Compiles every input and emits **one** `GraphModel` — pretty-printed
 mode** exactly like `check`/`build`: every supported surface under the tree
 is gathered into one snapshot, each file compiles independently with its
 imports resolving map-first, sibling artifacts are reused compile-once, the
-union-wide capability joins run, and formatter-golden `X.fmt.<ext>` files are
-skipped. Explicit files compile in their own context, like `build`.
+capability/design/decision joins run scoped to each file's import-connected
+application, and formatter-golden `X.fmt.<ext>` files are skipped. Explicit
+files compile in their own context, like `build`.
 
 Emission is **best-effort over the compiling subset** (the `build`
 precedent): a failing file renders its diagnostics per file and contributes
@@ -123,11 +135,15 @@ diff /tmp/examples.graph.json examples/artifacts/examples.graph.json
 REX_UPDATE_FIXTURES=1 cargo test -p rex-cli --test cli graph
 ```
 
-The tree keeps one pre-existing project-mode failure (`orders.ddd`'s
-`PlaceOrder` capability against the union-wide pooled `support.actor`
-capabilities — the same finding `check examples/` renders), which exercises
-the best-effort path: the artifact is written over the compiling subset and
-the command exits `1`.
+Every file under the tree compiles, so the command exits `0`: `orders.ddd`
+no longer resolves its `PlaceOrder` capability against `support.actor`'s
+names (the two files belong to different applications — rexlang#249), and
+an application with no policy of its own keeps the join silent. The
+best-effort emission path (a failing file renders its diagnostics, the
+artifact covers the compiling subset, the command exits `1`) is still the
+contract; it is just not exercised by `examples/` any more. `check
+examples/` still fails in the union integrity pass (rexlang#258), which
+`graph` does not run.
 
 ## Nodes (v1)
 
@@ -240,9 +256,10 @@ binding.
 
 The graph mirrors the compiler; it never invents a binding:
 
-- Capability/actor names are block-local but pool union-wide (`.ddd`
-  clause resolution, `.ifml` `requires:`/`roles:`, `.uc` steps). One match
-  binds; several emit all with `attributes["ambiguous"]="true"`.
+- Capability/actor names are block-local but pool across the file's
+  import-connected application (`.ddd` clause resolution, `.ifml`
+  `requires:`/`roles:`, `.uc` steps) — never across applications. One
+  match binds; several emit all with `attributes["ambiguous"]="true"`.
 - `action → operation` follows the #114 rule: ASCII-case-insensitive name
   equality; unique binds, several emit all with `ambiguous`.
 - `.uc` step → operation: by name among the application's design

@@ -211,3 +211,253 @@ async fn code_action_on_an_unknown_capability_offers_the_rename() {
         "the edit covers the reference"
     );
 }
+
+// --- application-scoped joins (rexlang#249) ----------------------------------
+//
+// The compile-time joins above pool the open document's **import-connected
+// application** (`rex_driver::applications`), never its directory: a `.mox`
+// both files import is the bridge that joins them, and two applications in
+// one directory without an import edge stay separate. An application with no
+// counterpart surface keeps the plain compile behavior — the join is silent
+// (opt-in house style), which is what makes the negative cases publish
+// nothing rather than fail.
+
+/// The desk application's domain.
+const SCOPED_DESK_MOX: &str = "package desk\n\nclass Ticket { String title }\n";
+
+/// The shop application's domain — no import edge to desk.
+const SCOPED_SHOP_MOX: &str = "package shop\n\nclass Order { String orderNo }\n";
+
+/// A design over `domain` whose one operation carries `capability`.
+fn scoped_design(domain: &str, application: &str, capability: &str) -> String {
+    format!("import \"{domain}\"\n\napplication {application} {{\n    module desk {{\n        service TicketService {{\n            boolean act() capability {capability};\n        }}\n    }}\n}}\n")
+}
+
+/// A design over `domain` whose one operation carries no capability.
+fn scoped_uncarried_design(domain: &str, application: &str) -> String {
+    format!("import \"{domain}\"\n\napplication {application} {{\n    module desk {{\n        service TicketService {{\n            boolean act() ;\n        }}\n    }}\n}}\n")
+}
+
+/// A design over `domain` invoking the decision service `service`.
+fn scoped_decision_design(domain: &str, application: &str, service: &str) -> String {
+    format!("import \"{domain}\";\n\napplication {application} {{\n    module desk {{\n        service TicketService {{\n            boolean act(String ticketNo, int cents) invokes {service};\n        }}\n    }}\n}}\n")
+}
+
+/// A policy over `domain` granting `capability`.
+fn scoped_policy(domain: &str, capability: &str) -> String {
+    format!("import \"{domain}\"\n\nactors Policy {{\n    actor Agent\n    capability {capability} on Ticket\n    grant Agent {{\n        permit {capability}\n    }}\n}}\n")
+}
+
+/// A decision model over `domain` declaring one service.
+fn scoped_decision_model(domain: &str, service: &str) -> String {
+    format!("import \"{domain}\"\n\ndecision_model Decisions {{\n    decisions {{\n        decision outcome {{\n            output boolean;\n        }}\n    }}\n\n    services {{\n        service {service} {{\n            outputs {{ outcome }}\n            encapsulates {{ outcome }}\n        }}\n    }}\n}}\n")
+}
+
+/// Negative: a policy in another application never supplies the open
+/// design's capability pool (the `examples/orders.ddd` failure — scoped, the
+/// shop application has no policy of its own and the join is silent).
+#[tokio::test]
+async fn two_unrelated_applications_in_one_directory_do_not_share_capabilities() {
+    let dir = scratch_dir("scoped-capabilities");
+    std::fs::write(dir.join("desk.mox"), SCOPED_DESK_MOX).expect("write desk mox");
+    std::fs::write(
+        dir.join("desk.actor"),
+        scoped_policy("desk.mox", "ApproveTicket"),
+    )
+    .expect("write desk policy");
+    std::fs::write(dir.join("shop.mox"), SCOPED_SHOP_MOX).expect("write shop mox");
+    let design_uri = url_for(&dir.join("shop.ddd"));
+
+    let (mut service, mut socket) = initialized_service().await;
+    open_at(
+        &mut service,
+        &design_uri,
+        &scoped_design("shop.mox", "Shop", "PlaceOrder"),
+    )
+    .await;
+    let publish = next_publish(&mut socket, &design_uri)
+        .await
+        .expect("publishDiagnostics for the design");
+    assert!(
+        publish.diagnostics.is_empty(),
+        "the desk policy must not pool into the shop design: {publish:?}"
+    );
+}
+
+/// Positive: the pool still works inside one application — the design and
+/// the policy import the same domain (the bridge), so the typo is reported
+/// against the sibling's capability with its did-you-mean.
+#[tokio::test]
+async fn an_imported_sibling_actor_still_pools() {
+    let dir = scratch_dir("scoped-actor-pool");
+    std::fs::write(dir.join("desk.mox"), SCOPED_DESK_MOX).expect("write desk mox");
+    std::fs::write(
+        dir.join("desk.actor"),
+        scoped_policy("desk.mox", "ApproveTicket"),
+    )
+    .expect("write desk policy");
+    let design_uri = url_for(&dir.join("desk.ddd"));
+
+    let (mut service, mut socket) = initialized_service().await;
+    open_at(
+        &mut service,
+        &design_uri,
+        &scoped_design("desk.mox", "Desk", "ApproveTicke"),
+    )
+    .await;
+    let publish = next_publish(&mut socket, &design_uri)
+        .await
+        .expect("publishDiagnostics for the design");
+    let diagnostic = publish
+        .diagnostics
+        .iter()
+        .find(|diagnostic| {
+            diagnostic
+                .message
+                .contains("unknown capability 'ApproveTicke'")
+        })
+        .expect("the pooled capability set rejects the typo");
+    assert!(
+        diagnostic.message.contains("did you mean 'ApproveTicket'?"),
+        "the sibling policy's name is the suggestion: {diagnostic:?}"
+    );
+}
+
+/// Negative: a decision model in another application never joins the open
+/// design's decisions bucket, so the `invokes` name stays unvalidated.
+#[tokio::test]
+async fn two_unrelated_applications_in_one_directory_do_not_share_decision_services() {
+    let dir = scratch_dir("scoped-decisions");
+    std::fs::write(dir.join("desk.mox"), SCOPED_DESK_MOX).expect("write desk mox");
+    std::fs::write(
+        dir.join("desk.dmn"),
+        scoped_decision_model("desk.mox", "AssessPayout"),
+    )
+    .expect("write desk decisions");
+    std::fs::write(dir.join("shop.mox"), SCOPED_SHOP_MOX).expect("write shop mox");
+    let design_uri = url_for(&dir.join("shop.ddd"));
+
+    let (mut service, mut socket) = initialized_service().await;
+    open_at(
+        &mut service,
+        &design_uri,
+        &scoped_decision_design("shop.mox", "Shop", "AssessRefund"),
+    )
+    .await;
+    let publish = next_publish(&mut socket, &design_uri)
+        .await
+        .expect("publishDiagnostics for the design");
+    assert!(
+        publish.diagnostics.is_empty(),
+        "the desk decisions must not pool into the shop design: {publish:?}"
+    );
+}
+
+/// Positive: rule 17 still resolves inside one application — the design's
+/// `invokes` name is checked against the sibling decision model's services.
+#[tokio::test]
+async fn an_imported_sibling_decision_model_still_pools() {
+    let dir = scratch_dir("scoped-decision-pool");
+    std::fs::write(dir.join("desk.mox"), SCOPED_DESK_MOX).expect("write desk mox");
+    std::fs::write(
+        dir.join("desk.dmn"),
+        scoped_decision_model("desk.mox", "AssessRefund"),
+    )
+    .expect("write desk decisions");
+    let design_uri = url_for(&dir.join("desk.ddd"));
+
+    let (mut service, mut socket) = initialized_service().await;
+    open_at(
+        &mut service,
+        &design_uri,
+        &scoped_decision_design("desk.mox", "Desk", "AssessNothing"),
+    )
+    .await;
+    let publish = next_publish(&mut socket, &design_uri)
+        .await
+        .expect("publishDiagnostics for the design");
+    let diagnostic = publish
+        .diagnostics
+        .iter()
+        .find(|diagnostic| diagnostic.message.contains("E0250"))
+        .expect("the unknown decision service publishes");
+    assert!(
+        diagnostic
+            .message
+            .contains("the decision models declare: AssessRefund"),
+        "the sibling decision model's service is the pool: {diagnostic:?}"
+    );
+}
+
+/// Negative: a design in another application never carries the grant, so the
+/// policy's grant dangles inside its own application.
+#[tokio::test]
+async fn two_unrelated_applications_in_one_directory_do_not_share_grant_carriers() {
+    let dir = scratch_dir("scoped-carriers");
+    std::fs::write(dir.join("desk.mox"), SCOPED_DESK_MOX).expect("write desk mox");
+    std::fs::write(
+        dir.join("desk.ddd"),
+        scoped_uncarried_design("desk.mox", "Desk"),
+    )
+    .expect("write desk design");
+    std::fs::write(
+        dir.join("desk.actor"),
+        scoped_policy("desk.mox", "ApproveTicket"),
+    )
+    .expect("write desk policy");
+    std::fs::write(dir.join("shop.mox"), SCOPED_SHOP_MOX).expect("write shop mox");
+    std::fs::write(
+        dir.join("shop.ddd"),
+        scoped_design("shop.mox", "Shop", "ApproveTicket"),
+    )
+    .expect("write shop design");
+    let actor_uri = url_for(&dir.join("desk.actor"));
+
+    let (mut service, mut socket) = initialized_service().await;
+    open_at(
+        &mut service,
+        &actor_uri,
+        &scoped_policy("desk.mox", "ApproveTicket"),
+    )
+    .await;
+    let publish = next_publish(&mut socket, &actor_uri)
+        .await
+        .expect("publishDiagnostics for the policy");
+    assert!(
+        publish
+            .diagnostics
+            .iter()
+            .any(|diagnostic| diagnostic.message.contains(
+                "capability 'ApproveTicket' is granted but no operation or search carries it"
+            )),
+        "the shop design must not carry the desk grant: {publish:?}"
+    );
+}
+
+/// Positive: a design in the same application still carries the grant.
+#[tokio::test]
+async fn an_imported_sibling_design_still_carries_grants() {
+    let dir = scratch_dir("scoped-grant-carried");
+    std::fs::write(dir.join("desk.mox"), SCOPED_DESK_MOX).expect("write desk mox");
+    std::fs::write(
+        dir.join("desk.ddd"),
+        scoped_design("desk.mox", "Desk", "ApproveTicket"),
+    )
+    .expect("write desk design");
+    let actor_uri = url_for(&dir.join("desk.actor"));
+
+    let (mut service, mut socket) = initialized_service().await;
+    open_at(
+        &mut service,
+        &actor_uri,
+        &scoped_policy("desk.mox", "ApproveTicket"),
+    )
+    .await;
+    let publish = next_publish(&mut socket, &actor_uri)
+        .await
+        .expect("publishDiagnostics for the policy");
+    assert!(
+        publish.diagnostics.is_empty(),
+        "the sibling design carries the grant: {publish:?}"
+    );
+}

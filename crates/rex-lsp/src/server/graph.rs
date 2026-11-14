@@ -522,7 +522,7 @@ fn push_artifact(
 }
 
 /// The surface of a path, by extension.
-fn surface_of_path(path: &Path) -> Option<Surface> {
+pub(super) fn surface_of_path(path: &Path) -> Option<Surface> {
     match path.extension().and_then(|extension| extension.to_str())? {
         "mox" => Some(Surface::Mox),
         "actor" => Some(Surface::Actor),
@@ -539,7 +539,7 @@ fn surface_of_path(path: &Path) -> Option<Surface> {
 
 /// `true` for a formatter-golden `X.fmt.<ext>` file — an output, not a
 /// standalone model (the `check` project-mode rule).
-fn is_formatter_golden(path: &Path) -> bool {
+pub(super) fn is_formatter_golden(path: &Path) -> bool {
     path.file_name()
         .and_then(|name| name.to_str())
         .is_some_and(|name| name.contains(".fmt."))
@@ -576,8 +576,10 @@ fn surface_index(surface: Surface, text: &str, display: &str) -> Option<SurfaceI
 
 /// The resolved import keys of one file: every written import string joined
 /// with the file's directory, canonicalized where the file exists — the
-/// host-normalized keys the graph clusters applications on.
-fn resolved_imports(surface: Surface, text: &str, path: &Path) -> Vec<String> {
+/// host-normalized keys the graph clusters applications on. The publish
+/// pipeline's compile-time joins reuse this (rexlang#249), so graph
+/// clustering and capability pooling can never see different edges.
+pub(super) fn resolved_imports(surface: Surface, text: &str, path: &Path) -> Vec<String> {
     let directory = path.parent().unwrap_or_else(|| Path::new("."));
     let mut keys: Vec<String> = written_imports(surface, text)
         .into_iter()
