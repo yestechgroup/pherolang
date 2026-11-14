@@ -1,12 +1,12 @@
 //! LSP server tests: cross-surface navigation over the semantic graph.
 //!
-//! One fixture directory per test: the conformance `graph` stack
-//! (`tests/conformance/graph/app.*`) copied to a temp directory, plus the
-//! two files the matrix needs that the committed fixture does not carry —
-//! an `.ifml` view with `requires:`/`roles:`, and a design whose operation
-//! `invokes` a decision service. The `.evt` fixture gains a subscription
-//! (subscriptions must name events declared in their own file) and the `.uc`
-//! fixture a `realizes` clause.
+//! One fixture directory per test: the conformance application (one file per
+//! surface) copied to a temp directory through the shared `rex-testkit`
+//! loader, plus the files the matrix needs that the committed fixture does
+//! not carry — an `.ifml` view with `requires:`/`roles:`, and a design whose
+//! operation `invokes` a decision service. The `.evt` fixture gains a
+//! subscription (subscriptions must name events declared in their own file)
+//! and the `.uc` fixture a `realizes` clause.
 //!
 //! The in-process harness has a capacity-one client socket: every open and
 //! change is drained concurrently, the existing `open_at`/`drain_socket`
@@ -14,28 +14,14 @@
 
 use super::*;
 
+use rex_testkit::fixtures;
 use serde_json::json;
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 use tower::{Service, ServiceExt};
 use tower_lsp_server::jsonrpc;
 use tower_lsp_server::LspService;
 
 // --- the fixture -----------------------------------------------------------
-
-/// The committed conformance stack, copied verbatim.
-const STACK: [&str; 11] = [
-    "app.mox",
-    "app.actor",
-    "app.ddd",
-    "app.evt",
-    "app.deploy",
-    "app.ifml",
-    "app.uc",
-    "app.cmmn",
-    "app.dmn",
-    "other.mox",
-    "other.actor",
-];
 
 /// A design whose operation invokes the fixture's decision service.
 const INVOKED_DDD: &str = r#"// The decision-invoking half of the LSP fixture.
@@ -87,10 +73,6 @@ struct Fixture {
 
 impl Fixture {
     fn new(tag: &str) -> Self {
-        let source = Path::new(env!("CARGO_MANIFEST_DIR"))
-            .join("../../tests/conformance/graph")
-            .canonicalize()
-            .expect("the conformance graph fixture");
         let dir = std::env::temp_dir().join(format!(
             "rex-lsp-graph-{tag}-{}-{}",
             std::process::id(),
@@ -99,18 +81,21 @@ impl Fixture {
                 .expect("a clock")
                 .as_nanos()
         ));
-        std::fs::create_dir_all(&dir).expect("mkdir");
-        for name in STACK {
-            std::fs::copy(source.join(name), dir.join(name))
-                .unwrap_or_else(|error| panic!("copy {name}: {error}"));
-        }
-        // The state-machine pair (`payrun.*`) is the one matrix row the app
-        // fixture does not carry; it compiles into its own application.
-        let conformance = source.join("../ddd").canonicalize().expect("ddd fixtures");
-        for name in ["payrun.mox", "payrun.ddd"] {
-            std::fs::copy(conformance.join(name), dir.join(name))
-                .unwrap_or_else(|error| panic!("copy {name}: {error}"));
-        }
+        // The canonical conformance stack (one shared loader, issue
+        // rexlang#260), then the LSP-only extras the matrix needs: the
+        // unrelated second application (`other.*`), the state-machine pair
+        // (its own application), an inline-actors model, and the patched
+        // `.evt` (a subscription) / `.uc` (a `realizes` clause) below.
+        rex_testkit::copy_fixture_tree(&dir);
+        rex_testkit::copy_fixture_files(
+            &dir,
+            &[
+                fixtures::OTHER_MOX,
+                fixtures::OTHER_ACTOR,
+                fixtures::PAYRUN_MOX,
+                fixtures::PAYRUN_DDD,
+            ],
+        );
         std::fs::write(dir.join("inline.mox"), INLINE_MOX).expect("write inline.mox");
         let evt = dir.join("app.evt");
         let mut text = std::fs::read_to_string(&evt).expect("read app.evt");

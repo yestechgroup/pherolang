@@ -18,6 +18,11 @@
 //!
 //! Every analytic runs on the **deserialized artifact** — the product
 //! property — and never touches a source file at query time.
+//!
+//! This suite deliberately carries its own fixture loader rather than the
+//! shared `rex-testkit` one (issue rexlang#260): it **writes** the fixture's
+//! golden artifacts when `REX_UPDATE_FIXTURES` is set, and the testkit is the
+//! read-only loader for the navigation matrix.
 
 use std::path::{Path, PathBuf};
 use std::sync::OnceLock;
