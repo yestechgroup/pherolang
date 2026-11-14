@@ -5,6 +5,7 @@ use super::*;
 
 pub(crate) use harness::*;
 
+mod artifact_diagnostics;
 mod basics;
 mod capability_joins;
 mod code_action;

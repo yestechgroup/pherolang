@@ -37,10 +37,11 @@ const SOURCE_NAME: &str = "rexlang";
 /// directory's compiled artifacts plus one spanned surface index per file).
 /// The publish pipeline stays per surface: `.ifml` through rex-ifml,
 /// `.ddd`/`.actor`/`.dmn` with their sibling-artifact joins (rexlang#128,
-/// rexlang#78). `.evt`/`.deploy`/`.uc`/`.cmmn` compile inside
-/// [`graph::GraphSnapshot`]'s builder and publish no diagnostics yet; an
-/// unknown file kind publishes nothing either (it must never produce bogus
-/// `.mox` errors).
+/// rexlang#78). `.evt`/`.deploy`/`.uc`/`.cmmn` compile only inside
+/// [`graph::GraphSnapshot`]'s builder, so they publish the diagnostics that
+/// memoized compile stored (rexlang#255) rather than compiling twice; an
+/// unknown file kind publishes nothing (it must never produce bogus `.mox`
+/// errors).
 ///
 /// The extension table lives once, in [`rex_driver::SurfaceKind`]; this
 /// wrapper only adds the "not a rexlang surface" case the LSP must handle

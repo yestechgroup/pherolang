@@ -671,6 +671,16 @@ an external edit to an unopened sibling is still picked up on the next
 open/change/close. A file that does not compile is memoized as such (no
 artifact, its diagnostics kept) and retried when its key moves.
 
+**Diagnostics.** Diagnostics stay per surface: `.mox` and `.ifml` publish
+from their own compile pipelines, `.ddd`/`.actor`/`.dmn` from their compiles
+with the sibling-artifact joins, and `.evt`/`.deploy`/`.uc`/`.cmmn` — whose
+only compile is this snapshot's — from the memoized entry's own-file
+diagnostics (rexlang#255). Publishing therefore adds **no compile**: a
+same-text change re-publishes the stored set and compiles nothing. A
+document with no directory (a non-file URI) has no snapshot and publishes
+nothing rather than a bogus empty set; a clean document publishes an empty
+set, which clears its stale diagnostics.
+
 **The resolution rule.** A reference binds by `(kind, name)`, restricted to
 the hint's node kinds and to the referring file's application (a name
 declared in another application is never a binding). The spellings are tried
