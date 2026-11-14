@@ -650,6 +650,27 @@ The scope is the directory, not a project root: a tree that spreads one
 application across directories resolves within the opened file's directory
 only.
 
+**Incremental invalidation (rexlang#254).** A snapshot rebuild recompiles
+only the candidates whose **content key** moved; every other file's
+compiled artifact and spanned index are reused from a per-file memo
+(`GraphMemo` in `crates/rex-lsp/src/server/graph.rs`). The key is a hash of
+the file's own text plus the **open-or-disk text of every import it
+resolves** (`resolved_imports`, plus a `.mox` file's `import
+schema`/`import sigil` paths, which are not application edges) — so one
+keystroke recompiles the edited file and the files importing it, never the
+rest of the directory, and a `.ddd` whose imported `.mox` changed
+recompiles even with its own text untouched. A `didChange` that only bumps
+the version recompiles nothing. Content was chosen over `(version, mtime)`
+because open buffers have no mtime and only content tells a dependant that
+an imported domain moved; the hasher is the std `DefaultHasher` (process
+local, no stability promise outside one server run). The memo is bounded by
+the directory's candidate set: entries whose path is no longer a candidate
+(a file deleted from the directory) are pruned on the next build, and the
+directory listing itself is re-read per build — no filesystem watcher, so
+an external edit to an unopened sibling is still picked up on the next
+open/change/close. A file that does not compile is memoized as such (no
+artifact, its diagnostics kept) and retried when its key moves.
+
 **The resolution rule.** A reference binds by `(kind, name)`, restricted to
 the hint's node kinds and to the referring file's application (a name
 declared in another application is never a binding). The spellings are tried
