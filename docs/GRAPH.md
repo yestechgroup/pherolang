@@ -110,6 +110,14 @@ nothing, and the command still writes the graph for everything that
 compiled, exiting `1`. Unresolved wiring never becomes an edge — it stays
 the compiler's diagnostic, not a guessed binding.
 
+Classification lives in **one surface table**, `rex_driver::SurfaceKind`
+(`crates/rex-driver/src/surface.rs`): the CLI's `is_*_file` helpers, its
+project snapshot's written-import dispatch, `verify`'s receipt kinds, and the
+LSP's `surface_for` all delegate to it. `commands/pipeline.rs::compile_one`
+is the CLI's single per-surface dispatch — an exhaustive match with no `_`
+arm — behind `check`, `ir`, `build`, `graph`, `verify`, and the union pass's
+phase-2 re-check, so a new surface is one table row plus its pipeline arm.
+
 ### Display paths and the base rule
 
 Every emitted path — node ids, `file` fields, `applications[].files` — is
@@ -556,7 +564,9 @@ key, pinned by the anti-drift test in
 `crates/rex-driver/tests/navigation.rs`. Spans are per surface; resolution
 is the graph's.
 
-The span tables live in `rex_driver::navigation`
+The server classifies open documents and directory siblings through the same
+`rex_driver::SurfaceKind` table the CLI uses (its `Surface` type only adds the
+"not a rexlang surface" case); the span tables live in `rex_driver::navigation`
 (`crates/rex-driver/src/navigation/`): one builder per surface, a pure
 function of source text that yields an empty index (never a panic) on a
 source that does not parse. The graph's node names are derived by the

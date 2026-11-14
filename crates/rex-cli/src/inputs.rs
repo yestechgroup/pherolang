@@ -17,6 +17,7 @@ use rex_driver::{
     compile_actor_imports, compile_decision_imports, compile_domain_union, compile_files,
     compile_str, gather_case_imports, gather_deploy_imports, gather_domain_sources,
     gather_ifml_project, gather_usecase_imports, DomainImports, MultiCompilation, SchemaImports,
+    SurfaceKind,
 };
 
 use crate::imports::{collect_schema_imports, collect_sigil_imports, SigilSources};
@@ -137,15 +138,14 @@ fn is_formatter_golden(path: &Path) -> bool {
         .is_some_and(|stem| stem.ends_with(".fmt"))
 }
 
-/// Recursively collects files of every supported surface under `dir`.
+/// Recursively collects files of every supported surface under `dir` — the
+/// extension list is [`SurfaceKind::ALL`], the one surface table.
 fn collect_supported_files(dir: &Path, out: &mut Vec<PathBuf>) -> anyhow::Result<()> {
-    collect_with_extensions(
-        dir,
-        &[
-            "mox", "actor", "ddd", "evt", "dmn", "uc", "cmmn", "ifml", "deploy",
-        ],
-        out,
-    )
+    let extensions: Vec<&str> = SurfaceKind::ALL
+        .iter()
+        .map(|kind| kind.extension())
+        .collect();
+    collect_with_extensions(dir, &extensions, out)
 }
 
 /// Compiles in-memory sources into one model: a single source keeps the
@@ -184,52 +184,52 @@ pub(crate) fn compile_sources(
 /// `true` for `.ddd` paths: the standalone DDD design surface, compiled
 /// against the domain models it imports.
 pub(crate) fn is_ddd_file(file: &Path) -> bool {
-    file.extension().and_then(|extension| extension.to_str()) == Some("ddd")
+    SurfaceKind::of_path(file) == Some(SurfaceKind::Ddd)
 }
 
 /// `true` for `.actor` paths: the standalone actor-policy surface, compiled
 /// against the domain models it imports.
 pub(crate) fn is_actor_file(file: &Path) -> bool {
-    file.extension().and_then(|extension| extension.to_str()) == Some("actor")
+    SurfaceKind::of_path(file) == Some(SurfaceKind::Actor)
 }
 
 /// `true` for `.evt` paths: the standalone event-contract surface, compiled
 /// against the domain models it imports.
 pub(crate) fn is_evt_file(file: &Path) -> bool {
-    file.extension().and_then(|extension| extension.to_str()) == Some("evt")
+    SurfaceKind::of_path(file) == Some(SurfaceKind::Evt)
 }
 
 /// `true` for `.dmn` paths: the standalone decision-model surface, compiled
 /// against the domain models it imports and the decision-table contents its
 /// `logic table` clauses name.
 pub(crate) fn is_dmn_file(file: &Path) -> bool {
-    file.extension().and_then(|extension| extension.to_str()) == Some("dmn")
+    SurfaceKind::of_path(file) == Some(SurfaceKind::Dmn)
 }
 
 /// `true` for `.uc` paths: the use case surface, compiled against the
 /// domain models it imports and the pre-compiled `.ddd`/`.actor`/`.evt`
 /// artifacts its other imports resolve to.
 pub(crate) fn is_uc_file(file: &Path) -> bool {
-    file.extension().and_then(|extension| extension.to_str()) == Some("uc")
+    SurfaceKind::of_path(file) == Some(SurfaceKind::Uc)
 }
 
 /// `true` for `.cmmn` paths: the case-management surface, compiled against
 /// its imported domains, events, actors, and designs.
 pub(crate) fn is_cmmn_file(file: &Path) -> bool {
-    file.extension().and_then(|extension| extension.to_str()) == Some("cmmn")
+    SurfaceKind::of_path(file) == Some(SurfaceKind::Cmmn)
 }
 
 /// `true` for `.deploy` paths: the deployment surface, compiled against the
 /// `.ddd` designs and `.ifml` flows it imports.
 pub(crate) fn is_deploy_file(file: &Path) -> bool {
-    file.extension().and_then(|extension| extension.to_str()) == Some("deploy")
+    SurfaceKind::of_path(file) == Some(SurfaceKind::Deploy)
 }
 
 /// `true` for `.ifml` paths: the interaction-flow surface, compiled against
 /// the domain models it imports and the `.ifml` pattern libraries it pulls
 /// in.
 pub(crate) fn is_ifml_file(file: &Path) -> bool {
-    file.extension().and_then(|extension| extension.to_str()) == Some("ifml")
+    SurfaceKind::of_path(file) == Some(SurfaceKind::Ifml)
 }
 
 /// An `.ifml` file plus everything it imports, ready for
