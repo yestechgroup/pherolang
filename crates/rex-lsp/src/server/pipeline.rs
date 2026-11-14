@@ -8,8 +8,14 @@
 use rex_driver::NavigationIndex;
 use tower_lsp_server::ls_types::*;
 
+use super::graph::{is_formatter_golden, resolved_imports, surface_of_path};
 use super::{RexBackend, Surface, SOURCE_NAME};
 use crate::position::PositionMap;
+
+/// One candidate file of a directory snapshot: where it lives, its surface,
+/// and the text the application relation reads (an open buffer wins over
+/// disk).
+type DirectoryCandidate = (std::path::PathBuf, Surface, String);
 
 /// The import closure of one `.ifml` document, gathered by
 /// [`RexBackend::import_closure`].
@@ -389,58 +395,129 @@ impl RexBackend {
         open.or_else(|| std::fs::read_to_string(&resolved).ok())
     }
 
-    /// The `(path, text)` pairs of one open document's directory siblings
-    /// with `extension`, sorted, excluding `except` — the sibling
-    /// enumeration the compile-time capability joins gather from. An open
-    /// document wins over its on-disk text (the editor's buffer is the
-    /// truth); files that cannot be read contribute nothing.
-    fn sibling_sources(
+    /// The `(path, text)` pairs of one open document's **application**
+    /// siblings with `extension`, sorted, excluding `except` — the pool the
+    /// compile-time capability/design/decision joins gather from
+    /// (rexlang#249: the import-connected application, never the
+    /// directory). An open document wins over its on-disk text (the
+    /// editor's buffer is the truth); files that cannot be read contribute
+    /// nothing.
+    ///
+    /// The relation is recomputed per call — a `.ddd` publish gathers
+    /// actors and decisions, so the directory is walked twice. It is a
+    /// `read_dir` plus one parse per candidate: the expensive compile stays
+    /// behind the graph snapshot's cache, and a second cache keyed by
+    /// directory + open signature would only pay for itself on a much
+    /// larger directory than the LSP's one-directory snapshot scope.
+    fn siblings_in_application(
         &self,
         except: &std::path::Path,
         extension: &str,
     ) -> Vec<(std::path::PathBuf, String)> {
-        let Some(dir) = except.parent() else {
+        let Some(directory) = except.parent() else {
             return Vec::new();
         };
-        let mut paths: Vec<std::path::PathBuf> = match std::fs::read_dir(dir) {
-            Ok(entries) => entries
-                .flatten()
-                .map(|entry| entry.path())
-                .filter(|path| {
-                    path.extension().and_then(|ext| ext.to_str()) == Some(extension)
-                        && path != except
-                })
-                .collect(),
-            Err(_) => Vec::new(),
+        let candidates = self.directory_candidates(directory);
+        let files: Vec<rex_driver::applications::ApplicationFile> = candidates
+            .iter()
+            .map(
+                |(path, surface, text)| rex_driver::applications::ApplicationFile {
+                    path: normalize_path(path),
+                    imports: resolved_imports(*surface, text, path),
+                },
+            )
+            .collect();
+        let except_key = normalize_path(except);
+        let Some(except_index) = files.iter().position(|file| file.path == except_key) else {
+            // The document itself is always a candidate (it is open and
+            // lives in this directory); absence means no pool at all.
+            return Vec::new();
         };
-        paths.sort();
-        paths
-            .into_iter()
-            .filter_map(|path| {
-                let open = {
-                    let documents = self.documents.lock().unwrap();
-                    documents.iter().find_map(|(open_uri, document)| {
-                        let open_path = open_uri.to_file_path()?;
-                        (open_path == path).then(|| document.text.clone())
-                    })
-                };
-                open.or_else(|| std::fs::read_to_string(&path).ok())
-                    .map(|text| (path, text))
+        let components = rex_driver::applications::applications(&files);
+        let Some(component) = components
+            .iter()
+            .find(|members| members.contains(&except_index))
+        else {
+            return Vec::new();
+        };
+        component
+            .iter()
+            .filter_map(|&member| {
+                let (path, _, text) = &candidates[member];
+                (path != except
+                    && path.extension().and_then(|extension| extension.to_str()) == Some(extension))
+                .then(|| (path.clone(), text.clone()))
             })
             .collect()
     }
 
-    /// The pooled `.actor` artifacts of the open design's directory (open
-    /// documents win over disk): the capability table rule 10 resolves
-    /// against at compile time (rexlang#128's J3). A sibling that fails to
-    /// compile contributes nothing — its own open editor shows its
-    /// diagnostics.
+    /// Every candidate file of the open document's directory snapshot
+    /// (rexlang#249): each supported-surface file it holds (a
+    /// formatter-golden `X.fmt.<ext>` skipped) plus every **open** document
+    /// that lives there — open buffers win over disk copies and need not
+    /// exist on disk. Unreadable files contribute nothing. This is the
+    /// LSP's analog of the CLI's gathered project snapshot: imports leaving
+    /// the directory contribute no application edge.
+    fn directory_candidates(&self, directory: &std::path::Path) -> Vec<DirectoryCandidate> {
+        let open: Vec<(std::path::PathBuf, Surface, String)> = {
+            let documents = self.documents.lock().unwrap();
+            documents
+                .iter()
+                .filter(|(uri, document)| {
+                    document.surface != Surface::Other
+                        && uri
+                            .to_file_path()
+                            .is_some_and(|path| path.parent() == Some(directory))
+                })
+                .filter_map(|(uri, document)| {
+                    let path = uri.to_file_path()?.into_owned();
+                    Some((path, document.surface, document.text.clone()))
+                })
+                .collect()
+        };
+        let mut candidates: std::collections::BTreeMap<std::path::PathBuf, Surface> =
+            Default::default();
+        if let Ok(entries) = std::fs::read_dir(directory) {
+            for entry in entries.flatten() {
+                let path = entry.path();
+                if !path.is_file() || is_formatter_golden(&path) {
+                    continue;
+                }
+                if let Some(surface) = surface_of_path(&path) {
+                    candidates.insert(path, surface);
+                }
+            }
+        }
+        for (path, surface, _) in &open {
+            candidates.insert(path.clone(), *surface);
+        }
+        let mut snapshot: Vec<DirectoryCandidate> = candidates
+            .into_iter()
+            .filter_map(|(path, surface)| {
+                let text = open
+                    .iter()
+                    .find(|(open_path, _, _)| *open_path == path)
+                    .map(|(_, _, text)| text.clone())
+                    .or_else(|| std::fs::read_to_string(&path).ok())?;
+                Some((path, surface, text))
+            })
+            .collect();
+        snapshot.sort_by(|left, right| left.0.cmp(&right.0));
+        snapshot
+    }
+
+    /// The pooled `.actor` artifacts of the open design's **import-connected
+    /// application** (rexlang#249; open documents win over disk): the
+    /// capability table rule 10 resolves against at compile time
+    /// (rexlang#128's J3). An empty set is exactly the plain
+    /// `compile_ddd_str` behavior. A sibling that fails to compile
+    /// contributes nothing — its own open editor shows its diagnostics.
     fn sibling_actor_models(&self, except: &Uri) -> Vec<rex_ir::ActorModel> {
         let Some(path) = except.to_file_path() else {
             return Vec::new();
         };
         let mut models = Vec::new();
-        for (sibling, text) in self.sibling_sources(&path, "actor") {
+        for (sibling, text) in self.siblings_in_application(&path, "actor") {
             let key = sibling.display().to_string();
             let mut fetch =
                 |resolved: &str| -> Option<String> { self.fetch_open_or_disk(resolved) };
@@ -469,17 +546,18 @@ impl RexBackend {
         models
     }
 
-    /// The compiled `.ddd` artifacts of the open policy's directory (open
-    /// documents win over disk): the carrier set grant coverage resolves
-    /// against at compile time (rexlang#128's J4). Gathered exactly like
-    /// [`RexBackend::sibling_actor_models`]; a sibling that fails to
+    /// The compiled `.ddd` artifacts of the open policy's **application**
+    /// (rexlang#249; open documents win over disk): the carrier set grant
+    /// coverage resolves against at compile time (rexlang#128's J4). Gathered
+    /// exactly like [`RexBackend::sibling_actor_models`] — an empty set is
+    /// the plain `compile_actors_str` behavior; a sibling that fails to
     /// compile contributes nothing.
     fn sibling_design_models(&self, except: &Uri) -> Vec<rex_ir::ddd::DddModel> {
         let Some(path) = except.to_file_path() else {
             return Vec::new();
         };
         let mut models = Vec::new();
-        for (sibling, text) in self.sibling_sources(&path, "ddd") {
+        for (sibling, text) in self.siblings_in_application(&path, "ddd") {
             let key = sibling.display().to_string();
             let mut fetch =
                 |resolved: &str| -> Option<String> { self.fetch_open_or_disk(resolved) };
@@ -503,22 +581,22 @@ impl RexBackend {
         models
     }
 
-    /// The compiled `.dmn` artifacts of the open design's directory, keyed
-    /// by their disk paths (rule 17's decisions bucket, rexlang#78 — the
-    /// keys are what the provision check resolves `.dmn` import paths
-    /// against). Gathered exactly like [`RexBackend::sibling_design_models`]
-    /// (open documents win over disk); a sibling that fails to compile
-    /// contributes nothing. Decision tables resolve from disk next to each
-    /// sibling through [`dmn_table_sources`] — an unprovided table names it
-    /// and the sibling drops out. The sibling's imported `.evt` contracts
-    /// gather the same way (rule 14's bucket), so a model with `emits`
-    /// still compiles into the pool.
+    /// The compiled `.dmn` artifacts of the open design's **application**,
+    /// keyed by their disk paths (rexlang#249; rule 17's decisions bucket,
+    /// rexlang#78 — the keys are what the provision check resolves `.dmn`
+    /// import paths against). Gathered exactly like
+    /// [`RexBackend::sibling_design_models`] (open documents win over disk);
+    /// a sibling that fails to compile contributes nothing. Decision tables
+    /// resolve from disk next to each sibling through [`dmn_table_sources`] —
+    /// an unprovided table names it and the sibling drops out. The sibling's
+    /// imported `.evt` contracts gather the same way (rule 14's bucket), so a
+    /// model with `emits` still compiles into the pool.
     fn sibling_decision_models(&self, except: &Uri) -> Vec<(String, rex_ir::dmn::DmnModel)> {
         let Some(path) = except.to_file_path() else {
             return Vec::new();
         };
         let mut models = Vec::new();
-        for (sibling, text) in self.sibling_sources(&path, "dmn") {
+        for (sibling, text) in self.siblings_in_application(&path, "dmn") {
             let key = sibling.display().to_string();
             let mut fetch =
                 |resolved: &str| -> Option<String> { self.fetch_open_or_disk(resolved) };
@@ -791,6 +869,16 @@ fn dmn_table_sources(dir: &std::path::Path, source: &str) -> Vec<(String, String
         }
     }
     tables
+}
+
+/// Host-normalizes one path for the application relation (rexlang#249): the
+/// canonical path where it exists, else the path as written — the two sides
+/// (member paths and resolved import targets) go through the same function,
+/// so `rex_driver::applications` sees plain string equality.
+fn normalize_path(path: &std::path::Path) -> String {
+    std::fs::canonicalize(path)
+        .map(|canonical| canonical.display().to_string())
+        .unwrap_or_else(|_| path.display().to_string())
 }
 
 /// The import bundle for gathered domain sources: the domains' own

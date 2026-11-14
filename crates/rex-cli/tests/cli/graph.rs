@@ -19,14 +19,15 @@
 //! graph_analytics`), and `--fail-on-findings` gates on a definite finding.
 //!
 //! Directory mode compiles each file independently against the project
-//! snapshot, exactly like `check`/`build` — including the union-wide
-//! capability join. `examples/` therefore keeps one pre-existing phase-1
-//! failure (`orders.ddd`'s `PlaceOrder` capability against the pooled
-//! `support.actor` capabilities, the same finding `check examples/`
-//! renders), and the graph command exits `1` while still writing the
-//! artifact over the compiling subset — the `build` precedent these golden
-//! tests pin (the issue's verification compares the file with `diff`, not by
-//! exit status).
+//! snapshot, exactly like `check`/`build` — including the capability join
+//! scoped to each file's import-connected application (rexlang#249). Every
+//! file under `examples/` compiles: `orders.ddd` no longer resolves
+//! `PlaceOrder` against the unrelated `support.actor` pool, so the
+//! capability join stays silent there (the application has no policy of its
+//! own) and the graph command exits `0`. The `build`-precedent best-effort
+//! path is still pinned by `graph_still_writes_when_a_file_fails`; the
+//! failure `check examples/` keeps reporting lives in the union integrity
+//! pass (rexlang#258), which `graph` does not run.
 //!
 //! Regenerate with:
 //!
@@ -96,13 +97,14 @@ fn graph_prints_the_examples_golden_to_stdout() {
     // the stdout contract is that golden plus exactly one newline.
     let out = scratch_dir().join("examples.graph.json");
     let written = run_graph(&[dir, "-o", out.to_str().expect("utf-8 output path")]);
-    // `examples/` inherits one pre-existing phase-1 failure from its
-    // union-wide capability join (`orders.ddd`, see the module docs), so the
-    // command exits `1` by design; the artifact over the compiling subset is
-    // still the contract.
     assert!(
         String::from_utf8_lossy(&written.stdout).is_empty(),
         "`-o` writes no stdout"
+    );
+    assert!(
+        written.status.success(),
+        "every example compiles under application-scoped joins: {}",
+        stderr(&written)
     );
     let json = std::fs::read_to_string(&out)
         .unwrap_or_else(|error| panic!("read graph output {}: {error}", out.display()));
