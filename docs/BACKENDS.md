@@ -70,6 +70,14 @@ minimal `{"formatVersion": N}` bytes.
   not use a feature (no bodies, no vocabularies, no actors, no functions, no
   descriptions) stay **byte-identical** to older output. Unknown fields are
   ignored on read, never denied.
+- **Operation bodies.** A `rust` body is embedded **verbatim** as the
+  generated method's body (the signature convention lives in
+  `rex_backend_rust::codegen`); an `expr` body is parsed, type-checked
+  against the enclosing class and the operation's parameters, and lowered
+  at generate time — a parse/type/lower failure is a generate-time error
+  naming the operation (`operation '<op>' expr body …`). An operation with
+  neither body emits **no** method: it stays a hand-written hook. The
+  expression language is `docs/EXPRESSIONS.md`.
 - **Functions and unknown body targets.** `Package.functions` carries
   sigil-lowered Rune functions as signature-only `Operation`s whose bodies
   are the ends-trimmed verbatim `"rosetta"` target plus — for functions

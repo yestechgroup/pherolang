@@ -700,7 +700,8 @@ for what the interaction model lowers to, derived from the compilation
   is indistinguishable from app-authored UI), flattened with its
   container path, carrying the component type, the `data:` entity as
   written plus its resolved `(package, class)` when the host provides
-  the domain union, and the form fields / table columns. Resolution is
+  the domain union and the name resolves uniquely there (a bare spelling
+  always rides along), and the form fields / table columns. Resolution is
   **domain-only**: a `data:` that names a decision service (the
   [decision dimension](#decision-data)) rides along as the bare
   spelling with no `resolvedData` — the manifest never encodes decision
