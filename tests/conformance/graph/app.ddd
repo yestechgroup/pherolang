@@ -18,6 +18,7 @@ application GraphDesk {
             boolean raiseRefund(String ticketNo, int cents) capability RaiseRefund emits RefundRequested;
             boolean approveRefund(String ticketNo, int cents, User approver) capability ApproveRefund emits RefundApproved;
             Ticket[] listTickets();
+            findTicket => TicketRepository.findById;
         }
         entity Ticket scaffold cache repository TicketRepository {
             findById;

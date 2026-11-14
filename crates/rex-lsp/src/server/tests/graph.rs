@@ -1273,3 +1273,530 @@ async fn mox_inline_actor_grant_definition_lands_on_the_capability() {
         )
     );
 }
+
+// --- the definition-matrix rows added by rexlang#256 -----------------------
+
+#[tokio::test]
+async fn actor_delegation_from_definition_lands_on_the_actor() {
+    let fixture = Fixture::new("actor-delegation-from");
+    let (mut service, mut socket) = initialized_service().await;
+    open_file(&mut service, &mut socket, &fixture, "app.actor").await;
+
+    let actor = fixture.text("app.actor");
+    let found = definition(
+        &mut service,
+        &fixture.uri("app.actor"),
+        position(&actor, "from Manager", 0, 5),
+    )
+    .await
+    .expect("the delegation's source actor resolves");
+    assert_eq!(
+        found,
+        location(&actor, &fixture.uri("app.actor"), "actor Manager", 0, 6, 7)
+    );
+}
+
+#[tokio::test]
+async fn actor_delegation_to_definition_lands_on_the_agent() {
+    let fixture = Fixture::new("actor-delegation-to");
+    let (mut service, mut socket) = initialized_service().await;
+    open_file(&mut service, &mut socket, &fixture, "app.actor").await;
+
+    let actor = fixture.text("app.actor");
+    let found = definition(
+        &mut service,
+        &fixture.uri("app.actor"),
+        position(&actor, "to AutoTriage", 0, 3),
+    )
+    .await
+    .expect("the delegation's target agent resolves");
+    assert_eq!(
+        found,
+        location(
+            &actor,
+            &fixture.uri("app.actor"),
+            "agent AutoTriage",
+            0,
+            6,
+            10
+        )
+    );
+}
+
+#[tokio::test]
+async fn actor_never_both_definition_lands_on_the_capability() {
+    let fixture = Fixture::new("actor-never-both");
+    let (mut service, mut socket) = initialized_service().await;
+    open_file(&mut service, &mut socket, &fixture, "app.actor").await;
+
+    let actor = fixture.text("app.actor");
+    let found = definition(
+        &mut service,
+        &fixture.uri("app.actor"),
+        position(&actor, "never_both { ReadTicket", 1, 13),
+    )
+    .await
+    .expect("the never_both name resolves");
+    assert_eq!(
+        found,
+        location(
+            &actor,
+            &fixture.uri("app.actor"),
+            "capability ReadTicket",
+            0,
+            11,
+            10
+        )
+    );
+}
+
+#[tokio::test]
+async fn ddd_entity_definition_lands_on_the_mox_class() {
+    let fixture = Fixture::new("ddd-entity");
+    let (mut service, mut socket) = initialized_service().await;
+    open_file(&mut service, &mut socket, &fixture, "app.ddd").await;
+
+    let design = fixture.text("app.ddd");
+    let domain = fixture.text("app.mox");
+    let found = definition(
+        &mut service,
+        &fixture.uri("app.ddd"),
+        position(&design, "entity Ticket scaffold", 0, 7),
+    )
+    .await
+    .expect("the designed class resolves");
+    assert_eq!(
+        found,
+        location(&domain, &fixture.uri("app.mox"), "class Ticket", 0, 6, 6)
+    );
+}
+
+#[tokio::test]
+async fn ddd_delegation_forward_definition_lands_on_the_repository_operation() {
+    let fixture = Fixture::new("ddd-delegation-forward");
+    let (mut service, mut socket) = initialized_service().await;
+    open_file(&mut service, &mut socket, &fixture, "app.ddd").await;
+
+    let design = fixture.text("app.ddd");
+    let found = definition(
+        &mut service,
+        &fixture.uri("app.ddd"),
+        position(&design, "TicketRepository.findById", 0, 0),
+    )
+    .await
+    .expect("the delegated `Repo.op` pair resolves end-to-end");
+    assert_eq!(
+        found,
+        location(&design, &fixture.uri("app.ddd"), "findById;", 1, 0, 8)
+    );
+}
+
+#[tokio::test]
+async fn deploy_flow_binding_has_no_definition_site() {
+    let fixture = Fixture::new("deploy-flow");
+    let (mut service, mut socket) = initialized_service().await;
+    open_file(&mut service, &mut socket, &fixture, "app.deploy").await;
+
+    let deploy = fixture.text("app.deploy");
+    let found = definition(
+        &mut service,
+        &fixture.uri("app.deploy"),
+        position(&deploy, "flow \"app.ifml\"", 0, 6),
+    )
+    .await;
+    // A flow node's name is the file stem — a host fact with no written
+    // declaration site (the `file`-node exclusion), so the binding has no
+    // location. The edge still exists (`bindsFlow`).
+    assert_eq!(found, None);
+}
+
+#[tokio::test]
+async fn deploy_requires_has_no_definition_site() {
+    let fixture = Fixture::new("deploy-requires");
+    let (mut service, mut socket) = initialized_service().await;
+    open_file(&mut service, &mut socket, &fixture, "app.deploy").await;
+
+    let deploy = fixture.text("app.deploy");
+    let found = definition(
+        &mut service,
+        &fixture.uri("app.deploy"),
+        position(&deploy, "requires longRunningProcess", 0, 9),
+    )
+    .await;
+    // GAP (rexlang#256, reported separately): `requires` names the closed
+    // *target* capability vocabulary (`longRunningProcess`, `sqlDatabase`, …),
+    // which has no graph node kind. The emitter's `capability_or_actor` join
+    // can only bind a policy capability or actor that happens to share the
+    // written name, so on the fixture's policy there is nothing to land on.
+    assert_eq!(found, None);
+}
+
+#[tokio::test]
+async fn deploy_profile_use_definition_lands_on_the_profile() {
+    let fixture = Fixture::new("deploy-profile");
+    let (mut service, mut socket) = initialized_service().await;
+    open_file(&mut service, &mut socket, &fixture, "app.deploy").await;
+
+    let deploy = fixture.text("app.deploy");
+    let found = definition(
+        &mut service,
+        &fixture.uri("app.deploy"),
+        position(&deploy, "use production_k8s", 0, 4),
+    )
+    .await
+    .expect("the selected profile resolves");
+    assert_eq!(
+        found,
+        location(
+            &deploy,
+            &fixture.uri("app.deploy"),
+            "profile production_k8s",
+            0,
+            8,
+            14
+        )
+    );
+}
+
+#[tokio::test]
+async fn deploy_for_definition_lands_on_the_application() {
+    let fixture = Fixture::new("deploy-for");
+    let (mut service, mut socket) = initialized_service().await;
+    open_file(&mut service, &mut socket, &fixture, "app.deploy").await;
+
+    let deploy = fixture.text("app.deploy");
+    let found = definition(
+        &mut service,
+        &fixture.uri("app.deploy"),
+        position(&deploy, "deployment production for GraphDesk", 0, 26),
+    )
+    .await
+    .expect("the deployment's application resolves");
+    assert_eq!(
+        found,
+        location(
+            &deploy,
+            &fixture.uri("app.deploy"),
+            "application GraphDesk",
+            0,
+            12,
+            9
+        )
+    );
+}
+
+#[tokio::test]
+async fn uc_subject_type_definition_lands_on_the_mox_class() {
+    let fixture = Fixture::new("uc-subject-type");
+    let (mut service, mut socket) = initialized_service().await;
+    open_file(&mut service, &mut socket, &fixture, "app.uc").await;
+
+    let use_case = fixture.text("app.uc");
+    let domain = fixture.text("app.mox");
+    let found = definition(
+        &mut service,
+        &fixture.uri("app.uc"),
+        position(&use_case, "subject Ticket: Ticket", 0, 16),
+    )
+    .await
+    .expect("the subject's type resolves");
+    assert_eq!(
+        found,
+        location(&domain, &fixture.uri("app.mox"), "class Ticket", 0, 6, 6)
+    );
+}
+
+#[tokio::test]
+async fn uc_message_payload_definition_lands_on_the_evt_event() {
+    let fixture = Fixture::new("uc-message-payload");
+    let (mut service, mut socket) = initialized_service().await;
+    open_file(&mut service, &mut socket, &fixture, "app.uc").await;
+
+    let use_case = fixture.text("app.uc");
+    let events = fixture.text("app.evt");
+    let found = definition(
+        &mut service,
+        &fixture.uri("app.uc"),
+        position(&use_case, "of RefundRequested", 0, 3),
+    )
+    .await
+    .expect("the message payload resolves");
+    assert_eq!(
+        found,
+        location(
+            &events,
+            &fixture.uri("app.evt"),
+            "event RefundRequested",
+            0,
+            6,
+            15
+        )
+    );
+}
+
+#[tokio::test]
+async fn cmmn_case_file_item_type_definition_lands_on_the_mox_class() {
+    let fixture = Fixture::new("cmmn-item-type");
+    let (mut service, mut socket) = initialized_service().await;
+    open_file(&mut service, &mut socket, &fixture, "app.cmmn").await;
+
+    let case = fixture.text("app.cmmn");
+    let domain = fixture.text("app.mox");
+    let found = definition(
+        &mut service,
+        &fixture.uri("app.cmmn"),
+        position(&case, "Ticket[1..1] ticket", 0, 0),
+    )
+    .await
+    .expect("the case-file item's type resolves");
+    assert_eq!(
+        found,
+        location(&domain, &fixture.uri("app.mox"), "class Ticket", 0, 6, 6)
+    );
+}
+
+#[tokio::test]
+async fn dmn_requirement_information_definition_lands_on_the_decision() {
+    let fixture = Fixture::new("dmn-requirement-information");
+    let (mut service, mut socket) = initialized_service().await;
+    open_file(&mut service, &mut socket, &fixture, "app.dmn").await;
+
+    let decision = fixture.text("app.dmn");
+    let found = definition(
+        &mut service,
+        &fixture.uri("app.dmn"),
+        position(&decision, "requires RefundEligibility", 0, 9),
+    )
+    .await
+    .expect("the required decision resolves");
+    assert_eq!(
+        found,
+        location(
+            &decision,
+            &fixture.uri("app.dmn"),
+            "decision RefundEligibility",
+            0,
+            9,
+            17
+        )
+    );
+}
+
+#[tokio::test]
+async fn dmn_requirement_knowledge_definition_lands_on_the_bkm() {
+    let fixture = Fixture::new("dmn-requirement-knowledge");
+    let (mut service, mut socket) = initialized_service().await;
+    open_file(&mut service, &mut socket, &fixture, "app.dmn").await;
+
+    let decision = fixture.text("app.dmn");
+    let found = definition(
+        &mut service,
+        &fixture.uri("app.dmn"),
+        position(&decision, "invokes assess_refund", 0, 8),
+    )
+    .await
+    .expect("the required knowledge model resolves");
+    assert_eq!(
+        found,
+        location(
+            &decision,
+            &fixture.uri("app.dmn"),
+            "model assess_refund",
+            0,
+            6,
+            13
+        )
+    );
+}
+
+#[tokio::test]
+async fn dmn_requirement_authority_definition_lands_on_the_knowledge_source() {
+    let fixture = Fixture::new("dmn-requirement-authority");
+    let (mut service, mut socket) = initialized_service().await;
+    open_file(&mut service, &mut socket, &fixture, "app.dmn").await;
+
+    let decision = fixture.text("app.dmn");
+    let found = definition(
+        &mut service,
+        &fixture.uri("app.dmn"),
+        position(&decision, "governed_by RefundPolicy", 0, 12),
+    )
+    .await
+    .expect("the governing knowledge source resolves");
+    assert_eq!(
+        found,
+        location(
+            &decision,
+            &fixture.uri("app.dmn"),
+            "source RefundPolicy",
+            0,
+            7,
+            12
+        )
+    );
+}
+
+#[tokio::test]
+async fn dmn_logic_invoke_definition_lands_on_the_bkm() {
+    let fixture = Fixture::new("dmn-logic-invoke");
+    let (mut service, mut socket) = initialized_service().await;
+    open_file(&mut service, &mut socket, &fixture, "app.dmn").await;
+
+    let decision = fixture.text("app.dmn");
+    let found = definition(
+        &mut service,
+        &fixture.uri("app.dmn"),
+        position(&decision, "logic invoke assess_refund", 0, 13),
+    )
+    .await
+    .expect("the invoked business knowledge model resolves");
+    assert_eq!(
+        found,
+        location(
+            &decision,
+            &fixture.uri("app.dmn"),
+            "model assess_refund",
+            0,
+            6,
+            13
+        )
+    );
+}
+
+#[tokio::test]
+async fn ifml_refresh_definition_lands_on_the_component() {
+    let fixture = Fixture::new("ifml-refresh");
+    let (mut service, mut socket) = initialized_service().await;
+    open_file(&mut service, &mut socket, &fixture, "app.ifml").await;
+
+    let flow = fixture.text("app.ifml");
+    let found = definition(
+        &mut service,
+        &fixture.uri("app.ifml"),
+        position(&flow, "refresh(\"queue\")", 0, 9),
+    )
+    .await
+    .expect("the refresh target resolves");
+    assert_eq!(
+        found,
+        // `.ifml` name spans are the quoted string token.
+        location(
+            &flow,
+            &fixture.uri("app.ifml"),
+            "component \"queue\"",
+            0,
+            10,
+            7
+        )
+    );
+}
+
+// --- the matrix self-check ------------------------------------------------
+
+/// Every test the `docs/GRAPH.md` definition-target table names.
+///
+/// The doc-table test below asserts this list and the table's Test column
+/// are the same set, and that every name is still a test function in this
+/// file — so renaming a matrix test fails loudly instead of leaving the
+/// documentation pointing at a function that no longer exists.
+const DEFINITION_MATRIX_TESTS: &[&str] = &[
+    "actor_capability_class_definition_lands_on_the_mox_name",
+    "actor_grant_entry_definition_lands_on_the_capability",
+    "actor_extends_definition_lands_on_the_parent_actor",
+    "actor_delegation_from_definition_lands_on_the_actor",
+    "actor_delegation_to_definition_lands_on_the_agent",
+    "actor_never_both_definition_lands_on_the_capability",
+    "ddd_capability_definition_lands_on_the_actor_capability",
+    "ddd_invokes_definition_lands_on_the_dmn_service",
+    "ddd_emits_definition_lands_on_the_evt_event",
+    "ddd_injected_repository_definition_lands_on_the_repository",
+    "ddd_entity_definition_lands_on_the_mox_class",
+    "ddd_delegation_forward_definition_lands_on_the_repository_operation",
+    "ddd_machine_field_definition_lands_on_the_mox_feature",
+    "ddd_machine_state_enum_definition_lands_on_the_mox_enum",
+    "evt_consumer_definition_lands_on_the_deploy_component",
+    "evt_field_type_definition_lands_on_the_mox_enum",
+    "ifml_requires_definition_lands_on_the_capability",
+    "ifml_roles_definition_lands_on_the_actor",
+    "ifml_action_definition_lands_on_the_ddd_operation",
+    "ifml_data_definition_lands_on_the_mox_class",
+    "ifml_navigate_definition_lands_on_the_view",
+    "ifml_refresh_definition_lands_on_the_component",
+    "deploy_binding_definition_lands_on_the_ddd_module",
+    "deploy_connection_definition_lands_on_the_component",
+    "deploy_flow_binding_has_no_definition_site",
+    "deploy_requires_has_no_definition_site",
+    "deploy_profile_use_definition_lands_on_the_profile",
+    "deploy_for_definition_lands_on_the_application",
+    "uc_realizes_definition_lands_on_the_ddd_operation",
+    "uc_subject_type_definition_lands_on_the_mox_class",
+    "uc_policy_actor_definition_lands_on_the_actor",
+    "uc_step_requires_definition_lands_on_the_capability",
+    "uc_message_payload_definition_lands_on_the_evt_event",
+    "cmmn_execute_definition_lands_on_the_ddd_operation",
+    "cmmn_invokes_definition_lands_on_the_decision_service",
+    "cmmn_role_definition_lands_on_the_actor",
+    "cmmn_case_file_item_type_definition_lands_on_the_mox_class",
+    "dmn_requirement_information_definition_lands_on_the_decision",
+    "dmn_requirement_knowledge_definition_lands_on_the_bkm",
+    "dmn_requirement_authority_definition_lands_on_the_knowledge_source",
+    "dmn_logic_invoke_definition_lands_on_the_bkm",
+    "dmn_emits_definition_lands_on_the_evt_event",
+    "dmn_input_type_definition_lands_on_the_mox_class",
+    "mox_inline_actor_grant_definition_lands_on_the_capability",
+];
+
+/// The `docs/GRAPH.md` definition-target table and this file agree: every
+/// row names a test that exists here, and every matrix test is named by a
+/// row. The table is the issue's "test" column mapping; this is its gate.
+#[test]
+fn definition_matrix_names_the_tests_that_cover_it() {
+    let doc = rex_testkit::fixture("docs/GRAPH.md");
+    let section = doc
+        .split("### Definition targets")
+        .nth(1)
+        .expect("docs/GRAPH.md carries the definition-target section");
+    let table = section
+        .split("### Rename ownership")
+        .next()
+        .expect("the section ends at the next heading");
+
+    let mut documented: Vec<&str> = Vec::new();
+    for line in table.lines().map(str::trim) {
+        if !line.starts_with('|') {
+            continue;
+        }
+        let cells: Vec<&str> = line.trim_matches('|').split('|').map(str::trim).collect();
+        assert_eq!(
+            cells.len(),
+            4,
+            "every definition-target row carries a Test column: {line}"
+        );
+        if cells[0] == "From (surface)" || cells[0].starts_with("---") {
+            continue;
+        }
+        let names: Vec<&str> = cells[3].split('`').skip(1).step_by(2).collect();
+        assert!(
+            !names.is_empty(),
+            "row '{}' must name at least one test",
+            cells[0]
+        );
+        documented.extend(names);
+    }
+
+    let documented: std::collections::BTreeSet<&str> = documented.into_iter().collect();
+    let expected: std::collections::BTreeSet<&str> =
+        DEFINITION_MATRIX_TESTS.iter().copied().collect();
+    assert_eq!(
+        documented, expected,
+        "the docs/GRAPH.md Test column and DEFINITION_MATRIX_TESTS must name the same tests"
+    );
+
+    let source = include_str!("graph.rs");
+    for test in DEFINITION_MATRIX_TESTS {
+        assert!(
+            source.contains(&format!("async fn {test}(")),
+            "matrix test `{test}` is named in docs/GRAPH.md but not defined here"
+        );
+    }
+}

@@ -251,8 +251,8 @@ mod tests {
             .collect();
         assert_eq!(
             requirements.len(),
-            8,
-            "four requirement lines, two ends each"
+            10,
+            "five requirement lines (three information, one knowledge, one authority), two ends each"
         );
         assert!(requirements.iter().all(|reference| reference.target_kinds
             == [kinds::DECISION, kinds::BKM, kinds::KNOWLEDGE_SOURCE]));

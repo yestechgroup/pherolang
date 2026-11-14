@@ -11,6 +11,11 @@ decision_model GraphDecisions {
         requested_cents: int;
     }
     knowledge {
+        /// The refund policy the decision answers to.
+        source RefundPolicy {
+            name "Refund Policy Handbook";
+            reference "internal://refund-policy";
+        }
         /// The narrative the desk records for a refund decision.
         model assess_refund {
             parameters {
@@ -50,6 +55,9 @@ decision_model GraphDecisions {
         }
         knowledge {
             RefundAssessment invokes assess_refund;
+        }
+        authority {
+            RefundEligibility governed_by RefundPolicy;
         }
     }
     services {
