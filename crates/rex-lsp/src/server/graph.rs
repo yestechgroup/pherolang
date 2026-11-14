@@ -97,10 +97,11 @@ struct MemoEntry {
     /// non-compiling sibling contributes nothing, and is retried when its
     /// key moves).
     artifact: Option<SnapshotArtifact>,
-    /// The diagnostics this compile produced (own-file only), already in
-    /// LSP shape — stored for the publish pipeline (rexlang#255), which is
-    /// not wired yet; tests read them through `graph_memo_diagnostics`.
-    #[allow(dead_code)]
+    /// The diagnostics this compile produced (own-file only, filtered
+    /// exactly like the publish pipeline's), already in LSP shape — the
+    /// publish source for the surfaces whose only compile is this one
+    /// (rexlang#255), read through
+    /// [`RexBackend::snapshot_diagnostics`].
     diagnostics: Vec<Diagnostic>,
     /// The file's spanned index, or `None` when its source does not parse.
     index: Option<SurfaceIndex>,
@@ -121,8 +122,8 @@ impl GraphMemo {
     }
 
     /// The diagnostics the memoized compile of `path` produced, in LSP
-    /// shape (tests assert the stored product; rexlang#255 publishes it).
-    #[cfg(test)]
+    /// shape (own-file only). [`RexBackend::snapshot_diagnostics`] is the
+    /// publish pipeline's reader; tests also assert the stored product.
     pub(super) fn diagnostics(&self, path: &Path) -> Option<&[Diagnostic]> {
         self.entries
             .get(path)
@@ -265,6 +266,41 @@ impl RexBackend {
             snapshot: snapshot.clone(),
         });
         Some(snapshot)
+    }
+
+    /// The diagnostics the snapshot's **memoized** compile attributed to
+    /// `uri`'s own file, in LSP shape (rexlang#255).
+    ///
+    /// The four artifact surfaces whose compile lives only in the snapshot
+    /// (`.evt`, `.deploy`, `.uc`, `.cmmn`) publish from here rather than
+    /// compiling a second time: ensuring the snapshot exists for the
+    /// document's directory runs [`RexBackend::build_graph_snapshot`], which
+    /// compiles the candidates whose content key moved (rexlang#254) and
+    /// stores each file's own-file diagnostics. A URI that is not a file,
+    /// or has no directory, has no snapshot — the caller publishes nothing.
+    /// A file the memo never compiled (absent from the candidate set) also
+    /// publishes nothing; a clean compile publishes an empty vector, which
+    /// clears stale diagnostics.
+    pub(super) fn snapshot_diagnostics(&self, uri: &Uri) -> Vec<Diagnostic> {
+        // A snapshot is built from a directory on disk, so only a `file:`
+        // URI names one. An opaque URI (`untitled:…`) is still dispatched to
+        // its surface by extension, but has no directory to compile — the
+        // pipeline publishes nothing rather than a bogus empty set.
+        if !uri.scheme().as_str().eq_ignore_ascii_case("file") {
+            return Vec::new();
+        }
+        let Some(path) = uri.to_file_path() else {
+            return Vec::new();
+        };
+        if self.graph_snapshot(uri).is_none() {
+            return Vec::new();
+        }
+        self.graph_memo
+            .lock()
+            .unwrap()
+            .diagnostics(&path)
+            .map(<[Diagnostic]>::to_vec)
+            .unwrap_or_default()
     }
 
     /// The `(uri, version)` of every open document in `directory`, sorted —

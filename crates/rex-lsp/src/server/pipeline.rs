@@ -207,14 +207,18 @@ impl RexBackend {
                 .map(|(_, diagnostic)| to_lsp_diagnostic(diagnostic, &map))
                 .collect()
             }
-            // The artifact surfaces publish diagnostics once their own
-            // compile pipeline lands; today they contribute to the graph
-            // snapshot on demand and publish nothing.
+            // The four artifact surfaces compile only inside the graph
+            // snapshot (rexlang#243/#254): publish the diagnostics its
+            // memoized compile already produced for this file instead of
+            // compiling a second time (rexlang#255). A non-file URI (or one
+            // with no directory) has no snapshot — publish nothing, never a
+            // bogus empty set; a clean file publishes an empty vector, which
+            // clears its stale diagnostics.
             Surface::Known(SurfaceKind::Evt)
             | Surface::Known(SurfaceKind::Deploy)
             | Surface::Known(SurfaceKind::Uc)
-            | Surface::Known(SurfaceKind::Cmmn)
-            | Surface::Other => Vec::new(),
+            | Surface::Known(SurfaceKind::Cmmn) => self.snapshot_diagnostics(uri),
+            Surface::Other => Vec::new(),
         };
         self.client
             .publish_diagnostics(uri.clone(), lsp_diagnostics, version)
