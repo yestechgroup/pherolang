@@ -27,7 +27,8 @@
 //! The remaining single words ([`APPLICATION`], [`BASE`], [`MODULE`],
 //! [`SERVICE`], [`SEARCH`], [`EXTEND`], [`ABSTRACT`], [`REPOSITORY`],
 //! [`INJECT`], [`DECISION`], [`EMITS`], [`INVOKES`], [`TRANSITION`],
-//! [`FROM`], [`BOOST`], [`ANALYZER`], [`LIMIT`], [`MAX`], [`CURSOR`]) are
+//! [`THROWS`], [`FROM`], [`BOOST`], [`ANALYZER`], [`LIMIT`], [`MAX`],
+//! [`CURSOR`]) are
 //! matched on both sides at fixed grammar positions; they carry no canonical
 //! order. [`FROM`] names an existing lexer keyword rather than a contextual
 //! word (see its doc).
