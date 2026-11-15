@@ -627,6 +627,24 @@ over an optional date propagates with `map`:
 (self.maturity_date.map(|__phero_date| __phero_date.plus_days(1i32)))
 ```
 
+## Statement bodies
+
+`phero_expr::stmt` is the statement layer above this expression language
+(the `.ddd` executable body, issue #178; the orchestration-only posture and
+its declared raise vocabulary are DD7, issue #304). Every expression slot is
+source text typed by the same rules above; the statement layer adds scope
+threading, the aggregate feature-path assignment rule, and the raise
+contract. A raise names a `phero_expr::stmt::RaiseSignature` the caller
+supplies — the driver builds one per declared `.ddd` error plus the standard
+prelude (`NotFound(resource: string, key: string)`,
+`Conflict(detail: string)`) — and every argument type-checks **exactly**
+against the declared payload field (arity and type; rule R2's null-safe
+equality and rule R3's Option propagation apply to the argument expressions
+as usual). When the caller also supplies the operation's `throws` set, every
+raised name must be declared there: the contract is explicit and complete,
+never inferred. The statement layer is not a second expression grammar — it
+only names, scopes, and checks the slots this document defines.
+
 ## Scoping and evaluation shape
 
 - `let x = e1; e2`: `x` is bound to the value of `e1` while checking/evaluating

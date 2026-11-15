@@ -1508,6 +1508,13 @@
       "application": "support/cli.ifml"
     },
     {
+      "id": "error:support/support.ddd#SupportDesk.TicketAlreadyResolved",
+      "kind": "error",
+      "name": "SupportDesk.TicketAlreadyResolved",
+      "file": "support/support.ddd",
+      "application": "support/cli.ifml"
+    },
+    {
       "id": "file:support/support.ddd#support/support.ddd",
       "kind": "file",
       "name": "support/support.ddd",
@@ -3152,6 +3159,11 @@
     {
       "from": "dto:support/support.ddd#SupportDesk.desk.TicketSummary",
       "to": "module:support/support.ddd#SupportDesk.desk",
+      "kind": "memberOf"
+    },
+    {
+      "from": "error:support/support.ddd#SupportDesk.TicketAlreadyResolved",
+      "to": "designApplication:support/support.ddd#SupportDesk",
       "kind": "memberOf"
     },
     {
@@ -4892,6 +4904,11 @@
       "from": "serviceOperation:support/support.ddd#SupportDesk.desk.TicketService.updateTicket",
       "to": "service:support/support.ddd#SupportDesk.desk.TicketService",
       "kind": "memberOf"
+    },
+    {
+      "from": "serviceOperation:support/support.ddd#SupportDesk.desk.TicketService.updateTicket",
+      "to": "error:support/support.ddd#SupportDesk.TicketAlreadyResolved",
+      "kind": "throws"
     },
     {
       "from": "subscription:shop/ecommerce.evt#ecommerce.billing",

@@ -28,7 +28,7 @@ use crate::ddd::DddParam;
 ///
 /// A declaration with an empty payload serializes as `{"name":"Empty"}` —
 /// the `description` and `fields` keys are omitted. An application-level
-/// declaration rides [`DddModel::errors`]; a module-level one rides
+/// declaration rides [`crate::ddd::DddModel::errors`]; a module-level one rides
 /// [`Module::errors`](crate::ddd::Module::errors) and is private to that
 /// module. Error names are application-wide unique and may not shadow a
 /// prelude error.

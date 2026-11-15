@@ -68,6 +68,15 @@ const DTOS_DESIGN_PATH: &str = "tests/conformance/ddd/dtos.ddd";
 const DTOS_DOMAIN_PATH: &str = "tests/conformance/ddd/dtos.mox";
 const DTOS_ARTIFACT_PATH: &str = "tests/conformance/ddd/dtos.ddd.json";
 
+/// The DD7 declared-error fixture (issue pherolang#304): an application
+/// error with a typed payload, a module-private one, a DTO payload, the
+/// prelude, a body raising a declared error, a stated domain `op` call, and
+/// a delegation whose `throws` is a superset of its target's; the golden
+/// carries `errors` at both scopes and the resolved `throws` references.
+const ERRORS_DESIGN_PATH: &str = "tests/conformance/ddd/errors.ddd";
+const ERRORS_DOMAIN_PATH: &str = "tests/conformance/ddd/errors.mox";
+const ERRORS_ARTIFACT_PATH: &str = "tests/conformance/ddd/errors.ddd.json";
+
 /// Compiles one `(design, domain)` fixture pair the way the CLI resolves
 /// the import (paths relative to the design file) and returns the lowered
 /// artifact, failing on any diagnostic.
@@ -239,6 +248,52 @@ fn conformance_bodies_matches_golden_artifact() {
     assert!(total.bodies.contains_key("stmt"));
 
     assert_golden_artifact(model, BODIES_ARTIFACT_PATH, BODIES_DESIGN_PATH);
+}
+
+/// The DD7 error-vocabulary fixture: both scopes lower their declarations,
+/// the resolution carries application/module/prelude scopes, and the
+/// delegation copies the target's set as a superset.
+#[test]
+fn conformance_errors_matches_golden_artifact() {
+    let model = compile_fixture(ERRORS_DESIGN_PATH, ERRORS_DOMAIN_PATH);
+    assert_eq!(
+        model
+            .errors
+            .iter()
+            .map(|error| error.name.as_str())
+            .collect::<Vec<_>>(),
+        ["PaymentDeclined", "OutOfStock"]
+    );
+    assert_eq!(
+        model.errors[0].description.as_deref(),
+        Some("The payment was refused by the provider.")
+    );
+    assert_eq!(
+        model.modules[0]
+            .errors
+            .iter()
+            .map(|error| error.name.as_str())
+            .collect::<Vec<_>>(),
+        ["InvoiceAlreadyIssued", "DeclinedDetail"]
+    );
+    assert!(matches!(
+        model.modules[0].errors[1].fields[0].type_,
+        phero_ir::ddd::DddTypeRef::Dto { .. }
+    ));
+    let pay = &model.modules[0].services[0].operations[0];
+    assert_eq!(
+        pay.throws
+            .iter()
+            .map(|reference| (reference.name.as_str(), reference.scope))
+            .collect::<Vec<_>>(),
+        [
+            ("PaymentDeclined", phero_ir::ddd::ErrorScope::Application),
+            ("OutOfStock", phero_ir::ddd::ErrorScope::Application),
+            ("NotFound", phero_ir::ddd::ErrorScope::Prelude),
+            ("InvoiceAlreadyIssued", phero_ir::ddd::ErrorScope::Module),
+        ]
+    );
+    assert_golden_artifact(model, ERRORS_ARTIFACT_PATH, ERRORS_DESIGN_PATH);
 }
 
 /// The DD2 value fixture (issue pherolang#299): every value design carries

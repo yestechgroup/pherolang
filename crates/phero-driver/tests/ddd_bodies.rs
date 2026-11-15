@@ -512,3 +512,99 @@ fn transition_on_a_body_op_is_e0351() {
 }"#;
     assert_error(&design_with_op(op), "E0351");
 }
+
+// --- the orchestration-only posture (DD7, issue pherolang#304) ---------------
+
+/// Every deliberate exclusion is a named rejection, not a generic parse
+/// failure: loops, `try`/`catch`, compound assignment, collection mutation,
+/// and bare expression statements each say what they refused.
+#[test]
+fn orchestration_only_exclusions_are_named() {
+    for (statement, expected) in [
+        (
+            "while (true) { return true; }",
+            "loops (`for`, `while`) are outside the orchestration-only subset",
+        ),
+        (
+            "for (line in run.lines) { }",
+            "loops (`for`, `while`) are outside the orchestration-only subset",
+        ),
+        (
+            "try { return true; } catch { }",
+            "`try`/`catch` is outside the orchestration-only subset",
+        ),
+        ("run.total += 1;", "unsupported compound assignment '+='"),
+        (
+            "run.lines.push(line);",
+            "unsupported collection mutation 'push'",
+        ),
+        (
+            "self.save(run);",
+            "unsupported expression statement in a service body",
+        ),
+    ] {
+        let op = format!("boolean submit() => RunRepository {{\n    {statement}\n}}");
+        let diagnostics = diagnose(&design_with_op(&op));
+        assert!(
+            diagnostics
+                .iter()
+                .any(|diagnostic| diagnostic.message.contains(expected)),
+            "expected `{expected}` for `{statement}`, got: {diagnostics:?}"
+        );
+    }
+}
+
+/// A whole-local reassignment and a cross-aggregate load are E0360 — the
+/// body orchestrates one aggregate and assigns feature paths only.
+#[test]
+fn orchestration_only_reassign_and_cross_load_are_e0360() {
+    let reassign = r#"boolean submit() => RunRepository {
+    let run = self.findById("x") else error NotFound("Run", "x");
+    let other = run;
+    other = run;
+    return true;
+}"#;
+    assert_error(&design_with_op(reassign), "E0360");
+    assert_error(
+        &design_with_op(reassign),
+        "cannot reassign the local 'other'",
+    );
+
+    let cross = r#"boolean submit() => RunRepository {
+    let run = self.findById("x") else error NotFound("Run", "x");
+    let audit = AuditRepository.findById("x");
+    return true;
+}"#;
+    assert_error(&design_with_op(cross), "E0360");
+    assert_error(
+        &design_with_op(cross),
+        "`AuditRepository.findById` is a cross-aggregate load",
+    );
+}
+
+/// A body raise must be in the operation's `throws`; a declared-but-unraised
+/// entry is an interface promise, not an error.
+#[test]
+fn body_raises_are_checked_against_throws() {
+    let undeclared = r#"boolean submit() throws Conflict => RunRepository {
+    let run = self.findById("x") else error NotFound("Run", "x");
+    return true;
+}"#;
+    assert_error(&design_with_op(undeclared), "E0360");
+    assert_error(
+        &design_with_op(undeclared),
+        "error `NotFound` is not declared in the operation's `throws`",
+    );
+    assert_error(&design_with_op(undeclared), "declared: Conflict");
+
+    let declared_but_unraised = r#"boolean submit() throws NotFound, Conflict => RunRepository {
+    let run = self.findById("x") else error NotFound("Run", "x");
+    return true;
+}"#;
+    let compilation = compile(&design_with_op(declared_but_unraised));
+    assert!(
+        compilation.diagnostics.is_empty(),
+        "a declared-but-unraised entry is legal: {:?}",
+        compilation.diagnostics
+    );
+}

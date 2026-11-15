@@ -1351,9 +1351,7 @@ fn error_declarations_serialize_sparsely_and_round_trip() {
     let json = serde_json::to_string(&declined).expect("serialize");
     assert_eq!(
         json,
-        format!(
-            r#"{{"name":"PaymentDeclined","description":"The payment was refused.","fields":[{{"name":"reason","type":{{"type":"class","value":{{"package":"nz.example.library","name":"DeclineReason"}}}}}},{{"name":"reference","type":{{"type":"primitive","value":"string"}}}}]}}"#
-        )
+        r#"{"name":"PaymentDeclined","description":"The payment was refused.","fields":[{"name":"reason","type":{"type":"class","value":{"package":"nz.example.library","name":"DeclineReason"}}},{"name":"reference","type":{"type":"primitive","value":"string"}}]}"#
     );
     let round: ErrorDecl = serde_json::from_str(&json).expect("deserialize");
     assert_eq!(round, declined);

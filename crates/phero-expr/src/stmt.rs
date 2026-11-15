@@ -220,8 +220,12 @@ struct StmtCx<'a> {
     /// Receiver names (assignment roots are rejected).
     receivers: Vec<String>,
     /// The non-primary receivers: `findById`/`findAll` through one is a
-    /// cross-aggregate load.
+    /// cross-aggregate load. The class keys catch an alias
+    /// (`let other = AuditRepository; other.findById(…)`), the names the
+    /// direct call.
     secondary_receivers: Vec<String>,
+    secondary_classes: Vec<Ty>,
+    primary_classes: Vec<Ty>,
     /// The declared error vocabulary a raise may name, prelude included.
     raises: &'a [RaiseSignature],
     /// The operation's declared `throws` set; `None` disables the subset
@@ -276,6 +280,16 @@ pub fn check_stmt_body(
             .iter()
             .filter(|receiver| !receiver.is_primary)
             .map(|receiver| receiver.name.to_string())
+            .collect(),
+        secondary_classes: receivers
+            .iter()
+            .filter(|receiver| !receiver.is_primary)
+            .map(|receiver| Ty::class(receiver.package, receiver.class))
+            .collect(),
+        primary_classes: receivers
+            .iter()
+            .filter(|receiver| receiver.is_primary)
+            .map(|receiver| Ty::class(receiver.package, receiver.class))
             .collect(),
         raises,
         throws,
@@ -608,7 +622,13 @@ impl StmtCx<'_> {
     /// The orchestration-only aggregate rule: a body binds one primary
     /// repository, so `findById`/`findAll` through any other receiver is a
     /// cross-aggregate load. Walks every expression slot's parsed form.
-    fn check_aggregate_loads(&self, expr: &crate::Expr, slot: &str, errors: &mut Vec<BodyError>) {
+    fn check_aggregate_loads(
+        &self,
+        expr: &crate::Expr,
+        scope: &[(String, Ty)],
+        slot: &str,
+        errors: &mut Vec<BodyError>,
+    ) {
         let secondary: Vec<&str> = self
             .secondary_receivers
             .iter()
@@ -621,10 +641,22 @@ impl StmtCx<'_> {
             let crate::ast::ExprKind::Name(binding) = &receiver.kind else {
                 return;
             };
-            if !secondary.contains(&binding.as_str()) {
+            if !matches!(name.value.as_str(), "findById" | "findAll") {
                 return;
             }
-            if matches!(name.value.as_str(), "findById" | "findAll") {
+            // Direct call through a non-primary receiver, or an alias whose
+            // binding carries a non-primary repository's class (the same
+            // class as the primary is the same aggregate — an alias of the
+            // primary is not a second aggregate).
+            let aliased_secondary = scope
+                .iter()
+                .rev()
+                .find(|(name, _)| name == binding)
+                .map(|(_, ty)| {
+                    self.secondary_classes.contains(ty) && !self.primary_classes.contains(ty)
+                })
+                .unwrap_or(false);
+            if secondary.contains(&binding.as_str()) || aliased_secondary {
                 errors.push(BodyError {
                     slot: slot.to_string(),
                     message: format!(
@@ -695,7 +727,7 @@ impl StmtCx<'_> {
             return None;
         }
         let ast = parsed.ast?;
-        self.check_aggregate_loads(&ast, slot, errors);
+        self.check_aggregate_loads(&ast, scope, slot, errors);
         let mut checker = TypeChecker::new(self.context.clone());
         for (name, ty) in scope {
             checker = checker.with_binding(name.clone(), ty.clone());

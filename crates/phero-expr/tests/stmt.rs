@@ -1249,10 +1249,22 @@ fn check_stmt_rejects_whole_local_reassignment() {
 /// the primary stay legal.
 #[test]
 fn check_stmt_rejects_cross_aggregate_loads() {
+    let mut context = fixture_context();
+    context.insert_class(
+        "design",
+        "AuditRepository",
+        vec![],
+        vec![],
+        vec![Operation::new(
+            "findById",
+            class_ref("Trade"),
+            vec![id_param()],
+        )],
+    );
     let secondary = StmtReceiver {
         name: "audit",
         package: "design",
-        class: "TradeRepository",
+        class: "AuditRepository",
         is_primary: false,
     };
     let body = StmtBody {
@@ -1269,7 +1281,7 @@ fn check_stmt_rejects_cross_aggregate_loads() {
         ],
     };
     let errors = check_stmt_body(
-        &fixture_context(),
+        &context,
         &[id_param()],
         Some(double_output()),
         &[trade_repository(), secondary],
@@ -1300,7 +1312,7 @@ fn check_stmt_rejects_cross_aggregate_loads() {
         ],
     };
     let errors = check_stmt_body(
-        &fixture_context(),
+        &context,
         &[id_param()],
         Some(double_output()),
         &[trade_repository(), secondary],
@@ -1309,6 +1321,37 @@ fn check_stmt_rejects_cross_aggregate_loads() {
         &refused,
     )
     .expect_err("findAll");
+    assert!(
+        errors[0].message.contains("cross-aggregate load"),
+        "{:?}",
+        errors[0].message
+    );
+
+    // Binding the secondary repository to a local does not launder the
+    // load: the binding carries the non-primary class.
+    let aliased = StmtBody {
+        stmts: vec![
+            Stmt::Let {
+                name: "repo".to_string(),
+                expr: "audit".to_string(),
+            },
+            Stmt::Let {
+                name: "other".to_string(),
+                expr: "repo.findById(id)".to_string(),
+            },
+            return_of(Some("id")),
+        ],
+    };
+    let errors = check_stmt_body(
+        &context,
+        &[id_param()],
+        Some(double_output()),
+        &[trade_repository(), secondary],
+        &RaiseSignature::prelude(),
+        None,
+        &aliased,
+    )
+    .expect_err("aliased load");
     assert!(
         errors[0].message.contains("cross-aggregate load"),
         "{:?}",
