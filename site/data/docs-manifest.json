@@ -100,6 +100,13 @@
       "url": "/reference/naming/"
     },
     {
+      "source": "docs/HIGHLIGHTING.md",
+      "slug": "highlighting",
+      "collection": "reference",
+      "target": "reference/highlighting.md",
+      "url": "/reference/highlighting/"
+    },
+    {
       "source": "docs/README.md",
       "slug": "index",
       "collection": "reference",

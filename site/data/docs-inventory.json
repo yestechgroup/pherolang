@@ -83,6 +83,15 @@
       "lines": 948
     },
     {
+      "path": "docs/HIGHLIGHTING.md",
+      "name": "HIGHLIGHTING.md",
+      "slug": "highlighting",
+      "title": "Compiler-backed syntax highlighting",
+      "description": "Phero Lang source is highlighted by the compiler, not by a hand-written",
+      "bytes": 26650,
+      "lines": 546
+    },
+    {
       "path": "docs/IFML.md",
       "name": "IFML.md",
       "slug": "ifml",
@@ -115,8 +124,8 @@
       "slug": "index",
       "title": "Phero Lang documentation",
       "description": "Phero Lang is a multi-surface modeling language: every surface follows the same",
-      "bytes": 5099,
-      "lines": 56
+      "bytes": 5363,
+      "lines": 57
     },
     {
       "path": "docs/REBRAND.md",

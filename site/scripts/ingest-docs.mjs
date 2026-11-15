@@ -101,6 +101,7 @@ const PLACEMENT = {
   backends: ['reference', 120],
   versioning: ['reference', 130],
   naming: ['reference', 140],
+  highlighting: ['reference', 150],
 
   // Engineering — the claim ladder, the register, the shipped artifact.
   semantics: ['engineering', 10],
