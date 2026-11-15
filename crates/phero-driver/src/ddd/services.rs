@@ -303,6 +303,9 @@ pub(crate) enum DecisionResolution<'a> {
         model: &'a phero_ir::dmn::DmnModel,
         /// The resolved service declaration.
         service: &'a phero_ir::dmn::DecisionService,
+        /// The bucket path the providing model was supplied under — the
+        /// identity the resolved companions record as `contract`.
+        path: &'a str,
     },
     /// No provided model declares the service — the unknown-reference
     /// shape (E0250 on the design side), fired for pinned references too.
@@ -356,7 +359,7 @@ pub(crate) fn strict_version(text: &str) -> Option<(u64, u64, u64)> {
 
 /// The model's declared `version` metadata, when any (the metadata is a
 /// singleton per model — rule 3 — so the first entry wins).
-fn declared_version(model: &phero_ir::dmn::DmnModel) -> Option<&str> {
+pub(crate) fn declared_version(model: &phero_ir::dmn::DmnModel) -> Option<&str> {
     model
         .metadata
         .iter()
@@ -422,11 +425,15 @@ pub(crate) fn resolve_decision_service<'a>(
                 })
         })
         .collect();
-    let Some(&(_, model, service, _)) = candidates.first() else {
+    let Some(&(path, model, service, _)) = candidates.first() else {
         return DecisionResolution::Unknown;
     };
     let Some(pin) = pin else {
-        return DecisionResolution::Resolved { model, service };
+        return DecisionResolution::Resolved {
+            model,
+            service,
+            path,
+        };
     };
     match pin {
         dsl::DddVersionPin::Exact(value) => {
@@ -446,6 +453,7 @@ pub(crate) fn resolve_decision_service<'a>(
                 [only] => DecisionResolution::Resolved {
                     model: only.1,
                     service: only.2,
+                    path: only.0,
                 },
                 _ => DecisionResolution::Ambiguous {
                     version: value.clone(),
@@ -477,6 +485,7 @@ pub(crate) fn resolve_decision_service<'a>(
             DecisionResolution::Resolved {
                 model: only.1,
                 service: only.2,
+                path: only.0,
             }
         }
     }
@@ -877,12 +886,21 @@ pub(crate) fn lower_module_services<'a>(
                     params: Vec::new(),
                     delegation: Some(Delegation {
                         target: delegation.target.full_name(),
+                        // The resolved target identity (DD1) needs the
+                        // completed registries: the post-pass fills it.
+                        target_ref: None,
                         operation: delegation.operation.text.clone(),
                     }),
                     is_protected: op.is_protected,
                     capabilities,
+                    // The resolved companions (DD1) need the completed
+                    // registries and the provided artifact buckets: the
+                    // post-pass fills them (`ddd::links`).
+                    capability_refs: Vec::new(),
                     emits,
+                    emitted_refs: Vec::new(),
                     invokes,
+                    decision_refs: Vec::new(),
                     decision_pins,
                     condition: condition_text_out,
                     condition_paths,
@@ -984,8 +1002,14 @@ pub(crate) fn lower_module_services<'a>(
                     delegation: None,
                     is_protected: op.is_protected,
                     capabilities,
+                    // The resolved companions (DD1) need the completed
+                    // registries and the provided artifact buckets: the
+                    // post-pass fills them (`ddd::links`).
+                    capability_refs: Vec::new(),
                     emits,
+                    emitted_refs: Vec::new(),
                     invokes,
+                    decision_refs: Vec::new(),
                     decision_pins,
                     condition: condition_text_out,
                     condition_paths,
@@ -1014,9 +1038,13 @@ pub(crate) fn lower_module_services<'a>(
             .iter()
             .any(|(name, _)| *name == service.name.text)
         {
-            registries
-                .services
-                .push((service.name.text.clone(), ServiceEntry { ops }));
+            registries.services.push((
+                service.name.text.clone(),
+                ServiceEntry {
+                    module: module.name.text.clone(),
+                    ops,
+                },
+            ));
         }
         services_out.push(Service {
             name: service.name.text.clone(),
@@ -1027,6 +1055,9 @@ pub(crate) fn lower_module_services<'a>(
                 .iter()
                 .map(|name| name.text.clone())
                 .collect(),
+            // The resolved companions (DD1) need the completed registries:
+            // the post-pass fills them (`ddd::links`).
+            dependency_refs: Vec::new(),
             // The injected decision services lower as their last segment
             // (the resolution universe's spelling — rule 17); the pinned
             // lines also lower their `version` pins (pherolang#154).
@@ -1035,6 +1066,7 @@ pub(crate) fn lower_module_services<'a>(
                 .iter()
                 .map(|entry| entry.name.segments.last().unwrap().text.clone())
                 .collect(),
+            decision_dependency_refs: Vec::new(),
             decision_dependency_pins: service
                 .decision_dependencies
                 .iter()

@@ -180,7 +180,7 @@ layer, `phero_expr::stmt` (issue pherolang#178):
   never attached.
 
 The wire shapes and rules live in `docs/DDD.md`; the IR module docs
-(`crates/phero-ir/src/ddd.rs`) pin the additive `bodies`/`bodyReceiver`
+(`crates/phero-ir/src/ddd/`) pin the additive `bodies`/`bodyReceiver`
 fields.
 
 ## Implementation stages

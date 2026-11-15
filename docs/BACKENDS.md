@@ -28,10 +28,12 @@ docs](https://docs.rs/phero-ir)** (also rendered by `cargo doc -p phero-ir`).
 - The in-tree backends (`phero-backend-rust`, `phero-backend-jsonschema`,
   `phero-backend-cedar`, `phero-backend-cmmn` — the last lowering
   `CmmnModel` + domain model to the cmmn-rs engine's `CaseDefinition`
-  JSON, and `phero-backend-dmn` — lowering `DmnModel` + the markdown table
+  JSON, `phero-backend-dmn` — lowering `DmnModel` + the markdown table
   contents into the dsntk engine model it evaluates, recording
-  decision-table provenance) are reference implementations of exactly
-  this discipline; reading them is the fastest way to learn the shapes.
+  decision-table provenance, and `phero-backend-ddd` — the artifact-only
+  DDD contract checker and canonical serializer) are reference
+  implementations of exactly this discipline; reading them is the fastest
+  way to learn the shapes.
 
 ## The serialized-artifact contract (summary)
 
@@ -41,7 +43,7 @@ Root shapes, as actually serialized:
 | --- | --- |
 | Domain IR (`Model`) | `{"formatVersion": N, "pheroVersion"?: "…", "packages": […]}` |
 | Actor policy (`ActorModel`) | `{"formatVersion": N, "blocks"?: […]}` — block-less serializes as exactly `{"formatVersion": N}` |
-| DDD design (`ddd::DddModel`) | `{"formatVersion": N, "applications"?: […], "modules"?: […]}` (both omitted when empty) |
+| DDD design (`ddd::DddModel`) | `{"formatVersion": N, "pheroVersion"?: "…", "application"?: {…}, "modules"?: […]}` (the design keys omitted when empty; `pheroVersion` is provenance only) |
 | Event contract (`events::EventModel`) | `{"formatVersion": N, "events"?: […], "channels"?: […], "subscriptions"?: […]}` (all omitted when empty) |
 | Deployment (`deploy::DeployModel`) | `{"formatVersion": N, "applications"?: […], "profiles"?: […], "deployments"?: […]}` (all omitted when empty) |
 | Use case (`usecases::UseCaseModel`) | `{"formatVersion": N, "useCases"?: […]}` (omitted when empty) |
@@ -56,10 +58,12 @@ two exceptions that carry no provenance marker and deliberately stayed at
 `1`: the semantic graph (`GRAPH_MODEL_FORMAT_VERSION`) and the `graph query`
 envelope. `phero-evidence`'s receipt and proof-register format versions also
 stay at `1` — their shapes did not change. `pherolang artifact check`
-classifies non-empty roots by their disjoint section keys and falls back to
-the actor reading for the shared minimal `{"formatVersion": N}` bytes (now
-`N = 2` for the bumped kinds, which is why a bare `{"formatVersion": 1}`
-graph form is a version mismatch rather than an actor artifact).
+classifies non-empty roots by their disjoint section keys — never by
+`pheroVersion`, which both the domain `Model` and the DDD design carry
+(issue #298) — and falls back to the actor reading for the shared minimal
+`{"formatVersion": N}` bytes (now `N = 2` for the bumped kinds, which is why
+a bare `{"formatVersion": 1}` graph form is a version mismatch rather than
+an actor artifact).
 
 - **Casing.** All field names and bare enum tags are `camelCase`
   (`formatVersion`, `isReadOnly`, `"crossReference"`). Note that `$type` /
@@ -156,7 +160,8 @@ rule does not apply yet:
 | 0.3.0 | 2 | 2 | 2 | 2 |
 
 - `pheroVersion` inside an artifact is provenance only — consumers that must
-  not care can ignore it.
+  not care can ignore it. The domain `Model` and, since issue #298, the DDD
+  design (`ddd::DddModel`) carry it; `formatVersion` remains the only gate.
 - **0.3 does not read 0.2 artifacts.** There is no dual-accept window: the
   rename moved the provenance key and the instance discriminator, so a
   document carrying either pre-rename marker is rejected outright (see the
@@ -195,6 +200,14 @@ naming the file and violation when anything fails:
   instance);
 - `formatVersion` is present, an unsigned integer, and supported — a higher
   version is rejected with an error naming it;
+- DDD contract (issue #298): a contract-complete design carries its
+  `application` and a non-empty `pheroVersion`; every authored reference
+  carries its resolved companion (`typeRef`, `delegation.targetRef`,
+  `dependencyRefs`, `decisionDependencyRefs`, `capabilityRefs`,
+  `emittedRefs`, `decisionRefs`, `entityRef`, and search-member `typeRef`s),
+  the parallel lists are index-aligned, search references are complete, and
+  stereotype/flag combinations are legal — a violation names the design or
+  reference;
 - structural keys are camelCase (a snake_case spelling of a known key is
   reported with the correct spelling; model-defined keys — feature names,
   target names — are exempt);

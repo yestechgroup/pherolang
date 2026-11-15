@@ -286,7 +286,8 @@ fn classification_table_over_all_artifact_kinds() {
             expected: Ok(ArtifactKind::ActorModel),
         },
         ClassificationCase {
-            name: "module-only IFML artifact shape-matches the DDD design keys \
+            name: "module-only IFML artifact shape-matches the DDD design keys, \
+                       is claimed by the DDD check, and fails its contract \
                        (the documented limitation)",
             json: serde_json::to_string(&phero_ir::ifml::IfmlModel {
                 modules: vec![phero_ir::ifml::ModuleDeclaration {
@@ -302,7 +303,7 @@ fn classification_table_over_all_artifact_kinds() {
                 ..phero_ir::ifml::IfmlModel::default()
             })
             .expect("serialize IfmlModel"),
-            expected: Ok(ArtifactKind::DddModel),
+            expected: Err("pheroVersion"),
         },
         ClassificationCase {
             name: "view-bearing IFML artifact classifies as an IfmlModel",
@@ -563,16 +564,78 @@ fn unknown_root_type_is_rejected() {
 #[test]
 fn application_or_modules_keys_classify_as_ddd_model() {
     assert_eq!(
-        check(r#"{"formatVersion": 2, "application": {"name": "Library"}, "modules": []}"#),
+        check(
+            r#"{"formatVersion": 2, "pheroVersion": "0.3.0", "application": {"name": "Library"}, "modules": []}"#
+        ),
         Ok(ArtifactKind::DddModel)
     );
     assert_eq!(
-        check(r#"{"formatVersion": 2, "application": {"name": "Library"}}"#),
+        check(
+            r#"{"formatVersion": 2, "pheroVersion": "0.3.0", "application": {"name": "Library"}}"#
+        ),
         Ok(ArtifactKind::DddModel)
     );
     assert_eq!(
-        check(r#"{"formatVersion": 2, "modules": [{"name": "core"}]}"#),
+        check(
+            r#"{"formatVersion": 2, "pheroVersion": "0.3.0", "application": {"name": "Library"}, "modules": [{"name": "core"}]}"#
+        ),
         Ok(ArtifactKind::DddModel)
+    );
+}
+
+#[test]
+fn ddd_provenance_is_not_an_ir_classifier() {
+    // `pheroVersion` appears on the DDD design root too, so only `packages`
+    // may claim the IR reading. Before the rule change this document was
+    // misclassified as an IrModel and failed on the missing `packages`.
+    let golden = include_str!("../../../../tests/conformance/ddd/library.ddd.json");
+    assert_eq!(check(golden), Ok(ArtifactKind::DddModel));
+
+    // Provenance alone is not an artifact: no known root shape claims it.
+    let errors = check(r#"{"formatVersion": 2, "pheroVersion": "0.3.0"}"#).unwrap_err();
+    assert!(
+        errors.iter().any(|error| error.contains("unrecognized")),
+        "{errors:?}"
+    );
+}
+
+#[test]
+fn the_ddd_contract_is_enforced_by_artifact_check() {
+    let golden = include_str!("../../../../tests/conformance/ddd/library.ddd.json");
+
+    let mut missing_provenance: Value = serde_json::from_str(golden).expect("golden JSON");
+    missing_provenance
+        .as_object_mut()
+        .expect("artifact root")
+        .remove("pheroVersion");
+    let errors = check(&missing_provenance.to_string()).unwrap_err();
+    assert!(
+        errors.iter().any(|error| error.contains("pheroVersion")),
+        "{errors:?}"
+    );
+
+    let mut missing_type_ref: Value = serde_json::from_str(golden).expect("golden JSON");
+    missing_type_ref["modules"][0]["designs"][0]
+        .as_object_mut()
+        .expect("first design")
+        .remove("typeRef");
+    let errors = check(&missing_type_ref.to_string()).unwrap_err();
+    assert!(
+        errors
+            .iter()
+            .any(|error| error.contains("designs[0].typeRef")),
+        "{errors:?}"
+    );
+
+    let mut dto_with_repository: Value = serde_json::from_str(golden).expect("golden JSON");
+    dto_with_repository["modules"][0]["designs"][0]["stereotype"] =
+        Value::String("dto".to_string());
+    let errors = check(&dto_with_repository.to_string()).unwrap_err();
+    assert!(
+        errors
+            .iter()
+            .any(|error| error.contains("only an entity design may declare a repository")),
+        "{errors:?}"
     );
 }
 
@@ -989,6 +1052,7 @@ fn legacy_detection_matrix_covers_every_classified_artifact_kind() {
             name: "DDD design artifact",
             current: json!({
                 "formatVersion": 2,
+                "pheroVersion": "0.3.0",
                 "application": {"name": "Library"},
                 "modules": [{"name": "core"}],
             }),

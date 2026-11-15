@@ -150,6 +150,15 @@ pub(crate) fn lower_module_searches<'a>(
                 .unwrap_or_default(),
         );
         search_out.description = search.doc.clone();
+        // The resolved companion (DD1): the searched class. Absent only when
+        // the entity line failed to resolve (the artifact drops).
+        search_out.entity_ref =
+            resolved_entity
+                .as_ref()
+                .map(|(package, class)| phero_ir::TypeRef::Class {
+                    package: package.clone(),
+                    name: class.clone(),
+                });
         for capability in &search.capabilities {
             search_out.capabilities.push(capability.text.clone());
             registries.capability_checks.push(CapabilityCheck {
@@ -293,6 +302,8 @@ fn rule_11_search_text_fields(
             ));
         }
         let mut field_out = SearchField::new(field.property.full_name());
+        // The resolved companion (DD1): the indexed feature's declared type.
+        field_out.type_ref = Some(feature.type_.clone());
         field_out.boost = field.boost.map(|boost| Boost::new(boost as f32));
         field_out.analyzer = field.analyzer.clone();
         fields.push(field_out);
@@ -347,9 +358,19 @@ fn rule_11_search_filter_sort(
                 ));
                 continue;
             }
+            // The resolved companion (DD1): the filter/sort key's declared
+            // feature type.
             match kind {
-                "filter" => filters.push(SearchFilter::new(property.full_name())),
-                _ => sort.push(SearchSort::new(property.full_name())),
+                "filter" => {
+                    let mut filter = SearchFilter::new(property.full_name());
+                    filter.type_ref = Some(feature.type_.clone());
+                    filters.push(filter);
+                }
+                _ => {
+                    let mut sort_key = SearchSort::new(property.full_name());
+                    sort_key.type_ref = Some(feature.type_.clone());
+                    sort.push(sort_key);
+                }
             }
         }
     }

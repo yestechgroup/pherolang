@@ -1,5 +1,6 @@
 {
   "formatVersion": 2,
+  "pheroVersion": "0.3.0",
   "application": {
     "name": "Payroll",
     "base": "nz.example.payroll"
@@ -20,8 +21,18 @@
               "capabilities": [
                 "ApprovePayRun"
               ],
+              "capabilityRefs": [
+                {
+                  "name": "ApprovePayRun"
+                }
+              ],
               "emits": [
                 "PayRunStateChanged"
+              ],
+              "emittedRefs": [
+                {
+                  "name": "PayRunStateChanged"
+                }
               ],
               "condition": "status == AwaitingApproval"
             }
@@ -31,6 +42,13 @@
       "designs": [
         {
           "class": "PayRun",
+          "typeRef": {
+            "type": "class",
+            "value": {
+              "package": "nz.example.payroll",
+              "name": "PayRun"
+            }
+          },
           "stereotype": "entity",
           "flags": {
             "auditable": true,

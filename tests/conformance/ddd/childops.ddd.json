@@ -1,5 +1,6 @@
 {
   "formatVersion": 2,
+  "pheroVersion": "0.3.0",
   "application": {
     "name": "Payroll",
     "base": "nz.example.payroll"
@@ -19,24 +20,48 @@
               },
               "capabilities": [
                 "ApprovePayRun"
+              ],
+              "capabilityRefs": [
+                {
+                  "name": "ApprovePayRun"
+                }
               ]
             },
             {
               "name": "persist",
               "delegation": {
                 "target": "PayRunRepository",
+                "targetRef": {
+                  "kind": "repository",
+                  "qualifiedName": "Payroll.payroll.PayRunRepository",
+                  "module": "payroll"
+                },
                 "operation": "save"
               }
             }
           ],
           "dependencies": [
             "PayRunRepository"
+          ],
+          "dependencyRefs": [
+            {
+              "kind": "repository",
+              "qualifiedName": "Payroll.payroll.PayRunRepository",
+              "module": "payroll"
+            }
           ]
         }
       ],
       "designs": [
         {
           "class": "PayRun",
+          "typeRef": {
+            "type": "class",
+            "value": {
+              "package": "nz.example.payroll",
+              "name": "PayRun"
+            }
+          },
           "stereotype": "entity",
           "flags": {
             "auditable": true,
@@ -184,6 +209,13 @@
         },
         {
           "class": "PayRunLineDraft",
+          "typeRef": {
+            "type": "class",
+            "value": {
+              "package": "nz.example.payroll",
+              "name": "PayRunLineDraft"
+            }
+          },
           "stereotype": "dto"
         }
       ]

@@ -86,6 +86,14 @@ pub(crate) fn lower_module_designs(
         }
 
         let mut design_out = Design::new(design.class.text.clone(), stereotype(design));
+        // The resolved companion (DD1): the class the authored name binds
+        // to. Absent only when rule 3 already failed (the artifact drops).
+        design_out.type_ref = resolved
+            .as_ref()
+            .map(|(package, class)| phero_ir::TypeRef::Class {
+                package: package.clone(),
+                name: class.clone(),
+            });
         design_out.is_abstract = design.is_abstract;
         design_out.flags = flags(design);
 

@@ -1,5 +1,6 @@
 {
   "formatVersion": 2,
+  "pheroVersion": "0.3.0",
   "application": {
     "name": "Payroll",
     "base": "nz.example.payroll"
@@ -28,6 +29,11 @@
               "capabilities": [
                 "ApprovePayRun"
               ],
+              "capabilityRefs": [
+                {
+                  "name": "ApprovePayRun"
+                }
+              ],
               "bodies": {
                 "stmt": "{\"stmts\":[{\"kind\":\"letElse\",\"name\":\"run\",\"expr\":\"self.findById(\\\"current\\\")\",\"error\":{\"variant\":\"NotFound\",\"args\":[\"\\\"PayRun\\\"\",\"\\\"current\\\"\"]}},{\"kind\":\"guard\",\"expr\":\"run.total >= 0\",\"error\":{\"variant\":\"Conflict\",\"args\":[\"\\\"total\\\"\"]}},{\"kind\":\"let\",\"name\":\"units\",\"expr\":\"run.lines.map(line => line.quantity).sum()\"},{\"kind\":\"let\",\"name\":\"anyPositive\",\"expr\":\"run.lines.any(line => line.quantity > 0)\"},{\"kind\":\"let\",\"name\":\"allCosted\",\"expr\":\"run.lines.all(line => line.unitCost >= 0)\"},{\"kind\":\"let\",\"name\":\"lineCount\",\"expr\":\"run.lines.size()\"},{\"kind\":\"assign\",\"path\":[\"run\",\"total\"],\"expr\":\"units\"},{\"kind\":\"let\",\"name\":\"saved\",\"expr\":\"self.save(run)\"},{\"kind\":\"let\",\"name\":\"audit\",\"expr\":\"PayRunAuditRepository.record(\\\"submit\\\")\"}]}"
               },
@@ -41,6 +47,11 @@
               },
               "capabilities": [
                 "ApprovePayRun"
+              ],
+              "capabilityRefs": [
+                {
+                  "name": "ApprovePayRun"
+                }
               ],
               "condition": "status == Draft",
               "bodies": {
@@ -92,12 +103,31 @@
           "dependencies": [
             "PayRunRepository",
             "PayRunAuditRepository"
+          ],
+          "dependencyRefs": [
+            {
+              "kind": "repository",
+              "qualifiedName": "Payroll.payroll.PayRunRepository",
+              "module": "payroll"
+            },
+            {
+              "kind": "repository",
+              "qualifiedName": "Payroll.payroll.PayRunAuditRepository",
+              "module": "payroll"
+            }
           ]
         }
       ],
       "designs": [
         {
           "class": "PayRun",
+          "typeRef": {
+            "type": "class",
+            "value": {
+              "package": "nz.example.payroll",
+              "name": "PayRun"
+            }
+          },
           "stereotype": "entity",
           "flags": {
             "auditable": true,
@@ -173,6 +203,13 @@
         },
         {
           "class": "PayRunAudit",
+          "typeRef": {
+            "type": "class",
+            "value": {
+              "package": "nz.example.payroll",
+              "name": "PayRunAudit"
+            }
+          },
           "stereotype": "entity",
           "flags": {
             "auditable": true,

@@ -1,5 +1,6 @@
 {
   "formatVersion": 2,
+  "pheroVersion": "0.3.0",
   "application": {
     "name": "Orders",
     "base": "nz.example.shop"
@@ -53,8 +54,18 @@
               "capabilities": [
                 "PlaceOrder"
               ],
+              "capabilityRefs": [
+                {
+                  "name": "PlaceOrder"
+                }
+              ],
               "emits": [
                 "OrderPlaced"
+              ],
+              "emittedRefs": [
+                {
+                  "name": "OrderPlaced"
+                }
               ]
             },
             {
@@ -81,6 +92,11 @@
               ],
               "emits": [
                 "OrderCancelled"
+              ],
+              "emittedRefs": [
+                {
+                  "name": "OrderCancelled"
+                }
               ]
             },
             {
@@ -114,6 +130,11 @@
               ],
               "emits": [
                 "OrderLineShipped"
+              ],
+              "emittedRefs": [
+                {
+                  "name": "OrderLineShipped"
+                }
               ]
             },
             {
@@ -162,6 +183,11 @@
               "name": "saveOrder",
               "delegation": {
                 "target": "OrderRepository",
+                "targetRef": {
+                  "kind": "repository",
+                  "qualifiedName": "Orders.ordering.OrderRepository",
+                  "module": "ordering"
+                },
                 "operation": "save"
               }
             },
@@ -169,6 +195,11 @@
               "name": "findOrders",
               "delegation": {
                 "target": "OrderSearch",
+                "targetRef": {
+                  "kind": "search",
+                  "qualifiedName": "Orders.ordering.OrderSearch",
+                  "module": "ordering"
+                },
                 "operation": "search"
               }
             }
@@ -176,12 +207,31 @@
           "dependencies": [
             "OrderRepository",
             "OrderSearch"
+          ],
+          "dependencyRefs": [
+            {
+              "kind": "repository",
+              "qualifiedName": "Orders.ordering.OrderRepository",
+              "module": "ordering"
+            },
+            {
+              "kind": "search",
+              "qualifiedName": "Orders.ordering.OrderSearch",
+              "module": "ordering"
+            }
           ]
         }
       ],
       "designs": [
         {
           "class": "Order",
+          "typeRef": {
+            "type": "class",
+            "value": {
+              "package": "nz.example.shop",
+              "name": "Order"
+            }
+          },
           "stereotype": "entity",
           "flags": {
             "scaffold": true,
@@ -307,6 +357,13 @@
         },
         {
           "class": "OrderLine",
+          "typeRef": {
+            "type": "class",
+            "value": {
+              "package": "nz.example.shop",
+              "name": "OrderLine"
+            }
+          },
           "stereotype": "entity",
           "flags": {
             "auditable": true,
@@ -315,6 +372,13 @@
         },
         {
           "class": "Product",
+          "typeRef": {
+            "type": "class",
+            "value": {
+              "package": "nz.example.shop",
+              "name": "Product"
+            }
+          },
           "stereotype": "entity",
           "flags": {
             "auditable": true,
@@ -356,20 +420,42 @@
           "name": "OrderSearch",
           "description": "Full-text search over the order book.",
           "entity": "Order",
+          "entityRef": {
+            "type": "class",
+            "value": {
+              "package": "nz.example.shop",
+              "name": "Order"
+            }
+          },
           "text": [
             {
               "property": "orderNo",
+              "typeRef": {
+                "type": "primitive",
+                "value": "string"
+              },
               "boost": 2.0
             }
           ],
           "filters": [
             {
-              "property": "currency"
+              "property": "currency",
+              "typeRef": {
+                "type": "vocabulary",
+                "value": {
+                  "package": "nz.example.shop",
+                  "name": "Currency"
+                }
+              }
             }
           ],
           "sort": [
             {
-              "property": "orderNo"
+              "property": "orderNo",
+              "typeRef": {
+                "type": "primitive",
+                "value": "string"
+              }
             }
           ],
           "document": [
@@ -396,6 +482,11 @@
               "name": "register",
               "delegation": {
                 "target": "CustomerRepository",
+                "targetRef": {
+                  "kind": "repository",
+                  "qualifiedName": "Orders.customers.CustomerRepository",
+                  "module": "customers"
+                },
                 "operation": "save"
               }
             },
@@ -403,6 +494,11 @@
               "name": "save",
               "delegation": {
                 "target": "CustomerRepository",
+                "targetRef": {
+                  "kind": "repository",
+                  "qualifiedName": "Orders.customers.CustomerRepository",
+                  "module": "customers"
+                },
                 "operation": "save"
               }
             },
@@ -429,12 +525,26 @@
           ],
           "dependencies": [
             "CustomerRepository"
+          ],
+          "dependencyRefs": [
+            {
+              "kind": "repository",
+              "qualifiedName": "Orders.customers.CustomerRepository",
+              "module": "customers"
+            }
           ]
         }
       ],
       "designs": [
         {
           "class": "Customer",
+          "typeRef": {
+            "type": "class",
+            "value": {
+              "package": "nz.example.shop",
+              "name": "Customer"
+            }
+          },
           "stereotype": "entity",
           "flags": {
             "auditable": true,

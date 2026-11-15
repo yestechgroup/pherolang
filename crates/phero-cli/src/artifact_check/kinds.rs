@@ -38,6 +38,25 @@ pub(super) fn check_kind(
 fn no_extra(_: &serde_json::Map<String, Value>, _: &mut Vec<String>) {}
 
 /// The DDD design root's `application` object must carry a non-empty
+/// string `name`, and the document must satisfy the artifact-only DDD
+/// contract (resolved companions, effective design decisions, aligned
+/// parallel lists) through `phero-backend-ddd`.
+fn check_ddd_contract(root: &serde_json::Map<String, Value>, errors: &mut Vec<String>) {
+    check_ddd_application(root, errors);
+    let value = Value::Object(root.clone());
+    match serde_json::from_value::<phero_ir::ddd::DddModel>(value) {
+        Err(error) => errors.push(format!(
+            "the DDD design artifact does not match the DDD model: {error}"
+        )),
+        Ok(model) => errors.extend(
+            phero_backend_ddd::check_contract(&model)
+                .into_iter()
+                .map(|violation| violation.to_string()),
+        ),
+    }
+}
+
+/// The DDD design root's `application` object must carry a non-empty
 /// string `name`.
 fn check_ddd_application(root: &serde_json::Map<String, Value>, errors: &mut Vec<String>) {
     let Some(application) = root.get("application") else {
@@ -117,7 +136,7 @@ pub(super) fn check_ddd_model(
         phero_ir::ddd::DDD_MODEL_FORMAT_VERSION,
         "DDD design artifact",
         &["modules"],
-        check_ddd_application,
+        check_ddd_contract,
     )
 }
 

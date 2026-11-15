@@ -13,6 +13,7 @@ members = [
     "crates/phero-backend-cedar",
     "crates/phero-backend-cmmn",
     "crates/phero-backend-dmn",
+    "crates/phero-backend-ddd",
     "crates/phero-backend-common",
     "crates/phero-vocab",
     "crates/phero-lsp",
@@ -51,6 +52,7 @@ phero-driver = { path = "crates/phero-driver" }
 phero-backend-rust = { path = "crates/phero-backend-rust" }
 phero-backend-jsonschema = { path = "crates/phero-backend-jsonschema" }
 phero-backend-cedar = { path = "crates/phero-backend-cedar" }
+phero-backend-ddd = { path = "crates/phero-backend-ddd" }
 phero-backend-common = { path = "crates/phero-backend-common" }
 phero-vocab = { path = "crates/phero-vocab" }
 phero-lsp = { path = "crates/phero-lsp" }

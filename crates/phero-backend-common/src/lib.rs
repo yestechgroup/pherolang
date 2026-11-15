@@ -1,8 +1,9 @@
 //! Utilities shared by the pherolang code-generation backends.
 //!
 //! The backends ([`phero-backend-rust`], [`phero-backend-jsonschema`],
-//! [`phero-backend-cedar`], [`phero-backend-cmmn`]) are independent peers
-//! that must agree on three cross-cutting behaviors: the canonical JSON
+//! [`phero-backend-cedar`], [`phero-backend-cmmn`], [`phero-backend-ddd`])
+//! are independent peers that must agree on three cross-cutting behaviors:
+//! the canonical JSON
 //! key order their emitted bytes are pinned against, the `snake_case`
 //! instance-identifier convention the Rust serializer and the JSON Schema
 //! `id` patterns define together, and [`STRUCTURAL_KEYS`] — the wire
@@ -15,6 +16,7 @@
 //! [`phero-backend-jsonschema`]: https://docs.rs/phero-backend-jsonschema
 //! [`phero-backend-cedar`]: https://docs.rs/phero-backend-cedar
 //! [`phero-backend-cmmn`]: https://docs.rs/phero-backend-cmmn
+//! [`phero-backend-ddd`]: https://docs.rs/phero-backend-ddd
 
 use std::collections::BTreeMap;
 use std::path::Path;

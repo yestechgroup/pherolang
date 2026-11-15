@@ -26,6 +26,7 @@ phero-backend-rust = { workspace = true }
 phero-backend-jsonschema = { workspace = true }
 phero-backend-cedar = { workspace = true }
 phero-backend-common = { workspace = true }
+phero-backend-ddd = { workspace = true }
 phero-runtime = { workspace = true }
 phero-vocab = { workspace = true }
 clap = { workspace = true }
