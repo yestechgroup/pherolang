@@ -2931,3 +2931,275 @@ fn adversarial_dto_inputs_do_not_panic() {
         let _ = format_ddd(source);
     }
 }
+
+// --- declared error vocabulary and `throws` (DD7, issue pherolang#304) -------
+
+/// An application declares errors at both scopes with typed payloads, a doc
+/// comment, and `throws` clauses on declared, delegated, and body service
+/// operations and on declared repository operations.
+#[test]
+fn error_declarations_and_throws_parse() {
+    let source = r#"
+application Payments {
+    base nz.example.payments
+
+    /// The payment was refused by the provider.
+    error PaymentDeclined(DeclineReason reason, String reference);
+    error OutOfStock(String sku);
+    error Empty();
+
+    module billing {
+        error InvoiceAlreadyIssued(String invoiceId);
+        service PaymentService {
+            inject PaymentRepository;
+            Receipt pay(OrderId orderId) capability PayOrder throws PaymentDeclined, OutOfStock when (order.status == AwaitingPayment);
+            submit => PaymentRepository.save throws PaymentDeclined;
+            boolean settle(String id) capability Settle throws NotFound => PaymentRepository {
+                let run = self.findById(id) else error NotFound("Payment", id);
+                return true;
+            }
+        }
+        entity Payment repository PaymentRepository {
+            findById;
+            save;
+            Receipt capture(String id) throws PaymentDeclined, Conflict when (status == Pending);
+        }
+    }
+}
+"#;
+    let result = parse_ddd(source);
+    assert!(
+        result.errors.is_empty(),
+        "unexpected errors: {:?}",
+        result.errors
+    );
+    let application = result.ast.unwrap().application.unwrap();
+    assert_eq!(application.errors.len(), 3);
+    assert_eq!(application.errors[0].name.text, "PaymentDeclined");
+    assert_eq!(
+        application.errors[0].doc.as_deref(),
+        Some("The payment was refused by the provider.")
+    );
+    assert_eq!(application.errors[0].fields.len(), 2);
+    assert_eq!(application.errors[0].fields[0].name.text, "reason");
+    assert_eq!(application.errors[0].fields[1].name.text, "reference");
+    assert!(application.errors[2].fields.is_empty());
+
+    let module = &application.modules[0];
+    assert_eq!(module.errors.len(), 1);
+    assert_eq!(module.errors[0].name.text, "InvoiceAlreadyIssued");
+
+    let pay = &module.services[0].operations[0];
+    assert_eq!(
+        pay.throws
+            .iter()
+            .map(|name| name.text.as_str())
+            .collect::<Vec<_>>(),
+        ["PaymentDeclined", "OutOfStock"]
+    );
+    let submit = &module.services[0].operations[1];
+    assert!(submit.delegation.is_some());
+    assert_eq!(submit.throws.len(), 1);
+    let settle = &module.services[0].operations[2];
+    assert_eq!(settle.throws.len(), 1);
+    assert!(settle.body.is_some());
+
+    let repository = module.designs[0].repository.as_ref().expect("repository");
+    let capture = repository
+        .operations
+        .iter()
+        .find(|operation| operation.name.text == "capture")
+        .expect("capture");
+    assert_eq!(
+        capture
+            .throws
+            .iter()
+            .map(|name| name.text.as_str())
+            .collect::<Vec<_>>(),
+        ["PaymentDeclined", "Conflict"]
+    );
+    // A builtin takes no `throws`.
+    assert!(repository.operations[0].throws.is_empty());
+}
+
+/// The declarations and `throws` clauses re-emit in canonical position:
+/// `base`, then the application errors, then the modules; each module's
+/// errors lead its body; `throws` sits between `transition` and `when`.
+#[test]
+fn error_declarations_and_throws_format_canonically() {
+    let source = concat!(
+        "import \"payments.mox\";\n",
+        "\n",
+        "application Payments {\n",
+        "    base nz.example.payments\n",
+        "    error PaymentDeclined(DeclineReason reason,String reference) ;\n",
+        "    module billing {\n",
+        "        error InvoiceAlreadyIssued(String invoiceId);\n",
+        "        service PaymentService {\n",
+        "            inject PaymentRepository;\n",
+        "            Receipt pay(OrderId orderId) capability PayOrder throws PaymentDeclined,OutOfStock when (order.status == AwaitingPayment);\n",
+        "            submit => PaymentRepository.save transition Submit throws PaymentDeclined;\n",
+        "            boolean settle(String id) throws NotFound => PaymentRepository {\n",
+        "                let run = self.findById(id) else error NotFound(\"Payment\", id);\n",
+        "                return true;\n",
+        "            }\n",
+        "        }\n",
+        "        entity Payment repository PaymentRepository {\n",
+        "            findById;\n",
+        "            Receipt capture(String id) throws PaymentDeclined,Conflict when (status == Pending);\n",
+        "        }\n",
+        "    }\n",
+        "}\n",
+    );
+    let expected = concat!(
+        "import \"payments.mox\";\n",
+        "\n",
+        "application Payments {\n",
+        "    base nz.example.payments\n",
+        "    error PaymentDeclined(DeclineReason reason, String reference);\n",
+        "    module billing {\n",
+        "        error InvoiceAlreadyIssued(String invoiceId);\n",
+        "        service PaymentService {\n",
+        "            inject PaymentRepository;\n",
+        "            Receipt pay(OrderId orderId) capability PayOrder throws PaymentDeclined, OutOfStock when (order.status == AwaitingPayment);\n",
+        "            submit => PaymentRepository.save transition Submit throws PaymentDeclined;\n",
+        "            boolean settle(String id) throws NotFound => PaymentRepository {\n",
+        "                let run = self.findById(id) else error NotFound(\"Payment\", id);\n",
+        "                return true;\n",
+        "            }\n",
+        "        }\n",
+        "        entity Payment repository PaymentRepository {\n",
+        "            findById;\n",
+        "            Receipt capture(String id) throws PaymentDeclined, Conflict when (status == Pending);\n",
+        "        }\n",
+        "    }\n",
+        "}\n",
+    );
+    assert_eq!(fmt_ddd(source), expected);
+    assert_eq!(fmt_ddd(expected), expected, "formatting is a fixpoint");
+}
+
+/// `error` declarations lead their enclosing body: a late application error
+/// (after a module) and a late module error (after a member) are named syntax
+/// errors and are dropped from the canonical AST.
+#[test]
+fn late_error_declarations_are_named_errors() {
+    let application = concat!(
+        "application A {\n",
+        "    module m { }\n",
+        "    error Late(String x);\n",
+        "}\n",
+    );
+    let result = parse_ddd(application);
+    assert!(
+        result.errors.iter().any(|error| error
+            .message
+            .contains("`error` declarations must precede the application's modules")),
+        "expected the application-scope order refusal, got: {:?}",
+        result.errors
+    );
+    assert!(result
+        .ast
+        .expect("recovered AST")
+        .application
+        .expect("application")
+        .errors
+        .is_empty());
+
+    let module = concat!(
+        "application A {\n",
+        "    module m {\n",
+        "        service S { boolean x(); }\n",
+        "        error Late(String x);\n",
+        "    }\n",
+        "}\n",
+    );
+    let result = parse_ddd(module);
+    assert!(
+        result.errors.iter().any(|error| error
+            .message
+            .contains("`error` declarations must precede the module's members")),
+        "expected the module-scope order refusal, got: {:?}",
+        result.errors
+    );
+}
+
+/// A built-in repository operation takes no `throws` clause: the refusal
+/// names the builtin, and the clause is consumed so recovery continues.
+#[test]
+fn builtin_repository_throws_is_refused() {
+    let source = concat!(
+        "application A {\n",
+        "    module m {\n",
+        "        entity E repository R { findById throws NotFound; save; }\n",
+        "    }\n",
+        "}\n",
+    );
+    let result = parse_ddd(source);
+    assert!(
+        result.errors.iter().any(|error| error
+            .message
+            .contains("built-in repository operation 'findById' takes no `throws` clause")),
+        "expected the builtin-throws refusal, got: {:?}",
+        result.errors
+    );
+    assert!(
+        !result
+            .errors
+            .iter()
+            .any(|error| error.message.contains("expected a repository operation")),
+        "the clause is consumed whole: {:?}",
+        result.errors
+    );
+    let module = &result.ast.unwrap().application.unwrap().modules[0];
+    let repository = module.designs[0].repository.as_ref().expect("repository");
+    assert_eq!(
+        repository.operations.len(),
+        1,
+        "the refused builtin is dropped; save still parses"
+    );
+    assert_eq!(repository.operations[0].name.text, "save");
+}
+
+/// `throws` is contextual: an operation may be named `throws`, and an
+/// escaped `^throws` is an ordinary name.
+#[test]
+fn throws_stays_a_contextual_identifier() {
+    let source = concat!(
+        "application A {\n",
+        "    module m {\n",
+        "        service S { boolean throws(); boolean ^throws(); }\n",
+        "        entity E repository R { boolean throws(int x); }\n",
+        "    }\n",
+        "}\n",
+    );
+    let result = parse_ddd(source);
+    assert!(
+        result.errors.is_empty(),
+        "unexpected errors: {:?}",
+        result.errors
+    );
+    let module = &result.ast.unwrap().application.unwrap().modules[0];
+    assert_eq!(module.services[0].operations[0].name.text, "throws");
+    assert_eq!(module.services[0].operations[1].name.text, "throws");
+    assert!(module.services[0].operations[1].name.escaped);
+}
+
+/// An error declaration with a malformed payload recovers; the declaration
+/// still parses where it can, and a missing `throws` name list is a named
+/// error.
+#[test]
+fn malformed_error_vocabulary_inputs_do_not_panic() {
+    for source in [
+        "application A { error ; }",
+        "application A { error E( }",
+        "application A { error E(String); }",
+        "application A { module m { error E { } } }",
+        "application A { module m { service S { boolean x() throws; } } }",
+        "application A { module m { service S { boolean x() throws A B; } } }",
+        "application A { module m { entity E repository R { boolean x() throws ; } } }",
+    ] {
+        let _ = parse_ddd(source);
+        let _ = format_ddd(source);
+    }
+}

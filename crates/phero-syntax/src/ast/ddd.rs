@@ -27,6 +27,9 @@ pub struct DddApplication {
     /// the first member position; a misplaced or repeated `base` is a syntax
     /// error reported by the parser.
     pub base: Option<DddBase>,
+    /// Application-scoped `error` declarations (DD7, issue pherolang#304), in
+    /// source order. The grammar pins them between `base` and the modules.
+    pub errors: Vec<DddErrorDecl>,
     /// The modules in source order.
     pub modules: Vec<DddModule>,
     /// Span of the whole declaration, `application` keyword included.
@@ -49,6 +52,10 @@ pub struct DddBase {
 pub struct DddModule {
     /// The module name.
     pub name: Name,
+    /// Module-scoped `error` declarations (DD7, issue pherolang#304), in
+    /// source order. Module errors are private: visible only inside this
+    /// module. The grammar pins them to the leading member position.
+    pub errors: Vec<DddErrorDecl>,
     /// Application services in source order.
     pub services: Vec<DddService>,
     /// Class designs in source order.
@@ -119,6 +126,11 @@ pub struct DddServiceOp {
     /// machine-bound transition a delegated operation fires — legal only
     /// on a delegation to a repository `save`, which the driver validates.
     pub transition: Option<DddTransitionRef>,
+    /// Error names from the `throws` clause (DD7, issue pherolang#304), in
+    /// source order: the declared error vocabulary the operation can raise.
+    /// Names are bare; the driver resolves them against the application's
+    /// error declarations and the standard prelude.
+    pub throws: Vec<Name>,
     /// The `when ( ... )` guard condition: a `raw_parens` span (parens
     /// included, expression inside deliberately unparsed — slicing and
     /// type-checking it is the driver's job).
@@ -189,9 +201,10 @@ pub enum DddStmt {
     },
 }
 
-/// One `error <Variant>(<args>)` raise of a [`DddBody`]: the closed v1
-/// variant set (`NotFound` with two arguments, `Conflict` with one) is a
-/// driver concern; the syntax keeps the written name and raw argument spans.
+/// One `error <Variant>(<args>)` raise of a [`DddBody`] (DD7): the error name
+/// as written plus the raw argument spans. Resolution against the declared
+/// error vocabulary (application/module declarations and the standard
+/// prelude) is a driver concern.
 #[derive(Debug, Clone, PartialEq)]
 pub struct DddRaise {
     /// The error variant name as written.
@@ -271,6 +284,45 @@ pub struct DddParam {
     pub name: Name,
     /// Span covering the whole parameter.
     pub span: Span,
+}
+
+/// One `error <Name>(<field> (, <field>)*);` declaration of an application
+/// or module (DD7, issue pherolang#304): the declared error vocabulary and
+/// its typed payload. The fields reuse the operation-parameter production
+/// ([`DddParam`]) — an error payload is data, typed against the domain union
+/// and the DTO/value types.
+///
+/// Application-level errors are visible everywhere in the application;
+/// module-level errors are private to their module; the standard prelude
+/// ([`PRELUDE_ERRORS`]) is always available and cannot be shadowed. `error`
+/// is a contextual word: at declaration position it introduces this
+/// declaration, inside a body it introduces a raise.
+#[derive(Debug, Clone, PartialEq)]
+pub struct DddErrorDecl {
+    /// The error name.
+    pub name: Name,
+    /// Payload fields in source order.
+    pub fields: Vec<DddParam>,
+    /// Description from the doc comment directly above the declaration
+    /// (contiguous `///` lines, joined).
+    pub doc: Option<String>,
+    /// Span of the whole declaration, `error` keyword included.
+    pub span: Span,
+}
+
+/// The standard prelude's error declarations (DD7): always available, never
+/// emitted in the artifact's `errors`, and not shadowable by a user
+/// declaration. `NotFound(resource: string, key: string)` and
+/// `Conflict(detail: string)`; a body raises them like any declared error,
+/// but a prelude raise is still declared in the operation's `throws`.
+pub const PRELUDE_ERRORS: [(&str, &[(&str, &str)]); 2] = [
+    ("NotFound", &[("resource", "string"), ("key", "string")]),
+    ("Conflict", &[("detail", "string")]),
+];
+
+/// `true` when the prelude declares the given error name (DD7).
+pub fn is_prelude_error(name: &str) -> bool {
+    PRELUDE_ERRORS.iter().any(|(prelude, _)| *prelude == name)
 }
 
 /// A module-level `extend <Class> { ... }` block (issue pherolang#179):
@@ -581,6 +633,10 @@ pub struct DddRepositoryOp {
     /// `true` for the `protected` modifier: the operation stays off the
     /// public interface (Sculptor's visibility).
     pub is_protected: bool,
+    /// Error names from the `throws` clause (DD7, issue pherolang#304), in
+    /// source order. Declared repository operations take the clause; the
+    /// built-in operations take none (a named syntax error).
+    pub throws: Vec<Name>,
     /// The `when ( ... )` guard condition of a declared operation: a
     /// `raw_parens` span (parens included, expression inside deliberately
     /// unparsed — slicing and type-checking it is the driver's job).

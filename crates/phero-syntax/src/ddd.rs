@@ -100,6 +100,15 @@ pub(crate) const COMPATIBLE: &str = "compatible";
 /// repository operations carry none, so accepting one would silently drop
 /// data).
 pub(crate) const EMITS: &str = "emits";
+/// The `throws <Error> (, <Error>)*` clause of a declared/delegated service
+/// operation and a declared repository operation (DD7, issue
+/// pherolang#304): the declared error vocabulary the operation can raise.
+/// A contextual word like the rest — special only in the clause position
+/// between a service operation's `transition` binding and its `when` guard
+/// (repository operations: directly after the signature), an ordinary
+/// identifier everywhere else (`^throws` escapes). The entries are bare
+/// names; a built-in repository operation takes no clause.
+pub(crate) const THROWS: &str = "throws";
 /// The `transition <Trigger>` clause of a delegated service operation
 /// (issue pherolang#176): the explicit transition binding — the machine-bound
 /// transition the `=> <target>.<operation>` delegation fires. The
