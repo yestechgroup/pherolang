@@ -64,7 +64,12 @@ env:
   # a constant here. `detect` resolves the concrete asset name from the
   # latest release against this pattern and passes it to the two data jobs;
   # until a release exists they stay skipped rather than red.
-  PHEROLANG_ASSET_PATTERN: 'pherolang-*-x86_64-unknown-linux-gnu.tar.gz'
+  # An extended regular expression, not a shell glob: the probe feeds this to
+  # `grep -E`, where `*` repeats the preceding character. The old
+  # `pherolang-*-x86_64…` therefore matched only `pherolang-x86_64…` and never
+  # the real, versioned asset name — so `binary` was always false and
+  # freshness/drift never ran, even with v0.3.0 published.
+  PHEROLANG_ASSET_PATTERN: '^pherolang-.+-x86_64-unknown-linux-gnu\.tar\.gz$'
 
 jobs:
   # Always runs (no `if:`), because it is the only job that can tell the
