@@ -1,0 +1,449 @@
+{
+  "formatVersion": 1,
+  "generator": {
+    "binary": "pherolang",
+    "version": "0.3.0",
+    "reported": "pherolang 0.3.0 (x86_64-unknown-linux-gnu)"
+  },
+  "counts": {
+    "surfaces": 9,
+    "nodes": 305,
+    "edges": 463,
+    "applications": 8,
+    "crates": 22
+  },
+  "applications": [
+    {
+      "id": "iot/iot.mox",
+      "files": [
+        "iot/iot.mox"
+      ]
+    },
+    {
+      "id": "lending/lending.dmn",
+      "files": [
+        "lending/lending.dmn"
+      ]
+    },
+    {
+      "id": "library/library.mox",
+      "files": [
+        "library/library.mox"
+      ]
+    },
+    {
+      "id": "org/org.mox",
+      "files": [
+        "org/org.mox"
+      ]
+    },
+    {
+      "id": "pricing/pricing.mox",
+      "files": [
+        "pricing/pricing.mox"
+      ]
+    },
+    {
+      "id": "shapes/shapes.mox",
+      "files": [
+        "shapes/shapes.mox"
+      ]
+    },
+    {
+      "id": "shop/ecommerce.evt",
+      "files": [
+        "shop/ecommerce.evt",
+        "shop/ecommerce.ifml",
+        "shop/ecommerce.mox",
+        "shop/orders.ddd"
+      ]
+    },
+    {
+      "id": "support/cli.ifml",
+      "files": [
+        "support/cli.ifml",
+        "support/support.actor",
+        "support/support.cmmn",
+        "support/support.ddd",
+        "support/support.deploy",
+        "support/support.dmn",
+        "support/support.evt",
+        "support/support.ifml",
+        "support/support.mox",
+        "support/support.uc"
+      ]
+    }
+  ],
+  "kinds": {
+    "nodes": {
+      "action": 14,
+      "actor": 4,
+      "bkm": 3,
+      "capability": 5,
+      "case": 1,
+      "caseFileItem": 2,
+      "caseRole": 3,
+      "channel": 4,
+      "class": 20,
+      "command": 4,
+      "component": 7,
+      "datatype": 3,
+      "decision": 8,
+      "decisionModel": 2,
+      "decisionService": 2,
+      "deployApplication": 1,
+      "deployComponent": 5,
+      "deployProfile": 2,
+      "deployment": 2,
+      "designApplication": 2,
+      "enum": 3,
+      "event": 7,
+      "feature": 65,
+      "file": 20,
+      "flow": 3,
+      "inputData": 11,
+      "knowledgeSource": 4,
+      "module": 4,
+      "operation": 6,
+      "planItem": 8,
+      "repository": 4,
+      "repositoryOperation": 22,
+      "search": 2,
+      "service": 3,
+      "serviceOperation": 28,
+      "subscription": 4,
+      "useCase": 6,
+      "view": 11
+    },
+    "edges": {
+      "assignedTo": 4,
+      "binds": 14,
+      "bindsDesign": 1,
+      "bindsFlow": 1,
+      "carries": 9,
+      "connects": 2,
+      "contains": 6,
+      "data": 6,
+      "delivers": 2,
+      "deploys": 2,
+      "designs": 6,
+      "emits": 8,
+      "excludes": 2,
+      "executes": 1,
+      "extends": 4,
+      "forbids": 1,
+      "forwardsTo": 4,
+      "imports": 22,
+      "injects": 3,
+      "invokesAction": 6,
+      "invokesDecision": 1,
+      "memberOf": 206,
+      "navigates": 4,
+      "on": 5,
+      "opaqueGrant": 1,
+      "opposite": 22,
+      "permits": 8,
+      "provides": 3,
+      "publishes": 8,
+      "readsFeature": 18,
+      "realizes": 2,
+      "refers": 10,
+      "requires": 6,
+      "subscribes": 8,
+      "typeOf": 55,
+      "usesProfile": 2
+    }
+  },
+  "crates": [
+    "phero-backend-cedar",
+    "phero-backend-cmmn",
+    "phero-backend-common",
+    "phero-backend-dmn",
+    "phero-backend-jsonschema",
+    "phero-backend-rust",
+    "phero-cli",
+    "phero-dates",
+    "phero-diagnostics",
+    "phero-driver",
+    "phero-evidence",
+    "phero-expr",
+    "phero-ifml",
+    "phero-ir",
+    "phero-lsp",
+    "phero-parser",
+    "phero-runtime",
+    "phero-strings",
+    "phero-syntax",
+    "phero-testkit",
+    "phero-verify",
+    "phero-vocab"
+  ],
+  "surfaces": [
+    {
+      "id": "mox",
+      "extension": ".mox",
+      "name": "Domain model",
+      "docs": {
+        "path": "docs/LANGUAGE.md",
+        "exists": true,
+        "bytes": 39969
+      },
+      "example": {
+        "path": "examples/support/support.mox",
+        "exists": true,
+        "bytes": 832
+      },
+      "conformance": {
+        "path": "tests/conformance/models",
+        "exists": true,
+        "files": 18
+      },
+      "golden": null,
+      "backends": [
+        {
+          "crate": "phero-backend-rust",
+          "exists": true
+        },
+        {
+          "crate": "phero-backend-jsonschema",
+          "exists": true
+        },
+        {
+          "crate": "phero-backend-cedar",
+          "exists": true
+        }
+      ],
+      "status": "implemented"
+    },
+    {
+      "id": "ddd",
+      "extension": ".ddd",
+      "name": "Application design",
+      "docs": {
+        "path": "docs/DDD.md",
+        "exists": true,
+        "bytes": 58851
+      },
+      "example": {
+        "path": "examples/support/support.ddd",
+        "exists": true,
+        "bytes": 3268
+      },
+      "conformance": {
+        "path": "tests/conformance/ddd",
+        "exists": true,
+        "files": 14
+      },
+      "golden": {
+        "path": "examples/artifacts/support.ddd.json",
+        "exists": true,
+        "bytes": 12946
+      },
+      "backends": [],
+      "status": "validated"
+    },
+    {
+      "id": "actor",
+      "extension": ".actor",
+      "name": "Authorisation",
+      "docs": {
+        "path": "docs/LANGUAGE.md",
+        "exists": true,
+        "bytes": 39969
+      },
+      "example": {
+        "path": "examples/support/support.actor",
+        "exists": true,
+        "bytes": 1215
+      },
+      "conformance": {
+        "path": "tests/conformance/models",
+        "exists": true,
+        "files": 18
+      },
+      "golden": {
+        "path": "examples/artifacts/support.actor.json",
+        "exists": false
+      },
+      "backends": [
+        {
+          "crate": "phero-backend-cedar",
+          "exists": true
+        }
+      ],
+      "status": "implemented"
+    },
+    {
+      "id": "dmn",
+      "extension": ".dmn",
+      "name": "Decision model",
+      "docs": {
+        "path": "docs/DMN.md",
+        "exists": true,
+        "bytes": 32355
+      },
+      "example": {
+        "path": "examples/support/support.dmn",
+        "exists": true,
+        "bytes": 3725
+      },
+      "conformance": {
+        "path": "tests/conformance/dmn",
+        "exists": true,
+        "files": 7
+      },
+      "golden": {
+        "path": "examples/artifacts/support.dmn.json",
+        "exists": true,
+        "bytes": 6092
+      },
+      "backends": [
+        {
+          "crate": "phero-backend-dmn",
+          "exists": true
+        }
+      ],
+      "status": "implemented"
+    },
+    {
+      "id": "evt",
+      "extension": ".evt",
+      "name": "Event contract",
+      "docs": {
+        "path": "docs/EVENTS.md",
+        "exists": true,
+        "bytes": 26381
+      },
+      "example": {
+        "path": "examples/support/support.evt",
+        "exists": true,
+        "bytes": 1078
+      },
+      "conformance": {
+        "path": "tests/conformance/events",
+        "exists": true,
+        "files": 2
+      },
+      "golden": {
+        "path": "examples/artifacts/support.evt.json",
+        "exists": true,
+        "bytes": 2796
+      },
+      "backends": [],
+      "status": "validated"
+    },
+    {
+      "id": "uc",
+      "extension": ".uc",
+      "name": "Use case pattern",
+      "docs": {
+        "path": "docs/USECASES.md",
+        "exists": true,
+        "bytes": 25498
+      },
+      "example": {
+        "path": "examples/support/support.uc",
+        "exists": true,
+        "bytes": 2733
+      },
+      "conformance": {
+        "path": "tests/conformance/usecases",
+        "exists": true,
+        "files": 5
+      },
+      "golden": {
+        "path": "examples/artifacts/support.uc.json",
+        "exists": true,
+        "bytes": 9024
+      },
+      "backends": [],
+      "status": "validated"
+    },
+    {
+      "id": "cmmn",
+      "extension": ".cmmn",
+      "name": "Case management",
+      "docs": {
+        "path": "docs/CMMN.md",
+        "exists": true,
+        "bytes": 14827
+      },
+      "example": {
+        "path": "examples/support/support.cmmn",
+        "exists": true,
+        "bytes": 3069
+      },
+      "conformance": {
+        "path": "tests/conformance/cmmn",
+        "exists": true,
+        "files": 8
+      },
+      "golden": {
+        "path": "examples/artifacts/support.cmmn.json",
+        "exists": true,
+        "bytes": 6526
+      },
+      "backends": [
+        {
+          "crate": "phero-backend-cmmn",
+          "exists": true
+        }
+      ],
+      "status": "implemented"
+    },
+    {
+      "id": "ifml",
+      "extension": ".ifml",
+      "name": "Interaction flow",
+      "docs": {
+        "path": "docs/IFML.md",
+        "exists": true,
+        "bytes": 40732
+      },
+      "example": {
+        "path": "examples/support/support.ifml",
+        "exists": true,
+        "bytes": 2136
+      },
+      "conformance": {
+        "path": "tests/conformance/ifml",
+        "exists": true,
+        "files": 4
+      },
+      "golden": {
+        "path": "examples/artifacts/support.manifest.json",
+        "exists": true,
+        "bytes": 10753
+      },
+      "backends": [],
+      "status": "validated"
+    },
+    {
+      "id": "deploy",
+      "extension": ".deploy",
+      "name": "Deployment",
+      "docs": {
+        "path": "docs/DEPLOY.md",
+        "exists": true,
+        "bytes": 16277
+      },
+      "example": {
+        "path": "examples/support/support.deploy",
+        "exists": true,
+        "bytes": 1735
+      },
+      "conformance": {
+        "path": "tests/conformance/deploy",
+        "exists": true,
+        "files": 1
+      },
+      "golden": {
+        "path": "examples/artifacts/support.deploy.json",
+        "exists": true,
+        "bytes": 4133
+      },
+      "backends": [],
+      "status": "validated"
+    }
+  ]
+}

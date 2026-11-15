@@ -1,0 +1,44 @@
+---
+import Base from '../layouts/Base.astro';
+import Button from '@ui/Button.astro';
+import Prose from '@ui/Prose.astro';
+
+const routes = [
+  { href: '/platform/overview', label: 'The platform' },
+  { href: '/languages', label: 'The languages' },
+  { href: '/architecture', label: 'Architecture' },
+  { href: '/getting-started', label: 'Get started' },
+  { href: 'https://docs.pherolang.com', label: 'Documentation' },
+];
+---
+
+<Base
+  title="Page not found — Phero Lang"
+  description="That page does not exist. Here is where to go instead."
+  noindex
+>
+  <section class="py-24 sm:py-32">
+    <p class="font-mono text-xs uppercase tracking-[0.2em] text-[var(--text-muted)]">404</p>
+    <h1 class="mt-5 max-w-[24ch] font-display text-display-2 font-semibold text-balance">
+      That page is not part of the model.
+    </h1>
+    <Prose class="mt-6">
+      <p>
+        The address you followed does not resolve to anything here. Every other
+        surface on this site is generated from the repository's own artifacts —
+        including this page's list of destinations.
+      </p>
+    </Prose>
+    <ul class="mt-10 flex flex-wrap gap-3">
+      {
+        routes.map((route) => (
+          <li>
+            <Button href={route.href} variant="secondary">
+              {route.label}
+            </Button>
+          </li>
+        ))
+      }
+    </ul>
+  </section>
+</Base>

@@ -64,7 +64,12 @@ env:
   # a constant here. `detect` resolves the concrete asset name from the
   # latest release against this pattern and passes it to the two data jobs;
   # until a release exists they stay skipped rather than red.
-  PHEROLANG_ASSET_PATTERN: 'pherolang-*-x86_64-unknown-linux-gnu.tar.gz'
+  # An extended regular expression, not a shell glob: the probe feeds this to
+  # `grep -E`, where `*` repeats the preceding character. The old
+  # `pherolang-*-x86_64…` therefore matched only `pherolang-x86_64…` and never
+  # the real, versioned asset name — so `binary` was always false and
+  # freshness/drift never ran, even with v0.3.0 published.
+  PHEROLANG_ASSET_PATTERN: '^pherolang-.+-x86_64-unknown-linux-gnu\.tar\.gz$'
 
 jobs:
   # Always runs (no `if:`), because it is the only job that can tell the
@@ -388,13 +393,18 @@ jobs:
     name: Deploy to production
     runs-on: ubuntu-latest
     needs: [detect, freshness]
-    # Push to main AND the apps exist AND freshness passed. A skipped
-    # freshness (no released binary) is `skipped`, not `success`, so the
-    # site never deploys unverified model data.
+    # Push to main AND the apps exist AND freshness passed AND the Cloudflare
+    # credentials exist. The last clause matters as much as the others: without
+    # it a merge would start `wrangler deploy` with an empty API token and turn
+    # `main` red before the account owner has connected Cloudflare. `detect`
+    # already answers the question for `preview`; this job simply reads the same
+    # output. (A skipped freshness — no released binary — is `skipped`, not
+    # `success`, so the site never deploys unverified model data.)
     if: >-
       github.event_name == 'push' &&
       github.ref == 'refs/heads/main' &&
       needs.detect.outputs.apps == 'true' &&
+      needs.detect.outputs.cloudflareSecrets == 'true' &&
       needs.freshness.result == 'success'
     environment:
       name: production

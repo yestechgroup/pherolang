@@ -1,0 +1,297 @@
+/*
+ * Starlight, driven entirely by packages/tokens — no hex literal is allowed in
+ * this file. The docs are the light, reading-first surface; the marketing site
+ * is the dark one, and both read the same palette.
+ *
+ * Starlight's `--sl-color-accent` is used for links and controls, so it points
+ * at the measured link colour (6.24:1 on warm white). Lime is the selection and
+ * focus accent, never body text on light — see packages/tokens/contrast.json.
+ *
+ * These declarations are intentionally unlayered: Starlight ships its own theme
+ * inside `@layer starlight.*`, and an unlayered rule wins over a layered one
+ * regardless of specificity, so the palette below is the one that lands without
+ * `!important` anywhere.
+ */
+@import "@fontsource-variable/geist/index.css";
+@import "@fontsource/ibm-plex-mono/400.css";
+@import "@fontsource/ibm-plex-mono/500.css";
+@import "../../../packages/tokens/src/tokens.css";
+
+/* ---------------------------------------------------------------------------
+ * 1. Starlight's variable surface, mapped onto the palette.
+ * ------------------------------------------------------------------------- */
+:root {
+  --sl-font: var(--palette-font-sans);
+  --sl-font-mono: var(--palette-font-mono);
+  --sl-font-system-mono: var(--palette-font-mono);
+
+  --sl-color-white: var(--palette-graphite);
+  --sl-color-black: var(--palette-warm-white);
+
+  --sl-color-accent-low: color-mix(in oklab, var(--palette-lime) 26%, var(--palette-warm-white));
+  --sl-color-accent: var(--palette-link);
+  --sl-color-accent-high: var(--palette-graphite);
+
+  --sl-color-text: var(--palette-graphite);
+  --sl-color-text-accent: var(--palette-link);
+  --sl-color-text-invert: var(--palette-warm-white);
+
+  --sl-color-bg: var(--palette-warm-white);
+  --sl-color-bg-nav: var(--palette-warm-white);
+  --sl-color-bg-sidebar: var(--palette-warm-white);
+  --sl-color-bg-inline-code: color-mix(in oklab, var(--palette-graphite) 7%, transparent);
+  --sl-color-bg-accent: var(--palette-link);
+
+  --sl-color-hairline-light: color-mix(in oklab, var(--palette-graphite) 12%, transparent);
+  --sl-color-hairline: color-mix(in oklab, var(--palette-graphite) 16%, transparent);
+  --sl-color-hairline-shade: color-mix(in oklab, var(--palette-graphite) 22%, transparent);
+
+  --sl-color-gray-1: var(--palette-graphite);
+  --sl-color-gray-2: color-mix(in oklab, var(--palette-graphite) 84%, var(--palette-warm-white));
+  --sl-color-gray-3: var(--palette-muted);
+  --sl-color-gray-4: var(--palette-silver);
+  --sl-color-gray-5: color-mix(in oklab, var(--palette-silver) 45%, var(--palette-warm-white));
+  --sl-color-gray-6: color-mix(in oklab, var(--palette-silver) 24%, var(--palette-warm-white));
+  --sl-color-gray-7: color-mix(in oklab, var(--palette-silver) 14%, var(--palette-warm-white));
+
+  /* Reading metrics. The column is wide enough for the reference's tables and
+   * code; prose is capped separately (`--docs-measure`) so a paragraph never
+   * runs the full width of the column. */
+  --sl-content-width: 48rem;
+  --sl-line-height: 1.7;
+  --sl-line-height-headings: 1.22;
+  --sl-sidebar-width: 17.5rem;
+  --sl-text-code: 0.875rem;
+  --docs-measure: 68ch;
+
+  /* Expressive Code. The syntax hues stay the theme's (a full token palette is
+   * a bigger decision than this stylesheet); the surface, the rules and the
+   * focus ring are ours, so a code block reads as part of the page. */
+  --ec-codeBg: color-mix(in oklab, var(--palette-graphite) 4%, var(--palette-warm-white));
+  --ec-codeFg: var(--palette-graphite);
+  --ec-codeSelBg: color-mix(in oklab, var(--palette-lime) 45%, transparent);
+  --ec-brdCol: color-mix(in oklab, var(--palette-graphite) 14%, transparent);
+  --ec-brdRad: var(--palette-radius-sm);
+  --ec-codeFontSize: 0.875rem;
+  --ec-codeLineHt: 1.65;
+  --ec-focusBrd: var(--palette-link);
+}
+
+/* ---------------------------------------------------------------------------
+ * 2. Graphite ground, warm-white ink, lime accent.
+ * ------------------------------------------------------------------------- */
+:root[data-theme="dark"] {
+  --sl-color-white: var(--palette-warm-white);
+  --sl-color-black: var(--palette-graphite);
+
+  --sl-color-accent-low: color-mix(in oklab, var(--palette-lime) 18%, var(--palette-graphite));
+  --sl-color-accent: var(--palette-link-inverse);
+  --sl-color-accent-high: var(--palette-lime);
+
+  --sl-color-text: var(--palette-warm-white);
+  --sl-color-text-accent: var(--palette-link-inverse);
+  --sl-color-text-invert: var(--palette-graphite);
+
+  --sl-color-bg: var(--palette-graphite);
+  --sl-color-bg-nav: var(--palette-graphite);
+  --sl-color-bg-sidebar: var(--palette-graphite);
+  --sl-color-bg-inline-code: color-mix(in oklab, var(--palette-silver) 18%, transparent);
+  --sl-color-bg-accent: var(--palette-lime);
+
+  --sl-color-hairline-light: color-mix(in oklab, var(--palette-silver) 18%, transparent);
+  --sl-color-hairline: color-mix(in oklab, var(--palette-silver) 24%, transparent);
+  --sl-color-hairline-shade: color-mix(in oklab, var(--palette-silver) 32%, transparent);
+
+  --sl-color-gray-1: var(--palette-warm-white);
+  --sl-color-gray-2: var(--palette-silver);
+  --sl-color-gray-3: color-mix(in oklab, var(--palette-silver) 78%, var(--palette-graphite));
+  --sl-color-gray-4: color-mix(in oklab, var(--palette-silver) 55%, var(--palette-graphite));
+  --sl-color-gray-5: color-mix(in oklab, var(--palette-silver) 32%, var(--palette-graphite));
+  --sl-color-gray-6: color-mix(in oklab, var(--palette-silver) 18%, var(--palette-graphite));
+  --sl-color-gray-7: color-mix(in oklab, var(--palette-silver) 10%, var(--palette-graphite));
+
+  --ec-codeBg: color-mix(in oklab, var(--palette-warm-white) 6%, var(--palette-graphite));
+  --ec-codeFg: var(--palette-warm-white);
+  --ec-brdCol: color-mix(in oklab, var(--palette-silver) 26%, transparent);
+  --ec-focusBrd: var(--palette-lime);
+}
+
+/* ---------------------------------------------------------------------------
+ * 3. The one place lime is legal on a reading surface: a selection.
+ * ------------------------------------------------------------------------- */
+::selection {
+  background: var(--palette-lime);
+  color: var(--palette-graphite);
+}
+
+/* ---------------------------------------------------------------------------
+ * 4. Prose. A comfortable measure, headings that scan, links that read as
+ *    links without becoming a colour field.
+ * ------------------------------------------------------------------------- */
+.sl-markdown-content > p {
+  max-width: var(--docs-measure);
+}
+
+/* Lists in the reference carry indented code blocks (the `.ddd` grammar, the
+ * conformance walkthroughs); those lists keep the full column width and let the
+ * block scroll inside its own frame. */
+.sl-markdown-content > :is(ul, ol, dl):not(:has(.expressive-code)) {
+  max-width: var(--docs-measure);
+}
+
+.sl-markdown-content :is(p, li, dd) {
+  text-wrap: pretty;
+}
+
+.sl-markdown-content :is(h1, h2, h3, h4, h5, h6) {
+  letter-spacing: -0.02em;
+  text-wrap: balance;
+}
+
+.sl-markdown-content .sl-heading-wrapper.level-h2 {
+  padding-bottom: 0.35rem;
+  border-bottom: 1px solid var(--sl-color-hairline-light);
+}
+
+/* Links in prose are underlined at rest: Starlight differentiates them by
+ * colour alone, and the link colour does not reach 3:1 against body text, so
+ * WCAG 2.2 1.4.1 (Use of Color) needs the second cue. */
+.sl-markdown-content a:not(:where(.not-content *)) {
+  text-decoration: underline;
+  text-underline-offset: 0.18em;
+  text-decoration-thickness: 0.06em;
+  text-decoration-color: color-mix(in oklab, currentColor 40%, transparent);
+}
+
+.sl-markdown-content a:not(:where(.not-content *)):hover {
+  text-decoration-color: currentColor;
+}
+
+.sl-markdown-content :not(pre) > code {
+  border-radius: var(--palette-radius-xs);
+  font-size: 0.9em;
+}
+
+.sl-markdown-content blockquote {
+  border-inline-start: 2px solid var(--sl-color-hairline-shade);
+}
+
+.sl-markdown-content blockquote > :is(p, li) {
+  color: var(--sl-color-gray-2);
+}
+
+.sl-markdown-content hr {
+  border: 0;
+  border-top: 1px solid var(--sl-color-hairline);
+  margin-block: 2.5rem;
+}
+
+.sl-markdown-content :is(ul, ol) ::marker {
+  color: var(--sl-color-gray-3);
+}
+
+/* ---------------------------------------------------------------------------
+ * 5. Tables — the reference is mostly tables. They keep the full column width
+ *    and scroll; cell padding stays tight so a 5-column table still fits.
+ * ------------------------------------------------------------------------- */
+.sl-markdown-content table:not(:where(.not-content *)) {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.9375rem;
+  line-height: 1.55;
+}
+
+.sl-markdown-content :is(th, td):not(:where(.not-content *)) {
+  padding: 0.45rem 0.7rem;
+  border: 0;
+  border-bottom: 1px solid var(--sl-color-hairline-light);
+  text-align: start;
+  vertical-align: top;
+}
+
+.sl-markdown-content thead th:not(:where(.not-content *)) {
+  font-weight: 600;
+  border-bottom-color: var(--sl-color-hairline-shade);
+  background: color-mix(in oklab, var(--palette-graphite) 5%, transparent);
+}
+
+.sl-markdown-content tbody tr:last-child :is(th, td) {
+  border-bottom: 0;
+}
+
+.sl-markdown-content tbody tr:hover {
+  background: color-mix(in oklab, var(--palette-graphite) 2.5%, transparent);
+}
+
+:root[data-theme="dark"] .sl-markdown-content thead th:not(:where(.not-content *)) {
+  background: color-mix(in oklab, var(--palette-silver) 10%, transparent);
+}
+
+:root[data-theme="dark"] .sl-markdown-content tbody tr:hover {
+  background: color-mix(in oklab, var(--palette-silver) 6%, transparent);
+}
+
+/* ---------------------------------------------------------------------------
+ * 6. Sidebar — denser than the default, with the current page marked once.
+ * ------------------------------------------------------------------------- */
+#starlight__sidebar .sidebar-content {
+  gap: 0.6rem;
+  padding-top: 0.9rem;
+}
+
+#starlight__sidebar summary {
+  padding-block: 0.25rem;
+}
+
+#starlight__sidebar .group-label {
+  font-weight: 600;
+  letter-spacing: 0.01em;
+}
+
+#starlight__sidebar a {
+  border-radius: var(--palette-radius-xs);
+  padding-block: 0.15rem;
+}
+
+#starlight__sidebar a:hover {
+  background: color-mix(in oklab, var(--sl-color-text-accent) 9%, transparent);
+}
+
+#starlight__sidebar a[aria-current="page"] {
+  background: color-mix(in oklab, var(--palette-lime) 30%, transparent);
+  color: var(--sl-color-text);
+  font-weight: 600;
+}
+
+:root[data-theme="dark"] #starlight__sidebar a[aria-current="page"] {
+  background: color-mix(in oklab, var(--palette-lime) 22%, transparent);
+}
+
+/* ---------------------------------------------------------------------------
+ * 7. Focus. A keyboard reader must never have to guess where they are: the
+ *    ring is the measured focus colour (link in light, lime on graphite).
+ * ------------------------------------------------------------------------- */
+:is(a, button, summary, [tabindex], input, select, textarea):focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 2px;
+  border-radius: var(--palette-radius-xs);
+}
+
+/* The code block takes the ring inside its own frame, so it is not clipped by
+ * the surrounding scroll container. */
+.expressive-code pre:focus-visible {
+  outline-width: 2px;
+  outline-color: var(--focus);
+}
+
+/*
+ * Starlight's search trigger carries an `aria-label="Search"` plus a visible
+ * `Ctrl K` hint, so the accessible name does not contain the visible text
+ * (WCAG 2.5.3, axe `label-content-name-mismatch`). The shortcut is already
+ * exposed to assistive tech through `aria-keyshortcuts`, and the dialog shows
+ * it once open, so the hint is removed from the button rather than duplicating
+ * it into the name.
+ */
+:root site-search button[data-open-modal] kbd {
+  display: none;
+}

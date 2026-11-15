@@ -1,0 +1,102 @@
+---
+/**
+ * Primary navigation. No client JavaScript: the mobile menu is a `<details>`
+ * disclosure, so it works before hydration and with scripting disabled.
+ */
+interface Props {
+  current?: string;
+}
+const { current } = Astro.props;
+
+const links = [
+  { href: '/platform/overview', label: 'Platform' },
+  { href: '/languages', label: 'Languages' },
+  { href: '/demo', label: 'Demo' },
+  { href: '/architecture', label: 'Architecture' },
+  { href: '/getting-started', label: 'Get started' },
+];
+
+const external = [
+  { href: 'https://docs.pherolang.com', label: 'Docs' },
+  { href: 'https://github.com/yestechgroup/pherolang', label: 'GitHub' },
+];
+
+const isCurrent = (href: string) =>
+  current === href || (href !== '/' && Boolean(current?.startsWith(`${href}/`)));
+---
+
+<header class="sticky top-0 z-40 border-b border-[color-mix(in_oklab,var(--color-silver)_22%,transparent)] bg-graphite/95 backdrop-blur">
+  <div class="mx-auto flex h-16 max-w-6xl items-center justify-between gap-6 px-4 sm:px-6">
+    <a href="/" class="flex items-center gap-2.5 rounded-xs focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-lime">
+      <img src="/brand/pherolang-mark-compact-inverse.svg" alt="" width="24" height="24" class="size-6" />
+      <span class="font-display text-[1.0625rem] font-semibold tracking-[-0.01em] text-warm-white">
+        Phero&nbsp;Lang
+      </span>
+    </a>
+
+    <nav aria-label="Primary" class="hidden items-center gap-6 lg:flex">
+      <ul class="flex items-center gap-6">
+        {
+          links.map((link) => (
+            <li>
+              <a
+                href={link.href}
+                aria-current={isCurrent(link.href) ? 'page' : undefined}
+                class:list={[
+                  'rounded-xs font-medium text-[0.9375rem] no-underline transition-colors focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-lime',
+                  isCurrent(link.href) ? 'text-warm-white' : 'text-silver hover:text-warm-white',
+                ]}
+              >
+                {link.label}
+              </a>
+            </li>
+          ))
+        }
+        {
+          external.map((link) => (
+            <li>
+              <a
+                href={link.href}
+                class="rounded-xs text-[0.9375rem] font-medium text-silver no-underline transition-colors hover:text-warm-white focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-lime"
+                {...(link.href.startsWith('http') ? { rel: 'noopener' } : {})}
+              >
+                {link.label}
+              </a>
+            </li>
+          ))
+        }
+      </ul>
+      <a
+        href="/getting-started"
+        class="inline-flex min-h-10 items-center rounded-sm bg-lime px-4 py-2 text-[0.9375rem] font-medium text-graphite no-underline transition-colors hover:bg-[color-mix(in_oklab,var(--color-lime)_86%,var(--color-graphite))] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-lime"
+      >
+        Install
+      </a>
+    </nav>
+
+    <details class="relative lg:hidden">
+      <summary
+        class="flex min-h-10 cursor-pointer list-none items-center gap-2 rounded-sm border border-[color-mix(in_oklab,var(--color-silver)_40%,transparent)] px-3 py-2 font-mono text-xs uppercase tracking-[0.14em] text-warm-white focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-lime [&::-webkit-details-marker]:hidden"
+      >
+        Menu
+      </summary>
+      <div class="absolute right-0 top-[calc(100%+0.5rem)] w-64 rounded-md border border-[color-mix(in_oklab,var(--color-silver)_28%,transparent)] bg-graphite p-2 shadow-xl">
+        <ul class="flex flex-col">
+          {
+            [...links, ...external].map((link) => (
+              <li>
+                <a
+                  href={link.href}
+                  aria-current={isCurrent(link.href) ? 'page' : undefined}
+                  class="flex min-h-11 items-center rounded-sm px-3 text-[0.9375rem] font-medium text-warm-white no-underline hover:bg-charcoal focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-lime"
+                >
+                  {link.label}
+                </a>
+              </li>
+            ))
+          }
+        </ul>
+      </div>
+    </details>
+  </div>
+</header>

@@ -1,0 +1,282 @@
+---
+/**
+ * /languages — the catalogue.
+ *
+ * Every cell that could be wrong is derived: the nine rows come from
+ * `@data/surfaces.json`, the status words from the same file's `status`, and
+ * the backend names from its `backends` array (which `scripts/sync-model.mjs`
+ * filters by whether the crate exists). This page adds the reading order and
+ * the one distinction the table cannot make on its own: what `implemented` and
+ * `validated` mean.
+ */
+import Base from '../../layouts/Base.astro';
+import Breadcrumb from '@ui/Breadcrumb.astro';
+import SectionHeader from '@ui/SectionHeader.astro';
+import Prose from '@ui/Prose.astro';
+import Callout from '@ui/Callout.astro';
+import Stat from '@ui/Stat.astro';
+import StatusPill from '@ui/StatusPill.astro';
+
+import { surfaces } from '../../content/languages/catalog';
+
+const implemented = surfaces.filter((surface) => surface.status === 'implemented');
+const validated = surfaces.filter((surface) => surface.status === 'validated');
+
+/**
+ * The legend's pills are rendered from a real row rather than from a literal:
+ * the status vocabulary lives in `site/data/surfaces.json`, and this page does
+ * not restate it. The pill's label and dot depend only on the status, so any
+ * representative row shows the same thing.
+ */
+function exemplarOf(status: string) {
+  const found = surfaces.find((surface) => surface.status === status);
+  if (!found) throw new Error(`languages: no '${status}' surface to illustrate the status word`);
+  return found;
+}
+const implementedExample = exemplarOf('implemented');
+const validatedExample = exemplarOf('validated');
+const backendNames = [...new Set(surfaces.flatMap((surface) => surface.backends))].sort();
+
+const total = surfaces.length;
+const cell = 'px-4 py-4 align-top';
+const head =
+  'px-4 py-3 font-mono text-xs font-medium uppercase tracking-[0.12em] text-[var(--text-muted)]';
+---
+
+<Base
+  title="Languages — Phero Lang"
+  description="The nine Phero Lang surfaces: what each one models, whether a backend consumes its artifact today, and where to read it."
+>
+  <div class="pt-4">
+    <Breadcrumb
+      trail={[
+        { href: '/', label: 'Phero Lang' },
+        { href: '/languages', label: 'Languages' },
+      ]}
+    />
+  </div>
+
+  <section class="border-b border-[var(--border)] pb-14">
+    <p class="font-mono text-xs uppercase tracking-[0.2em] text-[var(--text-muted)]">Reference</p>
+    <h1 class="mt-5 max-w-[24ch] font-display text-display-1 font-semibold text-balance">
+      Nine surfaces, one compiler.
+    </h1>
+    <p class="mt-6 max-w-[62ch] text-lg leading-[1.6] text-[var(--text-muted)] text-pretty">
+      Each extension is a language in its own right: its own grammar, its own validation rules, its
+      own versioned artifact. They share one expression language and one compile pipeline, and
+      together they compile into one semantic graph.
+    </p>
+
+    <div class="mt-12 grid grid-cols-2 gap-6 border-t border-[var(--border)] pt-8 sm:grid-cols-4">
+      <Stat value={String(total)} label="Surfaces" />
+      <Stat value={String(implemented.length)} label="Implemented" />
+      <Stat value={String(validated.length)} label="Validated" />
+      <Stat value={String(backendNames.length)} label="Backend crates" />
+    </div>
+  </section>
+
+  <section id="catalogue" class="border-b border-[var(--border)] py-16">
+    <SectionHeader
+      eyebrow="The catalogue"
+      title="Every surface, and where it stands"
+      lede="Extension, name, what it models, and whether an in-tree backend reads its artifact. Every link goes to the surface's page: a real example, the compiled artifact, and the rendered reference."
+    />
+
+    <div
+      class="mt-10 overflow-x-auto rounded-md border border-[var(--border)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--focus)]"
+      role="region"
+      aria-labelledby="catalogue-caption"
+      tabindex="0"
+    >
+      <table class="w-full min-w-[58rem] border-collapse text-left text-[0.9375rem]">
+        <caption id="catalogue-caption" class="sr-only">
+          The nine Phero Lang surfaces: extension, name, what the surface models, its status, and
+          the number and names of the in-tree backends that consume its artifact. Scroll sideways
+          for the full table.
+        </caption>
+        <thead>
+          <tr class="border-b border-[var(--border-strong)]">
+            <th scope="col" class={head}>Extension</th>
+            <th scope="col" class={head}>Surface</th>
+            <th scope="col" class={head}>What it models</th>
+            <th scope="col" class={head}>Status</th>
+            <th scope="col" class={head}>Backends</th>
+          </tr>
+        </thead>
+        <tbody>
+          {
+            surfaces.map((surface) => (
+              <tr class="border-b border-[var(--border)] last:border-b-0">
+                <td class={`${cell} whitespace-nowrap font-mono text-[0.8125rem] text-[var(--text)]`}>
+                  {surface.extension}
+                </td>
+                <th scope="row" class={`${cell} whitespace-nowrap text-left font-medium text-[var(--text)]`}>
+                  <a
+                    href={`/languages/${surface.id}`}
+                    class="rounded-xs text-[var(--text)] underline decoration-[color-mix(in_oklab,var(--link)_35%,transparent)] underline-offset-4 hover:decoration-[var(--link)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--focus)]"
+                  >
+                    {surface.name}
+                  </a>
+                </th>
+                <td class={`${cell} min-w-[18rem] leading-[1.6] text-[var(--text-muted)]`}>
+                  {surface.tagline}
+                </td>
+                <td class={cell}>
+                  <StatusPill status={surface.status} backends={surface.backends} />
+                </td>
+                <td class={cell}>
+                  {surface.backends.length > 0 ? (
+                    <div class="flex flex-col gap-1">
+                      <p class="whitespace-nowrap font-mono text-xs text-[var(--text)]">
+                        {surface.backends.length} {surface.backends.length === 1 ? 'backend' : 'backends'}
+                      </p>
+                      <ul class="flex flex-col gap-0.5">
+                        {surface.backends.map((backend) => (
+                          <li class="whitespace-nowrap font-mono text-[0.6875rem] text-[var(--text-muted)]">
+                            {backend}
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  ) : (
+                    <span class="whitespace-nowrap font-mono text-xs text-[var(--text-muted)]">
+                      0 — none in tree
+                    </span>
+                  )}
+                </td>
+              </tr>
+            ))
+          }
+        </tbody>
+      </table>
+    </div>
+
+    <p class="mt-4 max-w-[70ch] text-sm leading-[1.6] text-[var(--text-muted)]">
+      The names in this table are not typed into this page. They come from
+      <code class="font-mono text-[0.8125rem]">site/data/surfaces.json</code>, which the site
+      generator derives from the crates that exist in the tree and from the evidence behind each
+      claim.
+    </p>
+  </section>
+
+  <section id="status" class="border-b border-[var(--border)] py-16">
+    <SectionHeader
+      eyebrow="Reading the status"
+      title="Implemented and validated are different claims"
+      lede="Both words mean the compiler checks the surface. Only one of them means something downstream consumes what it compiles."
+    />
+
+    <div class="mt-8 grid gap-8 lg:grid-cols-2">
+      <div class="rounded-md border border-[var(--border)] bg-[var(--surface-raised)] p-6">
+        <div class="flex flex-wrap items-center gap-3">
+          <StatusPill status={implementedExample.status} backends={implementedExample.backends} />
+          <span class="font-mono text-xs uppercase tracking-[0.12em] text-[var(--text-muted)]">
+            {implementedExample.status} · {implemented.length} of {total}
+          </span>
+        </div>
+        <Prose class="mt-5">
+          <p>
+            <strong>An in-tree backend consumes the artifact today.</strong> The Backends column
+            names the crate, and that crate reads the versioned JSON — never the grammar, never the
+            syntax tree. Implemented means there is a second implementation downstream that has to
+            agree with the compiler about the model's shape.
+          </p>
+        </Prose>
+        <ul class="mt-4 flex flex-wrap gap-x-4 gap-y-1">
+          {
+            implemented.map((surface) => (
+              <li>
+                <a
+                  href={`/languages/${surface.id}`}
+                  class="font-mono text-xs text-[var(--link)] no-underline hover:underline"
+                >
+                  {surface.extension}
+                </a>
+              </li>
+            ))
+          }
+        </ul>
+      </div>
+
+      <div class="rounded-md border border-[var(--border)] bg-[var(--surface-raised)] p-6">
+        <div class="flex flex-wrap items-center gap-3">
+          <StatusPill status={validatedExample.status} backends={validatedExample.backends} />
+          <span class="font-mono text-xs uppercase tracking-[0.12em] text-[var(--text-muted)]">
+            {validatedExample.status} · {validated.length} of {total}
+          </span>
+        </div>
+        <Prose class="mt-5">
+          <p>
+            <strong
+              >The surface parses, resolves, validates and lowers to its artifact — but no in-tree
+              backend consumes that artifact yet.</strong
+            >
+            The artifact is still real: it is generated from the example by the released binary,
+            committed under <code>site/data/artifacts/</code>, and validated by
+            <code>pherolang artifact check</code>. What is missing is the downstream consumer, not
+            the compiler or the checks.
+          </p>
+        </Prose>
+        <ul class="mt-4 flex flex-wrap gap-x-4 gap-y-1">
+          {
+            validated.map((surface) => (
+              <li>
+                <a
+                  href={`/languages/${surface.id}`}
+                  class="font-mono text-xs text-[var(--link)] no-underline hover:underline"
+                >
+                  {surface.extension}
+                </a>
+              </li>
+            ))
+          }
+        </ul>
+      </div>
+    </div>
+
+    <div class="mt-8 max-w-[70ch]">
+      <Callout title="Why the distinction is kept">
+        <p>
+          A modelling language that has no consumer is still useful — it is checked, versioned and
+          diffable — but it is not the same claim as one with a generator behind it. Collapsing the
+          two words would make the table easier to read and the site less true, so the status comes
+          from the tree: a surface is <code>implemented</code> only when the backend crate its row
+          names exists. {validated.length} of the {total} surfaces stop at the artifact today.
+        </p>
+      </Callout>
+    </div>
+  </section>
+
+  <section id="on-a-page" class="py-16">
+    <SectionHeader
+      eyebrow="What is on a page"
+      title="Evidence, not screenshots"
+      lede="Each surface page is built the same way, from the same generated sources."
+    />
+
+    <div class="mt-8 max-w-[70ch]">
+      <Prose>
+        <p>
+          Every page quotes lines from the CI-tested example that produced its artifact, prints the
+          first lines of that artifact byte for byte, and links the rendered reference. The example
+          comes from <code>examples/support/</code>; the artifact comes from
+          <code>site/data/artifacts/</code>. Neither is copied into the page's source.
+        </p>
+        <p>
+          The quote is checked at build time: the cited range must still end on a closing brace and
+          leave every delimiter balanced, or the build fails. A source edit that moves a block
+          cannot silently leave the website quoting the wrong lines.
+        </p>
+      </Prose>
+    </div>
+
+    <p class="mt-8">
+      <a
+        href="/getting-started"
+        class="rounded-xs font-mono text-xs uppercase tracking-[0.12em] text-[var(--link)] no-underline hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--focus)]"
+      >
+        Compile one of them — start here
+      </a>
+    </p>
+  </section>
+</Base>

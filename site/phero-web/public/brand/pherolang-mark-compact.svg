@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="Phero Lang compact mark">
+  <title>Phero Lang compact mark</title>
+  <g stroke="#111318" stroke-width="8" stroke-linecap="butt">
+    <line x1="8" y1="8" x2="56" y2="56"/>
+    <line x1="56" y1="8" x2="8" y2="56"/>
+  </g>
+  <path d="M32 19 L45 32 L32 45 L19 32 Z" fill="#C4F56A"/>
+</svg>

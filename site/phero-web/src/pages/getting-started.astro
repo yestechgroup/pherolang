@@ -1,0 +1,320 @@
+---
+import Base from '../layouts/Base.astro';
+import SectionHeader from '@ui/SectionHeader.astro';
+import Prose from '@ui/Prose.astro';
+import Callout from '@ui/Callout.astro';
+import CodeBlock from '@ui/CodeBlock.astro';
+import Button from '@ui/Button.astro';
+import Card from '@ui/Card.astro';
+import commands from '../data/commands.json';
+
+/**
+ * Every shell string on this page is read from `src/data/commands.json`, the
+ * file `site/scripts/check-commands.mjs` executes. A command cannot be printed
+ * without existing in that list, and `command()` throws at build time if an id
+ * is misspelt — so the page cannot show a command the gate never ran.
+ */
+interface Command {
+  id: string;
+  label: string;
+  run: string;
+  expectExit?: number;
+  expectStdout?: string;
+  network?: boolean;
+}
+const all: Command[] = commands.commands;
+
+function command(id: string): Command {
+  const found = all.find((entry) => entry.id === id);
+  if (!found) throw new Error(`commands.json has no command '${id}'`);
+  return found;
+}
+const shell = (...ids: string[]) => ids.map((id) => command(id).run).join('\n');
+const prints = (id: string) => command(id).expectStdout ?? '';
+
+const repo = 'https://github.com/yestechgroup/pherolang';
+const sourceFile = 'examples/support/support.mox';
+
+/** Lines 1–32 of `examples/support/support.mox`, verbatim — package through the Ticket class. */
+const domain = `package nz.example.support
+
+enum TicketState {
+    Open as "open" = 0
+    InProgress as "in_progress" = 1
+    Resolved as "resolved" = 2
+}
+
+class User {
+    id readonly String userId
+    String name
+    boolean active
+    refers Ticket[] assignedTickets opposite assignee
+}
+
+class Ticket {
+    id readonly String ticketNo
+    String title
+    boolean internal
+    int refundCents
+    TicketState state
+    refers User[0..1] assignee opposite assignedTickets
+    derived boolean needsRefund {
+        expr { refundCents > 0 }
+    }
+    op boolean raiseRefund(int cents) {
+        expr { refundCents + cents <= 5000 }
+    }
+    op boolean approveRefund(int cents) {
+        expr { refundCents + cents <= 100000 }
+    }
+}`;
+
+/** The first lines of the artifact `pherolang ir` writes for the excerpt above. */
+const artifactHead = `{
+  "formatVersion": 2,
+  "pheroVersion": "0.3.0",
+  "packages": [
+    {
+      "name": "nz.example.support",
+      "annotations": [],
+      "enums": [
+        {
+          "name": "TicketState",
+          "literals": [ … ]
+        }
+      ],
+      "classes": [ … ]
+    }
+  ]
+}`;
+---
+
+<Base
+  title="Getting started — Phero Lang"
+  description="Compile a .mox model to its Core IR artifact and generate code from it, in five minutes."
+>
+  <div class="py-16 sm:py-24">
+    <p class="font-mono text-xs uppercase tracking-[0.2em] text-[var(--text-muted)]">Get started</p>
+    <h1 class="mt-6 max-w-[26ch] font-display text-display-2 font-semibold text-balance">
+      A model, its artifact, and generated code.
+    </h1>
+    <p class="mt-5 max-w-[62ch] text-lg leading-[1.6] text-[var(--text-muted)] text-pretty">
+      You write one <code class="font-mono text-[0.9em]">.mox</code> file. The compiler checks it,
+      compiles it to Core IR, and every backend reads that artifact.
+    </p>
+
+    <Callout title="Before you start">
+      <p>
+        Install the compiler first — <a href="/install">the install page</a> has the archives and the
+        from-source fallback. Then clone
+        <a href={repo} rel="noopener">the repository</a> and run these commands from its root: they
+        compile <code>{sourceFile}</code>.
+      </p>
+    </Callout>
+
+    <Prose class="mt-8">
+      <p>Confirm the binary is on your <code>PATH</code>:</p>
+    </Prose>
+
+    <CodeBlock lang="sh" filename="bash" runnable code={shell('version')} />
+    <Prose class="mt-4">
+      <p>
+        You should see <code>{prints('version')}</code> and the target triple it was built for.
+      </p>
+    </Prose>
+
+    <section id="design" class="mt-20">
+      <SectionHeader
+        eyebrow="1 / Design"
+        title="Design a domain"
+        lede="A .mox file declares a package and the classes inside it. Every other surface reads this one."
+      />
+
+      <Prose class="mt-8">
+        <p>
+          This is lines 1–32 of
+          <a href={`${repo}/blob/main/${sourceFile}`} rel="noopener"><code>{sourceFile}</code></a>,
+          unchanged:
+        </p>
+      </Prose>
+      <CodeBlock lang="mox" filename={`${sourceFile} · lines 1–32`} code={domain} />
+
+      <Prose class="mt-6">
+        <p>Three lines in that excerpt do most of the work:</p>
+        <ul>
+          <li>
+            <code>refers User[0..1] assignee opposite assignedTickets</code> declares both ends of one
+            relation. The compiler checks that the two ends agree.
+          </li>
+          <li>
+            <code>derived boolean needsRefund</code> is computed, not stored — it has a body and no
+            stored value.
+          </li>
+          <li>
+            <code>op boolean raiseRefund(int cents)</code> declares an operation whose body is written
+            in the expression language and type-checked against <code>int</code> arithmetic.
+          </li>
+        </ul>
+        <p>
+          Declarations are checked, not annotated: a misspelt feature inside that body is a compile
+          error. The grammar is in
+          <a href="https://github.com/yestechgroup/pherolang/blob/main/docs/LANGUAGE.md" rel="noopener"
+            >LANGUAGE.md</a
+          >; the expression rules are in
+          <a
+            href="https://github.com/yestechgroup/pherolang/blob/main/docs/EXPRESSIONS.md"
+            rel="noopener">EXPRESSIONS.md</a
+          >.
+        </p>
+      </Prose>
+    </section>
+
+    <section id="compile" class="mt-20">
+      <SectionHeader
+        eyebrow="2 / Compile"
+        title="Check, compile, generate"
+        lede="Four commands. Each one exits 0 on the example above."
+      />
+
+      <div class="mt-10">
+        <h3 class="font-display text-xl font-semibold text-[var(--text)]">Check</h3>
+        <Prose class="mt-3">
+          <p>
+            <code>check</code> parses, resolves, validates and type-checks the file. It reports each
+            problem with the file and the exact span that caused it.
+          </p>
+        </Prose>
+        <CodeBlock lang="sh" filename="bash" runnable code={shell('check')} />
+        <Prose class="mt-4">
+          <p>
+            It prints <code>{prints('check')}</code> and nothing else.
+          </p>
+        </Prose>
+      </div>
+
+      <div class="mt-14">
+        <h3 class="font-display text-xl font-semibold text-[var(--text)]">Compile to Core IR</h3>
+        <Prose class="mt-3">
+          <p>
+            <code>ir</code> writes the artifact and prints nothing when it succeeds. The second
+            command reads the file back: <code>artifact check</code> validates the serialized JSON on
+            its own — it opens no model, resolves no import, and runs no compiler.
+          </p>
+        </Prose>
+        <CodeBlock lang="sh" filename="bash" runnable code={shell('ir', 'artifact-check')} />
+        <Prose class="mt-4">
+          <p>
+            The first command produces no output; the second prints
+            <code>{prints('artifact-check')}</code>.
+          </p>
+        </Prose>
+      </div>
+
+      <div class="mt-14">
+        <h3 class="font-display text-xl font-semibold text-[var(--text)]">Generate</h3>
+        <Prose class="mt-3">
+          <p>
+            A backend reads the compiled model and writes code. Here is the Rust one, over the same
+            source:
+          </p>
+        </Prose>
+        <CodeBlock lang="sh" filename="bash" runnable code={shell('gen-rust')} />
+        <Prose class="mt-4">
+          <p>
+            It prints <code>{prints('gen-rust')}</code>. You now have
+            <code>support-gen/models.rs</code>: arena-based Rust model code, generated from the model
+            rather than from the compiler's syntax tree.
+          </p>
+        </Prose>
+      </div>
+    </section>
+
+    <section id="artifact" class="mt-20">
+      <SectionHeader
+        eyebrow="3 / Understand"
+        title="What you just built"
+        lede="The artifact is the product. The compiler's job ends at Core IR."
+      />
+
+      <Prose class="mt-8">
+        <p>
+          Parsing, name resolution, validation and lowering all happen before an artifact exists.
+          Backends consume the artifact and nothing else — never the syntax tree. That is why an
+          in-tree generator and an out-of-tree backend cannot disagree about a model's shape: they
+          read the same Core IR, either in process or as the serialized artifact. The contract for
+          writing one is
+          <a href="https://github.com/yestechgroup/pherolang/blob/main/docs/BACKENDS.md" rel="noopener"
+            >BACKENDS.md</a
+          >.
+        </p>
+      </Prose>
+      <CodeBlock lang="json" filename="support.phero.json · excerpt" code={artifactHead} />
+
+      <Prose class="mt-6">
+        <p>
+          Two fields do the work. <code>formatVersion</code> is the compatibility gate: a reader
+          accepts that number or refuses the file. <code>pheroVersion</code> is provenance — which
+          compiler wrote it, and nothing more.
+          <a
+            href="https://github.com/yestechgroup/pherolang/blob/main/docs/VERSIONING.md"
+            rel="noopener">VERSIONING.md</a
+          >
+          states the rule: readers gate on <code>formatVersion</code> only.
+        </p>
+        <p>A second backend, over the same model:</p>
+      </Prose>
+      <CodeBlock lang="sh" filename="bash" runnable code={shell('gen-json-schema')} />
+      <Prose class="mt-4">
+        <p>
+          It prints <code>{prints('gen-json-schema')}</code>. One model, two targets, one shape.
+        </p>
+      </Prose>
+    </section>
+
+    <section id="next" class="mt-20">
+      <SectionHeader
+        eyebrow="4 / Continue"
+        title="Where to go next"
+        lede="The .mox domain is one of nine surfaces. They compile together into one semantic graph."
+      />
+
+      <Prose class="mt-8">
+        <p>
+          The example tree exercises every surface — designs, policies, decisions, event contracts,
+          use cases, cases, interaction flows, deployments. <code>check</code> prints one
+          <code>OK</code> line per file:
+        </p>
+      </Prose>
+      <CodeBlock lang="sh" filename="bash" runnable code={shell('check-examples')} />
+
+      <Prose class="mt-8">
+        <p>
+          <code>graph build</code> compiles that tree into one artifact instead of one per file:
+          applications, every surface's nodes, and the edges between them. It is derived after
+          compilation, never parsed.
+        </p>
+      </Prose>
+      <CodeBlock lang="sh" filename="bash" runnable code={shell('graph-build')} />
+
+      <div class="mt-12 grid gap-4 sm:grid-cols-2">
+        <Card href="/languages" eyebrow="Languages" title="The other eight surfaces">
+          One page per extension: what it models, a real example, and what it produces.
+        </Card>
+        <Card href="/architecture" eyebrow="Architecture" title="What the graph contains">
+          The pipeline from source to artifact, and the semantic graph drawn from the example.
+        </Card>
+        <Card href="https://docs.pherolang.com" eyebrow="Docs" title="The reference">
+          The repository's documentation, rendered: the language, the nine surfaces, expression rules,
+          and the backend contract.
+        </Card>
+        <Card href={`${repo}/tree/main/examples`} eyebrow="Examples" title="Models that compile">
+          The support desk, a shop, a library, a lending domain — each one CI-tested.
+        </Card>
+      </div>
+
+      <div class="mt-12">
+        <Button href="/install" variant="secondary">Install on another machine</Button>
+      </div>
+    </section>
+  </div>
+</Base>

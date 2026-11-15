@@ -1,0 +1,27 @@
+---
+interface Props {
+  href?: string;
+  eyebrow?: string;
+  title?: string;
+  class?: string;
+}
+const { href, eyebrow, title, class: className = '' } = Astro.props;
+const Tag = href ? 'a' : 'div';
+const interactive = href
+  ? 'no-underline transition-colors hover:border-[var(--border-strong)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--focus)]'
+  : '';
+---
+<Tag
+  href={href}
+  class:list={[
+    'block rounded-md border border-[var(--border)] bg-[var(--surface-raised)] p-6',
+    interactive,
+    className,
+  ]}
+>
+  {eyebrow && (
+    <p class="mb-2 font-mono text-xs uppercase tracking-[0.14em] text-[var(--text-muted)]">{eyebrow}</p>
+  )}
+  {title && <h3 class="font-display text-lg font-semibold text-[var(--text)]">{title}</h3>}
+  <div class="mt-2 text-[0.9375rem] leading-[1.6] text-[var(--text-muted)]"><slot /></div>
+</Tag>

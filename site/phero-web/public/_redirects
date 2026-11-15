@@ -1,0 +1,15 @@
+# pherolang.com — redirects applied by the static-asset layer before any asset
+# is served (`wrangler.jsonc` → `assets.directory: ./dist/client`).
+#
+# The documentation lives on its own origin, `docs.pherolang.com`. This site
+# serves no `/docs/...` page at all, so a request for one — an old bookmark, a
+# hand-typed URL, a link written before the docs app existed — is a 301 to the
+# same path over there. Cloudflare follows the first matching rule, and static
+# rules must precede dynamic ones, hence the two-line order.
+#
+# Domain-level redirects (`www` → apex) cannot be expressed here: this file
+# matches paths only. That one is a zone-level Redirect Rule — see
+# `site/DEPLOY.md`.
+
+/docs  https://docs.pherolang.com/  301
+/docs/*  https://docs.pherolang.com/:splat  301

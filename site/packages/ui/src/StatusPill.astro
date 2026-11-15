@@ -1,0 +1,29 @@
+---
+/**
+ * The capability status of one surface. The vocabulary is fixed by
+ * site/data/status.json — `implemented` means a backend consumes the artifact
+ * today, `validated` means it compiles and checks with no in-tree backend.
+ * The dot is decorative: the word carries the meaning.
+ */
+interface Props {
+  status: 'implemented' | 'validated';
+  backends?: string[];
+}
+const { status, backends = [] } = Astro.props;
+const tone =
+  status === 'implemented'
+    ? 'border-[color-mix(in_oklab,var(--color-lime)_55%,transparent)] text-[var(--text)]'
+    : 'border-[var(--border)] text-[var(--text-muted)]';
+const dot = status === 'implemented' ? 'bg-lime' : 'bg-[var(--text-muted)]';
+const label = status === 'implemented' ? 'Backend' : 'Validated';
+---
+<span
+  class:list={[
+    'inline-flex items-center gap-2 rounded-full border px-2.5 py-0.5 font-mono text-xs uppercase tracking-[0.1em]',
+    tone,
+  ]}
+  title={backends.length ? `Backends: ${backends.join(', ')}` : 'No in-tree backend'}
+>
+  <span class:list={['size-1.5 rounded-full', dot]} aria-hidden="true"></span>
+  {label}
+</span>

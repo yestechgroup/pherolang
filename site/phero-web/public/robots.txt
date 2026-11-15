@@ -1,0 +1,13 @@
+# pherolang.com
+#
+# Everything the marketing site publishes is meant to be indexed. Pages that are
+# not (the internal design gallery, when it lands) are excluded one by one
+# rather than by path rule: the layout's `noindex` prop emits
+# `<meta name="robots" content="noindex, nofollow">`, and a `Disallow` rule would
+# stop crawlers before they could read that tag. If a `/design` route is ever
+# added, add `Disallow: /design` below as a second, belt-and-braces line.
+
+User-agent: *
+Allow: /
+
+Sitemap: https://pherolang.com/sitemap-index.xml

@@ -1,0 +1,150 @@
+{
+  "formatVersion": 1,
+  "surfaces": [
+    {
+      "id": "mox",
+      "extension": ".mox",
+      "name": "Domain model",
+      "tagline": "Structure, relationships and behaviour",
+      "summary": "Packages, classes, features, operations, enums, datatypes and vocabularies — the structural domain every other surface reads.",
+      "docs": "docs/LANGUAGE.md",
+      "example": "examples/support/support.mox",
+      "status": "implemented",
+      "backends": [
+        "phero-backend-rust",
+        "phero-backend-jsonschema",
+        "phero-backend-cedar"
+      ],
+      "artifact": "artifacts/mox.json",
+      "counts": {
+        "conformanceFiles": 18
+      }
+    },
+    {
+      "id": "ddd",
+      "extension": ".ddd",
+      "name": "Application design",
+      "tagline": "Services, repositories and aggregate roots",
+      "summary": "Sculptor-style designs: applications, modules, services, repositories, searches, entity state machines, and executable operation bodies.",
+      "docs": "docs/DDD.md",
+      "example": "examples/support/support.ddd",
+      "status": "validated",
+      "backends": [],
+      "artifact": "artifacts/ddd.json",
+      "counts": {
+        "conformanceFiles": 14
+      }
+    },
+    {
+      "id": "actor",
+      "extension": ".actor",
+      "name": "Authorisation",
+      "tagline": "Actors, capabilities and obligations",
+      "summary": "Who may do what: actors, delegation, capability grants with typed `when` conditions, obligations, and Cedar policy generation.",
+      "docs": "docs/LANGUAGE.md",
+      "example": "examples/support/support.actor",
+      "status": "implemented",
+      "backends": [
+        "phero-backend-cedar"
+      ],
+      "artifact": "artifacts/actor.json",
+      "counts": {
+        "conformanceFiles": 18
+      }
+    },
+    {
+      "id": "dmn",
+      "extension": ".dmn",
+      "name": "Decision model",
+      "tagline": "Decision requirements and decision services",
+      "summary": "The decision-requirements graph, business knowledge models, knowledge sources, decision services, and external markdown decision tables.",
+      "docs": "docs/DMN.md",
+      "example": "examples/support/support.dmn",
+      "status": "implemented",
+      "backends": [
+        "phero-backend-dmn"
+      ],
+      "artifact": "artifacts/dmn.json",
+      "counts": {
+        "conformanceFiles": 7
+      }
+    },
+    {
+      "id": "evt",
+      "extension": ".evt",
+      "name": "Event contract",
+      "tagline": "Versioned events, channels and subscriptions",
+      "summary": "What the system publishes and who reacts: versioned event contracts, channels, and subscriptions with their binding rules.",
+      "docs": "docs/EVENTS.md",
+      "example": "examples/support/support.evt",
+      "status": "validated",
+      "backends": [],
+      "artifact": "artifacts/evt.json",
+      "counts": {
+        "conformanceFiles": 2
+      }
+    },
+    {
+      "id": "uc",
+      "extension": ".uc",
+      "name": "Use case pattern",
+      "tagline": "Subjects, actors and successions",
+      "summary": "SysML-v2-style use case patterns: subjects, actors, messages, successions and `realizes` links.",
+      "docs": "docs/USECASES.md",
+      "example": "examples/support/support.uc",
+      "status": "validated",
+      "backends": [],
+      "artifact": "artifacts/uc.json",
+      "counts": {
+        "conformanceFiles": 5
+      }
+    },
+    {
+      "id": "cmmn",
+      "extension": ".cmmn",
+      "name": "Case management",
+      "tagline": "Cases, plans and sentry criteria",
+      "summary": "CMMN 1.1 case models: case files, discretionary and required plan items, sentries, and decision tasks that invoke sibling decision services.",
+      "docs": "docs/CMMN.md",
+      "example": "examples/support/support.cmmn",
+      "status": "implemented",
+      "backends": [
+        "phero-backend-cmmn"
+      ],
+      "artifact": "artifacts/cmmn.json",
+      "counts": {
+        "conformanceFiles": 8
+      }
+    },
+    {
+      "id": "ifml",
+      "extension": ".ifml",
+      "name": "Interaction flow",
+      "tagline": "Views, navigation and CLI commands",
+      "summary": "Interaction flows over a composed pattern library: views, containers, components, events, navigation, and the declaration-backed control/route manifest.",
+      "docs": "docs/IFML.md",
+      "example": "examples/support/support.ifml",
+      "status": "validated",
+      "backends": [],
+      "artifact": "artifacts/ifml.json",
+      "counts": {
+        "conformanceFiles": 4
+      }
+    },
+    {
+      "id": "deploy",
+      "extension": ".deploy",
+      "name": "Deployment",
+      "tagline": "Components, profiles and targets",
+      "summary": "Deployment projections: application components, target capabilities and engines, profiles, settings, and type-checked placement policies.",
+      "docs": "docs/DEPLOY.md",
+      "example": "examples/support/support.deploy",
+      "status": "validated",
+      "backends": [],
+      "artifact": "artifacts/deploy.json",
+      "counts": {
+        "conformanceFiles": 1
+      }
+    }
+  ]
+}

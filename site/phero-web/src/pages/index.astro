@@ -1,0 +1,648 @@
+---
+/**
+ * / — the ten-section narrative.
+ *
+ * House rules this page obeys, and why:
+ *
+ *   * Every number is derived. The surface counts come from
+ *     `@data/surfaces.json`, the corpus counts from `@data/evidence.json`, the
+ *     proof-obligation ladder from `@data/register.json`, the perspective count
+ *     from `@data/support-model.json`, and the install block from
+ *     `src/data/commands.json` — the file `scripts/check-commands.mjs` executes.
+ *     A number typed into this file would be the one claim nothing regenerates.
+ *   * A status word the pill does not know is a build error, not an unstyled
+ *     cell (the same guard `/architecture` uses).
+ *   * No client JavaScript. The demonstration section links to the explorer on
+ *     `/demo` instead of mounting it here, so the marketing CSP stays
+ *     `script-src 'self'` with nothing but the island's own module.
+ */
+import Base from '../layouts/Base.astro';
+import SectionHeader from '@ui/SectionHeader.astro';
+import Card from '@ui/Card.astro';
+import Button from '@ui/Button.astro';
+import Prose from '@ui/Prose.astro';
+import Callout from '@ui/Callout.astro';
+import Stat from '@ui/Stat.astro';
+import StatusPill from '@ui/StatusPill.astro';
+import CodeBlock from '@ui/CodeBlock.astro';
+
+import surfaces from '@data/surfaces.json';
+import evidence from '@data/evidence.json';
+import register from '@data/register.json';
+import supportModel from '@data/support-model.json';
+import commands from '../data/commands.json';
+
+const docs = 'https://docs.pherolang.com';
+const repo = 'https://github.com/yestechgroup/pherolang';
+const partnerEmail = 'hello@pherolang.com';
+const partnerMail = `mailto:${partnerEmail}?subject=Design%20partner`;
+
+// ---------------------------------------------------------------------------
+// Surfaces. The status is validated, never cast: `StatusPill` knows exactly two
+// words, and a third one appearing in generated data should fail the build.
+// ---------------------------------------------------------------------------
+type SurfaceStatus = 'implemented' | 'validated';
+
+const surfaceRows = surfaces.surfaces.map((row) => {
+  const status = row.status;
+  if (status !== 'implemented' && status !== 'validated') {
+    throw new Error(`index: unknown status '${status}' for surface ${row.id}`);
+  }
+  return { ...row, status: status as SurfaceStatus };
+});
+
+const surfaceCount = surfaceRows.length;
+const implementedCount = surfaceRows.filter((row) => row.status === 'implemented').length;
+const validatedCount = surfaceCount - implementedCount;
+
+/** One surface by id, or a build error — nothing on this page guesses a row. */
+function surface(id: string) {
+  const found = surfaceRows.find((entry) => entry.id === id);
+  if (!found) throw new Error(`index: surfaces.json has no surface '${id}'`);
+  return found;
+}
+
+/** Every backend crate any surface declares, deduplicated — the ecosystem count. */
+const backendCrates = [...new Set(surfaceRows.flatMap((row) => row.backends))].sort();
+
+// ---------------------------------------------------------------------------
+// The proof-obligation ladder. The four statuses are the register's vocabulary;
+// a fifth one would make the four stats silently stop summing to the register,
+// so it is a build error here as well.
+// ---------------------------------------------------------------------------
+const LADDER_STATUSES = ['proved', 'tested', 'argued', 'assumed'] as const;
+type LadderStatus = (typeof LADDER_STATUSES)[number];
+
+const obligationCount = register.obligations.length;
+const unknownObligations = register.obligations.filter(
+  (obligation) => !LADDER_STATUSES.includes(obligation.status as LadderStatus),
+);
+if (unknownObligations.length > 0) {
+  throw new Error(
+    `index: register statuses outside the ladder: ${unknownObligations
+      .map((obligation) => `${obligation.id}=${obligation.status}`)
+      .join(', ')}`,
+  );
+}
+
+const ladder = LADDER_STATUSES.map((status: LadderStatus) => ({
+  status,
+  count: register.obligations.filter((obligation) => obligation.status === status).length,
+}));
+
+const ladderTotal = ladder.reduce((sum, row) => sum + row.count, 0);
+if (ladderTotal !== obligationCount) {
+  throw new Error(`index: ladder sums to ${ladderTotal}, register has ${obligationCount} rows`);
+}
+
+// ---------------------------------------------------------------------------
+// The demonstration. Perspective and connection counts come from the baked
+// projection, so the prose cannot disagree with the drawing on /architecture
+// or with the explorer on /demo.
+// ---------------------------------------------------------------------------
+const perspectiveLabels = supportModel.perspectives.map((perspective) => perspective.label);
+const domainPerspective = supportModel.perspectives.find((perspective) => perspective.id === 'domain');
+if (!domainPerspective) throw new Error('index: support-model.json has no domain perspective');
+
+// ---------------------------------------------------------------------------
+// Commands. Same contract as /getting-started: a printed shell line must exist
+// in `commands.json`, which the gate executes, or the build fails by id.
+// ---------------------------------------------------------------------------
+interface Command {
+  id: string;
+  label: string;
+  run: string;
+  network?: boolean;
+}
+const allCommands: Command[] = commands.commands;
+
+function command(id: string): Command {
+  const found = allCommands.find((entry) => entry.id === id);
+  if (!found) throw new Error(`commands.json has no command '${id}'`);
+  return found;
+}
+
+/** The Linux archive path, from the release download through `install` on PATH. */
+const installSteps = [
+  'install-linux-curl-asset',
+  'install-linux-curl-sums',
+  'install-linux-sha',
+  'install-linux-tar',
+  'install-linux-install',
+];
+const installSnippet = installSteps.map((id) => command(id).run).join('\n');
+
+// ---------------------------------------------------------------------------
+// The six capabilities, and the surface or page that demonstrates each one.
+// The extension in every card body is read from the generated surface table.
+// ---------------------------------------------------------------------------
+const capabilities = [
+  {
+    step: '01',
+    title: 'Model',
+    surfaceId: 'mox',
+    href: '/languages/mox',
+    body:
+      'Packages, classes, features, operations, enums and vocabularies in one file. Types, relation ends and operation bodies are checked, so a typo is a compile error and not a runtime surprise.',
+  },
+  {
+    step: '02',
+    title: 'Connect',
+    surfaceId: 'ddd',
+    href: '/languages/ddd',
+    body:
+      'Services, repositories, aggregate roots and entity state machines that import the domain instead of restating it. The design is checked against the names the domain actually declares.',
+  },
+  {
+    step: '03',
+    title: 'Validate',
+    surfaceId: 'actor',
+    href: '/languages/actor',
+    body:
+      'Actors, capabilities, grants and obligations as their own dimension. Every grant condition is type-checked against the domain class it is written over, then lowered to Cedar policy.',
+  },
+  {
+    step: '04',
+    title: 'Generate',
+    surfaceId: 'dmn',
+    href: '/languages/dmn',
+    body:
+      'Backends read the compiled artifact and write code: Rust model code, JSON Schema, Cedar policy, a DMN engine model, a case definition. One artifact, several targets, no second grammar to learn.',
+  },
+  {
+    step: '05',
+    title: 'Verify',
+    surfaceId: null,
+    href: `${docs}/engineering/verification/`,
+    body:
+      'No surface proves this one. A register does: every structural claim carries a status and an evidence pointer, with a review date on the rows that carry one — and the compiler prints a receipt naming the sources and artifacts it was checked over.',
+  },
+  {
+    step: '06',
+    title: 'Extend',
+    surfaceId: 'ifml',
+    href: '/languages/ifml',
+    body:
+      'Composition instead of forks. Interaction flows compose a shared pattern library by reference instead of copying, the same move a new backend makes: consume the published artifact, never the grammar behind it.',
+  },
+] as const;
+---
+
+<Base
+  title="Phero Lang — Verifiable Model-Driven Engineering"
+  description={`Phero Lang turns business intent into structured, executable models: ${surfaceCount} modelling surfaces over one semantic foundation, each compiled to a versioned artifact that generators, schemas and policy engines consume.`}
+>
+  <!-- 1 — Hero -->
+  <section class="pt-16 pb-14 sm:pt-24">
+    <p class="font-mono text-xs uppercase tracking-[0.2em] text-[var(--text-muted)]">
+      Phero Lang / Verifiable model-driven engineering
+    </p>
+    <h1 class="mt-6 max-w-[20ch] font-display text-display-1 font-semibold text-balance">
+      Software should be designed as a system.
+    </h1>
+    <p class="mt-8 max-w-[60ch] text-lg leading-[1.6] text-[var(--text-muted)] text-pretty">
+      Phero Lang turns business intent into structured, executable models. {surfaceCount} modelling
+      surfaces share one semantic foundation, and each compiles to a versioned artifact that
+      generators, schemas and policy engines read. The model is not a diagram next to the code — it
+      is what the code is generated from.
+    </p>
+    <div class="mt-10 flex flex-wrap items-center gap-3">
+      <Button href="/getting-started" size="lg">Get started</Button>
+      <Button href={docs} variant="secondary" size="lg">Read the docs</Button>
+    </div>
+    <p
+      class="mt-14 border-t border-[var(--border)] pt-6 font-mono text-xs uppercase tracking-[0.18em] text-[var(--text-muted)]"
+    >
+      OPEN SOURCE · RUST · EXTENSIBLE · MODEL-DRIVEN
+    </p>
+  </section>
+
+  <!-- 2 — The problem -->
+  <section id="problem" class="border-t border-[var(--border)] py-16">
+    <SectionHeader
+      eyebrow="01 / The problem"
+      title="One system. Many specifications. No shared meaning."
+      lede="A domain lives in an object model. Decisions live in a table only one team can read. Permissions live in a policy file nobody diffs. Workflows live in a drawing. Each one is right on its own."
+    />
+    <div class="mt-8 grid gap-8 lg:grid-cols-[1.1fr_0.9fr]">
+      <Prose>
+        <p>
+          Every tool in that list is authoritative about something and silent about everything else.
+          The object model cannot say that a refund above five thousand needs finance. The policy
+          file cannot say that the refund amount is an <code>int</code> cents value on a class called
+          <code>Ticket</code>. The table cannot say either. What connects them is a meeting, a wiki
+          page, and a reviewer's memory.
+        </p>
+        <p>
+          So the specifications do not disagree loudly — they drift quietly. A field is renamed in
+          code and the decision table keeps its old header. A capability is granted on an aggregate
+          that was split two releases ago. Nothing fails until it fails in production, in a place
+          that has nothing to do with the change that caused it.
+        </p>
+        <p>
+          The failure is structural, not personal. No amount of review discipline makes four tools
+          agree about a type they each store differently. To check that the specifications are
+          consistent, one of them has to be able to see the others.
+        </p>
+      </Prose>
+      <aside
+        class="h-fit rounded-md border border-[var(--border)] bg-[var(--surface-raised)] p-6 text-[0.9375rem] leading-[1.6] text-[var(--text)]"
+      >
+        <p class="font-mono text-xs uppercase tracking-[0.14em] text-[var(--text-muted)]">
+          What this page is not
+        </p>
+        <p class="mt-3">
+          It is not an argument for one language to rule a system, or for drawing more diagrams. It
+          is an argument that a model which cannot be checked is a picture, and that a system whose
+          parts cannot be checked against each other is being held together by people.
+        </p>
+      </aside>
+    </div>
+  </section>
+
+  <!-- 3 — The proposition -->
+  <section id="proposition" class="border-t border-[var(--border)] py-16">
+    <SectionHeader
+      eyebrow="02 / The proposition"
+      title="One semantic foundation. Many surfaces. One artifact each."
+      lede="Phero Lang gives each kind of specification its own language, and gives all of them one type system, one expression language and one compiler."
+    />
+    <div class="mt-10 grid gap-6 md:grid-cols-3">
+      <div class="border-t-2 border-[var(--border-strong)] pt-5">
+        <h3 class="font-display text-xl font-semibold text-[var(--text)]">One foundation</h3>
+        <p class="mt-3 text-[0.9375rem] leading-[1.6] text-[var(--text-muted)]">
+          Every surface resolves names through the same domain. A <code
+            class="rounded-xs bg-[color-mix(in_oklab,var(--border)_55%,transparent)] px-1.5 py-0.5 font-mono text-[0.9em] text-[var(--text)]"
+            >when</code
+          > condition in a policy, a decision input, an event field and a service operation signature
+          are all checked against the same classes and the same expression rules.
+        </p>
+      </div>
+      <div class="border-t-2 border-[var(--border-strong)] pt-5">
+        <h3 class="font-display text-xl font-semibold text-[var(--text)]">Many surfaces</h3>
+        <p class="mt-3 text-[0.9375rem] leading-[1.6] text-[var(--text-muted)]">
+          {surfaceCount} file kinds, each with its own grammar and formatter: structure, design,
+          policy, decisions, events, use cases, cases, interaction flows, deployment. One of them is
+          usually the entry point; none of them is the whole system.
+        </p>
+      </div>
+      <div class="border-t-2 border-[var(--border-strong)] pt-5">
+        <h3 class="font-display text-xl font-semibold text-[var(--text)]">One artifact each</h3>
+        <p class="mt-3 text-[0.9375rem] leading-[1.6] text-[var(--text-muted)]">
+          Each surface compiles to its own versioned JSON artifact, gated on a
+          <code
+            class="rounded-xs bg-[color-mix(in_oklab,var(--border)_55%,transparent)] px-1.5 py-0.5 font-mono text-[0.9em] text-[var(--text)]"
+            >formatVersion</code
+          >. Backends read the artifact and nothing above it, so a generator cannot depend on a
+          grammar it was not written against.
+        </p>
+      </div>
+    </div>
+    <p class="mt-10 text-[0.9375rem] leading-[1.6] text-[var(--text-muted)]">
+      <a
+        href="/platform/overview"
+        class="text-[var(--link)] underline decoration-[color-mix(in_oklab,var(--link)_45%,transparent)] underline-offset-4 hover:decoration-[var(--link)]"
+        >The platform overview</a
+      >
+      takes each capability in turn, with the invariant that holds them together.
+    </p>
+  </section>
+
+  <!-- 4 — How it works -->
+  <section id="how-it-works" class="border-t border-[var(--border)] py-16">
+    <SectionHeader
+      eyebrow="03 / How it works"
+      title="Six moves from intent to generated code."
+      lede="Six things the toolchain does. Each card opens the surface — or the register — that demonstrates it."
+    />
+    <div class="mt-10 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+      {
+        capabilities.map((capability) => {
+          const cited = capability.surfaceId ? surface(capability.surfaceId) : null;
+          return (
+            <Card
+              href={capability.href}
+              eyebrow={cited ? `${capability.step} · ${cited.name}` : capability.step}
+              title={capability.title}
+            >
+              <p>{capability.body}</p>
+              {cited && (
+                <p class="mt-3 font-mono text-xs text-[var(--text-muted)]">{cited.extension}</p>
+              )}
+            </Card>
+          );
+        })
+      }
+    </div>
+  </section>
+
+  <!-- 5 — The catalogue teaser -->
+  <section id="surfaces" class="border-t border-[var(--border)] py-16">
+    <SectionHeader
+      eyebrow="04 / The surfaces"
+      title="Every surface, one compiler discipline."
+      lede={`${implementedCount} surfaces have an in-tree backend today; the other ${validatedCount} compile and check with no backend yet. The word is the status, not a promise.`}
+    />
+
+    <div class="mt-10 overflow-x-auto rounded-md border border-[var(--border)]">
+      <table class="w-full min-w-[38rem] border-collapse text-left text-[0.9375rem]">
+        <caption class="sr-only">
+          The Phero Lang surfaces: file extension, name and backend status. The name links to the
+          surface page.
+        </caption>
+        <thead>
+          <tr class="border-b border-[var(--border-strong)]">
+            <th
+              scope="col"
+              class="px-4 py-3 font-mono text-xs font-medium uppercase tracking-[0.12em] text-[var(--text-muted)]"
+            >
+              Extension
+            </th>
+            <th
+              scope="col"
+              class="px-4 py-3 font-mono text-xs font-medium uppercase tracking-[0.12em] text-[var(--text-muted)]"
+            >
+              Surface
+            </th>
+            <th
+              scope="col"
+              class="px-4 py-3 font-mono text-xs font-medium uppercase tracking-[0.12em] text-[var(--text-muted)]"
+            >
+              Status
+            </th>
+          </tr>
+        </thead>
+        <tbody>
+          {
+            surfaceRows.map((row) => (
+              <tr class="border-b border-[var(--border)] last:border-b-0">
+                <td class="whitespace-nowrap px-4 py-3 font-mono text-[0.8125rem] text-[var(--text)]">
+                  {row.extension}
+                </td>
+                <th scope="row" class="px-4 py-3 text-left font-medium text-[var(--text)]">
+                  <a
+                    href={`/languages/${row.id}`}
+                    class="rounded-xs underline decoration-[color-mix(in_oklab,var(--link)_35%,transparent)] underline-offset-4 hover:decoration-[var(--link)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--focus)]"
+                  >
+                    {row.name}
+                  </a>
+                  <span class="mt-0.5 block text-sm font-normal text-[var(--text-muted)]">
+                    {row.tagline}
+                  </span>
+                </th>
+                <td class="px-4 py-3">
+                  <StatusPill status={row.status} backends={row.backends} />
+                </td>
+              </tr>
+            ))
+          }
+        </tbody>
+      </table>
+    </div>
+
+    <p class="mt-6 text-sm leading-[1.6] text-[var(--text-muted)]">
+      <a
+        href="/languages"
+        class="text-[var(--link)] underline decoration-[color-mix(in_oklab,var(--link)_45%,transparent)] underline-offset-4 hover:decoration-[var(--link)]"
+        >The catalogue</a
+      >
+      has a page per extension: the problem it solves, a real example from the repository, what it
+      compiles to, and where it stands.
+    </p>
+  </section>
+
+  <!-- 6 — The demonstration teaser -->
+  <section id="demonstration" class="border-t border-[var(--border)] py-16">
+    <SectionHeader
+      eyebrow="05 / The demonstration"
+      title={`One domain, ${perspectiveLabels.length} perspectives.`}
+      lede="The support-desk example is one domain plus the surfaces around it — a design, a policy, decisions, events, use cases, a case, an interaction flow, a deployment. One compiler, one graph."
+    />
+    <div class="mt-8 grid gap-10 lg:grid-cols-[1.05fr_0.95fr]">
+      <Prose>
+        <p>
+          <code>pherolang graph build</code> compiles the whole tree into a single artifact:
+          {evidence.counts.applications} import-connected applications, {evidence.counts.nodes} nodes
+          and {evidence.counts.edges} edges. It is derived after compilation — the builder never
+          re-reads a source file — so a node in the graph is the node the compiler produced.
+        </p>
+        <p>
+          The domain perspective holds {domainPerspective.nodes.length} nodes and
+          {domainPerspective.edges.length} connections on its own. The same declarations reappear in
+          the other perspectives, joined differently: the refund capability sits next to the operation
+          it authorises, the decision service next to the operation that invokes it, the event next to
+          the subscription that consumes it.
+        </p>
+        <p>
+          The static drawing of the domain perspective is on
+          <a href="/architecture">the architecture page</a>, where it renders without JavaScript. The
+          <a href="/demo">interactive explorer</a> is the same data with the perspective switcher as a
+          real tablist, and a no-JS transcript underneath.
+        </p>
+      </Prose>
+      <div>
+        <p class="font-mono text-xs uppercase tracking-[0.14em] text-[var(--text-muted)]">
+          The perspectives
+        </p>
+        <ul class="mt-4 flex flex-wrap gap-2">
+          {
+            perspectiveLabels.map((label) => (
+              <li class="rounded-xs border border-[var(--border)] px-2.5 py-1 font-mono text-xs uppercase tracking-[0.1em] text-[var(--text)]">
+                {label}
+              </li>
+            ))
+          }
+        </ul>
+        <div class="mt-8">
+          <Button href="/demo" variant="secondary">Open the explorer</Button>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 7 — Correctness -->
+  <section id="correctness" class="border-t border-[var(--border)] py-16">
+    <SectionHeader
+      eyebrow="06 / Correctness"
+      title="Correctness is enumerated, not implied."
+      lede={`The proof-obligation register holds ${obligationCount} claims. Each one carries a status and the evidence class that backs it; the rows that are argued or assumed also carry a trigger and a review date. The ladder reports the weakest honest class per row, never the average.`}
+    />
+
+    <div class="mt-10 grid grid-cols-2 gap-6 border-y border-[var(--border)] py-8 sm:grid-cols-4">
+      {
+        ladder.map((row) => (
+          <Stat value={String(row.count)} label={row.status} />
+        ))
+      }
+    </div>
+
+    <div class="mt-10 grid gap-8 lg:grid-cols-[1.05fr_0.95fr]">
+      <Prose>
+        <p>
+          <strong>What this is not:</strong> "Phero Lang is formally verified" is a claim the project
+          does not make and must not be read into these numbers. What exists is a proved kernel for
+          the compiler's own graph structure, a tested cross-layer integrity pass, and a set of stated
+          obligations with named assumptions. The register spells out the weakest class for each —
+          including the rows where the argument is incomplete and says so.
+        </p>
+        <p>
+          The counts above are computed from
+          <code>site/data/register.json</code>, a copy of
+          <code>docs/verification/register.json</code> taken when the site is generated. No number on
+          this page is folded into prose by hand: the honesty mechanism is that a claim without a live
+          evidence pointer fails the project's own gate.
+        </p>
+        <p>
+          <code>pherolang verify</code> turns that into a receipt — the source closure it was checked
+          over, the artifact hashes, and the register's rows — which can be validated later, offline,
+          with no prover toolchain present.
+        </p>
+      </Prose>
+      <Callout title="The honest claim">
+        <p>
+          A proved kernel, a tested integrity pass, and stated obligations with named assumptions.
+          Register reviewed {register.reviewedAt}.
+        </p>
+        <p class="mt-3">
+          <a href={`${docs}/engineering/verification/`}>The register, row by row</a> ·
+          <a href={`${docs}/engineering/semantics/`}>the claim ladder and its non-goals</a>
+        </p>
+      </Callout>
+    </div>
+  </section>
+
+  <!-- 8 — Open ecosystem -->
+  <section id="ecosystem" class="border-t border-[var(--border)] py-16">
+    <SectionHeader
+      eyebrow="07 / Open ecosystem"
+      title="Rust in the core, open at the edges."
+      lede="The compiler is a Rust workspace and an Apache-2.0 repository. The extension point is not an interface we designed for you — it is a JSON artifact with a version gate."
+    />
+    <div class="mt-10 grid gap-6 sm:grid-cols-2">
+      <div class="rounded-md border border-[var(--border)] bg-[var(--surface-raised)] p-6">
+        <h3 class="font-display text-lg font-semibold text-[var(--text)]">Rust, all the way down</h3>
+        <p class="mt-3 text-[0.9375rem] leading-[1.6] text-[var(--text-muted)]">
+          {evidence.counts.crates} workspace crates and one binary. Lexers, grammars, formatters, the
+          salsa-based driver, the IR, the editor server, the generated-code runtime, the backends.
+        </p>
+      </div>
+      <div class="rounded-md border border-[var(--border)] bg-[var(--surface-raised)] p-6">
+        <h3 class="font-display text-lg font-semibold text-[var(--text)]">Extensible backends</h3>
+        <p class="mt-3 text-[0.9375rem] leading-[1.6] text-[var(--text-muted)]">
+          {backendCrates.length} target backends ship in tree, each one a pure function from
+          artifact to output. A new backend never learns a grammar, and it can live outside the
+          workspace entirely.
+        </p>
+      </div>
+      <div class="rounded-md border border-[var(--border)] bg-[var(--surface-raised)] p-6">
+        <h3 class="font-display text-lg font-semibold text-[var(--text)]">A wire contract</h3>
+        <p class="mt-3 text-[0.9375rem] leading-[1.6] text-[var(--text-muted)]">
+          camelCase keys, adjacent tagging, a <code>formatVersion</code> gate, and additive-only
+          growth. <a href={`${docs}/reference/backends/`}>The backend contract</a> is the whole
+          integration surface.
+        </p>
+      </div>
+      <div class="rounded-md border border-[var(--border)] bg-[var(--surface-raised)] p-6">
+        <h3 class="font-display text-lg font-semibold text-[var(--text)]">A pattern library</h3>
+        <p class="mt-3 text-[0.9375rem] leading-[1.6] text-[var(--text-muted)]">
+          <a href={`${repo}/tree/main/patterns/ifml`}>patterns/ifml</a> composes domain-agnostic
+          modules into interaction flows. Reuse is a <code>use</code> statement, not a copied file.
+        </p>
+      </div>
+    </div>
+    <div class="mt-10 flex flex-wrap items-center gap-3">
+      <Button href={repo} variant="secondary">The repository</Button>
+      <Button href="/architecture" variant="ghost">How the pipeline is built</Button>
+      <Button href="/about" variant="ghost">About the project</Button>
+    </div>
+  </section>
+
+  <!-- 9 — Get started -->
+  <section id="get-started" class="border-t border-[var(--border)] py-16">
+    <SectionHeader
+      eyebrow="08 / Get started"
+      title="Install it, compile a model."
+      lede="A released archive per target, a checksum manifest, and one binary. The block below is the download-and-verify chain CI itself runs to fetch the released compiler, so the printed steps and the working ones are the same steps."
+    />
+    <div class="mt-10 grid gap-8 lg:grid-cols-[1.05fr_0.95fr]">
+      <div>
+        <CodeBlock lang="sh" filename="bash · Linux x86_64" code={installSnippet} />
+        <p class="mt-4 text-sm leading-[1.6] text-[var(--text-muted)]">
+          Windows archives, the aarch64 Linux build, and the <code>cargo install</code> fallback are
+          on <a href="/install">the install page</a>.
+        </p>
+      </div>
+      <Prose>
+        <p>
+          <a href="/getting-started">The five-minute walkthrough</a> takes one
+          <code>.mox</code> file through <code>check</code>, <code>ir</code> and <code>gen</code>, and
+          ends with a compiled artifact you can inspect. Every shell line on that page is executed by
+          CI against the released binary.
+        </p>
+        <p>
+          Want the shape of the whole thing first? <a href="/platform/how-it-works"
+            >How it works</a
+          > follows one file from source text to an artifact to generated Rust, JSON Schema and
+          Cedar.
+        </p>
+      </Prose>
+    </div>
+  </section>
+
+  <!-- 10 — Design partners -->
+  <section id="design-partners" class="border-t border-[var(--border)] py-16">
+    <div class="rounded-lg bg-graphite p-8 text-warm-white sm:p-12">
+      <p class="font-mono text-xs uppercase tracking-[0.18em] text-silver">09 / Design partners</p>
+      <h2 class="mt-4 max-w-[24ch] font-display text-display-2 font-semibold text-balance">
+        A few teams with a system worth specifying.
+      </h2>
+      <p class="mt-5 max-w-[62ch] text-lg leading-[1.6] text-silver text-pretty">
+        Phero Lang is pre-1.0. There is no support SLA, no hosted product, and no roadmap anyone
+        should schedule a release against yet. What exists is a working compiler, documentation you
+        can read in an afternoon, and a maintainer who will sit in your model with you.
+      </p>
+
+      <div class="mt-10 grid gap-8 border-t border-[color-mix(in_oklab,var(--color-silver)_26%,transparent)] pt-8 sm:grid-cols-2">
+        <div>
+          <h3 class="font-mono text-xs uppercase tracking-[0.16em] text-silver">What you get</h3>
+          <ul class="mt-4 flex flex-col gap-3 text-[0.9375rem] leading-[1.6] text-warm-white">
+            <li>
+              Your domain modelled with you, in the open: the
+              <code class="rounded-xs bg-[color-mix(in_oklab,var(--color-silver)_18%,transparent)] px-1.5 py-0.5 font-mono text-[0.9em]"
+                >.mox</code
+              >, <code class="rounded-xs bg-[color-mix(in_oklab,var(--color-silver)_18%,transparent)] px-1.5 py-0.5 font-mono text-[0.9em]">.ddd</code>
+              and <code class="rounded-xs bg-[color-mix(in_oklab,var(--color-silver)_18%,transparent)] px-1.5 py-0.5 font-mono text-[0.9em]"
+                >.actor</code
+              > layers written beside your engineers, not handed over as a PDF.
+            </li>
+            <li>
+              Compiler work sequenced from what your model exposes — a missing check or an awkward
+              grammar shows up as a fix, not a feature request in a queue.
+            </li>
+            <li>No fee. There is nothing to buy yet.</li>
+          </ul>
+        </div>
+        <div>
+          <h3 class="font-mono text-xs uppercase tracking-[0.16em] text-silver">What we ask</h3>
+          <ul class="mt-4 flex flex-col gap-3 text-[0.9375rem] leading-[1.6] text-warm-white">
+            <li>
+              A system with real constraints: regulated, authorised, or expensive to get wrong. A
+              clean CRUD app will not teach either of us anything.
+            </li>
+            <li>A few hours a month from someone who owns the domain, not only the ticket queue.</li>
+            <li>
+              Tolerance for a pre-1.0 toolchain. Minor versions may change the grammar and the wire
+              format until 1.0 freezes it.
+            </li>
+            <li>Blunt feedback when the model does not fit the way your system actually works.</li>
+          </ul>
+        </div>
+      </div>
+
+      <div class="mt-10 flex flex-wrap items-center gap-4">
+        <Button href={partnerMail}>Write to {partnerEmail}</Button>
+        <p class="text-sm text-silver">A paragraph about what you are modelling is enough.</p>
+      </div>
+    </div>
+  </section>
+</Base>

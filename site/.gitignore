@@ -1,0 +1,20 @@
+# Dependencies
+node_modules/
+.pnpm-store/
+
+# Astro
+.astro/
+dist/
+
+# Cloudflare
+.wrangler/
+
+# The fetched released `pherolang` binary (scripts/fetch-pherolang.mjs).
+.bin/
+
+# Generated: docs ingestion copies `docs/*.md` into the Starlight content
+# tree at build time. Only the generator's manifest is committed.
+phero-docs/src/content/docs/
+
+# OS noise
+.DS_Store

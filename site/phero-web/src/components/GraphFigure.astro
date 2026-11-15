@@ -1,0 +1,354 @@
+---
+/**
+ * GraphFigure — the static, accessible drawing of one graph perspective.
+ *
+ * Everything positional is read from `site/data/support-model.json`, whose
+ * coordinates are baked by `scripts/render-graph.mjs`. Nothing here measures,
+ * scales or lays out at runtime: the SVG's first paint is the finished figure,
+ * and JavaScript only *enhances* it (lane 6's explorer reuses this data and a
+ * `highlight` node id).
+ *
+ * Why an SVG and not a canvas or a library: the figure must survive without
+ * JavaScript, keep text selectable, be legible at 320px (it scrolls — the text
+ * never shrinks), and stay inside the token palette.
+ *
+ * Accessibility contract:
+ *   * the `<svg>` is `role="img"` with `<title>` + `<desc>`; the visible
+ *     `<figcaption>` is the same information in prose;
+ *   * every node is a `<g>` with its own `<title>` (the baked sentence);
+ *   * every connector is `aria-hidden="true"` — it carries no text;
+ *   * the wide drawing sits in a labelled, keyboard-focusable scroll region;
+ *   * colour is never the only channel: every node is labelled in text and
+ *     kinds are spelled out, not encoded in a hue.
+ *
+ * `highlight` takes one graph node id (the artifact's id verbatim). A node that
+ * is not in this perspective is ignored, so an explorer can pass the same
+ * highlight to every view.
+ */
+import model from '@data/support-model.json';
+
+interface Props {
+  /** One of the model's perspective ids, e.g. `domain`. */
+  perspective: string;
+  /** A node id to draw in the accent colour (lime). */
+  highlight?: string;
+  /**
+   * Element-id prefix for the accessible name/description wiring. Defaults to
+   * the perspective id; pass one when the same perspective is drawn twice on
+   * one page so the `aria-labelledby` targets stay unique.
+   */
+  id?: string;
+  class?: string;
+}
+
+interface Node {
+  id: string;
+  kind: string;
+  label: string;
+  group: string;
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+  detail: string;
+  provenance: string;
+}
+
+interface Edge {
+  from: string;
+  to: string;
+  kind: string;
+}
+
+interface Group {
+  key: string;
+  label: string;
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+  count: number;
+}
+
+interface Perspective {
+  id: string;
+  label: string;
+  surface: string;
+  viewport: { width: number; height: number };
+  groups: Group[];
+  nodes: Node[];
+  edges: Edge[];
+}
+
+const { perspective, highlight, id, class: className = '' } = Astro.props;
+
+const data = model as { application: string; perspectives: Perspective[] };
+const view = data.perspectives.find((candidate) => candidate.id === perspective);
+if (!view) {
+  throw new Error(
+    `GraphFigure: no perspective '${perspective}' — have ${data.perspectives.map((p) => p.id).join(', ')}`,
+  );
+}
+
+/** Human kind words. The wire kind ids are camelCase; the drawing is English. */
+const KIND_LABEL: Record<string, string> = {
+  class: 'class',
+  enum: 'enum',
+  datatype: 'datatype',
+  feature: 'feature',
+  operation: 'operation',
+  decisionModel: 'decision model',
+  decision: 'decision',
+  decisionService: 'decision service',
+  bkm: 'business knowledge model',
+  knowledgeSource: 'knowledge source',
+  inputData: 'input data',
+  event: 'event',
+  channel: 'channel',
+  subscription: 'subscription',
+  service: 'service',
+  serviceOperation: 'service operation',
+  repository: 'repository',
+  repositoryOperation: 'repository operation',
+  module: 'module',
+  designApplication: 'design application',
+  search: 'search',
+  actor: 'actor',
+  capability: 'capability',
+  flow: 'interaction flow',
+  view: 'view',
+  component: 'component',
+  action: 'action',
+  command: 'command',
+  deployment: 'deployment',
+  deployApplication: 'deployment application',
+  deployComponent: 'deployment component',
+  deployProfile: 'deployment profile',
+  case: 'case',
+  planItem: 'plan item',
+  caseFileItem: 'case-file item',
+  caseRole: 'case role',
+  useCase: 'use case',
+};
+
+const kindLabel = (kind: string) => KIND_LABEL[kind] ?? kind;
+
+// Unique element ids for the accessible name/description wiring. Astro runs
+// frontmatter per render, so a counter cannot be module-scoped; the prefix is
+// the perspective (or an explicit `id`) instead, which is deterministic and
+// unique for the normal one-figure-per-page case.
+const uid = id ?? `graph-${perspective}`;
+const titleId = `${uid}-title`;
+const descId = `${uid}-desc`;
+const captionId = `${uid}-caption`;
+
+const { width, height } = view.viewport;
+const nodeById = new Map(view.nodes.map((node) => [node.id, node]));
+
+const round = (value: number) => Math.round(value * 10) / 10;
+
+/**
+ * The point where the line from `from`'s centre toward `toward`'s centre leaves
+ * `from`'s box. Connectors therefore start and end on box borders instead of
+ * being swallowed by the node fill, and the arrowhead stays visible.
+ */
+function borderPoint(from: Node, toward: Node) {
+  const cx = from.x + from.w / 2;
+  const cy = from.y + from.h / 2;
+  const dx = toward.x + toward.w / 2 - cx;
+  const dy = toward.y + toward.h / 2 - cy;
+  if (dx === 0 && dy === 0) return { x: cx, y: cy };
+  const scale = Math.min(
+    dx === 0 ? Number.POSITIVE_INFINITY : from.w / 2 / Math.abs(dx),
+    dy === 0 ? Number.POSITIVE_INFINITY : from.h / 2 / Math.abs(dy),
+  );
+  return { x: round(cx + dx * scale), y: round(cy + dy * scale) };
+}
+
+const connectors: Array<{ key: string; kind: string; x: number; y: number; toX: number; toY: number }> = [];
+view.edges.forEach((edge, index) => {
+  const from = nodeById.get(edge.from);
+  const to = nodeById.get(edge.to);
+  if (!from || !to) return;
+  const start = borderPoint(from, to);
+  const end = borderPoint(to, from);
+  connectors.push({ key: `${index}-${edge.kind}`, kind: edge.kind, x: start.x, y: start.y, toX: end.x, toY: end.y });
+});
+
+const groups = [...view.groups];
+const highlighted = highlight ? nodeById.has(highlight) : false;
+const groupSummary = groups.map((group) => `${group.key} (${group.count})`).join(', ');
+const caption = `${view.label} perspective of ${data.application}: ${view.nodes.length} nodes and ${view.edges.length} connections, from the committed graph artifact.`;
+const description = `${caption} Nodes are grouped in columns: ${groupSummary}. Every node is labelled with its short name and its kind; a line joins two nodes the graph connects.`;
+---
+
+<figure class:list={['not-prose', className]} data-graph-perspective={view.id}>
+  <div
+    class="overflow-x-auto rounded-md border border-[var(--border)] bg-[var(--surface)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--focus)]"
+    role="region"
+    aria-labelledby={captionId}
+    tabindex="0"
+  >
+    <svg
+      class="block max-w-none"
+      width={width}
+      height={height}
+      viewBox={`0 0 ${width} ${height}`}
+      preserveAspectRatio="xMinYMin meet"
+      role="img"
+      aria-labelledby={titleId}
+      aria-describedby={descId}
+    >
+      <title id={titleId}>{`${view.label} perspective of ${data.application}`}</title>
+      <desc id={descId}>{description}</desc>
+
+      <defs>
+        <marker
+          id={`${uid}-arrow`}
+          viewBox="0 0 8 8"
+          refX="7"
+          refY="4"
+          markerWidth="6"
+          markerHeight="6"
+          orient="auto-start-reverse"
+        >
+          <path d="M0,0 L8,4 L0,8 Z" class="edge-head"></path>
+        </marker>
+      </defs>
+
+      <g>
+        {
+          groups.map((group) => (
+            <g>
+              <text x={group.x} y={group.y + 14} class="group-label">
+                {group.label}
+              </text>
+              <line
+                x1={group.x}
+                y1={group.y + 24}
+                x2={group.x + group.w}
+                y2={group.y + 24}
+                class="group-rule"
+              />
+            </g>
+          ))
+        }
+      </g>
+
+      <g aria-hidden="true">
+        {
+          connectors.map((connector) => (
+            <line
+              x1={connector.x}
+              y1={connector.y}
+              x2={connector.toX}
+              y2={connector.toY}
+              class="edge"
+              marker-end={`url(#${uid}-arrow)`}
+            />
+          ))
+        }
+      </g>
+
+      <g>
+        {
+          view.nodes.map((node) => (
+            <g class:list={['node', node.id === highlight && 'node-highlight']}>
+              <title>{node.detail}</title>
+              <rect
+                x={node.x}
+                y={node.y}
+                width={node.w}
+                height={node.h}
+                rx="3"
+                class="node-box"
+              />
+              <text x={node.x + 12} y={node.y + 20} class="node-label">
+                {node.label}
+              </text>{' '}
+              <text x={node.x + 12} y={node.y + 35} class="node-kind">
+                {kindLabel(node.kind)}
+              </text>
+            </g>
+          ))
+        }
+      </g>
+    </svg>
+  </div>
+
+  <figcaption
+    id={captionId}
+    class="mt-3 flex flex-wrap items-baseline gap-x-3 gap-y-1 text-[0.8125rem] leading-[1.6] text-[var(--text-muted)]"
+  >
+    <span class="font-mono text-xs uppercase tracking-[0.12em] text-[var(--text)]">
+      {view.label}
+    </span>
+    <span>
+      {view.nodes.length} nodes, {view.edges.length} connections · scroll sideways for the full diagram
+      {highlighted && ' · the highlighted node is the one selected'}
+    </span>
+  </figcaption>
+</figure>
+
+<style>
+  /*
+   * Palette only: `deep-blue` is diagram chrome (strokes and rules, never ink),
+   * `silver` is the connector, lime is reserved for the highlighted node. Node
+   * text uses the semantic text tokens, so it re-themes with the page and never
+   * relies on a hue to carry meaning.
+   */
+  .edge {
+    stroke: var(--palette-silver);
+    stroke-width: 1;
+    fill: none;
+  }
+
+  .edge-head {
+    fill: var(--palette-silver);
+    stroke: none;
+  }
+
+  .group-label {
+    font-family: var(--palette-font-mono);
+    font-size: 11px;
+    font-weight: 500;
+    letter-spacing: 0.06em;
+    fill: var(--text-muted);
+  }
+
+  .group-rule {
+    stroke: var(--diagram);
+    stroke-width: 1;
+    opacity: 0.4;
+  }
+
+  .node-box {
+    fill: var(--surface-raised);
+    stroke: var(--diagram);
+    stroke-width: 1;
+  }
+
+  .node-label {
+    font-family: var(--palette-font-sans);
+    font-size: 12px;
+    font-weight: 600;
+    fill: var(--text);
+  }
+
+  .node-kind {
+    font-family: var(--palette-font-mono);
+    font-size: 11px;
+    fill: var(--text-muted);
+  }
+
+  .node-highlight .node-box {
+    fill: var(--accent);
+    stroke: var(--accent-ink);
+    stroke-width: 1.5;
+  }
+
+  .node-highlight .node-label,
+  .node-highlight .node-kind {
+    fill: var(--accent-ink);
+  }
+</style>

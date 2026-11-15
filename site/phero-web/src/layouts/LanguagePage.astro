@@ -1,0 +1,620 @@
+---
+/**
+ * The language page template — all nine surfaces render through this file.
+ *
+ * The division of labour is the honesty mechanism of the page:
+ *
+ *   * `@data/surfaces.json` supplies every derived fact — extension, name,
+ *     tagline, summary, status, backend crate names, and the paths of the
+ *     example and the compiled artifact. None of it is retyped here.
+ *   * `src/content/languages/catalog.ts` supplies the authored layer: why the
+ *     surface exists, its concept vocabulary, its neighbours, and the exact
+ *     example line range to quote.
+ *   * this template reads the **real** example and the **real** committed
+ *     artifact from disk at build time and asserts the quoted ranges still
+ *     mean what the catalogue claims. A source edit that moves a block fails
+ *     the build instead of silently quoting the wrong lines.
+ *
+ * Both reads happen while the page is prerendered: `astro build` runs page
+ * frontmatter in Node with the checkout on disk (`prerenderEnvironment:
+ * 'node'` in astro.config.mjs), so this is the same files the compiler and the
+ * CLI see.
+ */
+import { existsSync, readFileSync } from 'node:fs';
+import { dirname, join } from 'node:path';
+
+import Breadcrumb from '@ui/Breadcrumb.astro';
+import SectionHeader from '@ui/SectionHeader.astro';
+import Prose from '@ui/Prose.astro';
+import Callout from '@ui/Callout.astro';
+import CodeBlock from '@ui/CodeBlock.astro';
+import Card from '@ui/Card.astro';
+import StatusPill from '@ui/StatusPill.astro';
+
+import {
+  inlineCode,
+  surfaceById,
+  type LanguageEntry,
+  type Surface,
+} from '../content/languages/catalog';
+
+interface Props {
+  surface: Surface;
+  entry: LanguageEntry;
+  /** The rendered documentation URL, resolved from docs-manifest.json. */
+  docsUrl: string;
+  /** Previous / next surface in catalogue order; null at the ends. */
+  prev: Surface | null;
+  next: Surface | null;
+}
+const { surface, entry, docsUrl, prev, next } = Astro.props;
+
+// ---------------------------------------------------------------------------
+// The repository root, found by walking up from the working directory until a
+// directory holds both `crates/` and the workspace `Cargo.toml` — the lookup
+// architecture.astro documents.
+//
+// `process.cwd()` is the app directory for every supported invocation (`pnpm -C
+// phero-web build`, the CI workflow, `astro dev`). `import.meta.url` is not
+// usable here: the Cloudflare adapter's prerenderer rewrites it to a value
+// `new URL()` rejects.
+// ---------------------------------------------------------------------------
+function findRepositoryRoot(start: string): string | null {
+  try {
+    let directory = start;
+    for (let depth = 0; depth < 8; depth += 1) {
+      if (existsSync(join(directory, 'crates')) && existsSync(join(directory, 'Cargo.toml'))) {
+        return directory;
+      }
+      const parent = dirname(directory);
+      if (parent === directory) break;
+      directory = parent;
+    }
+  } catch {
+    /* a runtime without a filesystem — reported below, never guessed around */
+  }
+  return null;
+}
+
+const repositoryRoot = findRepositoryRoot(process.cwd());
+if (!repositoryRoot) {
+  throw new Error(
+    'LanguagePage: cannot find the repository root (a directory holding crates/ and ' +
+      'Cargo.toml). This page quotes the real example and the real compiled artifact, so ' +
+      'it fails rather than rendering invented content.',
+  );
+}
+
+/** Read one repository-relative file as bytes; throws with the path when missing. */
+function readRepositoryFile(relative: string) {
+  const absolute = join(repositoryRoot as string, relative);
+  if (!existsSync(absolute)) {
+    throw new Error(`LanguagePage: missing '${relative}' — this page reads it at build time.`);
+  }
+  return readFileSync(absolute);
+}
+
+// ---------------------------------------------------------------------------
+// 1. The example excerpt.
+//
+// The catalogue names a 1-based, inclusive line range. Everything below is an
+// assertion on that range: it must be inside the file, it must end on a closing
+// brace, and its braces, brackets and parentheses must balance. Together those
+// three checks mean the cited range is a complete block of the real source, not
+// a fragment that happens to start and stop somewhere.
+// ---------------------------------------------------------------------------
+function delimitersBalance(source: string): number {
+  const stripped = source
+    .replace(/"(?:[^"\\]|\\.)*"/g, '""')
+    .replace(/\/\*[\s\S]*?\*\//g, '')
+    .replace(/\/\/[^\n]*/g, '');
+
+  let balance = 0;
+  for (const character of stripped) {
+    if (character === '{' || character === '[' || character === '(') balance += 1;
+    else if (character === '}' || character === ']' || character === ')') balance -= 1;
+  }
+  return balance;
+}
+
+const exampleLines = readRepositoryFile(surface.example).toString('utf8').split(/\r?\n/);
+const { start, end, note } = entry.excerpt;
+
+if (start < 1 || end < start || end > exampleLines.length) {
+  throw new Error(
+    `LanguagePage: ${surface.id} cites ${surface.example} lines ${start}–${end}, ` +
+      `but the file has ${exampleLines.length} lines.`,
+  );
+}
+
+const excerptLines = exampleLines.slice(start - 1, end);
+const excerpt = excerptLines.join('\n');
+const excerptLastLine = excerptLines[excerptLines.length - 1]?.trim() ?? '';
+
+if (excerptLastLine !== '}') {
+  throw new Error(
+    `LanguagePage: ${surface.id} cites ${surface.example} lines ${start}–${end}, ` +
+      `which end on '${excerptLastLine}' instead of a closing brace — the range no longer ` +
+      'covers a whole block. Update the catalogue range.',
+  );
+}
+
+const imbalance = delimitersBalance(excerpt);
+if (imbalance !== 0) {
+  throw new Error(
+    `LanguagePage: ${surface.id} cites ${surface.example} lines ${start}–${end}, ` +
+      `which leave ${imbalance} delimiter(s) unbalanced — the range is not a complete block.`,
+  );
+}
+
+// ---------------------------------------------------------------------------
+// 2. The compiled artifact.
+//
+// The bytes on the page are the file's own bytes: the CLI writes this artifact
+// with two-space indentation, so slicing complete lines is both a bounded view
+// and a verbatim one. The last printed line must close an object or an array,
+// which keeps the slice at a structural boundary instead of stopping mid-value.
+// ---------------------------------------------------------------------------
+const artifactBytes = readRepositoryFile(join('site', 'data', surface.artifact));
+const artifactText = artifactBytes.toString('utf8');
+const artifactAllLines = artifactText.replace(/\n+$/, '').split(/\r?\n/);
+const artifact = JSON.parse(artifactText) as Record<string, unknown>;
+
+const artifactLineCount = Math.min(entry.artifactLines, artifactAllLines.length);
+const artifactSlice = artifactAllLines.slice(0, artifactLineCount).join('\n');
+const artifactLastLine = artifactAllLines[artifactLineCount - 1]?.trim() ?? '';
+
+if (!['}', '},', ']', '],'].includes(artifactLastLine)) {
+  throw new Error(
+    `LanguagePage: ${surface.id} prints ${artifactLineCount} lines of ${surface.artifact}, ` +
+      `which end on '${artifactLastLine}' instead of a closing delimiter. Adjust ` +
+      'artifactLines in the catalogue so the viewer stops at a JSON boundary.',
+  );
+}
+
+/** The provenance fields that actually exist in this artifact. */
+const provenance: Array<{ key: string; value: string; note: string }> = [];
+if (typeof artifact.formatVersion === 'number') {
+  provenance.push({
+    key: 'formatVersion',
+    value: String(artifact.formatVersion),
+    note: 'The compatibility gate. A reader accepts this number or refuses the file.',
+  });
+}
+if (typeof artifact.pheroVersion === 'string') {
+  provenance.push({
+    key: 'pheroVersion',
+    value: artifact.pheroVersion,
+    note: 'Provenance only: which compiler wrote the file.',
+  });
+}
+
+/** Every other top-level key, with its size — derived from the artifact itself. */
+const artifactShape = Object.entries(artifact)
+  .filter(([key]) => key !== 'formatVersion' && key !== 'pheroVersion')
+  .map(([key, value]) => ({
+    key,
+    detail: Array.isArray(value)
+      ? `${value.length} ${value.length === 1 ? 'entry' : 'entries'}`
+      : typeof value === 'string'
+        ? JSON.stringify(value)
+        : Object.keys(value as Record<string, unknown>).join(', ') || 'object',
+  }));
+
+const related = entry.related.map((id) => surfaceById(id));
+const artifactPath = `site/data/${surface.artifact}`;
+const codeClass =
+  'rounded-xs bg-[color-mix(in_oklab,var(--border)_55%,transparent)] px-1.5 py-0.5 font-mono text-[0.9em]';
+const regenerate = [
+  `pherolang ir ${surface.example} -o ${artifactPath}`,
+  `pherolang artifact check ${artifactPath}`,
+].join('\n');
+const compile = [
+  `pherolang check ${surface.example}`,
+  `pherolang ir ${surface.example} -o ${artifactPath}`,
+  `pherolang artifact check ${artifactPath}`,
+].join('\n');
+---
+
+<article>
+  <div class="pt-4">
+    <Breadcrumb
+      trail={[
+        { href: '/', label: 'Phero Lang' },
+        { href: '/languages', label: 'Languages' },
+        { href: `/languages/${surface.id}`, label: surface.name },
+      ]}
+    />
+  </div>
+
+  <header class="border-b border-[var(--border)] pb-12">
+    <p class="font-mono text-xs uppercase tracking-[0.2em] text-[var(--text-muted)]">
+      {surface.extension}
+    </p>
+    <h1 class="mt-5 max-w-[24ch] font-display text-display-1 font-semibold text-balance">
+      {surface.name}
+    </h1>
+    <p class="mt-4 max-w-[52ch] font-display text-display-3 text-[var(--text-muted)] text-balance">
+      {surface.tagline}
+    </p>
+
+    <div class="mt-8 flex flex-wrap items-center gap-x-4 gap-y-2">
+      <StatusPill status={surface.status} backends={surface.backends} />
+      {
+        surface.backends.length > 0 ? (
+          <p class="flex flex-wrap items-baseline gap-x-2 gap-y-1">
+            <span class="font-mono text-[0.6875rem] uppercase tracking-[0.12em] text-[var(--text-muted)]">
+              consumed by
+            </span>
+            {surface.backends.map((backend) => (
+              <span class="font-mono text-xs text-[var(--text)]">{backend}</span>
+            ))}
+          </p>
+        ) : (
+          <p class="text-sm text-[var(--text-muted)]">
+            No in-tree backend — the artifact is validated and committed, not consumed.
+          </p>
+        )
+      }
+    </div>
+
+    <p class="mt-8 max-w-[62ch] text-lg leading-[1.6] text-[var(--text)] text-pretty">
+      {
+        inlineCode(surface.summary).map((run) =>
+          run.code ? (
+            <code class={codeClass}>
+              {run.text}
+            </code>
+          ) : (
+            run.text
+          ),
+        )
+      }
+    </p>
+  </header>
+
+  <section id="why" class="border-b border-[var(--border)] py-16">
+    <SectionHeader eyebrow="Why it exists" title={`What ${surface.extension} is for`} />
+    <Prose class="mt-8">
+      {
+        entry.problem.map((paragraph) => (
+          <p>
+            {inlineCode(paragraph).map((run) =>
+              run.code ? <code>{run.text}</code> : run.text,
+            )}
+          </p>
+        ))
+      }
+    </Prose>
+  </section>
+
+  <section id="models" class="border-b border-[var(--border)] py-16">
+    <SectionHeader
+      eyebrow="Vocabulary"
+      title="What it models"
+      lede={`The concepts ${surface.extension} declares, and what each one means to the compiler.`}
+    />
+
+    <dl class="mt-10 grid gap-x-10 gap-y-6 sm:grid-cols-2">
+      {
+        entry.concepts.map((concept) => (
+          <div class="border-t border-[var(--border)] pt-4">
+            <dt class="font-mono text-[0.8125rem] font-medium text-[var(--text)]">{concept.term}</dt>
+            <dd class="mt-2 text-[0.9375rem] leading-[1.6] text-[var(--text-muted)]">
+              {
+                inlineCode(concept.definition).map((run) =>
+                  run.code ? <code class={codeClass}>{run.text}</code> : run.text,
+                )
+              }
+            </dd>
+          </div>
+        ))
+      }
+    </dl>
+  </section>
+
+  <section id="example" class="border-b border-[var(--border)] py-16">
+    <SectionHeader
+      eyebrow="Source"
+      title="A working example"
+      lede="Quoted from the example this page's artifact was compiled from — not a snippet written for the website."
+    />
+
+    <Prose class="mt-8">
+      <p>
+        Lines {start}–{end} of <code>{surface.example}</code>, reproduced byte for byte, read from
+        the file at build time:
+      </p>
+    </Prose>
+
+    <CodeBlock
+      lang={surface.id}
+      filename={`${surface.example} · lines ${start}–${end}`}
+      code={excerpt}
+    />
+
+    <Prose class="mt-6">
+      <p>{note}</p>
+      <p>
+        The whole file is CI-tested: <code>pherolang check examples/</code> checks every surface in
+        the tree, and the example harness compiles each one on every run. What you see above is the
+        input to the artifact below.
+      </p>
+    </Prose>
+  </section>
+
+  <section id="relations" class="border-b border-[var(--border)] py-16">
+    <SectionHeader eyebrow="Neighbours" title="How it relates to the other surfaces" />
+
+    <div class="mt-8 grid gap-10 lg:grid-cols-[minmax(0,62ch)_minmax(0,1fr)]">
+      <Prose>
+        <p>
+          {
+            inlineCode(entry.relations).map((run) =>
+              run.code ? <code>{run.text}</code> : run.text,
+            )
+          }
+        </p>
+      </Prose>
+
+      <div>
+        <p class="font-mono text-[0.6875rem] uppercase tracking-[0.12em] text-[var(--text-muted)]">
+          Read alongside
+        </p>
+        <ul class="mt-4 flex flex-col gap-px">
+          {
+            related.map((neighbour) => (
+              <li>
+                <a
+                  href={`/languages/${neighbour.id}`}
+                  class="group flex items-baseline justify-between gap-4 rounded-xs border-t border-[var(--border)] py-3 no-underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--focus)]"
+                >
+                  <span class="text-[0.9375rem] font-medium text-[var(--text)] group-hover:text-[var(--link)]">
+                    {neighbour.name}
+                  </span>
+                  <span class="font-mono text-xs text-[var(--text-muted)]">{neighbour.extension}</span>
+                </a>
+              </li>
+            ))
+          }
+        </ul>
+      </div>
+    </div>
+  </section>
+
+  <section id="compile" class="border-b border-[var(--border)] py-16">
+    <SectionHeader
+      eyebrow="Commands"
+      title="How to compile and validate"
+      lede="Three commands, one file. They run from the repository root against the example on this page."
+    />
+
+    <div class="mt-8 max-w-[80ch]">
+      <CodeBlock lang="sh" filename="bash" code={compile} />
+    </div>
+
+    <Prose class="mt-6">
+      <p>
+        <code>check</code> parses, resolves, validates and type-checks the file and prints
+        <code>OK {surface.example}</code>. <code>ir</code> writes the artifact and prints nothing on
+        success. <code>artifact check</code> then validates the serialized JSON on its own — no
+        model, no import resolution, no compiler — and prints <code>OK {artifactPath}</code>.
+      </p>
+      <p>
+        Directories work too: <code>pherolang check examples/</code> enters project mode and checks
+        every supported surface under the tree, each file's imports resolving from the snapshot.
+      </p>
+    </Prose>
+  </section>
+
+  <section id="produces" class="border-b border-[var(--border)] py-16">
+    <SectionHeader
+      eyebrow="Artifact"
+      title="What it produces"
+      lede="One versioned JSON artifact, emitted by the compiler and consumed by whatever reads this surface."
+    />
+
+    <div class="mt-8 grid gap-10 lg:grid-cols-2">
+      <div>
+        <Prose>
+          <p>
+            {
+              inlineCode(entry.artifactSummary).map((run) =>
+                run.code ? <code>{run.text}</code> : run.text,
+              )
+            }
+          </p>
+          <p>
+            The artifact is <code>{artifactPath}</code>, and it is committed here exactly as the
+            released <code>pherolang</code> binary emits it. Its top-level shape:
+          </p>
+        </Prose>
+
+        <ul class="mt-6 flex flex-col gap-px">
+          {
+            artifactShape.map((field) => (
+              <li class="flex items-baseline justify-between gap-4 border-t border-[var(--border)] py-2.5">
+                <code class="font-mono text-[0.8125rem] text-[var(--text)]">{field.key}</code>
+                <span class="font-mono text-xs text-[var(--text-muted)]">{field.detail}</span>
+              </li>
+            ))
+          }
+        </ul>
+
+        <p class="mt-6">
+          <a
+            href="#artifact"
+            class="rounded-xs text-[0.9375rem] text-[var(--link)] underline decoration-[color-mix(in_oklab,var(--link)_45%,transparent)] underline-offset-4 hover:decoration-[var(--link)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--focus)]"
+          >
+            Jump to the compiled artifact
+          </a>
+        </p>
+      </div>
+
+      <div class="rounded-md border border-[var(--border)] bg-[var(--surface-raised)] p-6">
+        <p class="font-mono text-[0.6875rem] uppercase tracking-[0.12em] text-[var(--text-muted)]">
+          Provenance
+        </p>
+        <dl class="mt-4 flex flex-col gap-5">
+          {
+            provenance.map((field) => (
+              <div>
+                <dt class="font-mono text-[0.8125rem] text-[var(--text)]">
+                  {field.key} <span class="text-[var(--text-muted)]">= {field.value}</span>
+                </dt>
+                <dd class="mt-1 text-sm leading-[1.6] text-[var(--text-muted)]">{field.note}</dd>
+              </div>
+            ))
+          }
+          {
+            !('pheroVersion' in artifact) && (
+              <div>
+                <dt class="font-mono text-[0.8125rem] text-[var(--text-muted)]">
+                  pheroVersion — not present
+                </dt>
+                <dd class="mt-1 text-sm leading-[1.6] text-[var(--text-muted)]">
+                  This standalone surface artifact is versioned on its own
+                  <code class="font-mono">formatVersion</code>; only the domain model artifact
+                  carries the compiler-version stamp.
+                </dd>
+              </div>
+            )
+          }
+          <div>
+            <dt class="font-mono text-[0.8125rem] text-[var(--text)]">
+              {artifactBytes.byteLength.toLocaleString('en-US')} bytes
+            </dt>
+            <dd class="mt-1 text-sm leading-[1.6] text-[var(--text-muted)]">
+              {artifactAllLines.length.toLocaleString('en-US')} lines, two-space indented, in the
+              file's own key order.
+            </dd>
+          </div>
+        </dl>
+      </div>
+    </div>
+
+    {
+      surface.status === 'validated' && (
+        <div class="mt-10 max-w-[70ch]">
+          <Callout title="Validated, not implemented">
+            <p>
+              This surface compiles, resolves, validates and lowers to the artifact below — but no
+              in-tree backend consumes that artifact yet. It is checked by the compiler, not
+              executed by the stack; the artifact is the deliverable, and the consumers are out of
+              tree.
+            </p>
+          </Callout>
+        </div>
+      )
+    }
+
+    <div id="artifact" class="mt-14 scroll-mt-24">
+      <h3 class="font-display text-2xl font-semibold tracking-[-0.02em]">The compiled artifact</h3>
+      <Prose class="mt-4">
+        <p>
+          The first {artifactLineCount} of {artifactAllLines.length.toLocaleString('en-US')} lines,
+          verbatim — the exact bytes <code>pherolang ir</code> writes, not a hand-written sample.
+          The slice stops at a JSON boundary; the ellipsis marker is outside the JSON, and the full
+          file is <code>{artifactPath}</code>.
+        </p>
+      </Prose>
+
+      <details
+        class="mt-6 overflow-hidden rounded-md border border-[var(--border)] bg-[var(--surface-raised)]"
+        open
+      >
+        <summary
+          class="cursor-pointer border-b border-[var(--border)] px-4 py-2 font-mono text-xs uppercase tracking-[0.12em] text-[var(--text-muted)] focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-[var(--focus)]"
+        >
+          {surface.artifact} · lines 1–{artifactLineCount}
+        </summary>
+        <pre
+          class="overflow-x-auto p-4 font-mono text-[0.8125rem] leading-[1.65] text-[var(--text)]"
+        ><code>{artifactSlice}</code></pre>
+        <p class="border-t border-[var(--border)] px-4 py-2 font-mono text-xs text-[var(--text-muted)]">
+          … {(artifactAllLines.length - artifactLineCount).toLocaleString('en-US')} more lines in{' '}
+          <code>{artifactPath}</code>
+        </p>
+      </details>
+
+      <p class="mt-6 max-w-[70ch] text-sm leading-[1.6] text-[var(--text-muted)]">
+        Regenerate it from the repository root — the second command validates the serialized bytes
+        with no compiler in the loop:
+      </p>
+      <div class="max-w-[80ch]">
+        <CodeBlock lang="sh" filename="bash" code={regenerate} />
+      </div>
+      <p class="max-w-[70ch] text-sm leading-[1.6] text-[var(--text-muted)]">
+        The whole data directory is regenerated by <code>node scripts/sync-model.mjs</code> (run
+        from <code>site/</code>) with the released binary; CI fails on a one-byte difference.
+      </p>
+    </div>
+  </section>
+
+  <section id="docs" class="border-b border-[var(--border)] py-16">
+    <SectionHeader
+      eyebrow="Reference"
+      title="Documentation"
+      lede="The normative reference for this surface, rendered from the repository's own documentation."
+    />
+
+    <div class="mt-8 max-w-[70ch]">
+      <Card href={docsUrl} eyebrow="docs.pherolang.com" title={`${surface.name} reference`}>
+        The complete {surface.extension} reference — vocabulary, grammar, validation rules, artifact
+        wire format, and the CLI contract.
+      </Card>
+      <p class="mt-4 text-sm leading-[1.6] text-[var(--text-muted)]">
+        Generated from <code>{surface.docs}</code> in the repository. The page above summarises it;
+        the reference is normative.
+      </p>
+    </div>
+  </section>
+
+  <nav aria-label="Surfaces" class="py-12">
+    <a
+      href="/languages"
+      class="rounded-xs font-mono text-xs uppercase tracking-[0.12em] text-[var(--link)] no-underline hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--focus)]"
+    >
+      All nine surfaces
+    </a>
+
+    <ul class="mt-6 grid gap-4 sm:grid-cols-2">
+      <li>
+        {
+          prev && (
+            <a
+              href={`/languages/${prev.id}`}
+              class="block rounded-md border border-[var(--border)] bg-[var(--surface-raised)] p-5 no-underline transition-colors hover:border-[var(--border-strong)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--focus)]"
+            >
+              <span class="font-mono text-[0.6875rem] uppercase tracking-[0.12em] text-[var(--text-muted)]">
+                Previous
+              </span>
+              <span class="mt-2 flex items-baseline justify-between gap-3">
+                <span class="text-[0.9375rem] font-medium text-[var(--text)]">{prev.name}</span>
+                <span class="font-mono text-xs text-[var(--text-muted)]">{prev.extension}</span>
+              </span>
+            </a>
+          )
+        }
+      </li>
+      <li class="sm:text-right">
+        {
+          next && (
+            <a
+              href={`/languages/${next.id}`}
+              class="block rounded-md border border-[var(--border)] bg-[var(--surface-raised)] p-5 text-left no-underline transition-colors hover:border-[var(--border-strong)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--focus)] sm:text-right"
+            >
+              <span class="font-mono text-[0.6875rem] uppercase tracking-[0.12em] text-[var(--text-muted)]">
+                Next
+              </span>
+              <span class="mt-2 flex items-baseline justify-between gap-3 sm:flex-row-reverse">
+                <span class="text-[0.9375rem] font-medium text-[var(--text)]">{next.name}</span>
+                <span class="font-mono text-xs text-[var(--text-muted)]">{next.extension}</span>
+              </span>
+            </a>
+          )
+        }
+      </li>
+    </ul>
+  </nav>
+</article>

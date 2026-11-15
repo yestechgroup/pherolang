@@ -1,0 +1,22 @@
+---
+interface Props {
+  class?: string;
+  as?: 'div' | 'article';
+}
+const { class: className = '', as: Tag = 'div' } = Astro.props;
+---
+<Tag
+  class:list={[
+    'max-w-[68ch] text-[1.0625rem] leading-[1.7] text-[var(--text)]',
+    '[&_p]:my-4 [&_p:first-child]:mt-0 [&_ul]:my-4 [&_ul]:list-disc [&_ul]:pl-6 [&_ol]:my-4 [&_ol]:list-decimal [&_ol]:pl-6 [&_li]:my-1.5',
+    '[&_h2]:mt-12 [&_h2]:mb-3 [&_h2]:font-display [&_h2]:text-2xl [&_h2]:font-semibold [&_h2]:tracking-[-0.02em]',
+    '[&_h3]:mt-8 [&_h3]:mb-2 [&_h3]:font-display [&_h3]:text-xl [&_h3]:font-semibold',
+    '[&_a]:text-[var(--link)] [&_a]:underline [&_a]:decoration-[color-mix(in_oklab,var(--link)_45%,transparent)] [&_a]:underline-offset-4 hover:[&_a]:decoration-[var(--link)]',
+    '[&_code]:rounded-xs [&_code]:bg-[color-mix(in_oklab,var(--border)_55%,transparent)] [&_code]:px-1.5 [&_code]:py-0.5 [&_code]:font-mono [&_code]:text-[0.9em]',
+    '[&_pre]:my-6 [&_pre]:overflow-x-auto [&_pre]:rounded-md [&_pre]:border [&_pre]:border-[var(--border)] [&_pre]:bg-[var(--surface-raised)] [&_pre]:p-4',
+    '[&_strong]:font-semibold [&_hr]:my-10 [&_hr]:border-[var(--border)]',
+    className,
+  ]}
+>
+  <slot />
+</Tag>

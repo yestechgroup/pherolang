@@ -568,7 +568,7 @@ holding actor, because Cedar's `is` matches the exact principal type and
 hierarchy membership (`memberOfTypes`) alone would leave an agent's
 request validated but unauthorized.
 
-#### Session kinds
+### Session kinds
 
 A grant or delegation effect entry may carry a session-kind modifier between
 the effect and the capability name — `permit human SubmitPayRun when

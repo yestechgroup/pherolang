@@ -1,0 +1,300 @@
+---
+/**
+ * GraphExplorer — the /demo island: eight server-rendered perspectives, one
+ * visible, and the page's only client JavaScript.
+ *
+ * Three properties, in order of importance:
+ *
+ *   1. **The first paint is finished.** Every perspective is a real
+ *      `GraphFigure`, drawn from `site/data/support-model.json` at build time.
+ *      With JavaScript off, the domain view is visible, the switcher is a list
+ *      of ordinary links (`#graph-panel-…`), and a link reveals its own panel
+ *      through the `:target` rule in the stylesheet below — no client work is
+ *      needed to see any of the eight layers.
+ *   2. **The switcher is a tablist.** `role="tablist"` with `role="tab"`
+ *      anchors, each panel a `role="tabpanel"` labelled by its tab. The module
+ *      adds roving tabindex, ArrowLeft/ArrowRight/Home/End and
+ *      `aria-selected`; the tabs are links so the no-JS path is not a dead
+ *      control.
+ *   3. **Nothing positional reaches the bundle.** The island reads a
+ *      `type="application/json"` block (inert — CSP treats it as data, not a
+ *      script) holding one record per node: id, kind, label, provenance file
+ *      and edge counts. Geometry stays in the server-rendered SVG, and the
+ *      module's node handles are the `<g class="node">` elements it upgrades in
+ *      place.
+ *
+ * The projection is lane 5's contract (`site/data/CONTRACT.md`); this component
+ * adds no data and computes nothing the graph artifact does not already say.
+ */
+import GraphFigure from './GraphFigure.astro';
+import model from '@data/support-model.json';
+
+interface Props {
+  class?: string;
+}
+
+interface Node {
+  id: string;
+  kind: string;
+  label: string;
+  group: string;
+  detail: string;
+  provenance: string;
+}
+
+interface Edge {
+  from: string;
+  to: string;
+  kind: string;
+}
+
+interface Perspective {
+  id: string;
+  label: string;
+  surface: string;
+  nodes: Node[];
+  edges: Edge[];
+}
+
+const { class: className = '' } = Astro.props;
+
+const perspectives = (model as { perspectives: Perspective[] }).perspectives;
+const defaultId = perspectives.some((perspective) => perspective.id === 'domain')
+  ? 'domain'
+  : perspectives[0]?.id;
+if (!defaultId) throw new Error('GraphExplorer: support-model.json has no perspectives');
+
+/**
+ * The client payload: what the detail panel prints, and the edges as index
+ * pairs into the panel's node order. Counts are computed here so the module
+ * does no graph work; `JSON.stringify` order is the projection's node order,
+ * which is the order `GraphFigure` draws.
+ */
+const payload = {
+  perspectives: perspectives.map((perspective) => {
+    const indexOf = new Map(perspective.nodes.map((node, index) => [node.id, index]));
+    const incoming = new Map<string, number>();
+    const outgoing = new Map<string, number>();
+    const edges: Array<[number, number]> = [];
+
+    for (const edge of perspective.edges) {
+      const from = indexOf.get(edge.from);
+      const to = indexOf.get(edge.to);
+      if (from === undefined || to === undefined) continue;
+      edges.push([from, to]);
+      outgoing.set(edge.from, (outgoing.get(edge.from) ?? 0) + 1);
+      incoming.set(edge.to, (incoming.get(edge.to) ?? 0) + 1);
+    }
+
+    return {
+      id: perspective.id,
+      label: perspective.label,
+      nodes: perspective.nodes.map((node) => ({
+        id: node.id,
+        kind: node.kind,
+        label: node.label,
+        provenance: node.provenance,
+        incoming: incoming.get(node.id) ?? 0,
+        outgoing: outgoing.get(node.id) ?? 0,
+      })),
+      edges,
+    };
+  }),
+};
+
+// A `<` inside the block would end it early in the HTML parser; escaping it as
+// a JSON unicode escape keeps the text identical to `JSON.parse`.
+const payloadJson = JSON.stringify(payload).replace(/</g, '\\u003c');
+---
+
+<div class:list={['graph-explorer', className]} data-graph-explorer>
+  <div class="flex flex-col gap-3">
+    <div
+      role="tablist"
+      aria-label="Graph perspectives"
+      aria-orientation="horizontal"
+      class="flex flex-wrap gap-2"
+    >
+      {
+        perspectives.map((perspective) => {
+          const selected = perspective.id === defaultId;
+          return (
+            <a
+              role="tab"
+              id={`graph-tab-${perspective.id}`}
+              href={`#graph-panel-${perspective.id}`}
+              aria-controls={`graph-panel-${perspective.id}`}
+              aria-selected={selected ? 'true' : 'false'}
+              aria-label={`${perspective.label} ${perspective.nodes.length} nodes, ${perspective.edges.length} connections`}
+              data-graph-tab={perspective.id}
+              class="inline-flex items-baseline gap-2 rounded-xs border border-[var(--border)] px-3 py-2 font-mono text-xs uppercase tracking-[0.1em] text-[var(--text-muted)] no-underline transition-colors hover:border-[var(--border-strong)] hover:text-[var(--text)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--focus)] aria-selected:border-[var(--border-strong)] aria-selected:bg-[var(--surface-raised)] aria-selected:text-[var(--text)]"
+            >
+              {perspective.label}{' '}
+              <span aria-hidden="true" class="tabular-nums text-[var(--text-muted)]">
+                {perspective.nodes.length}
+              </span>
+            </a>
+          );
+        })
+      }
+    </div>
+    <p class="max-w-[68ch] text-sm leading-[1.6] text-[var(--text-muted)]">
+      Each perspective is also a link to its panel: without JavaScript all eight layers stay
+      readable, and with it the row above behaves as a tablist.
+    </p>
+  </div>
+
+  {
+    perspectives.map((perspective) => (
+      <section
+        role="tabpanel"
+        id={`graph-panel-${perspective.id}`}
+        aria-labelledby={`graph-tab-${perspective.id}`}
+        data-graph-panel={perspective.id}
+        data-collapsed={perspective.id === defaultId ? undefined : ''}
+        class="mt-6 scroll-mt-24"
+      >
+        <div class="grid gap-8 lg:grid-cols-[minmax(0,1fr)_21rem]">
+          <div class="min-w-0">
+            <GraphFigure perspective={perspective.id} id={`explorer-${perspective.id}`} />
+          </div>
+
+          <aside
+            aria-live="polite"
+            data-graph-detail
+            class="h-fit rounded-md border border-[var(--border)] bg-[var(--surface-raised)] p-5"
+          >
+            <p class="font-mono text-xs uppercase tracking-[0.14em] text-[var(--text-muted)]">
+              Selected node
+            </p>
+            <h3
+              tabindex="-1"
+              data-graph-detail-title
+              class="mt-2 font-display text-lg font-semibold text-[var(--text)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--focus)]"
+            >
+              Nothing selected
+            </h3>
+            <p
+              data-graph-detail-hint
+              class="mt-2 text-sm leading-[1.6] text-[var(--text-muted)]"
+            >
+              Every node in the drawing carries its declaration file and its connections. With
+              JavaScript, selecting a node shows that detail here.
+            </p>
+
+            <dl data-graph-detail-facts hidden class="mt-4 flex flex-col gap-3 text-sm">
+              <div>
+                <dt class="font-mono text-[0.6875rem] uppercase tracking-[0.12em] text-[var(--text-muted)]">
+                  Kind
+                </dt>
+                <dd class="mt-1 text-[var(--text)]" data-graph-fact="kind"></dd>
+              </div>
+              <div>
+                <dt class="font-mono text-[0.6875rem] uppercase tracking-[0.12em] text-[var(--text-muted)]">
+                  Declared in
+                </dt>
+                <dd class="mt-1">
+                  <code
+                    class="break-words font-mono text-[0.8125rem] text-[var(--text)]"
+                    data-graph-fact="provenance"
+                  ></code>
+                </dd>
+              </div>
+              <div>
+                <dt class="font-mono text-[0.6875rem] uppercase tracking-[0.12em] text-[var(--text-muted)]">
+                  Connections
+                </dt>
+                <dd class="mt-1 tabular-nums text-[var(--text)]" data-graph-fact="connections"></dd>
+              </div>
+              <div>
+                <dt class="font-mono text-[0.6875rem] uppercase tracking-[0.12em] text-[var(--text-muted)]">
+                  Node id
+                </dt>
+                <dd class="mt-1">
+                  <code
+                    class="break-all font-mono text-[0.75rem] leading-[1.5] text-[var(--text-muted)]"
+                    data-graph-fact="id"
+                  ></code>
+                </dd>
+              </div>
+            </dl>
+          </aside>
+        </div>
+      </section>
+    ))
+  }
+
+  <script type="application/json" data-graph-explorer-data set:html={payloadJson}></script>
+</div>
+
+<script>
+  import '../scripts/graph-explorer';
+</script>
+
+<style>
+  /*
+   * The switcher's own hiding rule, not `[hidden]`: Tailwind's preflight hides
+   * `[hidden]` from a lower cascade layer with `!important`, and an unlayered
+   * `:target` reveal cannot outrank that. Collapsing through an attribute this
+   * component owns keeps both states — module on and off — in one normal
+   * cascade, so the no-JS reveal below needs no `!important` at all.
+   */
+  .graph-explorer :global([data-graph-panel][data-collapsed]) {
+    display: none;
+  }
+
+  /*
+   * No-JS reveal. A tab is an ordinary link to its panel, so following it makes
+   * that panel the document's `:target`; with the module off, the link shows the
+   * layer it names instead of doing nothing. The un-enhanced guard keeps this
+   * rule from fighting the module's own toggling.
+   */
+  .graph-explorer:not([data-enhanced]) :global([data-graph-panel][data-collapsed]:target) {
+    display: block;
+  }
+
+  /*
+   * Selection. GraphFigure owns the drawing's base styles; the explorer only
+   * marks the state, and the palette comes from the tokens like everything
+   * else. The transition is the brief highlight on selection (and on clear) —
+   * it never runs on hover, and it is off when motion is unwelcome.
+   */
+  .graph-explorer :global(g.node .node-box) {
+    transition:
+      fill 140ms var(--palette-ease-out-precise),
+      stroke 140ms var(--palette-ease-out-precise),
+      stroke-width 140ms var(--palette-ease-out-precise);
+  }
+
+  .graph-explorer :global(g.node.is-selected .node-box) {
+    fill: var(--accent);
+    stroke: var(--accent-ink);
+    stroke-width: 1.5;
+  }
+
+  .graph-explorer :global(g.node.is-selected .node-label),
+  .graph-explorer :global(g.node.is-selected .node-kind) {
+    fill: var(--accent-ink);
+  }
+
+  .graph-explorer :global(g.node.is-neighbour .node-box) {
+    stroke: var(--diagram);
+    stroke-width: 2;
+  }
+
+  /* Focus is a box stroke, not the browser's default outline around the group. */
+  .graph-explorer :global(g.node:focus) {
+    outline: none;
+  }
+
+  .graph-explorer :global(g.node:focus-visible .node-box) {
+    stroke: var(--focus);
+    stroke-width: 2.5;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .graph-explorer :global(g.node .node-box) {
+      transition: none;
+    }
+  }
+</style>

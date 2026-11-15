@@ -1,0 +1,336 @@
+---
+import Base from '../layouts/Base.astro';
+import SectionHeader from '@ui/SectionHeader.astro';
+import Prose from '@ui/Prose.astro';
+import Callout from '@ui/Callout.astro';
+import CodeBlock from '@ui/CodeBlock.astro';
+import Button from '@ui/Button.astro';
+import commands from '../data/commands.json';
+
+/**
+ * Every shell string on this page is read from `src/data/commands.json`, the
+ * file `site/scripts/check-commands.mjs` executes. A command cannot be printed
+ * without existing in that list, and `command()` throws at build time if an id
+ * is misspelt. Entries marked `network: true` are download steps; the gate
+ * skips them because they need the release archive.
+ */
+interface Command {
+  id: string;
+  label: string;
+  run: string;
+  expectExit?: number;
+  expectStdout?: string;
+  network?: boolean;
+}
+const all: Command[] = commands.commands;
+
+function command(id: string): Command {
+  const found = all.find((entry) => entry.id === id);
+  if (!found) throw new Error(`commands.json has no command '${id}'`);
+  return found;
+}
+const shell = (...ids: string[]) => ids.map((id) => command(id).run).join('\n');
+const prints = (id: string) => command(id).expectStdout ?? '';
+
+const repo = 'https://github.com/yestechgroup/pherolang';
+const releases = `${repo}/releases`;
+const assets = [
+  { platform: 'Linux x86_64', asset: 'pherolang-0.3.0-x86_64-unknown-linux-gnu.tar.gz' },
+  { platform: 'Linux aarch64', asset: 'pherolang-0.3.0-aarch64-unknown-linux-gnu.tar.gz' },
+  { platform: 'Windows x86_64', asset: 'pherolang-0.3.0-x86_64-pc-windows-msvc.zip' },
+  { platform: 'All of the above', asset: 'SHA256SUMS' },
+];
+
+const linux = shell(
+  'install-linux-cd',
+  'install-linux-curl-asset',
+  'install-linux-curl-sums',
+  'install-linux-sha',
+  'install-linux-tar',
+  'install-linux-install',
+);
+const linuxLocal = shell('install-linux-install-local');
+const windows = shell(
+  'install-windows-setup',
+  'install-windows-asset',
+  'install-windows-base',
+  'install-windows-fetch-asset',
+  'install-windows-fetch-sums',
+  'install-windows-expected',
+  'install-windows-verify',
+  'install-windows-extract',
+  'install-windows-path',
+);
+const cargoInstall = shell('install-cargo');
+---
+
+<Base
+  title="Install Phero Lang"
+  description="Install the pherolang compiler from a released binary, or build it from source with cargo."
+>
+  <div class="py-16 sm:py-24">
+    <p class="font-mono text-xs uppercase tracking-[0.2em] text-[var(--text-muted)]">Install</p>
+    <h1 class="mt-6 max-w-[24ch] font-display text-display-2 font-semibold text-balance">
+      One binary, in one command.
+    </h1>
+    <p class="mt-5 max-w-[62ch] text-lg leading-[1.6] text-[var(--text-muted)] text-pretty">
+      <code class="font-mono text-[0.9em]">pherolang</code> is a native executable. It runs no
+      service, needs no account, and reads nothing from the network while it compiles.
+    </p>
+    <p class="mt-6">
+      <a
+        class="text-[var(--link)] underline decoration-[color-mix(in_oklab,var(--link)_45%,transparent)] underline-offset-4 hover:decoration-[var(--link)]"
+        href={`${releases}/tag/v0.3.0`}
+        rel="noopener">Browse the v0.3.0 release on GitHub</a
+      >.
+    </p>
+
+    <section id="download" class="mt-16">
+      <SectionHeader
+        eyebrow="Step 1"
+        title="Download the archive for your platform"
+        lede="v0.3.0 publishes three archives and a checksum manifest. An archive contains a single file: the binary, at the archive root."
+      />
+
+      <div class="mt-8 max-w-[68ch] overflow-x-auto">
+        <table class="w-full border-collapse text-left text-[0.9375rem]">
+          <caption class="sr-only">Released archives for pherolang v0.3.0</caption>
+          <thead>
+            <tr class="border-b border-[var(--border-strong)]">
+              <th scope="col" class="py-2 pr-6 font-medium">Platform</th>
+              <th scope="col" class="py-2 font-medium">Released asset</th>
+            </tr>
+          </thead>
+          <tbody>
+            {
+              assets.map((row) => (
+                <tr class="border-b border-[var(--border)]">
+                  <td class="py-2 pr-6 align-top">{row.platform}</td>
+                  <td class="py-2 font-mono text-[0.8125rem] break-all">{row.asset}</td>
+                </tr>
+              ))
+            }
+          </tbody>
+        </table>
+      </div>
+
+      <Prose class="mt-6">
+        <p>
+          The commands below pin <code>v0.3.0</code>. If the
+          <a href={releases} rel="noopener">releases page</a> lists a newer tag, substitute it in the
+          download URLs and in the archive names.
+        </p>
+      </Prose>
+    </section>
+
+    <section id="linux" class="mt-20">
+      <SectionHeader
+        eyebrow="Step 2"
+        title="Linux and macOS"
+        lede="Extract into a temporary directory, verify the archive against the published checksums, then move the binary onto your PATH."
+      />
+
+      <Prose class="mt-8">
+        <p>
+          Run this on <strong>Linux x86_64</strong>. The last line writes to
+          <code>/usr/local/bin</code>, which is already on most <code>PATH</code>s:
+        </p>
+      </Prose>
+      <CodeBlock lang="sh" filename="bash" runnable code={linux} />
+
+      <Prose class="mt-8">
+        <p>
+          On <strong>Linux aarch64</strong>, replace <code>x86_64-unknown-linux-gnu</code> with
+          <code>aarch64-unknown-linux-gnu</code> in both the download command and the
+          <code>tar</code> command. Everything else is identical.
+        </p>
+        <p>
+          <code>sha256sum -c</code> prints one line per listed archive it can find —
+          <code>pherolang-0.3.0-x86_64-unknown-linux-gnu.tar.gz: OK</code>. It exits <code>1</code> and
+          names the file if a single byte differs.
+        </p>
+        <p>
+          If you would rather not use <code>sudo</code>, install into your home directory instead —
+          provided <code>~/.local/bin</code> is on your <code>PATH</code>:
+        </p>
+      </Prose>
+      <CodeBlock lang="sh" filename="bash" runnable code={linuxLocal} />
+
+      <Callout tone="warning" title="macOS is not published yet">
+        <p>
+          v0.3.0 ships no <code>apple-darwin</code> archive. The release workflow carries the two
+          macOS rows behind the repository variable <code>PHERO_MACOS_RUNNERS</code>, which is unset
+          because the project's runner configuration does not offer macOS runners. Until that
+          changes, build from source on macOS — the
+          <a href="#from-source">cargo install</a> below compiles natively and needs only a Rust
+          toolchain.
+        </p>
+      </Callout>
+    </section>
+
+    <section id="windows" class="mt-20">
+      <SectionHeader
+        eyebrow="Step 3"
+        title="Windows"
+        lede="The Windows archive is a zip. This block downloads it, checks it against SHA256SUMS, extracts it to %USERPROFILE%\.pherolang, and adds that directory to your user PATH."
+      />
+
+      <CodeBlock lang="powershell" filename="PowerShell" runnable code={windows} />
+
+      <Prose class="mt-6">
+        <p>
+          <code>Get-FileHash</code> and <code>SHA256SUMS</code> are compared case-insensitively;
+          PowerShell's <code>-ne</code> already ignores case, so the lower-case manifest and the
+          upper-case hash match without normalisation. The block throws on a mismatch, so a bad
+          download stops there instead of reaching <code>Expand-Archive</code>.
+        </p>
+        <p>
+          <code>SetEnvironmentVariable</code> changes your <em>user</em> environment, not the terminal
+          you are in. Open a new terminal before running <code>pherolang</code>.
+        </p>
+      </Prose>
+    </section>
+
+    <section id="from-source" class="mt-20">
+      <SectionHeader
+        eyebrow="Fallback"
+        title="Build from source"
+        lede="A release is built from its tag, so installing from the tag compiles the same tree the release workflow compiled."
+      />
+
+      <CodeBlock lang="sh" filename="bash" runnable code={cargoInstall} />
+
+      <Prose class="mt-6">
+        <p>
+          This needs a Rust toolchain installed through <a href="https://rustup.rs" rel="noopener"
+            >rustup</a
+          >. The workspace targets edition 2021 and declares no minimum Rust version; CI and the
+          release workflow both build with the current <code>stable</code> channel, so that is the
+          safe choice. Cargo puts the binary in <code>~/.cargo/bin</code>, which rustup already adds
+          to your <code>PATH</code>.
+        </p>
+        <p>
+          Expect several minutes rather than seconds: <code>phero-cli</code> pulls in the compiler,
+          the language server and every in-tree backend, and they are all compiled from scratch.
+          <code>--locked</code> makes cargo use the tag's own <code>Cargo.lock</code>, which is what
+          the release workflow builds.
+        </p>
+        <p>
+          If a previous <code>pherolang</code> is on your <code>PATH</code>, cargo refuses to
+          overwrite it. Add <code>--force</code> to replace it.
+        </p>
+      </Prose>
+    </section>
+
+    <section id="verify" class="mt-20">
+      <SectionHeader
+        eyebrow="Step 4"
+        title="Verify the install"
+        lede="Two commands that need no model files, then one that does."
+      />
+
+      <CodeBlock lang="sh" filename="bash" runnable code={shell('version')} />
+      <Prose class="mt-4">
+        <p>
+          It prints <code>{prints('version')}</code> followed by the target triple it was built for —
+          <code>pherolang 0.3.0 (x86_64-unknown-linux-gnu)</code> for the Linux x86_64 archive. The
+          triple is part of the banner so a bug report can name the platform.
+        </p>
+      </Prose>
+
+      <Prose class="mt-8">
+        <p>
+          The registry that explains the compiler's diagnostic codes ships inside the binary — so this
+          works from an empty directory:
+        </p>
+      </Prose>
+      <CodeBlock lang="sh" filename="bash" runnable code={shell('explain')} />
+      <Prose class="mt-4">
+        <p>
+          You should see <code>E0104 — Unknown action reference (error)</code>, the band it belongs
+          to, the meaning, and a one-line fix. <code>pherolang explain --list</code> prints the whole
+          allocation ledger.
+        </p>
+      </Prose>
+
+      <Prose class="mt-8">
+        <p>
+          To check a real model, clone the repository and run the compiler over the example it uses
+          everywhere:
+        </p>
+      </Prose>
+      <CodeBlock lang="sh" filename="bash" runnable code={shell('check')} />
+      <Prose class="mt-4">
+        <p>
+          It prints <code>{prints('check')}</code> and exits <code>0</code>. From here,
+          <a href="/getting-started">the five-minute walkthrough</a> compiles that model to an
+          artifact and generates code from it.
+        </p>
+      </Prose>
+    </section>
+
+    <section id="versioning" class="mt-20">
+      <SectionHeader
+        eyebrow="Availability"
+        title="Why there is no crates.io release"
+        lede="You cannot yet depend on it through crates.io. That is a decision, not an oversight."
+      />
+
+      <Prose class="mt-8">
+        <p>
+          <a
+            href="https://github.com/yestechgroup/pherolang/blob/main/docs/VERSIONING.md"
+            rel="noopener">VERSIONING.md</a
+          >
+          reserves the compatibility promise for 1.0. Throughout 0.x, the grammar, the IR shape and
+          the CLI may break, and each break lands in the changelog with its golden-regeneration
+          note. At 1.0 the wire formats freeze: within a <code>formatVersion</code> evolution becomes
+          additive only.
+        </p>
+        <p>
+          A caret range over a moving 0.x is a promise nobody can keep, so the crates are consumed
+          by pinned git revision instead — the pattern in the
+          <a
+            href="https://github.com/yestechgroup/pherolang/blob/main/README.md"
+            rel="noopener">README</a
+          >
+          — and the binary by release tag. Both are pins you can read: a revision and a tag name one
+          tree.
+        </p>
+      </Prose>
+    </section>
+
+    <section id="editors" class="mt-20">
+      <SectionHeader
+        eyebrow="Editors"
+        title="The language server"
+        lede="The same binary is the language server. There is no editor extension in this repository, so you point your client at the executable."
+      />
+
+      <CodeBlock lang="sh" filename="bash" runnable code={shell('lsp')} />
+
+      <Prose class="mt-6">
+        <p>
+          <code>pherolang lsp</code> speaks LSP 3.x over stdio, and exits when the client closes the
+          stream — which is why this page can print it as a command that terminates. Any LSP client
+          works: start the binary with the single argument <code>lsp</code> and nothing else. The
+          server implements diagnostics, quick fixes on class-typed features, go to definition
+          (including opposite mentions), hover, document symbols, completion, and rename.
+        </p>
+        <p>
+          Client settings are yours to write; the repository's
+          <a href={`${repo}/blob/main/README.md`} rel="noopener">README</a> shows a VS Code
+          <code>settings.json</code> that launches the binary with the <code>lsp</code> argument for
+          the <code>.mox</code> language.
+        </p>
+      </Prose>
+
+      <Callout title="Next">
+        <p>
+          The walkthrough compiles a real model and generates code from it:
+          <Button href="/getting-started" variant="primary" class="mt-3">Get started</Button>
+        </p>
+      </Callout>
+    </section>
+  </div>
+</Base>
