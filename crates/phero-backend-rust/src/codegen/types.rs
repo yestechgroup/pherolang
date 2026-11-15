@@ -3,7 +3,7 @@
 //! + implicit defaults.
 
 use anyhow::bail;
-use phero_ir::{DefaultValue, Feature, FeatureKind, PrimitiveType, TypeRef};
+use phero_ir::{CollectionKind, DefaultValue, Feature, FeatureKind, PrimitiveType, TypeRef};
 
 use crate::naming::rust_ident;
 
@@ -34,6 +34,52 @@ pub(crate) fn value_type(type_: &TypeRef) -> anyhow::Result<String> {
             bail!("interfaces are not materialized by the Rust backend yet ('{name}')")
         }
     })
+}
+
+/// `true` for a many-valued feature lowered with set semantics (DD6).
+pub(crate) fn is_set(feature: &Feature) -> bool {
+    feature.collection == Some(CollectionKind::Set)
+}
+
+/// The collection container for a many-valued feature: `BTreeSet<T>` for a
+/// set (deterministic order, order-insensitive equality) and `Vec<T>` for a
+/// list.
+///
+/// A set element must be **totally ordered**, because `BTreeSet` keys on
+/// `Ord`. Every representable element type is (primitives except the IEEE
+/// floats, enums/datatypes/vocabularies with the generated `Ord` derive, and
+/// class references, whose generated slotmap key type is `Ord`); a set of
+/// `float`/`double` is the documented fallback boundary and is rejected here
+/// with an error naming the feature and the element type.
+pub(crate) fn collection_type(feature: &Feature, inner: &str) -> anyhow::Result<String> {
+    if !is_set(feature) {
+        return Ok(format!("Vec<{inner}>"));
+    }
+    if let TypeRef::Primitive(primitive @ (PrimitiveType::Float | PrimitiveType::Double)) =
+        &feature.type_
+    {
+        let name = match primitive {
+            PrimitiveType::Float => "float",
+            _ => "double",
+        };
+        bail!(
+            "set feature '{}' has element type '{name}', which has no total order; \
+             a set is a BTreeSet and requires an ordered element type. Model it as an \
+             ordered unique list (`{name}[] {} {{ unique }}`) instead",
+            feature.name,
+            feature.name
+        );
+    }
+    Ok(format!("std::collections::BTreeSet<{inner}>"))
+}
+
+/// The `Default` expression of a many-valued feature's field.
+pub(crate) fn many_default(feature: &Feature) -> &'static str {
+    if is_set(feature) {
+        "std::collections::BTreeSet::new()"
+    } else {
+        "Vec::new()"
+    }
 }
 
 pub(crate) fn is_reference(kind: FeatureKind) -> bool {
@@ -67,9 +113,10 @@ pub(crate) fn feature_doc(feature: &Feature) -> &'static str {
 
 /// The stored field type for a feature.
 ///
-/// Many features store `Vec<T>`; references store ids (`Option<T>` when
-/// optional — ids cannot be defaulted); scalar attributes are `T` when
-/// required (`lower >= 1`) and `Option<T>` when optional.
+/// Many features store `Vec<T>`, or `BTreeSet<T>` when the feature is a set
+/// (DD6); references store ids (`Option<T>` when optional — ids cannot be
+/// defaulted); scalar attributes are `T` when required (`lower >= 1`) and
+/// `Option<T>` when optional.
 pub(crate) fn field_type(_unit: &Unit<'_>, feature: &Feature) -> anyhow::Result<String> {
     if feature.is_derived {
         bail!(
@@ -91,7 +138,7 @@ pub(crate) fn field_type(_unit: &Unit<'_>, feature: &Feature) -> anyhow::Result<
         }
     };
     Ok(if feature.multiplicity.is_many() {
-        format!("Vec<{inner}>")
+        collection_type(feature, &inner)?
     } else if is_reference(feature.kind) || feature.multiplicity.lower == 0 {
         format!("Option<{inner}>")
     } else {

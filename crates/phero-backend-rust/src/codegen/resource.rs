@@ -8,6 +8,7 @@ use phero_ir::{Feature, FeatureKind, TypeRef};
 
 use crate::naming::{rust_ident, snake_case};
 
+use super::types::is_set;
 use super::*;
 pub(crate) fn emit_resource(e: &mut String, unit: &Unit<'_>) -> anyhow::Result<()> {
     e.push_str("/// Arena root: owns every object of the model.\n");
@@ -91,6 +92,17 @@ impl End<'_> {
 
     fn field(&self) -> String {
         rust_ident(&snake_case(&self.feature.name))
+    }
+
+    /// The mutator verb that appends one element: `insert` for a set (an
+    /// unordered collection, where the preceding `contains` guard keeps the
+    /// call idempotent), `push` for a list.
+    fn add_verb(&self) -> &'static str {
+        if is_set(self.feature) {
+            "insert"
+        } else {
+            "push"
+        }
     }
 }
 
@@ -226,6 +238,8 @@ fn emit_add_remove_many(e: &mut String, a: &End<'_>, b: &End<'_>) -> anyhow::Res
     let (b_id, b_slot) = (&b.class.id_type, &b.class.slot_field);
     let field = a.field();
     let opposite = b.field();
+    let a_add = a.add_verb();
+    let b_add = b.add_verb();
     let b_single = value_param_name(&a_single, &field, &b.class.single);
     e.push_str(&format!(
         "    /// Adds `{b_single}` to `{a_single}.{field}`, maintaining `{b_single}.{opposite}`.\n\
@@ -235,12 +249,12 @@ fn emit_add_remove_many(e: &mut String, a: &End<'_>, b: &End<'_>) -> anyhow::Res
          \x20       }}\n\
          \x20       if let Some(a) = self.{a_slot}.get_mut({a_single}) {{\n\
          \x20           if !a.{field}.contains(&{b_single}) {{\n\
-         \x20               a.{field}.push({b_single});\n\
+         \x20               a.{field}.{a_add}({b_single});\n\
          \x20           }}\n\
          \x20       }}\n\
          \x20       if let Some(b) = self.{b_slot}.get_mut({b_single}) {{\n\
          \x20           if !b.{opposite}.contains(&{a_single}) {{\n\
-         \x20               b.{opposite}.push({a_single});\n\
+         \x20               b.{opposite}.{b_add}({a_single});\n\
          \x20           }}\n\
          \x20       }}\n\
          \x20   }}\n\n\
@@ -267,6 +281,7 @@ fn emit_set_single(e: &mut String, a: &End<'_>, b: &End<'_>) -> anyhow::Result<(
     let (b_id, b_slot) = (&b.class.id_type, &b.class.slot_field);
     let field = a.field();
     let opposite = b.field();
+    let b_add = b.add_verb();
     let b_single = value_param_name(&a_single, &field, &b.class.single);
     e.push_str(&format!(
         "    /// Sets `{a_single}.{field}` (or clears it), maintaining `{b_single}.{opposite}`.\n\
@@ -291,7 +306,7 @@ fn emit_set_single(e: &mut String, a: &End<'_>, b: &End<'_>) -> anyhow::Result<(
          \x20       if let Some(new_b) = {b_single} {{\n\
          \x20           if let Some(b) = self.{b_slot}.get_mut(new_b) {{\n\
          \x20               if !b.{opposite}.contains(&{a_single}) {{\n\
-         \x20                   b.{opposite}.push({a_single});\n\
+         \x20                   b.{opposite}.{b_add}({a_single});\n\
          \x20               }}\n\
          \x20           }}\n\
          \x20       }}\n\
@@ -313,6 +328,7 @@ fn emit_add_remove_to_single(e: &mut String, a: &End<'_>, b: &End<'_>) -> anyhow
     let (b_id, b_slot) = (&b.class.id_type, &b.class.slot_field);
     let field = a.field();
     let opposite = b.field();
+    let a_add = a.add_verb();
     let b_single = value_param_name(&a_single, &field, &b.class.single);
     e.push_str(&format!(
         "    /// Adds `{b_single}` to `{a_single}.{field}`, detaching it from any previous `{opposite}` holder.\n\
@@ -331,7 +347,7 @@ fn emit_add_remove_to_single(e: &mut String, a: &End<'_>, b: &End<'_>) -> anyhow
          \x20       }}\n\
          \x20       if let Some(a) = self.{a_slot}.get_mut({a_single}) {{\n\
          \x20           if !a.{field}.contains(&{b_single}) {{\n\
-         \x20               a.{field}.push({b_single});\n\
+         \x20               a.{field}.{a_add}({b_single});\n\
          \x20           }}\n\
          \x20       }}\n\
          \x20       if let Some(b) = self.{b_slot}.get_mut({b_single}) {{\n\
@@ -420,6 +436,7 @@ fn emit_one_sided_containment(
     );
     let (b_id, b_slot) = (&child_class.id_type, &child_class.slot_field);
     let field = owner.field();
+    let a_add = owner.add_verb();
     let b_single = value_param_name(&a_single, &field, &child_class.single);
     e.push_str(&format!(
         "    /// Adds `{b_single}` to `{a_single}.{field}` (one-way containment, no opposite).\n\
@@ -429,7 +446,7 @@ fn emit_one_sided_containment(
          \x20       }}\n\
          \x20       if let Some(a) = self.{a_slot}.get_mut({a_single}) {{\n\
          \x20           if !a.{field}.contains(&{b_single}) {{\n\
-         \x20               a.{field}.push({b_single});\n\
+         \x20               a.{field}.{a_add}({b_single});\n\
          \x20           }}\n\
          \x20       }}\n\
          \x20   }}\n\n\
