@@ -405,9 +405,15 @@
 //!   `self`), a declared repository operation writes `Type? name(params)
 //!   when? { ... }`. A builtin repository operation takes no body (the
 //!   parser refuses it by name), and a qualified body receiver is a syntax
-//!   error. The subset is closed — `let`, `let … else error …`, assignment,
-//!   `guard … else error …`, `if`/`else`, `return`; any other statement is a
-//!   named parse error. Each `raw_expr` is a token run ending at the
+//!   error. The subset is closed and orchestration-only — `let`, `let … else
+//!   error …`, feature-path assignment, `guard … else error …`, `if`/`else`,
+//!   `return`; loops (`for`/`while`), `try`/`catch`, compound assignment,
+//!   collection mutation (`push`/`remove`/`clear`), and bare expression
+//!   statements are **named** refusals (each says where the construct
+//!   belongs: a domain `op`, or a bound `let`), and any other statement is
+//!   the generic named error. A raise names a declared error (the driver
+//!   supplies the vocabulary; the syntax keeps the written name and raw
+//!   argument spans). Each `raw_expr` is a token run ending at the
 //!   depth-0 terminator (`;`, an `else`, an `if` block's `{`, or a raise
 //!   argument's `,`/`)`), tracking `()`/`[]`/`{}` nesting and consuming a
 //!   whole expression-level `if cond { … } else { … }` atom; `let`, `guard`,

@@ -6,7 +6,11 @@
 //! guard/alias/`set` shape, while [`StmtBody`] is the closed procedural
 //! subset design operations need — `let`, `let … else error …`,
 //! `assign`, `guard … else error …`, `if`, and `return`, with every failure
-//! path raising one of a closed set of error variants ([`BodyRaise`]).
+//! path raising a declared error ([`BodyRaise`]) — the caller supplies the
+//! raised vocabulary ([`RaiseSignature`]) and, when it wants the subset
+//! enforced, the operation's `throws` set. The body is orchestration-only:
+//! one primary aggregate, feature-path assignment, and calls to the
+//! aggregate's own `op`s (DD7, issue pherolang#304).
 //!
 //! Expression slots are **phero-expr source text**, the same discipline as the
 //! Rune body: phero-ir never depends on phero-expr, so the driver serializes a
@@ -121,13 +125,15 @@ pub enum Stmt {
     },
 }
 
-/// A raised error: one declared failure variant plus its argument
-/// expressions (phero-expr source text). The v1 variant set is closed:
-/// `NotFound` with two arguments and `Conflict` with one.
+/// A raised error: one declared error name plus its argument expressions
+/// (phero-expr source text). The vocabulary is the caller's
+/// [`RaiseSignature`] list — never hardcoded here; the standard prelude's
+/// `NotFound(resource, key)` and `Conflict(detail)` come from
+/// [`RaiseSignature::prelude`].
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct BodyRaise {
-    /// The error variant name (`NotFound` or `Conflict`).
+    /// The error name (`NotFound`, `PaymentDeclined`, …).
     pub variant: String,
     /// The argument expressions, in written order; omitted when empty.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]

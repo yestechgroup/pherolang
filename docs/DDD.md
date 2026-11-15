@@ -1653,14 +1653,28 @@ boundary in the artifact, and an output DTO in a parameter slot — from the
 serialized artifact alone.
 
 The executable-body pair `bodies.mox`/`bodies.ddd` (formatter-canonical)
-is the pherolang#178 fixture: a void service body over the full statement
-subset (let-else, guard, assignment, `sum`/`size`/`any`/`all` reductions,
-`self.findById`/`self.save`, and a bare-name injected-repository call), a
-value-returning `if`/`else` body with `capability`/`when` clauses, a
-repository-operation body guarded by `when`, and an injected secondary
-repository. Its committed golden `bodies.ddd.json` carries each operation's
-`bodies` `"stmt"` target and the service bodies' `bodyReceiver`; the
-acceptance and failure rules are pinned by
+is the pherolang#178/#304 fixture: a void service body over the full
+statement subset (let-else, guard, assignment, `sum`/`size`/`any`/`all`
+reductions, `self.findById`/`self.save`, a bare-name injected-repository
+call, and a domain `op` call on the loaded aggregate), a value-returning
+`if`/`else` body with `capability`/`when` clauses, a repository-operation
+body guarded by `when`, and an injected secondary repository. Its committed
+golden `bodies.ddd.json` carries each operation's `bodies` `"stmt"` target,
+the service bodies' `bodyReceiver`, the application `errors`, and every
+operation's resolved `throws`; the acceptance and failure rules are pinned
+by `crates/phero-driver/tests/ddd_bodies.rs`.
+
+The declared-error pair `errors.mox`/`errors.ddd` (formatter-canonical) is
+the DD7 fixture (issue pherolang#304): an application error with a typed
+enum payload, a module-private error, a DTO payload, a body raising the
+prelude and a declared error, a domain `op` call on a loaded local, and a
+delegation whose `throws` is a superset of its target's. Its committed
+golden `errors.ddd.json` carries the root and module `errors` lists and the
+resolved `throws` references (application, module, and prelude scopes); the
+negative matrix — unknown error, duplicate/prelude-shadowed declaration,
+foreign private error, entity payload, duplicate field, narrowed delegation,
+undeclared body raise, payload mismatch, and the orchestration-only
+exclusions — is pinned by `crates/phero-driver/tests/ddd/errors.rs` and
 `crates/phero-driver/tests/ddd_bodies.rs`.
 
 The `examples/` side ships `support.ddd` (entity/value/dto designs,
