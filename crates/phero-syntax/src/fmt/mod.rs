@@ -876,7 +876,7 @@ impl<'src> Formatter<'src> {
                     // after `unique` is invalid source and is left intact).
                     self.bump_token();
                 }
-                Some(Token::Ident(text)) if is_constraint_keyword(&text) => {
+                Some(Token::Ident(text)) if is_constraint_keyword(text) => {
                     self.advance();
                     if let Some(Token::Str(_) | Token::Int(_)) = self.peek_tok() {
                         self.advance();
@@ -917,7 +917,7 @@ impl<'src> Formatter<'src> {
         }
         match self.peek_tok_nth(1) {
             Some(Token::RBrace) => true,
-            Some(Token::Ident(text)) => is_constraint_keyword(&text),
+            Some(Token::Ident(text)) => is_constraint_keyword(text),
             _ => false,
         }
     }
