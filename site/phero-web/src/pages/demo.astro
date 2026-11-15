@@ -1,0 +1,365 @@
+---
+/**
+ * /demo — the interactive graph explorer.
+ *
+ * The claim this page makes is narrow and checkable: a business system is one
+ * connected semantic model, and this drawing is that model compiled, not
+ * illustrated. Every number is derived from generated data —
+ * `@data/support-model.json` (the projection behind the drawing),
+ * `@data/graph.json` (the artifact it was projected from), `@data/surfaces.json`
+ * (the surface table) and `@data/evidence.json` (the corpus totals) — and the
+ * arithmetic below is asserted, so a projection that drifts from the artifact
+ * fails the build instead of quietly labelling a node wrong.
+ *
+ * The explorer itself is `GraphExplorer.astro`: static figures first, one island
+ * module second. `src/data/commands.json` supplies the regeneration command, the
+ * same file `scripts/check-commands.mjs` executes.
+ */
+import Base from '../layouts/Base.astro';
+import Breadcrumb from '@ui/Breadcrumb.astro';
+import SectionHeader from '@ui/SectionHeader.astro';
+import Prose from '@ui/Prose.astro';
+import Stat from '@ui/Stat.astro';
+import Callout from '@ui/Callout.astro';
+import CodeBlock from '@ui/CodeBlock.astro';
+import GraphExplorer from '../components/GraphExplorer.astro';
+
+import model from '@data/support-model.json';
+import graph from '@data/graph.json';
+import surfaces from '@data/surfaces.json';
+import evidence from '@data/evidence.json';
+import commands from '../data/commands.json';
+
+const docs = 'https://docs.pherolang.com';
+
+// ---------------------------------------------------------------------------
+// The application view of the graph. `support-model.json` carries only the
+// projection; the node and edge totals of the application it projects come from
+// the artifact, so the prose and the drawing are the same fact stated twice.
+// ---------------------------------------------------------------------------
+interface GraphNode {
+  id: string;
+  kind: string;
+  file: string;
+  application: string;
+}
+
+interface GraphEdge {
+  from: string;
+  to: string;
+  kind: string;
+}
+
+const application = model.application;
+const appNodes = (graph.nodes as GraphNode[]).filter((node) => node.application === application);
+const appNodeIds = new Set(appNodes.map((node) => node.id));
+const appEdges = (graph.edges as GraphEdge[]).filter(
+  (edge) => appNodeIds.has(edge.from) && appNodeIds.has(edge.to),
+);
+if (appNodes.length === 0) {
+  throw new Error(`demo: no graph nodes for application '${application}'`);
+}
+
+/** Nodes the projection deliberately leaves out (a file is not a declaration). */
+const fileKinds = new Set(model.meta.excludedKinds);
+const fileNodes = appNodes.filter((node) => fileKinds.has(node.kind));
+
+/** Where each drawn node lives: one layer, asserted, because edges are per layer. */
+const layerOf = new Map<string, string>();
+for (const perspective of model.perspectives) {
+  for (const node of perspective.nodes) {
+    const seen = layerOf.get(node.id);
+    if (seen !== undefined) {
+      throw new Error(`demo: node '${node.id}' is in both '${seen}' and '${perspective.id}'`);
+    }
+    layerOf.set(node.id, perspective.id);
+  }
+}
+
+const drawnNodeIds = new Set(model.perspectives.flatMap((perspective) => perspective.nodes.map((node) => node.id)));
+const drawnEdges = new Set(
+  model.perspectives.flatMap((perspective) =>
+    perspective.edges.map((edge) => `${edge.from}\u0000${edge.to}\u0000${edge.kind}`),
+  ),
+);
+
+const fileEdgeCount = appEdges.filter((edge) => fileNodes.some((node) => node.id === edge.from || node.id === edge.to)).length;
+const sameLayerEdges = appEdges.filter((edge) => {
+  const from = layerOf.get(edge.from);
+  return from !== undefined && from === layerOf.get(edge.to);
+});
+const crossLayerCount = appEdges.length - fileEdgeCount - sameLayerEdges.length;
+
+// The projection's own arithmetic, checked rather than trusted.
+if (drawnNodeIds.size !== appNodes.length - fileNodes.length) {
+  throw new Error(
+    `demo: perspectives draw ${drawnNodeIds.size} nodes, application has ${appNodes.length} minus ${fileNodes.length} file nodes`,
+  );
+}
+if (drawnEdges.size !== sameLayerEdges.length) {
+  throw new Error(
+    `demo: perspectives draw ${drawnEdges.size} connections, ${sameLayerEdges.length} stay inside one layer`,
+  );
+}
+
+// ---------------------------------------------------------------------------
+// The perspective table. A surface id the generated table does not know is a
+// build error, never an empty cell.
+// ---------------------------------------------------------------------------
+type SurfaceStatus = 'implemented' | 'validated';
+
+const surfaceRows = surfaces.surfaces.map((surface) => {
+  const status = surface.status;
+  if (status !== 'implemented' && status !== 'validated') {
+    throw new Error(`demo: unknown status '${status}' for surface ${surface.id}`);
+  }
+  return { ...surface, status: status as SurfaceStatus };
+});
+
+const perspectiveRows = model.perspectives.map((perspective) => {
+  const surface = surfaceRows.find((candidate) => candidate.id === perspective.surface);
+  if (!surface) {
+    throw new Error(`demo: perspective '${perspective.id}' names unknown surface '${perspective.surface}'`);
+  }
+  return {
+    id: perspective.id,
+    label: perspective.label,
+    surface,
+    nodes: perspective.nodes.length,
+    edges: perspective.edges.length,
+  };
+});
+
+const graphBuild = commands.commands.find((command) => command.id === 'graph-build');
+if (!graphBuild) throw new Error('demo: commands.json has no graph-build command');
+
+const regeneration = [
+  graphBuild.run,
+  'diff examples.graph.json examples/artifacts/examples.graph.json   # what CI checks',
+  'node site/scripts/sync-model.mjs                                  # project it into site/data/',
+].join('\n');
+---
+
+<Base
+  title="One domain, eight perspectives — Phero Lang"
+  description={`The support-desk example compiled into one semantic graph: ${model.perspectives.length} perspectives, ${appNodes.length} nodes and ${appEdges.length} edges across ${model.meta.files.length} files, drawn from the committed artifact.`}
+>
+  <Breadcrumb
+    trail={[
+      { href: '/', label: 'Phero Lang' },
+      { href: '/demo', label: 'Graph explorer' },
+    ]}
+  />
+
+  <section class="pb-12 pt-6 sm:pb-14">
+    <p class="font-mono text-xs uppercase tracking-[0.2em] text-[var(--text-muted)]">
+      Demo / the semantic graph
+    </p>
+    <h1 class="mt-5 max-w-[22ch] font-display text-display-1 font-semibold text-balance">
+      One domain, eight perspectives.
+    </h1>
+    <p class="mt-6 max-w-[62ch] text-lg leading-[1.6] text-[var(--text-muted)] text-pretty">
+      A business system is one connected semantic model. The layers people experience as separate
+      artifacts — the domain, the decisions, the policy, the workflow, the interface, the deployment
+      — are views of that one model, and they can be checked against each other because they are
+      stored together.
+    </p>
+    <p class="mt-4 max-w-[62ch] text-lg leading-[1.6] text-[var(--text-muted)] text-pretty">
+      Everything below is drawn from the compiled artifacts of the support-desk example in this
+      repository. Nothing here is an illustration of what the graph might look like.
+    </p>
+
+    <div class="mt-12 grid grid-cols-2 gap-6 border-t border-[var(--border)] pt-8 sm:grid-cols-4">
+      <Stat value={String(model.perspectives.length)} label="Perspectives" />
+      <Stat value={String(model.meta.files.length)} label="Source files" />
+      <Stat value={String(appNodes.length)} label="Nodes" />
+      <Stat value={String(appEdges.length)} label="Connections" />
+    </div>
+  </section>
+
+  <section id="explorer" class="border-t border-[var(--border)] py-16">
+    <SectionHeader
+      eyebrow="The explorer"
+      title="Pick a layer, then a node."
+      lede="The row of perspectives is a tablist. Tab reaches it, the arrow keys and Home and End move inside it, and Tab again lands in the drawing, where every node is a button: Enter or Space shows its kind, its declaration file, its connections and its artifact id, and Escape clears the selection."
+    />
+
+    <div class="mt-10">
+      <GraphExplorer />
+    </div>
+
+    <Callout title="Without JavaScript">
+      <p>
+        The first paint is the finished drawing, not a placeholder. Every perspective is
+        server-rendered, each tab is also an ordinary link to its panel, and the selection detail is
+        the only part that needs the module. The drawing on this page is the same one{' '}
+        <a href="/architecture">the architecture page</a> shows statically.
+      </p>
+    </Callout>
+  </section>
+
+  <section id="what" class="border-t border-[var(--border)] py-16">
+    <SectionHeader
+      eyebrow="What you are looking at"
+      title="One application, read eight ways"
+      lede={`One application, ${model.meta.files.length} files, ${appNodes.length} nodes and ${appEdges.length} connections. Each perspective below is the same application read through one surface; the counts are the drawing's, not a separate tally.`}
+    />
+
+    <div class="mt-10 grid gap-10 lg:grid-cols-[1.05fr_0.95fr]">
+      <div>
+        <Prose>
+          <p>
+            The ten source files are the nine surfaces plus a second interaction flow
+            (<code>cli.ifml</code>), which declares the command-line views over the same domain. Every
+            one of them is compiled, and every one of them contributes nodes to the same graph.
+          </p>
+        </Prose>
+        <ul class="mt-5 flex flex-wrap gap-2">
+          {
+            model.meta.files.map((file) => (
+              <li class="rounded-xs border border-[var(--border)] px-2 py-1 font-mono text-[0.6875rem] text-[var(--text)]">
+                {file}
+              </li>
+            ))
+          }
+        </ul>
+        <Prose class="mt-5">
+          <p>
+            The drawing leaves out the {fileNodes.length} <code>file</code> nodes — a file is a
+            container, not a declaration — which leaves {drawnNodeIds.size} nodes. Of the{' '}
+            {appEdges.length} connections, {fileEdgeCount} touch a file node and{' '}
+            {crossLayerCount} join two different layers (an interface action binding a service
+            operation, say), so the perspectives carry the remaining {drawnEdges.size}: the ones whose
+            two ends sit in the same layer.
+          </p>
+          <p>
+            A node id is the graph artifact's id verbatim, so a node selected above can be found with{' '}
+            <code>pherolang graph query</code> in the committed artifact. It is not a label invented
+            for this page.
+          </p>
+        </Prose>
+      </div>
+
+      <div>
+        <div
+          class="overflow-x-auto rounded-md border border-[var(--border)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--focus)]"
+          role="region"
+          aria-labelledby="perspectives-caption"
+          tabindex="0"
+        >
+          <table class="w-full min-w-[24rem] border-collapse text-left text-[0.9375rem]">
+            <caption id="perspectives-caption" class="sr-only">
+              The eight perspectives of the support application, the surface each one is drawn from,
+              and the node and connection counts of each drawing.
+            </caption>
+            <thead>
+              <tr class="border-b border-[var(--border-strong)]">
+                <th scope="col" class="px-4 py-3 font-mono text-xs font-medium uppercase tracking-[0.12em] text-[var(--text-muted)]">
+                  Perspective
+                </th>
+                <th scope="col" class="px-4 py-3 font-mono text-xs font-medium uppercase tracking-[0.12em] text-[var(--text-muted)]">
+                  Surface
+                </th>
+                <th scope="col" class="px-4 py-3 text-right font-mono text-xs font-medium uppercase tracking-[0.12em] text-[var(--text-muted)]">
+                  Nodes
+                </th>
+                <th scope="col" class="px-4 py-3 text-right font-mono text-xs font-medium uppercase tracking-[0.12em] text-[var(--text-muted)]">
+                  Edges
+                </th>
+              </tr>
+            </thead>
+            <tbody>
+              {
+                perspectiveRows.map((row) => (
+                  <tr class="border-b border-[var(--border)] align-top last:border-b-0">
+                    <th scope="row" class="whitespace-nowrap px-4 py-3 text-left font-medium text-[var(--text)]">
+                      {row.label}
+                    </th>
+                    <td class="px-4 py-3 text-[var(--text-muted)]">
+                      <a
+                        href={`/languages/${row.surface.id}`}
+                        class="rounded-xs text-[var(--text)] underline decoration-[color-mix(in_oklab,var(--link)_35%,transparent)] underline-offset-4 hover:decoration-[var(--link)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--focus)]"
+                      >
+                        {row.surface.name}
+                      </a>
+                      <span class="mt-0.5 block font-mono text-xs text-[var(--text-muted)]">
+                        {row.surface.extension}
+                      </span>
+                    </td>
+                    <td class="px-4 py-3 text-right tabular-nums text-[var(--text)]">{row.nodes}</td>
+                    <td class="px-4 py-3 text-right tabular-nums text-[var(--text)]">{row.edges}</td>
+                  </tr>
+                ))
+              }
+            </tbody>
+          </table>
+        </div>
+        <p class="mt-4 text-sm leading-[1.6] text-[var(--text-muted)]">
+          The same corpus holds {evidence.counts.applications} import-connected applications,{' '}
+          {evidence.counts.nodes} nodes and {evidence.counts.edges} edges. This page filters to one
+          of them, because a graph of everything would not fit on a screen or in a sentence.
+        </p>
+      </div>
+    </div>
+  </section>
+
+  <section id="provenance" class="border-t border-[var(--border)] py-16">
+    <SectionHeader
+      eyebrow="Provenance"
+      title="Generated, not illustrated"
+      lede="The drawing is a projection of one committed artifact. Regenerate the artifact and the projection, and the numbers on this page change with them."
+    />
+
+    <div class="mt-10 grid gap-8 lg:grid-cols-2">
+      <div>
+        <Prose>
+          <p>
+            <code>site/data/graph.json</code> is written by the released <code>pherolang</code>{' '}
+            binary running <code>graph build</code> over <code>examples/</code>. The builder is
+            derived post-compile: it never re-reads a source or re-checks a file, so a node in the
+            graph is a node the compiler produced.
+          </p>
+          <p>
+            The artifact is pinned: <code>examples/artifacts/examples.graph.json</code> is byte-compared
+            in CI against a fresh build of the same tree, so a change to the graph is a change to a
+            committed golden, not a silent drift.
+          </p>
+          <p>
+            <code>site/scripts/render-graph.mjs</code> then bakes the per-perspective geometry into{' '}
+            <code>site/data/support-model.json</code>, which is what this page reads. Detail paths are
+            relative to the repository's <code>examples/</code> directory.
+          </p>
+        </Prose>
+
+        <div class="mt-8 flex flex-wrap items-center gap-3">
+          <a
+            href="/architecture"
+            class="inline-flex items-center rounded-xs border border-[var(--border)] px-3 py-2 font-mono text-xs uppercase tracking-[0.1em] text-[var(--text)] no-underline transition-colors hover:border-[var(--border-strong)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--focus)]"
+          >
+            The architecture page
+          </a>
+          <a
+            href={`${docs}/reference/graph/`}
+            class="inline-flex items-center rounded-xs border border-[var(--border)] px-3 py-2 font-mono text-xs uppercase tracking-[0.1em] text-[var(--text)] no-underline transition-colors hover:border-[var(--border-strong)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--focus)]"
+          >
+            Graph reference
+          </a>
+        </div>
+      </div>
+
+      <div>
+        <CodeBlock lang="sh" filename="repository root" code={regeneration} />
+        <p class="mt-4 text-sm leading-[1.6] text-[var(--text-muted)]">
+          The first line is the exact command <code>scripts/check-commands.mjs</code> executes in CI;
+          the diff is the freshness gate. Node kinds, edge kinds, determinism and the query surface are
+          documented in{' '}
+          <a
+            href={`${docs}/reference/graph/`}
+            class="text-[var(--link)] underline decoration-[color-mix(in_oklab,var(--link)_45%,transparent)] underline-offset-4 hover:decoration-[var(--link)]"
+            >the graph reference</a
+          >.
+        </p>
+      </div>
+    </div>
+  </section>
+</Base>

@@ -1,0 +1,315 @@
+---
+/**
+ * /about — what this is, who it is for, how mature it is, and where the work
+ * happens.
+ *
+ * Every claim here is checkable in this repository: the version policy is
+ * `docs/VERSIONING.md` (linked through the docs origin), the maturity limits are
+ * `SECURITY.md` and the changelog, the spelling contract is `docs/NAMING.md`,
+ * and the corpus counts come from `@data/evidence.json`. There is no founding
+ * story and no dates, because neither is sourced anywhere in the tree.
+ */
+import Base from '../layouts/Base.astro';
+import SectionHeader from '@ui/SectionHeader.astro';
+import Prose from '@ui/Prose.astro';
+import Callout from '@ui/Callout.astro';
+import Stat from '@ui/Stat.astro';
+import Button from '@ui/Button.astro';
+
+import surfaces from '@data/surfaces.json';
+import evidence from '@data/evidence.json';
+
+const docs = 'https://docs.pherolang.com';
+const repo = 'https://github.com/yestechgroup/pherolang';
+const partnerEmail = 'hello@pherolang.com';
+const partnerMail = `mailto:${partnerEmail}?subject=Design%20partner`;
+---
+
+<Base
+  title="About — Phero Lang"
+  description="What Phero Lang is, who it is for, how mature it is (pre-1.0), the naming rule, and where the work happens."
+>
+  <section class="pt-16 pb-12 sm:pt-20">
+    <p class="font-mono text-xs uppercase tracking-[0.2em] text-[var(--text-muted)]">About</p>
+    <h1 class="mt-5 max-w-[24ch] font-display text-display-1 font-semibold text-balance">
+      What this is, and what it is not yet.
+    </h1>
+    <p class="mt-6 max-w-[62ch] text-lg leading-[1.6] text-[var(--text-muted)] text-pretty">
+      An open-source modelling language and compiler for systems whose specifications are too
+      important to live in four tools that never meet. It is pre-1.0, and this page says exactly what
+      that means.
+    </p>
+  </section>
+
+  <section id="what" class="border-t border-[var(--border)] py-14">
+    <SectionHeader
+      eyebrow="01 / What this is"
+      title="A compiler, a wire format, and every surface"
+      lede="Not a diagram tool with an export button. The compiler checks a model, lowers it to a versioned artifact, and that artifact is what everything downstream reads."
+    />
+
+    <div class="mt-8 grid gap-10 lg:grid-cols-[1.05fr_0.95fr]">
+      <Prose>
+        <p>
+          Phero Lang gives each kind of specification its own small language — a domain model, an
+          application design, an authorisation policy, a decision model, an event contract, a use case
+          pattern, a case model, an interaction flow, a deployment projection. They share one type
+          index, one expression language and one diagnostics registry, so a check in one can see a
+          declaration in another.
+        </p>
+        <p>
+          Each surface compiles to a JSON artifact with a version gate. Rust code generators, JSON
+          Schema, Cedar policy, a DMN engine model and a CMMN case definition all read those
+          artifacts and nothing above them. That boundary is the design: it is why a backend can be
+          written outside this repository, and why a grammar change cannot quietly alter generated
+          code.
+        </p>
+        <p>
+          The whole implementation is a Rust workspace, released as one binary,
+          <code>pherolang</code>. The documentation in this repository is the same documentation the
+          docs site renders — there is no second copy to drift.
+        </p>
+      </Prose>
+      <div class="h-fit rounded-md border border-[var(--border)] bg-[var(--surface-raised)] p-6">
+        <p class="font-mono text-xs uppercase tracking-[0.14em] text-[var(--text-muted)]">
+          The example corpus
+        </p>
+        <div class="mt-5 grid grid-cols-2 gap-6">
+          <Stat value={String(surfaces.surfaces.length)} label="Surfaces" />
+          <Stat value={String(evidence.counts.crates)} label="Crates" />
+          <Stat value={String(evidence.counts.applications)} label="Applications" />
+          <Stat value={String(evidence.counts.nodes)} label="Graph nodes" />
+        </div>
+        <p class="mt-5 text-sm leading-[1.6] text-[var(--text-muted)]">
+          Compiled by <code>{evidence.generator.reported}</code> from
+          <a href={`${repo}/tree/main/examples`} rel="noopener">examples/</a>, which CI compiles,
+          generates and executes on every change.
+        </p>
+      </div>
+    </div>
+  </section>
+
+  <section id="who" class="border-t border-[var(--border)] py-14">
+    <SectionHeader
+      eyebrow="02 / Who it is for"
+      title="Three kinds of team, and one kind that should wait"
+      lede="A modelling language is a long commitment. It is fairer to say who will get value from this one now, and who will not."
+    />
+
+    <div class="mt-10 grid gap-6 md:grid-cols-3">
+      <div class="border-t-2 border-[var(--border-strong)] pt-5">
+        <h3 class="font-display text-lg font-semibold text-[var(--text)]">
+          Teams whose domain is the hard part
+        </h3>
+        <p class="mt-3 text-[0.9375rem] leading-[1.6] text-[var(--text-muted)]">
+          Lending, insurance, health, logistics, internal platforms: anywhere the rules are the
+          product, authorisation is part of correctness, and a decision table outliving its author is
+          a liability. These are the systems the surfaces were shaped against.
+        </p>
+      </div>
+      <div class="border-t-2 border-[var(--border-strong)] pt-5">
+        <h3 class="font-display text-lg font-semibold text-[var(--text)]">
+          Platform engineers who generate code
+        </h3>
+        <p class="mt-3 text-[0.9375rem] leading-[1.6] text-[var(--text-muted)]">
+          If you already write generators against a schema and you are tired of the schema being
+          whatever the last parser produced, the artifact contract is the interesting part. A backend
+          is a function; it needs no compiler changes and no grammar knowledge.
+        </p>
+      </div>
+      <div class="border-t-2 border-[var(--border-strong)] pt-5">
+        <h3 class="font-display text-lg font-semibold text-[var(--text)]">
+          People who need the model to outlive the tool
+        </h3>
+        <p class="mt-3 text-[0.9375rem] leading-[1.6] text-[var(--text-muted)]">
+          Artifacts are committed, byte-compared and validated without the compiler. A model is a file
+          in your repository, not a row in somebody's database — which is also why it can be reviewed
+          like code.
+        </p>
+      </div>
+    </div>
+
+    <div class="mt-10 max-w-[72ch]">
+      <Callout tone="warning" title="And who should wait">
+        <p>
+          If you need a visual modeller, a hosted registry, a plugin marketplace, or a wire format
+          that will not change this year, this is not it yet. If your system is a thin CRUD app with
+          no decisions, no authorisation model and no lifecycle, the modelling layers will cost more
+          than they return.
+        </p>
+      </Callout>
+    </div>
+  </section>
+
+  <section id="maturity" class="border-t border-[var(--border)] py-14">
+    <SectionHeader
+      eyebrow="03 / Maturity"
+      title="Pre-1.0, with the rules written down"
+      lede="Version numbers are a promise. This is the promise, in the terms the project actually publishes."
+    />
+
+    <div class="mt-8 grid gap-10 lg:grid-cols-[1.05fr_0.95fr]">
+      <Prose>
+        <p>
+          <strong>0.x does not promise stability.</strong> Grammar, artifact shape and CLI surface may
+          change at a minor version. What is promised is disclosure: every break lands in the
+          changelog with the golden-regeneration notes needed to see exactly what drifted.
+        </p>
+        <p>
+          <strong>1.0 freezes the wire formats.</strong> From then on, within a
+          <code>formatVersion</code>, evolution is additive only: new optional fields, no renames, no
+          changed meanings, no artifact that stops parsing. A <code>formatVersion</code> bump is the
+          only sanctioned break, and it has to be a major release with a migration note.
+        </p>
+        <p>
+          <strong>One exception has already been spent.</strong> The 0.3 release does not read 0.2
+          artifacts. When the product was renamed for 0.3, the provenance key, the instance
+          discriminator and the schema identifier all moved with it, so every artifact that depended
+          on them moved to <code>formatVersion 2</code>. That was the single allowed pre-1.0 wire
+          break; a saved older artifact fails <code>artifact check</code> with one named migration
+          message instead of a generic mismatch.
+        </p>
+        <p>
+          <strong>Support is bounded.</strong> Only the latest 0.x minor receives fixes, and there is
+          no commercial support contract, SLA or hosted service. Security reports have a private
+          channel and a stated response aim, not a guarantee:
+          <a href={`${repo}/blob/main/SECURITY.md`} rel="noopener">SECURITY.md</a>.
+        </p>
+        <p>
+          The full policy — what each artifact promises, what a release consists of — is
+          <a href={`${docs}/reference/versioning/`}>Versioning and release policy</a>.
+        </p>
+      </Prose>
+
+      <div class="h-fit rounded-md border border-[var(--border)] bg-[var(--surface-raised)] p-6">
+        <p class="font-mono text-xs uppercase tracking-[0.14em] text-[var(--text-muted)]">
+          Where the guarantees live
+        </p>
+        <ul class="mt-4 flex flex-col gap-3 text-[0.9375rem] leading-[1.6] text-[var(--text)]">
+          <li>
+            <a href={`${docs}/reference/versioning/`}>Versioning</a> — 0.x allowances, the 1.0 freeze,
+            the one pre-1.0 wire break.
+          </li>
+          <li>
+            <a href={`${docs}/reference/backends/`}>Backend contract</a> — what an artifact guarantees
+            to whoever consumes it.
+          </li>
+          <li>
+            <a href={`${docs}/engineering/verification/`}>Proof-obligation register</a> — each claim's
+            status and evidence pointer, with a review date on the rows that carry one.
+          </li>
+          <li>
+            <a href={`${docs}/engineering/semantics/`}>The claim ladder</a> — including everything the
+            project explicitly refuses to claim.
+          </li>
+          <li>
+            <a href={`${repo}/blob/main/CHANGELOG.md`} rel="noopener">CHANGELOG.md</a> — the drift
+            record itself.
+          </li>
+        </ul>
+      </div>
+    </div>
+  </section>
+
+  <section id="name" class="border-t border-[var(--border)] py-14">
+    <SectionHeader
+      eyebrow="04 / The name"
+      title="Phero Lang, two words"
+      lede="A spelling rule, stated once and held mechanically by the repository's own gate."
+    />
+    <div class="mt-8 max-w-[72ch]">
+      <Prose>
+        <p>
+          The product is <strong>Phero Lang</strong> — two words, never the bare token. The wordmark
+          and the command-line binary are <code>pherolang</code>, one word. The library crates are
+          <code>phero-*</code>; the repository is <code>yestechgroup/pherolang</code>; the origins are
+          <code>pherolang.com</code> and <code>docs.pherolang.com</code>.
+        </p>
+        <p>
+          This is not a style preference. The single token is already the name of unrelated projects,
+          so a search for it lands somewhere else; the compound is what this project can own. The rule
+          is enforced by a script in the continuous-integration gate, which fails on any revived
+          spelling outside a small, documented allowlist — the naming contract is
+          <a href={`${docs}/reference/naming/`}>docs/NAMING.md</a>.
+        </p>
+      </Prose>
+    </div>
+  </section>
+
+  <section id="work" class="border-t border-[var(--border)] py-14">
+    <SectionHeader
+      eyebrow="05 / Where the work happens"
+      title="In one repository, in the open"
+      lede="The compiler, the grammar, the documentation, the examples and this site are in the same Apache-2.0 tree. There is no private core."
+    />
+    <div class="mt-8 grid gap-10 lg:grid-cols-[1.05fr_0.95fr]">
+      <Prose>
+        <p>
+          Bug reports, failing test cases, documentation fixes and new backends are all welcome —
+          <a href={`${repo}/blob/main/CONTRIBUTING.md`} rel="noopener">CONTRIBUTING.md</a> is the path
+          from a clone to a merged pull request. The gate is one script;
+          <a href={`${repo}/blob/main/.github/workflows/ci.yml`} rel="noopener">CI runs the same one</a
+          >, so a green local run and a green CI run are the same thing.
+        </p>
+        <p>
+          The examples are not samples: <code>examples/</code> is compiled, generated and executed by
+          the test suite on every change. If a claim in the documentation stops being true of the
+          code, the build fails before the documentation can drift.
+        </p>
+      </Prose>
+      <div class="flex flex-col gap-3">
+        <Button href={repo} variant="secondary">The repository</Button>
+        <Button href={`${repo}/issues`} variant="secondary">Issues</Button>
+        <Button href={`${repo}/blob/main/CONTRIBUTING.md`} variant="ghost">Contributing</Button>
+        <Button href={`${repo}/blob/main/LICENSE`} variant="ghost">Apache-2.0 licence</Button>
+        <Button href={`${repo}/blob/main/CODE_OF_CONDUCT.md`} variant="ghost">Code of conduct</Button>
+      </div>
+    </div>
+  </section>
+
+  <section id="engage" class="border-t border-[var(--border)] py-14">
+    <SectionHeader
+      eyebrow="06 / How to engage"
+      title="File an issue, or model something with us"
+      lede="The fastest useful contribution is a failing case. The most useful conversation is a real domain the current surfaces do not describe well."
+    />
+    <div class="mt-8 grid gap-10 lg:grid-cols-[1.05fr_0.95fr]">
+      <Prose>
+        <p>
+          For a bug: a minimal reproducible model beats a description. Attach the smallest
+          <code>.mox</code> or design file that shows the problem, the output of
+          <code>pherolang --version</code>, and what you expected instead.
+        </p>
+        <p>
+          Design partnerships are how the next round of work gets chosen: a few teams at a time,
+          working with the maintainers on a real system. It is pre-1.0 tooling with no support
+          contract, so the terms are modest in both directions — what a partner gets and what we ask
+          is spelled out on <a href="/#design-partners">the homepage</a>.
+        </p>
+        <p>
+          Suspected vulnerabilities go through a
+          <a href={`${repo}/security/advisories/new`} rel="noopener">private advisory</a>, never a
+          public issue.
+        </p>
+      </Prose>
+      <div class="h-fit rounded-md border border-[var(--border)] bg-[var(--surface-raised)] p-6">
+        <p class="font-mono text-xs uppercase tracking-[0.14em] text-[var(--text-muted)]">
+          Design partners
+        </p>
+        <p class="mt-3 text-[0.9375rem] leading-[1.6] text-[var(--text)]">
+          Write to <a href={partnerMail}>{partnerEmail}</a> with a paragraph about what you are
+          modelling and what makes it hard. There is no form and no sales call.
+        </p>
+        <div class="mt-5">
+          <Button href={partnerMail}>Write to us</Button>
+        </div>
+      </div>
+    </div>
+
+    <div class="mt-12 flex flex-wrap items-center gap-3">
+      <Button href="/platform/overview" variant="secondary">Platform overview</Button>
+      <Button href="/architecture" variant="secondary">Architecture</Button>
+      <Button href="/getting-started" variant="ghost">Get started</Button>
+    </div>
+  </section>
+</Base>

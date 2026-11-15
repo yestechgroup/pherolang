@@ -51,9 +51,10 @@ copied to `dist/client/` by the build:
 Run from `site/` after `fnm use` (the pin is `site/.nvmrc`, Node `24.16.0`) and
 `pnpm install`. Wrangler resolves to `4.162.0` here.
 
-**Both apps build.** `pnpm -C phero-web build` emits 3 pages plus
-`sitemap-index.xml`; `pnpm -C phero-docs build` emits 24 pages, a
-`404.html`, a Pagefind index and its own sitemap. Both write `dist/client`.
+**Both apps build.** `pnpm -C phero-web build` emits 19 pages including its
+own `404.html`, plus `sitemap-index.xml`; `pnpm -C phero-docs build` emits 24
+pages, a `404.html`, a Pagefind index and its own sitemap. Both write
+`dist/client`.
 
 **The asset control files parse.** The build prints what the asset server
 accepted, so a pattern it cannot read is visible in the build log rather than
@@ -409,13 +410,13 @@ are console-only until a collector exists ([§9](#9-not-covered-yet)).
 ### Which directive had to be relaxed, and why
 
 Everything below is measured against the built HTML, not assumed. The marketing
-app builds 3 pages; the docs app builds 24.
+app builds 19 pages; the docs app builds 24.
 
 | Directive | Relaxation | Evidence |
 |---|---|---|
 | `script-src` (docs) | `'unsafe-inline'` | 10 inline scripts on every docs page (6 on `404.html`), 9 distinct script bodies across the 24 pages: Starlight's theme bootstrap, its theme-select sync, the search-shortcut hint, four module scripts that define custom elements (theme select, language select, sidebar pane, sidebar state), and two aria-hidden sidebar scroll-state scripts |
 | `script-src` (docs) | `'wasm-unsafe-eval'` | Pagefind 1.6 ships a wasm-bindgen worker; `pagefind/wasm.en.pagefind` gunzips to a `pagefind_dcd` header followed by a real wasm module. Without the directive the browser refuses to compile it and site search is dead |
-| `script-src` (marketing) | **none** — `'self'` only | 0 inline scripts across the 3 pages the app builds today. The graph island the plan adds is a same-origin module under `/_astro/`, which `'self'` covers |
+| `script-src` (marketing) | **none** — `'self'` only | 0 inline scripts across the 19 pages. The one client island (`/demo`) is a same-origin module under `/_astro/` — 1,793 bytes gzipped — and the graph's data rides in an inert `<script type="application/json">` block, which CSP does not execute. Keep it that way: a `<script is:inline>` on this origin would be blocked in production |
 | `style-src` (both) | `'unsafe-inline'` | Docs: 6,050 inline `style` attributes across 24 pages, up to 833 on one page — Starlight/Expressive Code writes per-token colour variables (`--0`, `--1`), tree depth (`--depth`) and icon sizes (`--sl-icon-size`) as attributes. Marketing: 3, on `install`/`getting-started` (callout accents). An inline `style` **attribute** can only be admitted wholesale or by `'unsafe-hashes'` plus a hash of each value, and 6,050 distinct values is not a hash list — so `'unsafe-inline'` is the only practical source |
 | `img-src` (both) | `data:` | The docs stylesheets embed their icons as `data:image/svg+xml` backgrounds; Pagefind does the same. A `data:` image cannot execute script in an `<img>`/CSS context |
 
@@ -517,75 +518,27 @@ adds the page should add the robots line and this note in its PR description.
 
 ---
 
-## 8. The marketing app has no 404 page (open item)
+## 8. The 404 pages
 
-Starlight generates `dist/client/404.html` for the docs app automatically. The
-marketing app does not: Astro only emits `404.html` when an
-`src/pages/404.astro` exists, and there is none.
+Both origins now answer an unknown path with a real page. Starlight generates
+`dist/client/404.html` for the docs app automatically; the marketing app emits
+one because `src/pages/404.astro` exists (Astro only emits `404.html` when that
+file is present).
 
-That matters because `wrangler.jsonc` sets
-`"not_found_handling": "404-page"`. Cloudflare looks for the nearest `404.html`
-in the assets directory; with none present, the observed behaviour on the built
-output is a `404` with a **0-byte body**:
+That file is load-bearing rather than cosmetic: `wrangler.jsonc` sets
+`"not_found_handling": "404-page"`, so Cloudflare serves the nearest
+`404.html`. Before it existed the observed behaviour on the built output was a
+`404` with a **0-byte body**:
 
 ```console
 $ curl -sS -o /dev/null -w '%{http_code} %{size_download}\n' http://127.0.0.1:8787/nope
 404 0
 ```
 
-The status code is right and the security headers are still applied, so this is a
-usability gap, not a safety one — but a visitor who mistypes a URL gets a blank
-page.
-
-**Fix (integrator-owned, not in this change):** add
-`site/phero-web/src/pages/404.astro`, which uses `Base` so it inherits the nav,
-footer and `<head>`:
-
-```astro
----
-import Base from '../layouts/Base.astro';
-import Prose from '@ui/Prose.astro';
-import Button from '@ui/Button.astro';
----
-
-<Base
-  title="Page not found — Phero Lang"
-  description="That page does not exist. Start from the homepage, the platform overview, or the documentation."
->
-  <div class="py-16 sm:py-24">
-    <p class="font-mono text-xs uppercase tracking-[0.2em] text-[var(--text-muted)]">Error 404</p>
-    <h1 class="mt-6 max-w-[26ch] font-display text-display-2 font-semibold text-balance">
-      That page does not exist.
-    </h1>
-    <Prose class="mt-6">
-      <p>
-        The URL was mistyped, or the page moved. The homepage, the
-        <a href="/platform">platform overview</a> and the
-        <a href="https://docs.pherolang.com/">documentation</a> all still work.
-      </p>
-    </Prose>
-    <div class="mt-8 flex flex-wrap gap-3">
-      <Button href="/">Go to the homepage</Button>
-      <Button href="https://docs.pherolang.com/" variant="secondary">Read the docs</Button>
-    </div>
-  </div>
-</Base>
-```
-
-The classes and components are the ones the other pages already use
-(`SectionHeader`, `Prose`, `Button` from `@ui`, colours via the
-`packages/tokens` custom properties), so the 404 does not invent a second visual
-language.
-
-Astro writes it to `dist/client/404.html` and `not_found_handling` starts serving
-it with no configuration change. This is deliberately **not** a
-`public/404.html`: that file would be hand-maintained chrome that drifts from the
-layout the moment the nav changes.
-
-The docs app needs nothing: its 404 already returns a 10.7 KB Starlight page with
-the full header stack.
-
----
+The status code and security headers were always correct, so it was a usability
+gap rather than a safety one — a visitor who mistyped a URL got a blank page.
+Both pages are `noindex`, so a 404 can never compete with a real route in search
+results.
 
 ## 9. Not covered yet
 

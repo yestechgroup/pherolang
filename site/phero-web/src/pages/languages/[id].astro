@@ -1,0 +1,57 @@
+---
+/**
+ * /languages/<id> — one page per surface, generated from the catalogue.
+ *
+ * The route table is `@data/surfaces.json`, via the catalogue module: nine
+ * entries, in the order the generated file lists them. `getStaticPaths`
+ * therefore cannot disagree with the surfaces table, the status rows or the
+ * backend names — they are the same source of truth.
+ */
+import type { GetStaticPaths } from 'astro';
+
+import Base from '../../layouts/Base.astro';
+import LanguagePage from '../../layouts/LanguagePage.astro';
+import {
+  docsUrl,
+  languages,
+  neighbours,
+  surfaceById,
+  type LanguageEntry,
+  type Surface,
+} from '../../content/languages/catalog';
+
+interface Props {
+  surface: Surface;
+  entry: LanguageEntry;
+  /** The rendered docs URL for the surface's reference page. */
+  docsUrl: string;
+  prev: Surface | null;
+  next: Surface | null;
+}
+
+export const getStaticPaths = (() =>
+  languages.map((entry) => {
+    const surface = surfaceById(entry.id);
+    return {
+      params: { id: surface.id },
+      props: { surface, entry, docsUrl: docsUrl(surface), ...neighbours(surface.id) },
+    };
+  })) satisfies GetStaticPaths;
+
+const { surface, entry, docsUrl: reference, prev, next } = Astro.props;
+
+const title = `${surface.extension} — ${surface.name} — Phero Lang`;
+// The summary is authored in markdown, so strip the inline-code backticks
+// before it becomes a meta description.
+const description = `${surface.summary.replaceAll('`', '')} — the ${surface.extension} surface of Phero Lang.`;
+---
+
+<Base title={title} description={description}>
+  <LanguagePage
+    surface={surface}
+    entry={entry}
+    docsUrl={reference}
+    prev={prev}
+    next={next}
+  />
+</Base>

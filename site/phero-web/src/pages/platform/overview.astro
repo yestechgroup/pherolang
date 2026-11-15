@@ -1,0 +1,311 @@
+---
+/**
+ * /platform/overview — capabilities in product language, not a crate tour.
+ *
+ * The crate tour lives on /architecture, which reads the real manifests. This
+ * page answers a different question: what does the toolchain *do*, and where
+ * can I see it doing it? Every "where to see it" pointer is a surface page, a
+ * page in this app, or a documentation URL that `sync-model` guarantees exists.
+ *
+ * Counts come from `@data/surfaces.json` and `@data/evidence.json`; the six
+ * sections are authored prose because a capability's meaning is a sentence, not
+ * a field.
+ */
+import Base from '../../layouts/Base.astro';
+import Breadcrumb from '@ui/Breadcrumb.astro';
+import SectionHeader from '@ui/SectionHeader.astro';
+import Prose from '@ui/Prose.astro';
+import Callout from '@ui/Callout.astro';
+import Stat from '@ui/Stat.astro';
+import StatusPill from '@ui/StatusPill.astro';
+import Button from '@ui/Button.astro';
+
+import surfaces from '@data/surfaces.json';
+import evidence from '@data/evidence.json';
+
+const docs = 'https://docs.pherolang.com';
+
+type SurfaceStatus = 'implemented' | 'validated';
+
+const surfaceById = new Map(surfaces.surfaces.map((row) => [row.id, row]));
+
+/**
+ * One surface, cited by a capability. The status is validated here rather than
+ * cast: the vocabulary is fixed by `site/data/status.json`, and a value the pill
+ * does not know is a build error, not an unstyled label.
+ */
+function cited(id: string) {
+  const found = surfaceById.get(id);
+  if (!found) throw new Error(`platform/overview: surfaces.json has no surface '${id}'`);
+  const status = found.status;
+  if (status !== 'implemented' && status !== 'validated') {
+    throw new Error(`platform/overview: unknown status '${status}' for surface ${id}`);
+  }
+  return {
+    extension: found.extension,
+    backends: found.backends,
+    status: status as SurfaceStatus,
+  };
+}
+
+const backendCrates = [
+  ...new Set(surfaces.surfaces.flatMap((row) => row.backends)),
+].sort();
+
+/**
+ * The six capabilities. `links` are the surfaces and pages where the claim is
+ * checkable; `extension` is filled from the generated surface table so a card
+ * can never name a file extension the toolchain stopped producing.
+ */
+const capabilities = [
+  {
+    id: 'model',
+    title: 'Model',
+    claim: 'Structure, relationships and behaviour in one file.',
+    body: [
+      'A package declares classes, features, operations, enums, datatypes and vocabularies. Relation ends are declared as a pair, so the compiler can check that both sides agree. A derived feature has a body and no stored value; an operation body is written in the shared expression language.',
+      'The point is not notation. Every name inside an operation body is resolved and every expression is type-checked, so a misspelt feature is a diagnostic with a span, not a bug three layers down.',
+    ],
+    example:
+      'examples/support/support.mox declares a Ticket with a refundCents feature, a derived needsRefund predicate and two operations whose bodies are type-checked integer arithmetic.',
+    links: [
+      { href: '/languages/mox', label: '.mox — domain model' },
+      { href: '/getting-started', label: 'the five-minute walkthrough' },
+    ],
+    see: cited('mox'),
+  },
+  {
+    id: 'connect',
+    title: 'Connect',
+    claim: 'Every other surface imports the domain instead of restating it.',
+    body: [
+      'A design, a policy, a decision model, an event contract, a case and a deployment model all name the same classes. Imports are resolved by path, and the resolved content is handed to the compiler as pre-compiled artifacts or as source text — the compiler core itself never touches the filesystem or the network.',
+      'That is what makes cross-surface checking possible at all: the policy condition and the operation it guards are judged against one type index, not two.',
+    ],
+    example:
+      'examples/support/ is one import-connected application: support.ddd, support.actor, support.dmn, support.evt, support.uc, support.cmmn, support.ifml and support.deploy all sit on support.mox.',
+    links: [
+      { href: '/languages/ddd', label: '.ddd — application design' },
+      { href: '/architecture', label: 'the graph across all surfaces' },
+    ],
+    see: cited('ddd'),
+  },
+  {
+    id: 'validate',
+    title: 'Validate',
+    claim: 'Checks that span surfaces, not just within one.',
+    body: [
+      'Within a surface, validation is ordinary compiler work: duplicate names, unresolved references, opposite pairing, inheritance and actor cycles, state machines closed over their enum, guards that type as boolean.',
+      'Across surfaces, one more pass checks the wiring between artifacts: a granted capability is carried by an operation or a search, an interaction action binds to exactly one service operation, a subscription consumer names a declared deployment component, and an operation\'s emitted event is declared in some event contract. The two capability joins resolve during compilation; this artifact-level pass is their lint channel.',
+    ],
+    example:
+      'support.actor grants RaiseRefund to Agent with a condition over Ticket.refundCents; the condition is checked against the domain class, and the grant is checked against the operations the design declares.',
+    links: [
+      { href: '/languages/actor', label: '.actor — authorisation' },
+      { href: `${docs}/reference/diagnostics/`, label: 'the diagnostic codes' },
+    ],
+    see: cited('actor'),
+  },
+  {
+    id: 'generate',
+    title: 'Generate',
+    claim: 'Backends read the artifact. They never read the grammar.',
+    body: [
+      'A backend is a pure function from a compiled artifact to output. The Rust backend writes arena-based model code, and an operation body written in Rust is emitted verbatim; the JSON Schema backend writes the wire and API schemas; the Cedar backend writes a policy set and an entity schema; the DMN and CMMN backends write the model their engines evaluate or execute.',
+      'Because the input is a versioned JSON contract, a backend can be written in another language, published outside this repository, and pinned by its formatVersion field — no compiler changes required, and no way for it to depend on a parser detail.',
+    ],
+    example:
+      'pherolang gen rust examples/support/support.mox -o support-gen writes Rust from the same source that pherolang ir serialises, and the two cannot disagree about the model shape.',
+    links: [
+      { href: '/languages/dmn', label: '.dmn — decisions an engine runs' },
+      { href: `${docs}/reference/backends/`, label: 'the backend contract' },
+    ],
+    see: cited('dmn'),
+  },
+  {
+    id: 'verify',
+    title: 'Verify',
+    claim: 'Claims with an evidence class, and a review date where one is required.',
+    body: [
+      'The proof-obligation register enumerates what the compiler claims about its own structures, and what backs each claim: a proof obligation, a test, a code pointer, an argued residue, or a declared assumption. The statuses are proved, tested, argued and assumed — and each row is required to state the weakest honest one.',
+      'The verify command turns that into a receipt: the closure of source files it was checked over, the artifact hashes, and the register rows. A receipt validates offline, with no register, no models and no prover toolchain, which is what makes it useful to somebody who does not trust this machine.',
+    ],
+    example:
+      'examples/artifacts/support.receipt.json covers the support desk: every source in the closure hashed, every artifact hashed, and the register stamped with its own digest.',
+    links: [
+      { href: `${docs}/engineering/verification/`, label: 'the register, row by row' },
+      { href: `${docs}/engineering/receipts/`, label: 'what a receipt proves' },
+    ],
+    see: null,
+  },
+  {
+    id: 'extend',
+    title: 'Extend',
+    claim: 'Three extension points, none of them a fork.',
+    body: [
+      'A backend: consume the artifact, publish the output — no compiler change at all. A surface: a lexer, a grammar, a compiler stage and an artifact type, added as one table row rather than a second pipeline. A pattern library: modules composed into flows by reference, so a shared view is imported rather than pasted.',
+      'The first is the cheapest: an out-of-tree backend is a program that reads JSON. The other two are ordinary work in a repository you can clone.',
+    ],
+    example:
+      'patterns/ifml holds domain-agnostic interaction modules that examples/support/support.ifml composes with use — one library, many flows, one compiled manifest.',
+    links: [
+      { href: '/languages/ifml', label: '.ifml — interaction flows' },
+      { href: '/architecture', label: 'how a surface is wired in' },
+    ],
+    see: cited('ifml'),
+  },
+] as const;
+---
+
+<Base
+  title="Platform overview — Phero Lang"
+  description="What the Phero Lang toolchain does: model, connect, validate, generate, verify and extend — with the surface that demonstrates each capability."
+>
+  <Breadcrumb
+    trail={[
+      { href: '/', label: 'Home' },
+      { href: '/platform/overview', label: 'Platform overview' },
+    ]}
+  />
+
+  <section class="pb-12 pt-6 sm:pt-10">
+    <p class="font-mono text-xs uppercase tracking-[0.2em] text-[var(--text-muted)]">
+      Platform / overview
+    </p>
+    <h1 class="mt-5 max-w-[24ch] font-display text-display-1 font-semibold text-balance">
+      Capabilities, not crates.
+    </h1>
+    <p class="mt-6 max-w-[62ch] text-lg leading-[1.6] text-[var(--text-muted)] text-pretty">
+      Six things the toolchain does, in the order you would meet them. Each section says what the
+      capability means, gives a real example from the repository, and points at the surface or page
+      where you can check it.
+    </p>
+
+    <div class="mt-12 grid grid-cols-2 gap-6 border-t border-[var(--border)] pt-8 sm:grid-cols-3">
+      <Stat value={String(surfaces.surfaces.length)} label="Surfaces" />
+      <Stat value={String(evidence.counts.crates)} label="Crates" />
+      <Stat value={String(backendCrates.length)} label="Target backends" />
+    </div>
+  </section>
+
+  <div class="border-t border-[var(--border)]">
+    {
+      capabilities.map((capability) => (
+        <section class="border-b border-[var(--border)] py-14">
+          <div class="grid gap-8 lg:grid-cols-[0.9fr_1.1fr]">
+            <div>
+              <p class="font-mono text-xs uppercase tracking-[0.16em] text-[var(--text-muted)]">
+                {capability.id}
+              </p>
+              <h2 class="mt-3 font-display text-display-3 font-semibold text-[var(--text)]">
+                {capability.title}
+              </h2>
+              <p class="mt-4 text-lg leading-[1.5] text-[var(--text)] text-pretty">
+                {capability.claim}
+              </p>
+              {capability.see && (
+                <div class="mt-5 flex flex-wrap items-center gap-3">
+                  <span class="font-mono text-xs tracking-[0.12em] text-[var(--text-muted)]">
+                    {capability.see.extension}
+                  </span>
+                  <StatusPill status={capability.see.status} backends={capability.see.backends} />
+                </div>
+              )}
+            </div>
+
+            <div>
+              <Prose>
+                {capability.body.map((paragraph) => (
+                  <p>{paragraph}</p>
+                ))}
+              </Prose>
+              <div class="mt-6 rounded-md border border-[var(--border)] bg-[var(--surface-raised)] p-5">
+                <p class="font-mono text-xs uppercase tracking-[0.14em] text-[var(--text-muted)]">
+                  In the repository
+                </p>
+                <p class="mt-2 text-[0.9375rem] leading-[1.6] text-[var(--text)]">
+                  {capability.example}
+                </p>
+              </div>
+              <ul class="mt-5 flex flex-col gap-2">
+                {capability.links.map((link) => (
+                  <li>
+                    <a
+                      href={link.href}
+                      class="rounded-xs text-[0.9375rem] text-[var(--link)] underline decoration-[color-mix(in_oklab,var(--link)_45%,transparent)] underline-offset-4 hover:decoration-[var(--link)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--focus)]"
+                    >
+                      {link.label}
+                    </a>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          </div>
+        </section>
+      ))
+    }
+  </div>
+
+  <section id="invariant" class="py-16">
+    <SectionHeader
+      eyebrow="The invariant"
+      title="Backends consume only the versioned IR artifact."
+      lede="This is the one rule the rest of the design hangs on. It is also the reason a backend can be written by somebody who has never read this compiler."
+    />
+
+    <div class="mt-8 grid gap-8 lg:grid-cols-[1.05fr_0.95fr]">
+      <Prose>
+        <p>
+          Parsing, name resolution, validation and lowering happen once, in the compiler. What leaves
+          that boundary is <code>phero_ir::Model</code> — or the artifact of the surface you compiled —
+          serialized as JSON with camelCase keys, adjacent tagging and a
+          <code>formatVersion</code> gate. A backend is handed that value. It is never handed an AST,
+          and it cannot reach one.
+        </p>
+        <p>Three things follow, and each one is checkable today:</p>
+        <ul>
+          <li>
+            <code>pherolang artifact check</code> validates a serialized artifact with no compiler,
+            no model and no import resolution in the loop — the artifact is a complete description.
+          </li>
+          <li>
+            An in-tree generator and an out-of-tree consumer cannot disagree about a model's shape,
+            because there is only one shape to read.
+          </li>
+          <li>
+            A change to a grammar cannot silently change generated code: it would have to change the
+            artifact, and the artifact is pinned by byte-compared goldens.
+          </li>
+        </ul>
+      </Prose>
+
+      <Callout title="Why the boundary is a wire format">
+        <p>
+          A JSON contract versions independently of the compiler that wrote it.
+          <code>pheroVersion</code> records provenance — which build emitted the file.
+          <code>formatVersion</code> is the only compatibility gate; a reader accepts that number or
+          refuses the file. Evolve the artifact additively and old readers keep working; break it and
+          the number has to move — the promise 1.0 freezes, and the shape of every release after it.
+        </p>
+        <p class="mt-3">
+          <a href={`${docs}/reference/versioning/`}>Versioning and release policy</a> ·
+          <a href={`${docs}/reference/backends/`}>the backend contract</a>
+        </p>
+      </Callout>
+    </div>
+  </section>
+
+  <section id="next" class="border-t border-[var(--border)] py-16">
+    <SectionHeader
+      eyebrow="Continue"
+      title="Where to look next"
+      lede="The walkthrough follows one file end to end; the catalogue opens each surface on its own; the architecture page shows how the pieces are wired."
+    />
+    <div class="mt-8 flex flex-wrap items-center gap-3">
+      <Button href="/platform/how-it-works">How it works, step by step</Button>
+      <Button href="/languages" variant="secondary">The surface catalogue</Button>
+      <Button href="/architecture" variant="ghost">Architecture</Button>
+      <Button href={`${docs}/reference/language/`} variant="ghost">Language reference</Button>
+    </div>
+  </section>
+</Base>

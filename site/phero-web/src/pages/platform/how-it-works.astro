@@ -1,0 +1,401 @@
+---
+/**
+ * /platform/how-it-works — the pipeline as a walkthrough.
+ *
+ * One real file, followed all the way: `examples/support/support.mox` through
+ * `check`, `ir` and two generators.
+ *
+ * Two sources of truth, neither of them prose:
+ *   * every shell line comes from `src/data/commands.json`, which
+ *     `scripts/check-commands.mjs` executes against the released binary — the
+ *     ids are looked up, so a misspelt id fails the build;
+ *   * the artifact excerpt is built from `@data/artifacts/mox.json`, so the
+ *     `formatVersion` and `pheroVersion` on this page are the bytes the released
+ *     compiler actually wrote, not a remembered example.
+ */
+import Base from '../../layouts/Base.astro';
+import Breadcrumb from '@ui/Breadcrumb.astro';
+import SectionHeader from '@ui/SectionHeader.astro';
+import Prose from '@ui/Prose.astro';
+import Callout from '@ui/Callout.astro';
+import CodeBlock from '@ui/CodeBlock.astro';
+import Button from '@ui/Button.astro';
+
+import surfaces from '@data/surfaces.json';
+import coreIr from '@data/artifacts/mox.json';
+import commands from '../../data/commands.json';
+
+const docs = 'https://docs.pherolang.com';
+const repo = 'https://github.com/yestechgroup/pherolang';
+const sourceFile = 'examples/support/support.mox';
+
+// ---------------------------------------------------------------------------
+// Commands — the gate's list, looked up by id.
+// ---------------------------------------------------------------------------
+interface Command {
+  id: string;
+  label: string;
+  run: string;
+  expectStdout?: string;
+  network?: boolean;
+}
+const allCommands: Command[] = commands.commands;
+
+function command(id: string): Command {
+  const found = allCommands.find((entry) => entry.id === id);
+  if (!found) throw new Error(`commands.json has no command '${id}'`);
+  return found;
+}
+const prints = (id: string) => command(id).expectStdout ?? '';
+
+// ---------------------------------------------------------------------------
+// The artifact's provenance, read from the committed artifact. Only the fields
+// that are present are shown; `packages` is elided because the body is the rest
+// of the file, not a claim.
+// ---------------------------------------------------------------------------
+const provenance = `{
+  "formatVersion": ${coreIr.formatVersion},
+  "pheroVersion": "${coreIr.pheroVersion}",
+  "packages": [ … ]
+}`;
+
+const corePackage = coreIr.packages[0];
+if (!corePackage) throw new Error('how-it-works: the Core IR artifact has no packages');
+
+// ---------------------------------------------------------------------------
+// Backends. The set is derived from `surfaces.json` (every backend any surface
+// declares); the descriptions are authored, and a backend with no description
+// is a build error rather than an empty table cell.
+// ---------------------------------------------------------------------------
+const BACKENDS: Record<string, { reads: string; emits: string }> = {
+  'phero-backend-rust': { reads: 'Core IR', emits: 'arena-based Rust model code' },
+  'phero-backend-jsonschema': { reads: 'Core IR', emits: 'JSON Schema — wire and api profiles' },
+  'phero-backend-cedar': { reads: 'Core IR + ActorModel', emits: 'Cedar policies and an entity schema' },
+  'phero-backend-dmn': { reads: 'DmnModel', emits: 'the model the dsntk engine evaluates' },
+  'phero-backend-cmmn': { reads: 'CmmnModel + domain', emits: 'a cmmn-rs CaseDefinition' },
+};
+
+const backendRows = [...new Set(surfaces.surfaces.flatMap((surface) => surface.backends))]
+  .sort()
+  .map((crate) => {
+    const described = BACKENDS[crate];
+    if (!described) {
+      throw new Error(`how-it-works: no description for backend '${crate}' — add one to BACKENDS`);
+    }
+    return { crate, ...described };
+  });
+
+/**
+ * Lines 3–32 of the example, verbatim: the state enum, the two classes it
+ * relates, and the derived predicate and operations that make the file a
+ * *model* and not a schema.
+ */
+const domainExcerpt = `enum TicketState {
+    Open as "open" = 0
+    InProgress as "in_progress" = 1
+    Resolved as "resolved" = 2
+}
+
+class User {
+    id readonly String userId
+    String name
+    boolean active
+    refers Ticket[] assignedTickets opposite assignee
+}
+
+class Ticket {
+    id readonly String ticketNo
+    String title
+    boolean internal
+    int refundCents
+    TicketState state
+    refers User[0..1] assignee opposite assignedTickets
+    derived boolean needsRefund {
+        expr { refundCents > 0 }
+    }
+    op boolean raiseRefund(int cents) {
+        expr { refundCents + cents <= 5000 }
+    }
+    op boolean approveRefund(int cents) {
+        expr { refundCents + cents <= 100000 }
+    }
+}`;
+---
+
+<Base
+  title="How it works — Phero Lang"
+  description="One .mox file, followed through the pipeline: check, compile to Core IR, and generate Rust or JSON Schema — with the artifact's real provenance fields."
+>
+  <Breadcrumb trail={[{ href: '/', label: 'Home' }, { href: '/platform/how-it-works', label: 'How it works' }]} />
+
+  <section class="pb-12 pt-6 sm:pt-10">
+    <p class="font-mono text-xs uppercase tracking-[0.2em] text-[var(--text-muted)]">
+      Platform / how it works
+    </p>
+    <h1 class="mt-5 max-w-[22ch] font-display text-display-1 font-semibold text-balance">
+      From one file to generated code.
+    </h1>
+    <p class="mt-6 max-w-[62ch] text-lg leading-[1.6] text-[var(--text-muted)] text-pretty">
+      One example file, quoted verbatim, followed through every stage the toolchain has. Nothing
+      below is illustrative: the shell lines are executed by CI against the released binary, and the
+      artifact fields are read from the artifact this repository commits.
+    </p>
+    <p
+      class="mt-10 border-t border-[var(--border)] pt-6 font-mono text-xs uppercase tracking-[0.18em] text-[var(--text-muted)]"
+    >
+      SOURCE → CHECK → CORE IR → BACKENDS → OUTPUT
+    </p>
+  </section>
+
+  <section id="source" class="border-t border-[var(--border)] py-14">
+    <SectionHeader
+      eyebrow="01 / The source"
+      title="A domain, declared once"
+      lede="A .mox file declares a package and what lives in it. Every other surface reads this file rather than restating it."
+    />
+
+    <Prose class="mt-8">
+      <p>
+        This is <a href={`${repo}/blob/main/${sourceFile}`} rel="noopener"><code>{sourceFile}</code></a
+        >, lines 3–32, unchanged:
+      </p>
+    </Prose>
+    <CodeBlock lang="mox" filename={`${sourceFile} · lines 3–32`} code={domainExcerpt} />
+
+    <Prose class="mt-6">
+      <p>Four lines carry the design decisions:</p>
+      <ul>
+        <li>
+          <code>refers User[0..1] assignee opposite assignedTickets</code> declares both ends of one
+          relation. The compiler checks that the two ends agree, so a relation cannot be half
+          described.
+        </li>
+        <li>
+          <code>derived boolean needsRefund</code> is computed, not stored: it has a body and no
+          stored value, and the generators know the difference.
+        </li>
+        <li>
+          <code>op boolean raiseRefund(int cents)</code> is an operation whose body is written in the
+          shared expression language and type-checked against <code>int</code> arithmetic and the
+          class's own features.
+        </li>
+        <li>
+          <code>TicketState</code> is a closed enum. A state machine declared in a design over this
+          class has to use its literals — which is the next surface's problem, not this file's.
+        </li>
+      </ul>
+    </Prose>
+  </section>
+
+  <section id="check" class="border-t border-[var(--border)] py-14">
+    <SectionHeader
+      eyebrow="02 / Check"
+      title="The compiler refuses to be surprised"
+      lede="Parsing, resolution, validation and type-checking all happen before a byte of artifact is written. A file that fails any of them produces no model at all."
+    />
+
+    <div class="mt-8 max-w-[78ch]">
+      <CodeBlock lang="sh" filename="bash" runnable code={command('check').run} />
+      <Prose>
+        <p>
+          It prints <code>{prints('check')}</code> and nothing else. An error blocks the model
+          outright: an unresolved type, a duplicated declaration, an opposite that does not pair, or a
+          guard that does not type as boolean all end the run with no artifact written.
+        </p>
+        <p>
+          Each diagnostic carries a stable code allocated in one central registry, so a code in an
+          issue stays the same code in the editor:
+        </p>
+      </Prose>
+      <CodeBlock lang="sh" filename="bash" runnable code={command('explain').run} />
+      <Prose>
+        <p>
+          prints <code>{prints('explain')}</code> — the meaning of the code, not a mangled message
+          number. <a href={`${docs}/reference/diagnostics/`}>The full registry</a> is generated from
+          the compiler's own table.
+        </p>
+      </Prose>
+    </div>
+  </section>
+
+  <section id="artifact" class="border-t border-[var(--border)] py-14">
+    <SectionHeader
+      eyebrow="03 / Compile"
+      title="The artifact is the product"
+      lede="Lowering happens once. What leaves the compiler is a versioned JSON document that describes the model completely enough to be read without the model."
+    />
+
+    <div class="mt-8 grid gap-10 lg:grid-cols-[0.95fr_1.05fr]">
+      <div>
+        <CodeBlock lang="sh" filename="bash" runnable code={command('ir').run} />
+        <Prose>
+          <p>
+            The first command writes the artifact and prints nothing. The second reads it back with no
+            compiler in the loop — no model opened, no import resolved, no grammar involved:
+          </p>
+        </Prose>
+        <CodeBlock lang="sh" filename="bash" runnable code={command('artifact-check').run} />
+        <Prose>
+          <p>It prints <code>{prints('artifact-check')}</code>.</p>
+        </Prose>
+      </div>
+
+      <div>
+        <CodeBlock lang="json" filename="support.phero.json · head" code={provenance} />
+        <Prose>
+          <p>
+            Two fields, two jobs. <code>formatVersion</code> is the compatibility gate: a reader
+            accepts that number or refuses the file, and it is the only thing a reader may gate on.
+            <code>pheroVersion</code> is provenance — which build of
+            <code>pherolang</code> wrote these bytes — and nothing more.
+          </p>
+          <p>
+            The package body follows (<code>{corePackage.name}</code> here). Evolution is additive: a
+            new optional field can appear without changing the bytes of a model that does not use it,
+            because the goldens are compared byte for byte. From 1.0 that becomes a promise — no
+            golden changes without a <code>formatVersion</code> bump — and it is what lets a reader
+            pinned to <code>formatVersion {coreIr.formatVersion}</code> keep reading later artifacts
+            while the number stays where it is.
+          </p>
+        </Prose>
+        <p class="mt-4 text-sm leading-[1.6] text-[var(--text-muted)]">
+          Every artifact this site talks about is committed under
+          <code>site/data/artifacts/</code>, one per surface, and regenerated by CI from the released
+          binary. <a href={`${docs}/reference/versioning/`}>Versioning and release policy</a>.
+        </p>
+      </div>
+    </div>
+  </section>
+
+  <section id="backends" class="border-t border-[var(--border)] py-14">
+    <SectionHeader
+      eyebrow="04 / Backends"
+      title="Pure functions from artifact to output"
+      lede="Each backend is handed a compiled value. None of them sees a syntax tree, and none of them can: the compiler does not hand one out."
+    />
+
+    <div class="mt-8 overflow-x-auto rounded-md border border-[var(--border)]">
+      <table class="w-full min-w-[42rem] border-collapse text-left text-[0.9375rem]">
+        <caption class="sr-only">
+          The in-tree backends: the crate, the artifact it reads, and the output it emits.
+        </caption>
+        <thead>
+          <tr class="border-b border-[var(--border-strong)]">
+            <th
+              scope="col"
+              class="px-4 py-3 font-mono text-xs font-medium uppercase tracking-[0.12em] text-[var(--text-muted)]"
+            >
+              Backend
+            </th>
+            <th
+              scope="col"
+              class="px-4 py-3 font-mono text-xs font-medium uppercase tracking-[0.12em] text-[var(--text-muted)]"
+            >
+              Reads
+            </th>
+            <th
+              scope="col"
+              class="px-4 py-3 font-mono text-xs font-medium uppercase tracking-[0.12em] text-[var(--text-muted)]"
+            >
+              Emits
+            </th>
+          </tr>
+        </thead>
+        <tbody>
+          {
+            backendRows.map((row) => (
+              <tr class="border-b border-[var(--border)] last:border-b-0">
+                <th scope="row" class="whitespace-nowrap px-4 py-3 text-left font-mono text-[0.8125rem] font-medium text-[var(--text)]">
+                  {row.crate}
+                </th>
+                <td class="px-4 py-3 text-[var(--text-muted)]">{row.reads}</td>
+                <td class="px-4 py-3 text-[var(--text)]">{row.emits}</td>
+              </tr>
+            ))
+          }
+        </tbody>
+      </table>
+    </div>
+
+    <div class="mt-8 max-w-[78ch]">
+      <Callout title="What a backend is allowed to know">
+        <p>
+          The artifact, and the target language. An in-tree generator and an out-of-tree one are the
+          same kind of program, which is why the out-of-tree contract is a document rather than an
+          SDK: <a href={`${docs}/reference/backends/`}>docs/BACKENDS.md</a> describes the value that
+          arrives and the invariants it satisfies.
+        </p>
+      </Callout>
+    </div>
+  </section>
+
+  <section id="output" class="border-t border-[var(--border)] py-14">
+    <SectionHeader
+      eyebrow="05 / Output"
+      title="Two targets, one shape"
+      lede="The same source, generated twice. Neither run reads the other's output, and neither one can invent a field the model does not have."
+    />
+
+    <div class="mt-8 grid gap-10 lg:grid-cols-2">
+      <div>
+        <CodeBlock lang="sh" filename="bash" runnable code={command('gen-rust').run} />
+        <Prose>
+          <p>
+            It prints <code>{prints('gen-rust')}</code>: arena-based Rust model code, generated from
+            the compiled model rather than from the syntax tree. An <code>expr</code> operation body
+            is parsed, typed and lowered at generation time; a <code>rust</code> body is emitted
+            verbatim, by definition trusted code.
+          </p>
+        </Prose>
+      </div>
+      <div>
+        <CodeBlock lang="sh" filename="bash" runnable code={command('gen-json-schema').run} />
+        <Prose>
+          <p>
+            It prints <code>{prints('gen-json-schema')}</code>. The wire profile is the JSON contract
+            the canonical instance documents are validated against; the api profile is a flattened DTO
+            projection for OpenAPI-style use, over the same model.
+          </p>
+        </Prose>
+      </div>
+    </div>
+
+    <div class="mt-10 grid gap-8 lg:grid-cols-[1.05fr_0.95fr]">
+      <Prose>
+        <p>
+          Cedar policy is the third target from this same domain, and it needs one more file: an
+          <code>.actor</code> surface that imports the domain and declares who may do what under which
+          condition. Policy is a separate artifact and a separate dimension — it never appears in the
+          domain model or in its schemas.
+        </p>
+        <p>
+          The two artifacts are then checked against each other — which is the point of writing
+          policy in the same language as the model:
+          <a href="/languages/actor">the authorisation surface</a> has the shape of that file, and
+          <a href="/platform/overview">the platform overview</a> explains the cross-surface pass.
+        </p>
+      </Prose>
+      <Callout title="What did not happen">
+        <p>
+          No backend parsed a source file. No generator saw an AST. No artifact was written without a
+          <code>formatVersion</code>. Those three sentences are the pipeline — everything else on this
+          page is a consequence of them.
+        </p>
+      </Callout>
+    </div>
+  </section>
+
+  <section id="next" class="border-t border-[var(--border)] py-14">
+    <SectionHeader
+      eyebrow="Continue"
+      title="Run it yourself"
+      lede="The install page has the archive for your platform; the walkthrough runs these same commands end to end from a clean checkout, with the exact output of each one."
+    />
+    <div class="mt-8 flex flex-wrap items-center gap-3">
+      <Button href="/getting-started">Get started</Button>
+      <Button href="/install" variant="secondary">Install</Button>
+      <Button href="/languages" variant="ghost">The surface catalogue</Button>
+      <Button href="/architecture" variant="ghost">Architecture</Button>
+    </div>
+  </section>
+</Base>
