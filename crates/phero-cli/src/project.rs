@@ -128,6 +128,90 @@ impl Project {
         self.sources.get(key).map(String::as_str)
     }
 
+    /// The tree-level `.ddd` problems a directory batch must report before
+    /// compiling: a fragment no root reaches, a fragment reached by two
+    /// roots, and two roots with one authored application name (DD8).
+    pub(crate) fn ddd_tree_errors(&mut self) -> Vec<String> {
+        let ddd_keys: Vec<String> = self
+            .sources
+            .keys()
+            .filter(|key| SurfaceKind::of_path(Path::new(key)) == Some(SurfaceKind::Ddd))
+            .cloned()
+            .collect();
+        let mut roots: Vec<(String, String)> = Vec::new(); // (path, app name)
+        for key in &ddd_keys {
+            let Some(source) = self.sources.get(key) else {
+                continue;
+            };
+            if let Some(ast) = phero_syntax::parse_ddd(source).ast {
+                if let Some(application) = ast.application {
+                    roots.push((key.clone(), application.name.text));
+                }
+            }
+        }
+        let mut errors = Vec::new();
+        let mut owner: BTreeMap<String, Vec<String>> = BTreeMap::new();
+        for (root, _) in &roots {
+            let source = self.sources.get(root).cloned().unwrap_or_default();
+            let mut fetch = |resolved: &str| self.fetch(resolved).ok();
+            let gathered = phero_driver::project::gather_ddd_fragments(root, &source, &mut fetch);
+            for (fragment, _) in gathered.fragments {
+                owner.entry(fragment).or_default().push(root.clone());
+            }
+            for missing in gathered.missing {
+                errors.push(format!(
+                    "imported design fragment \"{missing}\" was not provided"
+                ));
+            }
+            for cycle in gathered.cycles {
+                errors.push(format!("design import cycle through {cycle}"));
+            }
+        }
+        for key in &ddd_keys {
+            if roots.iter().any(|(root, _)| root == key) {
+                continue;
+            }
+            match owner.get(key) {
+                None => errors.push(format!(
+                    "design fragment {key} has no root: no `.ddd` application imports it"
+                )),
+                Some(roots) if roots.len() > 1 => errors.push(format!(
+                    "design fragment {key} is imported by more than one root: {}",
+                    roots.join(", ")
+                )),
+                Some(_) => {}
+            }
+        }
+        let mut names: BTreeMap<&str, Vec<&str>> = BTreeMap::new();
+        for (root, name) in &roots {
+            names.entry(name).or_default().push(root);
+        }
+        for (name, roots) in names {
+            if roots.len() > 1 {
+                errors.push(format!(
+                    "duplicate design application name '{name}' in {}",
+                    roots.join(", ")
+                ));
+            }
+        }
+        errors
+    }
+
+    /// Whether `path` is a `.ddd` fragment (top-level modules, no
+    /// `application`) — the files a directory batch compiles through their
+    /// root and never checks standalone (DD8).
+    pub(crate) fn is_ddd_fragment(&self, path: &Path) -> bool {
+        if SurfaceKind::of_path(path) != Some(SurfaceKind::Ddd) {
+            return false;
+        }
+        let key = path.display().to_string();
+        self.sources.get(&key).is_some_and(|source| {
+            phero_syntax::parse_ddd(source)
+                .ast
+                .is_some_and(|ast| ast.application.is_none() && !ast.fragments.is_empty())
+        })
+    }
+
     /// Map-first, disk-second fetch: the snapshot's text for `key`, or a
     /// disk read of `path` — filled into the map on success, so a later
     /// consumer of the same file never re-reads. `Err` carries the io
@@ -280,11 +364,28 @@ impl Project {
                     let Ok(design) = read_ddd_design(Path::new(&member), Some(self)) else {
                         continue;
                     };
-                    let compilation = phero_driver::compile_ddd_str(
-                        &design.path,
-                        &design.source,
-                        &design.domains,
-                        &design.imports(),
+                    if phero_syntax::parse_ddd(&design.pair.source)
+                        .ast
+                        .is_none_or(|ast| ast.application.is_none())
+                    {
+                        // A fragment is compiled through its root; it never
+                        // owns an artifact (DD8).
+                        continue;
+                    }
+                    let fragments: Vec<phero_driver::DddFragment> = design
+                        .fragments
+                        .iter()
+                        .map(|(path, source)| phero_driver::DddFragment {
+                            path: path.clone(),
+                            source: source.clone(),
+                        })
+                        .collect();
+                    let compilation = phero_driver::compile_ddd_app_str(
+                        &design.pair.path,
+                        &design.pair.source,
+                        &fragments,
+                        &design.pair.domains,
+                        &design.pair.imports(),
                     );
                     if let Some(model) = compilation.model {
                         self.store(&member, &Artifact::Design(model.clone()));

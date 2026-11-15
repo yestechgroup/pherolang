@@ -27,7 +27,21 @@ pub(crate) fn run(files: Vec<PathBuf>, out: PathBuf) -> anyhow::Result<ExitCode>
     };
     let mut project = project_mode.then(|| Project::gather(&expanded));
     let mut failed = 0usize;
+    if let Some(project) = project.as_mut() {
+        for error in project.ddd_tree_errors() {
+            eprintln!("Error: {error}");
+            failed += 1;
+        }
+    }
     for file in &expanded {
+        if project
+            .as_ref()
+            .is_some_and(|project| project.is_ddd_fragment(file))
+        {
+            // One artifact per application root; a fragment is merged into
+            // its root (DD8).
+            continue;
+        }
         match compile_surface(std::slice::from_ref(file), project.as_mut(), false) {
             Ok(Some(outcome)) => {
                 let artifact_path = artifact_path(&out, file);

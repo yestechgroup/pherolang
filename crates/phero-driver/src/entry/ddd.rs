@@ -6,10 +6,22 @@ use salsa::Database as Db;
 
 use crate::compilation::DddCompilation;
 use crate::ddd;
+use crate::diagnostic::Diagnostic;
 use crate::entry::finish_surface;
 use crate::imports::DomainImports;
 use crate::session::{parse_ddd_query, Database, SourceFile};
 use crate::union::{domain_files, lower_domains};
+
+/// One imported `.ddd` design fragment (DD8, issue pherolang#305): the
+/// host-resolved path and its source text. Fragments are merged into the
+/// root application at compile time; they never emit their own artifact.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct DddFragment {
+    /// Host-resolved path (the diagnostic tag and import identity).
+    pub path: String,
+    /// The fragment's source text.
+    pub source: String,
+}
 
 /// Compiles a `.ddd` design file against its imported domain models to the
 /// standalone [`phero_ir::ddd::DddModel`] (memoized by salsa): parse the
@@ -133,9 +145,16 @@ fn compile_ddd_with(
 /// unique-across-packages lookup runs. `base` itself must name an existing
 /// domain package.
 ///
-/// Resolution is **validation-only**: the artifact keeps every name exactly
-/// as authored (unqualified where written qualified and vice versa), and
-/// consumers resolve against the domain model.
+/// Resolution is **additive, never rewriting**: the artifact keeps every
+/// name exactly as authored (unqualified where written unqualified,
+/// qualified where written qualified), and every reference a consumer acts
+/// on also carries its resolved companion (DD1, pherolang#298) —
+/// `Design::type_ref`, `Delegation::target_ref`, `Service::dependency_refs`
+/// / `decision_dependency_refs`, `ServiceOperation::capability_refs` /
+/// `emitted_refs` / `decision_refs`, `SearchDef::entity_ref` /
+/// `capability_refs`, and each search member's `type_ref`. Consumers act on
+/// the companion and never re-implement resolution; the authored spelling
+/// stays for round-tripping and diagnostics.
 ///
 /// ## Validation rules
 ///
@@ -449,4 +468,191 @@ fn compile_ddd_str_inner(
     let design = SourceFile::new(&db, path.to_string(), source.to_string());
     let files = domain_files(&db, domains);
     compile_ddd_with(&db, design, files, actors, imports, decisions)
+}
+
+/// Compiles a `.ddd` **root** with its imported fragments (DD8, issue
+/// pherolang#305): the fragments' top-level modules merge into the root
+/// application in import order, and the result is one [`DddCompilation`]
+/// and one artifact. A source without an `application` declaration is a
+/// fragment and is refused here — compile its root instead.
+pub fn compile_ddd_app_str(
+    path: &str,
+    source: &str,
+    fragments: &[DddFragment],
+    domains: &[(String, String)],
+    imports: &DomainImports,
+) -> DddCompilation {
+    compile_ddd_app_str_inner(path, source, fragments, domains, None, imports, &[])
+}
+
+/// [`compile_ddd_app_str`] with capability and decision-link validation.
+pub fn compile_ddd_app_str_with_decisions(
+    path: &str,
+    source: &str,
+    fragments: &[DddFragment],
+    domains: &[(String, String)],
+    imports: &DomainImports,
+    actors: &[phero_ir::ActorModel],
+    decisions: &[(String, phero_ir::dmn::DmnModel)],
+) -> DddCompilation {
+    compile_ddd_app_str_inner(
+        path,
+        source,
+        fragments,
+        domains,
+        Some(actors),
+        imports,
+        decisions,
+    )
+}
+
+fn compile_ddd_app_str_inner(
+    path: &str,
+    source: &str,
+    fragments: &[DddFragment],
+    domains: &[(String, String)],
+    actors: Option<&[phero_ir::ActorModel]>,
+    imports: &DomainImports,
+    decisions: &[(String, phero_ir::dmn::DmnModel)],
+) -> DddCompilation {
+    let root = phero_syntax::parse_ddd(source);
+    let mut diagnostics: Vec<(String, Diagnostic)> = root
+        .errors
+        .iter()
+        .map(|error| {
+            (
+                path.to_string(),
+                Diagnostic::error(error.message.clone(), Some(error.span)),
+            )
+        })
+        .collect();
+    let Some(mut ast) = root.ast else {
+        return DddCompilation::assemble(None, None, diagnostics);
+    };
+    let Some(mut application) = ast.application.take() else {
+        diagnostics.push((
+            path.to_string(),
+            Diagnostic::error(
+                "this file is a design fragment (no `application` declaration); compile \
+                 the root that imports it",
+                None,
+            ),
+        ));
+        return DddCompilation::assemble(None, None, diagnostics);
+    };
+
+    // The combined source keeps root spans at their authored offsets and
+    // pads each fragment before parsing, so every AST span is already a
+    // combined-source span. Ranges map diagnostics back to their file.
+    let mut combined = source.to_string();
+    let mut ranges: Vec<(String, usize, usize)> = vec![(path.to_string(), 0, source.len())];
+    let mut fragment_modules = Vec::new();
+    let mut merged_imports = ast.imports.clone();
+    for fragment in fragments {
+        let base = combined.len();
+        let padded = format!("{}{}", " ".repeat(base), fragment.source);
+        let parsed = phero_syntax::parse_ddd(&padded);
+        for error in &parsed.errors {
+            let local =
+                (error.span.start.saturating_sub(base)..error.span.end.saturating_sub(base)).into();
+            diagnostics.push((
+                fragment.path.clone(),
+                Diagnostic::error(error.message.clone(), Some(local)),
+            ));
+        }
+        if let Some(fragment_ast) = parsed.ast {
+            if fragment_ast.application.is_some() {
+                diagnostics.push((
+                    fragment.path.clone(),
+                    Diagnostic::error(
+                        "a design application root cannot be imported as a fragment; \
+                         remove its `application` declaration or import its root instead",
+                        None,
+                    ),
+                ));
+            } else {
+                fragment_modules.extend(fragment_ast.fragments);
+                merged_imports.extend(fragment_ast.imports);
+            }
+        }
+        combined.push_str(&fragment.source);
+        ranges.push((fragment.path.clone(), base, base + fragment.source.len()));
+    }
+    application.modules.extend(fragment_modules);
+    application.modules = merge_modules(application.modules);
+    ast.imports = merged_imports;
+    ast.application = Some(application);
+    ast.fragments.clear();
+
+    let db = Database::new();
+    let files = domain_files(&db, domains);
+    let lowered = lower_domains(&db, path, &ast.imports, &files, imports);
+    let (model, local_diagnostics) = ddd::compile_ddd_file(
+        path,
+        &combined,
+        Some(&ast),
+        &[],
+        &lowered.domain_units,
+        actors,
+        decisions,
+    );
+    diagnostics.extend(local_diagnostics);
+    let diagnostics = remap_diagnostics(diagnostics, path, &ranges);
+    let model = if diagnostics
+        .iter()
+        .any(|(_, diagnostic)| diagnostic.is_error())
+    {
+        None
+    } else {
+        model
+    };
+    finish_surface(lowered, model, diagnostics, DddCompilation::assemble)
+}
+
+/// Reopens same-named modules across fragments: members concatenate in
+/// first-appearance order, and the artifact carries one module per name.
+fn merge_modules(modules: Vec<phero_syntax::ast::DddModule>) -> Vec<phero_syntax::ast::DddModule> {
+    let mut merged: Vec<phero_syntax::ast::DddModule> = Vec::new();
+    for module in modules {
+        if let Some(existing) = merged
+            .iter_mut()
+            .find(|existing| existing.name.text == module.name.text)
+        {
+            existing.errors.extend(module.errors);
+            existing.services.extend(module.services);
+            existing.designs.extend(module.designs);
+            existing.searches.extend(module.searches);
+            existing.extends.extend(module.extends);
+        } else {
+            merged.push(module);
+        }
+    }
+    merged
+}
+
+/// Re-tags the combined-source diagnostics with their originating file and
+/// rebases their spans to that file's local coordinates.
+fn remap_diagnostics(
+    diagnostics: Vec<(String, Diagnostic)>,
+    root_path: &str,
+    ranges: &[(String, usize, usize)],
+) -> Vec<(String, Diagnostic)> {
+    diagnostics
+        .into_iter()
+        .map(|(file, mut diagnostic)| {
+            if file != root_path {
+                return (file, diagnostic);
+            }
+            let Some(span) = diagnostic.span else {
+                return (file, diagnostic);
+            };
+            for (path, start, end) in ranges {
+                if span.start >= *start && span.end <= *end {
+                    diagnostic.span = Some((span.start - start..span.end - start).into());
+                    return (path.clone(), diagnostic);
+                }
+            }
+            (file, diagnostic)
+        })
+        .collect()
 }

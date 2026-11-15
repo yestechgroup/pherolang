@@ -480,7 +480,7 @@ fn import_semicolon_is_optional_and_unescaped() {
 
 #[test]
 fn missing_application_is_an_error() {
-    for source in ["", "   \n\t\n  ", "module Bogus { }", "import \"a.mox\""] {
+    for source in ["", "   \n\t\n  ", "import \"a.mox\""] {
         let result = parse_ddd(source);
         assert!(
             result.errors.iter().any(|error| error
@@ -587,7 +587,7 @@ fn import_after_application_is_an_error() {
     assert!(
         result.errors.iter().any(|error| error
             .message
-            .contains("`import` after the `application` declaration")),
+            .contains("`import` after the `application`/`module` declarations")),
         "expected the late-import error, got {:?}",
         result.errors
     );
@@ -2163,11 +2163,11 @@ application Payroll {
         entity PayRun repository PayRunRepository {
             findById;
         }
-        extend PayRun {
+        children PayRun {
             boolean addLine(PayRunLineDraft line) => lines.add;
             protected boolean removeLine(String lineId) => lines.remove when (lineId != "");
         }
-        extend PayRun {
+        children PayRun {
             boolean saveLine(PayRunLineDraft line) => lines.save;
         }
     }
@@ -2212,7 +2212,7 @@ fn extend_blocks_parse_with_child_operations() {
 }
 
 #[test]
-fn extend_formats_canonically_and_is_idempotent() {
+fn children_formats_canonically_and_is_idempotent() {
     let canonical = concat!(
         "import \"payroll.mox\";\n",
         "\n",
@@ -2222,11 +2222,11 @@ fn extend_formats_canonically_and_is_idempotent() {
         "        entity PayRun repository PayRunRepository {\n",
         "            findById;\n",
         "        }\n",
-        "        extend PayRun {\n",
+        "        children PayRun {\n",
         "            boolean addLine(PayRunLineDraft line) => lines.add;\n",
         "            protected boolean removeLine(String lineId) => lines.remove when (lineId != \"\");\n",
         "        }\n",
-        "        extend PayRun {\n",
+        "        children PayRun {\n",
         "            boolean saveLine(PayRunLineDraft line) => lines.save;\n",
         "        }\n",
         "    }\n",
@@ -2253,7 +2253,7 @@ application Payroll {
         entity PayRun repository PayRunRepository {
             findById;
         }
-        extend PayRun {
+        children PayRun {
             boolean addLine(PayRunLineDraft line) => lines;
         }
     }
@@ -2301,7 +2301,7 @@ import "payroll.mox"
 application Payroll {
     base nz.example.payroll
     module payroll {
-        extend PayRun {
+        children PayRun {
             nope;
             boolean addLine(PayRunLineDraft line) => lines.add;
         }
@@ -3321,4 +3321,96 @@ fn qualified_throws_spelling_gets_a_bare_name_diagnostic() {
         module.services[0].operations[0].throws[0].text,
         "PaymentDeclined"
     );
+}
+
+#[test]
+fn invariant_clause_parses_before_the_repository_block() {
+    let source = concat!(
+        "import \"orders.mox\"\n",
+        "application A {\n",
+        "    base nz.example.orders\n",
+        "    module m {\n",
+        "        entity Order\n",
+        "            invariant total == lines.map(l => l.quantity * l.unitPrice).sum();\n",
+        "            invariant total >= 0;\n",
+        "            repository OrderRepository {\n",
+        "                findById;\n",
+        "            }\n",
+        "    }\n",
+        "}\n",
+    );
+    let result = parse_ddd(source);
+    assert!(result.errors.is_empty(), "{:?}", result.errors);
+    let design = &result.ast.expect("ast").application.expect("app").modules[0].designs[0];
+    assert_eq!(design.invariants.len(), 2);
+    assert_eq!(span_text(source, design.invariants[1]), "total >= 0");
+}
+
+#[test]
+fn invariants_format_one_per_line_and_keep_the_expression() {
+    let source = concat!(
+        "import \"orders.mox\"\n",
+        "application A {\n",
+        "    base nz.example.orders\n",
+        "    module m {\n",
+        "        entity Order invariant total == lines.map(l => l.quantity * l.unitPrice).sum(); invariant total >= 0; repository OrderRepository { findById; }\n",
+        "        value Money invariant cents >= 0;\n",
+        "    }\n",
+        "}\n",
+    );
+    let formatted = fmt_ddd(source);
+    let expected = concat!(
+        "import \"orders.mox\";\n",
+        "\n",
+        "application A {\n",
+        "    base nz.example.orders\n",
+        "    module m {\n",
+        "        entity Order\n",
+        "            invariant total == lines.map(l => l.quantity * l.unitPrice).sum();\n",
+        "            invariant total >= 0;\n",
+        "            repository OrderRepository {\n",
+        "                findById;\n",
+        "            }\n",
+        "        value Money\n",
+        "            invariant cents >= 0;\n",
+        "    }\n",
+        "}\n",
+    );
+    assert_eq!(formatted, expected);
+    assert_eq!(fmt_ddd(&formatted), formatted, "formatting is a fixpoint");
+}
+
+#[test]
+fn a_fragment_parses_top_level_modules_without_an_application() {
+    let source = concat!(
+        "import \"orders.mox\"\n",
+        "module sales {\n",
+        "    entity Order\n",
+        "}\n",
+    );
+    let result = parse_ddd(source);
+    assert!(result.errors.is_empty(), "{:?}", result.errors);
+    let file = result.ast.expect("ast");
+    assert!(file.application.is_none());
+    assert_eq!(file.fragments.len(), 1);
+    assert_eq!(file.fragments[0].name.text, "sales");
+}
+
+#[test]
+fn a_fragment_formats_without_an_application() {
+    let source = "import \"orders.mox\"\nmodule sales { entity Order }\n";
+    let formatted = fmt_ddd(source);
+    assert_eq!(
+        formatted,
+        "import \"orders.mox\";\n\nmodule sales {\n    entity Order\n}\n"
+    );
+    assert_eq!(fmt_ddd(&formatted), formatted);
+}
+
+#[test]
+fn padded_application_parses() {
+    let source = "   application Other { module m { entity Order } }\n";
+    let result = parse_ddd(source);
+    assert!(result.errors.is_empty(), "{:?}", result.errors);
+    assert!(result.ast.expect("ast").application.is_some());
 }

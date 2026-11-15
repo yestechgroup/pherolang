@@ -476,6 +476,12 @@
             "optimisticLocking": true,
             "cache": true
           },
+          "isAggregateRoot": true,
+          "invariants": [
+            {
+              "expression": "refundCents >= 0"
+            }
+          ],
           "repository": {
             "name": "TicketRepository",
             "operations": [
@@ -544,7 +550,12 @@
             "immutable": true,
             "deepImmutable": true,
             "equality": "structural"
-          }
+          },
+          "invariants": [
+            {
+              "expression": "cents >= 0"
+            }
+          ]
         },
         {
           "stereotype": "dto",

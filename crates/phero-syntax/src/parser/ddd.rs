@@ -1,5 +1,6 @@
 //! The `.ddd` design grammar: services, designs, repositories,
-//! machines, searches, modules, and the application file parser.
+//! machines, searches, modules, and the root/fragment application file
+//! parser.
 
 use std::iter::once;
 
@@ -1416,76 +1417,120 @@ pub(crate) fn ddd_dto_suffix<'src>(
     projection.or(standalone)
 }
 
-/// A design declaration: `("abstract")? stereotype name flag* dto_suffix?
-/// ("repository" ...)? ("machine" ...)?`.
+/// A design declaration: `("abstract")? stereotype name flag* boundary?
+/// invariant* dto_suffix? ("repository" ...)? ("machine" ...)?`.
+/// The optional authored aggregate-boundary clause of a design (DD4, issue
+/// pherolang#301): `root` or `aggregate <Root>`.
+pub(crate) fn ddd_boundary_decl<'src>(
+) -> impl Parser<'src, Tokens<'src>, DddBoundaryDecl, MoxExtra<'src>> + Clone {
+    let root = ddd_keyword(ddd::ROOT).to(DddBoundary::Root);
+    let aggregate = ddd_keyword(ddd::AGGREGATE)
+        .ignore_then(qname())
+        .map(DddBoundary::Aggregate);
+    root.or(aggregate).map_with(|kind, e| DddBoundaryDecl {
+        kind,
+        span: e.span(),
+    })
+}
+
+/// One `invariant <raw_expr>;` clause of a design (DD5, issue pherolang#302):
+/// the expression is captured raw (the `raw_expr` convention) and typed by
+/// the driver against the designed class.
+pub(crate) fn ddd_invariant_decl<'src>(
+) -> impl Parser<'src, Tokens<'src>, Span, MoxExtra<'src>> + Clone {
+    ddd_keyword(ddd::INVARIANT).ignore_then(ddd_raw_expr())
+}
+
 pub(crate) fn ddd_design_decl<'src>(
 ) -> impl Parser<'src, Tokens<'src>, DddDesign, MoxExtra<'src>> + Clone {
     ddd_design_head()
         .then(name())
         .then(ddd_flags())
+        .then(ddd_boundary_decl().or_not())
+        .then(ddd_boundary_decl().repeated().collect::<Vec<_>>())
+        .then(ddd_invariant_decl().repeated().collect::<Vec<_>>())
         .then(ddd_dto_suffix().or_not())
         .then(ddd_repository_decl().or_not())
         .then(ddd_machine_decl().or_not())
-        .map_with(
-            |((((((abstract_span, stereotype), class), flags), suffix), repository), machine),
-             e| {
-                let mut problems = Vec::new();
-                let mut dto_source = None;
-                let mut dto_members = None;
-                if let Some(DddDtoSuffix {
-                    source,
-                    members,
-                    from_written,
-                    span,
-                }) = suffix
-                {
-                    if stereotype == DddStereotype::Dto {
-                        dto_source = source;
-                        match members {
-                            Some(members) => dto_members = Some(members),
-                            None => {
-                                problems.push((
-                                    span,
-                                    "expected a projection block `{ ... }` after \
-                                     `from <source>`"
-                                        .to_string(),
-                                ));
-                                // Recover as an empty projection so the
-                                // source is not silently promoted to a
-                                // standalone DTO.
-                                dto_members = Some(DddDtoMembers::Projection(Vec::new()));
-                            }
-                        }
-                    } else if from_written {
-                        problems.push((
-                            span,
-                            format!("`{} <source>` is only allowed on a `dto` design", ddd::FROM),
-                        ));
-                    } else {
-                        problems.push((
-                            span,
-                            "a DTO member block is only allowed on a `dto` design \
-                             (`dto Name { ... }` or `dto Name from Source { ... }`)"
-                                .to_string(),
-                        ));
-                    }
-                }
+        .map_with(|parts, e| {
+            let (
                 (
-                    DddDesign {
-                        is_abstract: abstract_span.is_some(),
-                        stereotype,
-                        class,
-                        flags,
-                        dto_source,
-                        dto_members,
-                        repository,
-                        machine,
-                        span: e.span(),
-                    },
-                    problems,
-                )
-            },
-        )
+                    ((((((head, class), flags), boundary), extra_boundaries), invariants), suffix),
+                    repository,
+                ),
+                machine,
+            ) = parts;
+            let (abstract_span, stereotype) = head;
+            let mut problems = Vec::new();
+            if !extra_boundaries.is_empty() {
+                let span = boundary
+                    .as_ref()
+                    .map(|boundary| boundary.span)
+                    .unwrap_or_else(|| extra_boundaries[0].span);
+                problems.push((
+                    span,
+                    "E0379 a design may declare only one aggregate boundary; `root` and \
+                         `aggregate <Root>` contradict each other"
+                        .to_string(),
+                ));
+            }
+            let mut dto_source = None;
+            let mut dto_members = None;
+            if let Some(DddDtoSuffix {
+                source,
+                members,
+                from_written,
+                span,
+            }) = suffix
+            {
+                if stereotype == DddStereotype::Dto {
+                    dto_source = source;
+                    match members {
+                        Some(members) => dto_members = Some(members),
+                        None => {
+                            problems.push((
+                                span,
+                                "expected a projection block `{ ... }` after \
+                                     `from <source>`"
+                                    .to_string(),
+                            ));
+                            // Recover as an empty projection so the
+                            // source is not silently promoted to a
+                            // standalone DTO.
+                            dto_members = Some(DddDtoMembers::Projection(Vec::new()));
+                        }
+                    }
+                } else if from_written {
+                    problems.push((
+                        span,
+                        format!("`{} <source>` is only allowed on a `dto` design", ddd::FROM),
+                    ));
+                } else {
+                    problems.push((
+                        span,
+                        "a DTO member block is only allowed on a `dto` design \
+                             (`dto Name { ... }` or `dto Name from Source { ... }`)"
+                            .to_string(),
+                    ));
+                }
+            }
+            (
+                DddDesign {
+                    is_abstract: abstract_span.is_some(),
+                    stereotype,
+                    class,
+                    flags,
+                    boundary,
+                    invariants,
+                    dto_source,
+                    dto_members,
+                    repository,
+                    machine,
+                    span: e.span(),
+                },
+                problems,
+            )
+        })
         .validate(|(design, problems), _, emitter| {
             for (span, message) in problems {
                 emitter.emit(Rich::custom(span, message));
@@ -1777,14 +1822,16 @@ pub(crate) fn ddd_raw_expr<'src>() -> impl Parser<'src, Tokens<'src>, Span, MoxE
             ) =>
                 ()
         };
+        // A call's argument list may be empty (`sum()`, `size()`), so the
+        // balanced interior is optional in every bracket family.
         let parens = kw(Token::LParen)
-            .ignore_then(body.clone())
+            .ignore_then(body.clone().or_not().ignored())
             .then_ignore(kw(Token::RParen));
         let brackets = kw(Token::LBracket)
-            .ignore_then(body.clone())
+            .ignore_then(body.clone().or_not().ignored())
             .then_ignore(kw(Token::RBracket));
         let braces = kw(Token::LBrace)
-            .ignore_then(body)
+            .ignore_then(body.or_not().ignored())
             .then_ignore(kw(Token::RBrace));
         atom.or(parens)
             .or(brackets)
@@ -2085,7 +2132,8 @@ pub(crate) fn ddd_search_decl<'src>(
         })
 }
 
-/// One child operation of an `extend` block (issue pherolang#179):
+/// One child operation of a `children` block (issue pherolang#179; the block
+/// was named `extend` before DD4, issue pherolang#301):
 /// `("protected")? signature "=>" child_feature "." child_action
 /// guard_clause? ";"`. The signature is the shared [`ddd_signature`]
 /// production; the dotted pair is exactly two names — the root's child
@@ -2152,28 +2200,36 @@ pub(crate) fn junk_ddd_child_op<'src>(
         })
 }
 
-/// A module-level `extend <Class> { ... }` block of child operations
-/// (issue pherolang#179). The body is a run of [`ddd_child_op`]s (with junk
-/// recovery between them); the driver validates the target (an entity
-/// design with a repository in the same module) and each operation.
+/// A module-level `children <Class> { ... }` block of child operations
+/// (issue pherolang#179; renamed by DD4, issue pherolang#301). The block
+/// keyword may also be the deprecated `extend` alias, which the driver warns
+/// about and the formatter rewrites. The body is a run of [`ddd_child_op`]s
+/// (with junk recovery between them); the driver validates the target (an
+/// entity design with a repository in the same module) and each operation.
 pub(crate) fn ddd_extend_decl<'src>(
 ) -> impl Parser<'src, Tokens<'src>, DddExtend, MoxExtra<'src>> + Clone {
-    ddd_keyword(ddd::EXTEND)
-        .ignore_then(name())
-        .then_ignore(kw(Token::LBrace))
-        .then(
-            ddd_child_op()
-                .map(Some)
-                .or(junk_ddd_child_op().to(None))
-                .repeated()
-                .collect::<Vec<_>>(),
-        )
-        .then_ignore(kw(Token::RBrace))
-        .map_with(|(class, operations), e| DddExtend {
+    select! {
+        Token::Ident(text) = e
+            if text == ddd::CHILDREN || text == ddd::EXTEND => (e.span(), text == ddd::EXTEND)
+    }
+    .then(name())
+    .then_ignore(kw(Token::LBrace))
+    .then(
+        ddd_child_op()
+            .map(Some)
+            .or(junk_ddd_child_op().to(None))
+            .repeated()
+            .collect::<Vec<_>>(),
+    )
+    .then_ignore(kw(Token::RBrace))
+    .map_with(
+        |(((_keyword_span, deprecated), class), operations), e| DddExtend {
             class,
             operations: operations.into_iter().flatten().collect(),
+            deprecated,
             span: e.span(),
-        })
+        },
+    )
 }
 
 /// One member of a `module` body.
@@ -2392,6 +2448,7 @@ pub(crate) fn ddd_application_decl<'src>(
 pub(crate) enum DddFileItem {
     Import(Import),
     Application(DddApplication),
+    Module(DddModule),
     Junk,
 }
 
@@ -2401,43 +2458,69 @@ pub(crate) enum DddFileItem {
 /// error for the skipped region.
 pub(crate) fn junk_ddd_file<'src>() -> impl Parser<'src, Tokens<'src>, (), MoxExtra<'src>> + Clone {
     let rest = select! {
-        t if !matches!(t, Token::Import | Token::Ident(ddd::APPLICATION)) => ()
+        t if !matches!(
+            t,
+            Token::Import | Token::Ident(ddd::APPLICATION | ddd::MODULE)
+        ) => ()
     };
     any()
         .ignore_then(rest.repeated().ignored())
         .validate(|(), e, emitter| {
             emitter.emit(Rich::custom(
                 e.span(),
-                "expected an import or `application` declaration",
+                "expected an import, `application`, or `module` declaration",
             ));
         })
 }
 
 /// Folds the top-level items of a `.ddd` file: imports must precede the
-/// application and exactly one application is allowed. Violations are
-/// reported as (span, message) problems; the AST recovers the first
-/// application and drops the offending items regardless.
+/// application or top-level modules; a file is either one **root**
+/// (`application`) or a **fragment** (top-level modules), never both.
+/// Violations are reported as (span, message) problems; the AST recovers the
+/// first application, keeps the fragment modules, and drops the offending
+/// items regardless.
 pub(crate) fn fold_ddd_file(items: Vec<DddFileItem>) -> (DddFile, Vec<(Span, String)>) {
     let mut imports = Vec::new();
     let mut application = None;
+    let mut fragments = Vec::new();
     let mut problems = Vec::new();
     for item in items {
         match item {
             DddFileItem::Import(decl) => {
-                if application.is_none() {
+                if application.is_none() && fragments.is_empty() {
                     imports.push(decl);
                 } else {
                     problems.push((
                         decl.span,
-                        "`import` after the `application` declaration".to_string(),
+                        "`import` after the `application`/`module` declarations".to_string(),
                     ));
                 }
             }
             DddFileItem::Application(decl) => {
                 if application.is_none() {
+                    if !fragments.is_empty() {
+                        problems.push((
+                            decl.span,
+                            "a file declares either one `application` (a root) or top-level \
+                             `module` blocks (a fragment), not both"
+                                .to_string(),
+                        ));
+                    }
                     application = Some(decl);
                 } else {
                     problems.push((decl.span, "duplicate `application` declaration".to_string()));
+                }
+            }
+            DddFileItem::Module(module) => {
+                if application.is_some() {
+                    problems.push((
+                        module.span,
+                        "module declarations belong inside the `application` block; a \
+                         top-level module makes the file a fragment"
+                            .to_string(),
+                    ));
+                } else {
+                    fragments.push(module);
                 }
             }
             DddFileItem::Junk => {}
@@ -2447,6 +2530,7 @@ pub(crate) fn fold_ddd_file(items: Vec<DddFileItem>) -> (DddFile, Vec<(Span, Str
         DddFile {
             imports,
             application,
+            fragments,
         },
         problems,
     )
@@ -2456,6 +2540,7 @@ pub(crate) fn ddd_file<'src>() -> impl Parser<'src, Tokens<'src>, DddFile, MoxEx
     let item = choice((
         ddd_import_decl().map(DddFileItem::Import),
         ddd_application_decl().map(DddFileItem::Application),
+        ddd_module_decl().map(DddFileItem::Module),
     ))
     .or(junk_ddd_file().to(DddFileItem::Junk));
 
@@ -2467,10 +2552,11 @@ pub(crate) fn ddd_file<'src>() -> impl Parser<'src, Tokens<'src>, DddFile, MoxEx
             for (span, message) in problems {
                 emitter.emit(Rich::custom(span, message));
             }
-            if file.application.is_none() {
+            if file.application.is_none() && file.fragments.is_empty() {
                 emitter.emit(Rich::custom(
                     Span::from(span.end..span.end),
-                    "expected an `application` declaration",
+                    "expected an `application` declaration (a root) or at least one \
+                     top-level `module` (a fragment)",
                 ));
             }
             file

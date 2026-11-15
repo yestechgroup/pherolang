@@ -133,7 +133,8 @@ const GOOD_DDD_ARTIFACT: &str = r#"{
             "type": "class",
             "value": { "package": "demo", "name": "Thing" }
           },
-          "stereotype": "entity"
+          "stereotype": "entity",
+          "isAggregateRoot": true
         }
       ]
     }
@@ -619,7 +620,8 @@ const GOOD_DTO_DDD_ARTIFACT: &str = r#"{
             "type": "class",
             "value": { "package": "nz.example.library", "name": "Book" }
           },
-          "stereotype": "entity"
+          "stereotype": "entity",
+          "isAggregateRoot": true
         },
         {
           "class": "Book",

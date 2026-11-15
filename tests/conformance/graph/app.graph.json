@@ -2,7 +2,7 @@
   "formatVersion": 1,
   "applications": [
     {
-      "id": "app.actor",
+      "id": "GraphDesk",
       "files": [
         "app.actor",
         "app.cmmn",
@@ -35,735 +35,735 @@
       "kind": "actor",
       "name": "App.Agent",
       "file": "app.actor",
-      "application": "app.actor"
+      "application": "GraphDesk"
     },
     {
       "id": "actor:app.actor#App.AutoTriage",
       "kind": "actor",
       "name": "App.AutoTriage",
       "file": "app.actor",
-      "application": "app.actor"
+      "application": "GraphDesk"
     },
     {
       "id": "actor:app.actor#App.Customer",
       "kind": "actor",
       "name": "App.Customer",
       "file": "app.actor",
-      "application": "app.actor"
+      "application": "GraphDesk"
     },
     {
       "id": "actor:app.actor#App.Finance",
       "kind": "actor",
       "name": "App.Finance",
       "file": "app.actor",
-      "application": "app.actor"
+      "application": "GraphDesk"
     },
     {
       "id": "actor:app.actor#App.Manager",
       "kind": "actor",
       "name": "App.Manager",
       "file": "app.actor",
-      "application": "app.actor"
+      "application": "GraphDesk"
     },
     {
       "id": "capability:app.actor#App.ApproveRefund",
       "kind": "capability",
       "name": "App.ApproveRefund",
       "file": "app.actor",
-      "application": "app.actor"
+      "application": "GraphDesk"
     },
     {
       "id": "capability:app.actor#App.EscalateRefund",
       "kind": "capability",
       "name": "App.EscalateRefund",
       "file": "app.actor",
-      "application": "app.actor"
+      "application": "GraphDesk"
     },
     {
       "id": "capability:app.actor#App.RaiseRefund",
       "kind": "capability",
       "name": "App.RaiseRefund",
       "file": "app.actor",
-      "application": "app.actor"
+      "application": "GraphDesk"
     },
     {
       "id": "capability:app.actor#App.ReadTicket",
       "kind": "capability",
       "name": "App.ReadTicket",
       "file": "app.actor",
-      "application": "app.actor"
+      "application": "GraphDesk"
     },
     {
       "id": "capability:app.actor#App.ResolveTicket",
       "kind": "capability",
       "name": "App.ResolveTicket",
       "file": "app.actor",
-      "application": "app.actor"
+      "application": "GraphDesk"
     },
     {
       "id": "capability:app.actor#App.UpdateTicket",
       "kind": "capability",
       "name": "App.UpdateTicket",
       "file": "app.actor",
-      "application": "app.actor"
+      "application": "GraphDesk"
     },
     {
       "id": "file:app.actor#app.actor",
       "kind": "file",
       "name": "app.actor",
       "file": "app.actor",
-      "application": "app.actor"
+      "application": "GraphDesk"
     },
     {
       "id": "case:app.cmmn#RefundDesk",
       "kind": "case",
       "name": "RefundDesk",
       "file": "app.cmmn",
-      "application": "app.actor"
+      "application": "GraphDesk"
     },
     {
       "id": "caseFileItem:app.cmmn#RefundDesk.decision",
       "kind": "caseFileItem",
       "name": "RefundDesk.decision",
       "file": "app.cmmn",
-      "application": "app.actor"
+      "application": "GraphDesk"
     },
     {
       "id": "caseFileItem:app.cmmn#RefundDesk.ticket",
       "kind": "caseFileItem",
       "name": "RefundDesk.ticket",
       "file": "app.cmmn",
-      "application": "app.actor"
+      "application": "GraphDesk"
     },
     {
       "id": "caseRole:app.cmmn#RefundDesk.finance",
       "kind": "caseRole",
       "name": "RefundDesk.finance",
       "file": "app.cmmn",
-      "application": "app.actor"
+      "application": "GraphDesk"
     },
     {
       "id": "caseRole:app.cmmn#RefundDesk.triage",
       "kind": "caseRole",
       "name": "RefundDesk.triage",
       "file": "app.cmmn",
-      "application": "app.actor"
+      "application": "GraphDesk"
     },
     {
       "id": "file:app.cmmn#app.cmmn",
       "kind": "file",
       "name": "app.cmmn",
       "file": "app.cmmn",
-      "application": "app.actor"
+      "application": "GraphDesk"
     },
     {
       "id": "planItem:app.cmmn#RefundDesk.ApproveRefund",
       "kind": "planItem",
       "name": "RefundDesk.ApproveRefund",
       "file": "app.cmmn",
-      "application": "app.actor"
+      "application": "GraphDesk"
     },
     {
       "id": "planItem:app.cmmn#RefundDesk.AssessAuthority",
       "kind": "planItem",
       "name": "RefundDesk.AssessAuthority",
       "file": "app.cmmn",
-      "application": "app.actor"
+      "application": "GraphDesk"
     },
     {
       "id": "planItem:app.cmmn#RefundDesk.AssessRefund",
       "kind": "planItem",
       "name": "RefundDesk.AssessRefund",
       "file": "app.cmmn",
-      "application": "app.actor"
+      "application": "GraphDesk"
     },
     {
       "id": "planItem:app.cmmn#RefundDesk.Assessment",
       "kind": "planItem",
       "name": "RefundDesk.Assessment",
       "file": "app.cmmn",
-      "application": "app.actor"
+      "application": "GraphDesk"
     },
     {
       "id": "planItem:app.cmmn#RefundDesk.RefundSettled",
       "kind": "planItem",
       "name": "RefundDesk.RefundSettled",
       "file": "app.cmmn",
-      "application": "app.actor"
+      "application": "GraphDesk"
     },
     {
       "id": "planItem:app.cmmn#RefundDesk.ReviewTicket",
       "kind": "planItem",
       "name": "RefundDesk.ReviewTicket",
       "file": "app.cmmn",
-      "application": "app.actor"
+      "application": "GraphDesk"
     },
     {
       "id": "designApplication:app.ddd#GraphDesk",
       "kind": "designApplication",
       "name": "GraphDesk",
       "file": "app.ddd",
-      "application": "app.actor"
+      "application": "GraphDesk"
     },
     {
       "id": "file:app.ddd#app.ddd",
       "kind": "file",
       "name": "app.ddd",
       "file": "app.ddd",
-      "application": "app.actor"
+      "application": "GraphDesk"
     },
     {
       "id": "module:app.ddd#GraphDesk.desk",
       "kind": "module",
       "name": "GraphDesk.desk",
       "file": "app.ddd",
-      "application": "app.actor"
+      "application": "GraphDesk"
     },
     {
       "id": "repository:app.ddd#GraphDesk.desk.TicketRepository",
       "kind": "repository",
       "name": "GraphDesk.desk.TicketRepository",
       "file": "app.ddd",
-      "application": "app.actor"
+      "application": "GraphDesk"
     },
     {
       "id": "repositoryOperation:app.ddd#GraphDesk.desk.TicketRepository.delete",
       "kind": "repositoryOperation",
       "name": "GraphDesk.desk.TicketRepository.delete",
       "file": "app.ddd",
-      "application": "app.actor"
+      "application": "GraphDesk"
     },
     {
       "id": "repositoryOperation:app.ddd#GraphDesk.desk.TicketRepository.findAll",
       "kind": "repositoryOperation",
       "name": "GraphDesk.desk.TicketRepository.findAll",
       "file": "app.ddd",
-      "application": "app.actor"
+      "application": "GraphDesk"
     },
     {
       "id": "repositoryOperation:app.ddd#GraphDesk.desk.TicketRepository.findById",
       "kind": "repositoryOperation",
       "name": "GraphDesk.desk.TicketRepository.findById",
       "file": "app.ddd",
-      "application": "app.actor"
+      "application": "GraphDesk"
     },
     {
       "id": "repositoryOperation:app.ddd#GraphDesk.desk.TicketRepository.save",
       "kind": "repositoryOperation",
       "name": "GraphDesk.desk.TicketRepository.save",
       "file": "app.ddd",
-      "application": "app.actor"
+      "application": "GraphDesk"
     },
     {
       "id": "search:app.ddd#GraphDesk.desk.TicketSearch",
       "kind": "search",
       "name": "GraphDesk.desk.TicketSearch",
       "file": "app.ddd",
-      "application": "app.actor"
+      "application": "GraphDesk"
     },
     {
       "id": "service:app.ddd#GraphDesk.desk.TicketService",
       "kind": "service",
       "name": "GraphDesk.desk.TicketService",
       "file": "app.ddd",
-      "application": "app.actor"
+      "application": "GraphDesk"
     },
     {
       "id": "serviceOperation:app.ddd#GraphDesk.desk.TicketService.approveRefund",
       "kind": "serviceOperation",
       "name": "GraphDesk.desk.TicketService.approveRefund",
       "file": "app.ddd",
-      "application": "app.actor"
+      "application": "GraphDesk"
     },
     {
       "id": "serviceOperation:app.ddd#GraphDesk.desk.TicketService.findTicket",
       "kind": "serviceOperation",
       "name": "GraphDesk.desk.TicketService.findTicket",
       "file": "app.ddd",
-      "application": "app.actor"
+      "application": "GraphDesk"
     },
     {
       "id": "serviceOperation:app.ddd#GraphDesk.desk.TicketService.listTickets",
       "kind": "serviceOperation",
       "name": "GraphDesk.desk.TicketService.listTickets",
       "file": "app.ddd",
-      "application": "app.actor"
+      "application": "GraphDesk"
     },
     {
       "id": "serviceOperation:app.ddd#GraphDesk.desk.TicketService.raiseRefund",
       "kind": "serviceOperation",
       "name": "GraphDesk.desk.TicketService.raiseRefund",
       "file": "app.ddd",
-      "application": "app.actor"
+      "application": "GraphDesk"
     },
     {
       "id": "serviceOperation:app.ddd#GraphDesk.desk.TicketService.raiseTicket",
       "kind": "serviceOperation",
       "name": "GraphDesk.desk.TicketService.raiseTicket",
       "file": "app.ddd",
-      "application": "app.actor"
+      "application": "GraphDesk"
     },
     {
       "id": "serviceOperation:app.ddd#GraphDesk.desk.TicketService.readTicket",
       "kind": "serviceOperation",
       "name": "GraphDesk.desk.TicketService.readTicket",
       "file": "app.ddd",
-      "application": "app.actor"
+      "application": "GraphDesk"
     },
     {
       "id": "serviceOperation:app.ddd#GraphDesk.desk.TicketService.resolveTicket",
       "kind": "serviceOperation",
       "name": "GraphDesk.desk.TicketService.resolveTicket",
       "file": "app.ddd",
-      "application": "app.actor"
+      "application": "GraphDesk"
     },
     {
       "id": "serviceOperation:app.ddd#GraphDesk.desk.TicketService.updateTicket",
       "kind": "serviceOperation",
       "name": "GraphDesk.desk.TicketService.updateTicket",
       "file": "app.ddd",
-      "application": "app.actor"
+      "application": "GraphDesk"
     },
     {
       "id": "deployApplication:app.deploy#GraphDesk",
       "kind": "deployApplication",
       "name": "GraphDesk",
       "file": "app.deploy",
-      "application": "app.actor"
+      "application": "GraphDesk"
     },
     {
       "id": "deployComponent:app.deploy#GraphDesk.api",
       "kind": "deployComponent",
       "name": "GraphDesk.api",
       "file": "app.deploy",
-      "application": "app.actor"
+      "application": "GraphDesk"
     },
     {
       "id": "deployComponent:app.deploy#GraphDesk.db",
       "kind": "deployComponent",
       "name": "GraphDesk.db",
       "file": "app.deploy",
-      "application": "app.actor"
+      "application": "GraphDesk"
     },
     {
       "id": "deployComponent:app.deploy#GraphDesk.refund_approval_service",
       "kind": "deployComponent",
       "name": "GraphDesk.refund_approval_service",
       "file": "app.deploy",
-      "application": "app.actor"
+      "application": "GraphDesk"
     },
     {
       "id": "deployComponent:app.deploy#GraphDesk.web",
       "kind": "deployComponent",
       "name": "GraphDesk.web",
       "file": "app.deploy",
-      "application": "app.actor"
+      "application": "GraphDesk"
     },
     {
       "id": "deployProfile:app.deploy#production_k8s",
       "kind": "deployProfile",
       "name": "production_k8s",
       "file": "app.deploy",
-      "application": "app.actor"
+      "application": "GraphDesk"
     },
     {
       "id": "deployment:app.deploy#GraphDesk.production",
       "kind": "deployment",
       "name": "GraphDesk.production",
       "file": "app.deploy",
-      "application": "app.actor"
+      "application": "GraphDesk"
     },
     {
       "id": "file:app.deploy#app.deploy",
       "kind": "file",
       "name": "app.deploy",
       "file": "app.deploy",
-      "application": "app.actor"
+      "application": "GraphDesk"
     },
     {
       "id": "platformCapability:app.deploy#longRunningProcess",
       "kind": "platformCapability",
       "name": "longRunningProcess",
       "file": "app.deploy",
-      "application": "app.actor"
+      "application": "GraphDesk"
     },
     {
       "id": "bkm:app.dmn#GraphDecisions.assess_refund",
       "kind": "bkm",
       "name": "GraphDecisions.assess_refund",
       "file": "app.dmn",
-      "application": "app.actor"
+      "application": "GraphDesk"
     },
     {
       "id": "decision:app.dmn#GraphDecisions.RefundAssessment",
       "kind": "decision",
       "name": "GraphDecisions.RefundAssessment",
       "file": "app.dmn",
-      "application": "app.actor"
+      "application": "GraphDesk"
     },
     {
       "id": "decision:app.dmn#GraphDecisions.RefundEligibility",
       "kind": "decision",
       "name": "GraphDecisions.RefundEligibility",
       "file": "app.dmn",
-      "application": "app.actor"
+      "application": "GraphDesk"
     },
     {
       "id": "decisionModel:app.dmn#GraphDecisions",
       "kind": "decisionModel",
       "name": "GraphDecisions",
       "file": "app.dmn",
-      "application": "app.actor"
+      "application": "GraphDesk"
     },
     {
       "id": "decisionService:app.dmn#GraphDecisions.AssessRefund",
       "kind": "decisionService",
       "name": "GraphDecisions.AssessRefund",
       "file": "app.dmn",
-      "application": "app.actor"
+      "application": "GraphDesk"
     },
     {
       "id": "file:app.dmn#app.dmn",
       "kind": "file",
       "name": "app.dmn",
       "file": "app.dmn",
-      "application": "app.actor"
+      "application": "GraphDesk"
     },
     {
       "id": "inputData:app.dmn#GraphDecisions.requested_cents",
       "kind": "inputData",
       "name": "GraphDecisions.requested_cents",
       "file": "app.dmn",
-      "application": "app.actor"
+      "application": "GraphDesk"
     },
     {
       "id": "inputData:app.dmn#GraphDecisions.ticket",
       "kind": "inputData",
       "name": "GraphDecisions.ticket",
       "file": "app.dmn",
-      "application": "app.actor"
+      "application": "GraphDesk"
     },
     {
       "id": "knowledgeSource:app.dmn#GraphDecisions.RefundPolicy",
       "kind": "knowledgeSource",
       "name": "GraphDecisions.RefundPolicy",
       "file": "app.dmn",
-      "application": "app.actor"
+      "application": "GraphDesk"
     },
     {
       "id": "channel:app.evt#app.refunds",
       "kind": "channel",
       "name": "app.refunds",
       "file": "app.evt",
-      "application": "app.actor"
+      "application": "GraphDesk"
     },
     {
       "id": "channel:app.evt#app.tickets",
       "kind": "channel",
       "name": "app.tickets",
       "file": "app.evt",
-      "application": "app.actor"
+      "application": "GraphDesk"
     },
     {
       "id": "event:app.evt#app.RefundApproved",
       "kind": "event",
       "name": "app.RefundApproved",
       "file": "app.evt",
-      "application": "app.actor"
+      "application": "GraphDesk"
     },
     {
       "id": "event:app.evt#app.RefundRequested",
       "kind": "event",
       "name": "app.RefundRequested",
       "file": "app.evt",
-      "application": "app.actor"
+      "application": "GraphDesk"
     },
     {
       "id": "event:app.evt#app.TicketRaised",
       "kind": "event",
       "name": "app.TicketRaised",
       "file": "app.evt",
-      "application": "app.actor"
+      "application": "GraphDesk"
     },
     {
       "id": "file:app.evt#app.evt",
       "kind": "file",
       "name": "app.evt",
       "file": "app.evt",
-      "application": "app.actor"
+      "application": "GraphDesk"
     },
     {
       "id": "action:app.ifml#RaiseRefund",
       "kind": "action",
       "name": "RaiseRefund",
       "file": "app.ifml",
-      "application": "app.actor"
+      "application": "GraphDesk"
     },
     {
       "id": "component:app.ifml#Inbox.queue",
       "kind": "component",
       "name": "Inbox.queue",
       "file": "app.ifml",
-      "application": "app.actor"
+      "application": "GraphDesk"
     },
     {
       "id": "component:app.ifml#Intake.intake",
       "kind": "component",
       "name": "Intake.intake",
       "file": "app.ifml",
-      "application": "app.actor"
+      "application": "GraphDesk"
     },
     {
       "id": "file:app.ifml#app.ifml",
       "kind": "file",
       "name": "app.ifml",
       "file": "app.ifml",
-      "application": "app.actor"
+      "application": "GraphDesk"
     },
     {
       "id": "flow:app.ifml#app",
       "kind": "flow",
       "name": "app",
       "file": "app.ifml",
-      "application": "app.actor"
+      "application": "GraphDesk"
     },
     {
       "id": "view:app.ifml#Inbox",
       "kind": "view",
       "name": "Inbox",
       "file": "app.ifml",
-      "application": "app.actor"
+      "application": "GraphDesk"
     },
     {
       "id": "view:app.ifml#Intake",
       "kind": "view",
       "name": "Intake",
       "file": "app.ifml",
-      "application": "app.actor"
+      "application": "GraphDesk"
     },
     {
       "id": "class:app.mox#nz.example.graph.Invoice",
       "kind": "class",
       "name": "nz.example.graph.Invoice",
       "file": "app.mox",
-      "application": "app.actor"
+      "application": "GraphDesk"
     },
     {
       "id": "class:app.mox#nz.example.graph.Note",
       "kind": "class",
       "name": "nz.example.graph.Note",
       "file": "app.mox",
-      "application": "app.actor"
+      "application": "GraphDesk"
     },
     {
       "id": "class:app.mox#nz.example.graph.RefundDecision",
       "kind": "class",
       "name": "nz.example.graph.RefundDecision",
       "file": "app.mox",
-      "application": "app.actor"
+      "application": "GraphDesk"
     },
     {
       "id": "class:app.mox#nz.example.graph.Ticket",
       "kind": "class",
       "name": "nz.example.graph.Ticket",
       "file": "app.mox",
-      "application": "app.actor"
+      "application": "GraphDesk"
     },
     {
       "id": "class:app.mox#nz.example.graph.User",
       "kind": "class",
       "name": "nz.example.graph.User",
       "file": "app.mox",
-      "application": "app.actor"
+      "application": "GraphDesk"
     },
     {
       "id": "enum:app.mox#nz.example.graph.TicketState",
       "kind": "enum",
       "name": "nz.example.graph.TicketState",
       "file": "app.mox",
-      "application": "app.actor"
+      "application": "GraphDesk"
     },
     {
       "id": "feature:app.mox#nz.example.graph.Invoice.amount",
       "kind": "feature",
       "name": "nz.example.graph.Invoice.amount",
       "file": "app.mox",
-      "application": "app.actor"
+      "application": "GraphDesk"
     },
     {
       "id": "feature:app.mox#nz.example.graph.Invoice.invoiceId",
       "kind": "feature",
       "name": "nz.example.graph.Invoice.invoiceId",
       "file": "app.mox",
-      "application": "app.actor"
+      "application": "GraphDesk"
     },
     {
       "id": "feature:app.mox#nz.example.graph.Note.body",
       "kind": "feature",
       "name": "nz.example.graph.Note.body",
       "file": "app.mox",
-      "application": "app.actor"
+      "application": "GraphDesk"
     },
     {
       "id": "feature:app.mox#nz.example.graph.Note.internalNotes",
       "kind": "feature",
       "name": "nz.example.graph.Note.internalNotes",
       "file": "app.mox",
-      "application": "app.actor"
+      "application": "GraphDesk"
     },
     {
       "id": "feature:app.mox#nz.example.graph.Note.noteId",
       "kind": "feature",
       "name": "nz.example.graph.Note.noteId",
       "file": "app.mox",
-      "application": "app.actor"
+      "application": "GraphDesk"
     },
     {
       "id": "feature:app.mox#nz.example.graph.Note.ticket",
       "kind": "feature",
       "name": "nz.example.graph.Note.ticket",
       "file": "app.mox",
-      "application": "app.actor"
+      "application": "GraphDesk"
     },
     {
       "id": "feature:app.mox#nz.example.graph.RefundDecision.approved",
       "kind": "feature",
       "name": "nz.example.graph.RefundDecision.approved",
       "file": "app.mox",
-      "application": "app.actor"
+      "application": "GraphDesk"
     },
     {
       "id": "feature:app.mox#nz.example.graph.RefundDecision.cents",
       "kind": "feature",
       "name": "nz.example.graph.RefundDecision.cents",
       "file": "app.mox",
-      "application": "app.actor"
+      "application": "GraphDesk"
     },
     {
       "id": "feature:app.mox#nz.example.graph.RefundDecision.decisionId",
       "kind": "feature",
       "name": "nz.example.graph.RefundDecision.decisionId",
       "file": "app.mox",
-      "application": "app.actor"
+      "application": "GraphDesk"
     },
     {
       "id": "feature:app.mox#nz.example.graph.Ticket.assignee",
       "kind": "feature",
       "name": "nz.example.graph.Ticket.assignee",
       "file": "app.mox",
-      "application": "app.actor"
+      "application": "GraphDesk"
     },
     {
       "id": "feature:app.mox#nz.example.graph.Ticket.internal",
       "kind": "feature",
       "name": "nz.example.graph.Ticket.internal",
       "file": "app.mox",
-      "application": "app.actor"
+      "application": "GraphDesk"
     },
     {
       "id": "feature:app.mox#nz.example.graph.Ticket.needsRefund",
       "kind": "feature",
       "name": "nz.example.graph.Ticket.needsRefund",
       "file": "app.mox",
-      "application": "app.actor"
+      "application": "GraphDesk"
     },
     {
       "id": "feature:app.mox#nz.example.graph.Ticket.notes",
       "kind": "feature",
       "name": "nz.example.graph.Ticket.notes",
       "file": "app.mox",
-      "application": "app.actor"
+      "application": "GraphDesk"
     },
     {
       "id": "feature:app.mox#nz.example.graph.Ticket.refundCents",
       "kind": "feature",
       "name": "nz.example.graph.Ticket.refundCents",
       "file": "app.mox",
-      "application": "app.actor"
+      "application": "GraphDesk"
     },
     {
       "id": "feature:app.mox#nz.example.graph.Ticket.state",
       "kind": "feature",
       "name": "nz.example.graph.Ticket.state",
       "file": "app.mox",
-      "application": "app.actor"
+      "application": "GraphDesk"
     },
     {
       "id": "feature:app.mox#nz.example.graph.Ticket.ticketNo",
       "kind": "feature",
       "name": "nz.example.graph.Ticket.ticketNo",
       "file": "app.mox",
-      "application": "app.actor"
+      "application": "GraphDesk"
     },
     {
       "id": "feature:app.mox#nz.example.graph.Ticket.title",
       "kind": "feature",
       "name": "nz.example.graph.Ticket.title",
       "file": "app.mox",
-      "application": "app.actor"
+      "application": "GraphDesk"
     },
     {
       "id": "feature:app.mox#nz.example.graph.User.active",
       "kind": "feature",
       "name": "nz.example.graph.User.active",
       "file": "app.mox",
-      "application": "app.actor"
+      "application": "GraphDesk"
     },
     {
       "id": "feature:app.mox#nz.example.graph.User.assignedTickets",
       "kind": "feature",
       "name": "nz.example.graph.User.assignedTickets",
       "file": "app.mox",
-      "application": "app.actor"
+      "application": "GraphDesk"
     },
     {
       "id": "feature:app.mox#nz.example.graph.User.name",
       "kind": "feature",
       "name": "nz.example.graph.User.name",
       "file": "app.mox",
-      "application": "app.actor"
+      "application": "GraphDesk"
     },
     {
       "id": "feature:app.mox#nz.example.graph.User.userId",
       "kind": "feature",
       "name": "nz.example.graph.User.userId",
       "file": "app.mox",
-      "application": "app.actor"
+      "application": "GraphDesk"
     },
     {
       "id": "file:app.mox#app.mox",
       "kind": "file",
       "name": "app.mox",
       "file": "app.mox",
-      "application": "app.actor"
+      "application": "GraphDesk"
     },
     {
       "id": "operation:app.mox#nz.example.graph.Ticket.raiseRefund",
       "kind": "operation",
       "name": "nz.example.graph.Ticket.raiseRefund",
       "file": "app.mox",
-      "application": "app.actor"
+      "application": "GraphDesk"
     },
     {
       "id": "file:app.uc#app.uc",
       "kind": "file",
       "name": "app.uc",
       "file": "app.uc",
-      "application": "app.actor"
+      "application": "GraphDesk"
     },
     {
       "id": "useCase:app.uc#RaiseRefund",
       "kind": "useCase",
       "name": "RaiseRefund",
       "file": "app.uc",
-      "application": "app.actor"
+      "application": "GraphDesk"
     },
     {
       "id": "useCase:app.uc#TrackTickets",
       "kind": "useCase",
       "name": "TrackTickets",
       "file": "app.uc",
-      "application": "app.actor"
+      "application": "GraphDesk"
     },
     {
       "id": "actor:other.actor#Audit.Auditor",

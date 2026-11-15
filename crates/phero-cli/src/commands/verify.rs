@@ -189,6 +189,18 @@ fn emit_artifacts(inputs: &[PathBuf]) -> anyhow::Result<Vec<Emission>> {
     let mut emissions = Vec::new();
     let mut failed = 0usize;
     for input in inputs {
+        if is_ddd_file(input) {
+            let fragment = std::fs::read_to_string(input).ok().is_some_and(|source| {
+                phero_syntax::parse_ddd(&source)
+                    .ast
+                    .is_some_and(|ast| ast.application.is_none() && !ast.fragments.is_empty())
+            });
+            if fragment {
+                // A fragment is part of its root's application, not an
+                // artifact of its own; the root's closure hashes its bytes.
+                continue;
+            }
+        }
         let kind = artifact_kind(input)?;
         let json = if is_ifml_file(input) {
             match ifml_manifest_json(input)? {

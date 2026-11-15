@@ -17,6 +17,12 @@ impl<'src> Formatter<'src> {
                 Some(Node::Token(token, _)) => match token {
                     Token::Import => self.scan_ddd_import(),
                     Token::Ident(ddd::APPLICATION) => self.scan_ddd_application(),
+                    Token::Ident(ddd::MODULE) => {
+                        self.begin_top_decl();
+                        self.advance();
+                        self.take_name();
+                        self.scan_body(BodyKind::DddModule);
+                    }
                     _ => self.scan_top_junk_ddd(),
                 },
             }
@@ -64,7 +70,7 @@ impl<'src> Formatter<'src> {
                 self.scan_body(BodyKind::DddService);
             }
             Some(Token::Ident(ddd::SEARCH)) => self.scan_ddd_search(),
-            Some(Token::Ident(ddd::EXTEND)) => self.scan_ddd_extend(),
+            Some(Token::Ident(ddd::CHILDREN | ddd::EXTEND)) => self.scan_ddd_extend(),
             Some(Token::Ident(text)) if ddd::starts_design_decl(text) => self.scan_ddd_design(),
             _ => {
                 // Junk always consumes the front token first (the stop set
@@ -131,6 +137,29 @@ impl<'src> Formatter<'src> {
                 }
             }
         }
+        // The authored aggregate boundary (DD4): `root` or
+        // `aggregate <Root>`, kept on the design header line in canonical
+        // order.
+        let aggregate_boundary = matches!(self.peek_tok(), Some(Token::Ident(ddd::AGGREGATE)));
+        if aggregate_boundary || matches!(self.peek_tok(), Some(Token::Ident(ddd::ROOT))) {
+            self.advance();
+            if aggregate_boundary {
+                self.scan_qname();
+            }
+        }
+        // The invariant clauses (DD5): each on its own line at one extra
+        // indent, before the repository/machine blocks.
+        let mut invariant_indent = false;
+        if matches!(self.peek_tok(), Some(Token::Ident(ddd::INVARIANT))) {
+            self.flush_line();
+            self.indent += 1;
+            invariant_indent = true;
+            while matches!(self.peek_tok(), Some(Token::Ident(ddd::INVARIANT))) {
+                self.advance();
+                self.scan_raw_expr_verbatim_until_semicolon();
+                self.flush_line();
+            }
+        }
         // The DTO member suffix (issue pherolang#300): a projection's
         // `from <Source> { ... }` or a standalone `{ ... }` block. Both
         // blocks expand one member per line and are followed by one
@@ -163,6 +192,9 @@ impl<'src> Formatter<'src> {
             self.push_text(":", true);
             self.scan_qname();
             self.scan_body(BodyKind::DddMachine);
+        }
+        if invariant_indent {
+            self.indent -= 1;
         }
     }
 
@@ -668,7 +700,10 @@ impl<'src> Formatter<'src> {
     /// (`op signature => feature.action when (...) ;`, the service-op
     /// layout).
     pub(crate) fn scan_ddd_extend(&mut self) {
-        self.advance(); // the `extend` keyword
+        // The deprecated `extend` spelling is rewritten to the canonical
+        // `children` (DD4); both consume the same body.
+        self.bump_token();
+        self.push_text(ddd::CHILDREN, false);
         self.take_name();
         self.scan_body(BodyKind::DddExtend);
     }
@@ -897,6 +932,40 @@ impl<'src> Formatter<'src> {
         }
     }
 
+    /// Re-emits a raw expression **verbatim** from the source slice, from
+    /// the current token through the depth-0 `;` (the `raw_expr`
+    /// convention). Verbatim is the contract for invariants: operator
+    /// spellings (`==`, `>=`, `=>`) must not be respaced token by token.
+    /// The caller owns the keyword before it and the line break after it.
+    pub(crate) fn scan_raw_expr_verbatim_until_semicolon(&mut self) {
+        let Some(start) = self.front().map(|node| node.span().start) else {
+            return;
+        };
+        let mut depth = 0usize;
+        let mut index = self.pos;
+        let mut end = self.source.len();
+        while let Some(node) = self.nodes.get(index) {
+            match node {
+                Node::Token(Token::Other(';'), span) if depth == 0 => {
+                    end = span.start;
+                    break;
+                }
+                Node::Token(Token::LParen | Token::LBracket | Token::LBrace, _) => depth += 1,
+                Node::Token(Token::RParen | Token::RBracket | Token::RBrace, _) => {
+                    depth = depth.saturating_sub(1)
+                }
+                _ => {}
+            }
+            index += 1;
+        }
+        let text = self.source[start..end].trim().to_string();
+        self.pos = index;
+        if !text.is_empty() {
+            self.push_text(&text, false);
+        }
+        self.take_if(|token| matches!(token, Token::Other(';')));
+    }
+
     /// One member of a projection DTO block (issue pherolang#300): `name;`
     /// or `name = <expression>;`. The expression re-emits verbatim token by
     /// token at canonical spacing, terminating at the depth-0 `;` — the same
@@ -1020,7 +1089,9 @@ impl<'src> Formatter<'src> {
             };
             let starts_item = matches!(
                 token,
-                Some(Token::Import) | Some(Token::Ident("application"))
+                Some(Token::Import)
+                    | Some(Token::Ident("application"))
+                    | Some(Token::Ident(ddd::MODULE))
             );
             if items.is_empty() || (depth == 0 && starts_item) {
                 items.push((index, index));

@@ -143,13 +143,13 @@ impl PheroBackend {
                 // against every `.dmn` artifact of the directory.
                 let actors = self.sibling_actor_models(uri);
                 let decisions = self.sibling_decision_models(uri);
-                phero_driver::compile_ddd_str_with_decisions(
-                    &driver_path,
-                    &text,
-                    &domains,
-                    &imports,
-                    &actors,
-                    &decisions,
+                // DD8 (issue pherolang#305): a fragment compiles through
+                // its root; a root gathers its fragment closure.
+                let app = self.ddd_app_sources(uri, &text);
+                let (root_path, root_text, fragments) =
+                    app.unwrap_or((driver_path.clone(), text.clone(), Vec::new()));
+                phero_driver::compile_ddd_app_str_with_decisions(
+                    &root_path, &root_text, &fragments, &domains, &imports, &actors, &decisions,
                 )
                 .diagnostics
                 .iter()
@@ -310,6 +310,60 @@ impl PheroBackend {
         }
         let imports = domain_import_bundle(&domains);
         (domains, imports)
+    }
+
+    /// The root application and `.ddd` fragment closure of one open `.ddd`
+    /// document (DD8): the document itself when it is a root, else the
+    /// directory's root whose import closure reaches it. Open buffers win
+    /// over disk. `None` when no root reaches a fragment.
+    pub(super) fn ddd_app_sources(
+        &self,
+        uri: &Uri,
+        text: &str,
+    ) -> Option<(String, String, Vec<phero_driver::DddFragment>)> {
+        let path = uri.to_file_path()?;
+        let key = path.display().to_string();
+        let is_root = |source: &str| {
+            phero_syntax::parse_ddd(source)
+                .ast
+                .is_some_and(|ast| ast.application.is_some())
+        };
+        let (root_path, root_text) = if is_root(text) {
+            (key, text.to_string())
+        } else {
+            let directory = path.parent()?;
+            let mut found = None;
+            for (candidate, surface, candidate_text) in self.directory_candidates(directory) {
+                if surface != Surface::Known(SurfaceKind::Ddd) || !is_root(&candidate_text) {
+                    continue;
+                }
+                let candidate_key = candidate.display().to_string();
+                let mut fetch = |resolved: &str| self.fetch_open_or_disk(resolved);
+                let gathered = phero_driver::project::gather_ddd_fragments(
+                    &candidate_key,
+                    &candidate_text,
+                    &mut fetch,
+                );
+                if gathered
+                    .fragments
+                    .iter()
+                    .any(|(fragment, _)| fragment == &key)
+                {
+                    found = Some((candidate_key, candidate_text));
+                    break;
+                }
+            }
+            found?
+        };
+        let mut fetch = |resolved: &str| self.fetch_open_or_disk(resolved);
+        let gathered =
+            phero_driver::project::gather_ddd_fragments(&root_path, &root_text, &mut fetch);
+        let fragments = gathered
+            .fragments
+            .into_iter()
+            .map(|(path, source)| phero_driver::DddFragment { path, source })
+            .collect();
+        Some((root_path, root_text, fragments))
     }
 
     /// The `.mox` domains one open `.actor` policy imports (open documents

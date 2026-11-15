@@ -43,7 +43,7 @@ Root shapes, as actually serialized:
 | --- | --- |
 | Domain IR (`Model`) | `{"formatVersion": N, "pheroVersion"?: "…", "packages": […]}` |
 | Actor policy (`ActorModel`) | `{"formatVersion": N, "blocks"?: […]}` — block-less serializes as exactly `{"formatVersion": N}` |
-| DDD design (`ddd::DddModel`) | `{"formatVersion": N, "pheroVersion"?: "…", "application"?: {…}, "errors"?: […], "modules"?: […]}` (the design keys omitted when empty; `pheroVersion` is provenance only; a `value` design nested inside carries the fixed `semantics` block, entity and dto designs omit it — strict value semantics, issue #299; a `dto` design carries `dtoShape`, and `class` is omitted for a standalone DTO — DD3, issue #300; `errors` carries the application-scoped error declarations, each module its private ones, and operations their resolved `throws` — DD7, issue #304) |
+| DDD design (`ddd::DddModel`) | `{"formatVersion": N, "pheroVersion"?: "…", "application"?: {…}, "errors"?: […], "modules"?: […]}` (the design keys omitted when empty; `pheroVersion` is provenance only; a `value` design nested inside carries the fixed `semantics` block, entity and dto designs omit it — strict value semantics, issue #299; a `dto` design carries `dtoShape`, and `class` is omitted for a standalone DTO — DD3, issue #300; `errors` carries the application-scoped error declarations, each module its private ones, and operations their resolved `throws` — DD7, issue #304; every entity design carries its effective `isAggregateRoot` (absent only when the verdict is undecided) and a non-root its `aggregate {root, origin}` — DD4, issue #301; entity/value designs carry the sparse ordered `invariants: [{expression}]` — DD5, issue #302; a multi-file application is one merged artifact for its root plus imported fragments, never one per fragment — DD8, issue #305 — and `formatVersion` stays 2) |
 | Event contract (`events::EventModel`) | `{"formatVersion": N, "events"?: […], "channels"?: […], "subscriptions"?: […]}` (all omitted when empty) |
 | Deployment (`deploy::DeployModel`) | `{"formatVersion": N, "applications"?: […], "profiles"?: […], "deployments"?: […]}` (all omitted when empty) |
 | Use case (`usecases::UseCaseModel`) | `{"formatVersion": N, "useCases"?: […]}` (omitted when empty) |
@@ -237,21 +237,25 @@ naming the file and violation when anything fails:
   instance);
 - `formatVersion` is present, an unsigned integer, and supported — a higher
   version is rejected with an error naming it;
-- DDD contract (issues #298/#299/#300): a contract-complete design carries
-  its `application` and a non-empty `pheroVersion`; every authored reference
-  carries its resolved companion (`typeRef` — absent for a standalone DTO,
-  `delegation.targetRef`, `dependencyRefs`, `decisionDependencyRefs`,
-  `capabilityRefs`, `emittedRefs`, `decisionRefs`, `entityRef`, and
-  search-member `typeRef`s), the parallel lists are index-aligned, search
-  references are complete, stereotype/flag combinations are legal, every
-  `value` design carries the fixed `semantics` block (strict value
-  semantics, issue #299) while no entity or dto design carries one, every
-  `dto` design carries a `dtoShape` (boundary name, optional source,
-  `input`/`output` direction, members in declaration order of kind
-  `select`/`derive`/`declared` with unique output names) while no other
-  design does, every
+- DDD contract (issues #298/#299/#300/#301/#302): a contract-complete design
+  carries its `application` and a non-empty `pheroVersion`; every authored
+  reference carries its resolved companion (`typeRef` — absent for a
+  standalone DTO, `delegation.targetRef`, `dependencyRefs`,
+  `decisionDependencyRefs`, `capabilityRefs`, `emittedRefs`, `decisionRefs`,
+  `entityRef`, and search-member `typeRef`s), the parallel lists are
+  index-aligned, search references are complete, stereotype/flag
+  combinations are legal, every `value` design carries the fixed `semantics`
+  block (strict value semantics, issue #299) while no entity or dto design
+  carries one, every `dto` design carries a `dtoShape` (boundary name,
+  optional source, `input`/`output` direction, members in declaration order
+  of kind `select`/`derive`/`declared` with unique output names) while no
+  other design does, every
   `DddTypeRef` DTO reference (`{"dto": "<name>"}`) resolves to a `dtoShape`
-  name in the artifact, no output DTO fills a parameter slot, every error
+  name in the artifact, no output DTO fills a parameter slot, every entity
+  design carries `isAggregateRoot` with the membership its verdict implies
+  (a root no `aggregate`, a non-root a root design this artifact marks as a
+  root) and every invariant expression is non-empty on an entity or value
+  design (DD4/DD5), every error
   name is unique with unique payload fields and no prelude shadow, every
   `throws` reference resolves with a consistent scope/module, every body
   raise appears in its operation's `throws`, and every delegation's `throws`

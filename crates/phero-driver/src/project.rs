@@ -437,6 +437,81 @@ pub fn gather_domain_sources(
     gather_domains_relative(path_key, source, import_paths, fetch, false).unwrap_or_default()
 }
 
+/// The `.ddd` import closure of a design root (DD8, issue pherolang#305):
+/// the transitively imported fragment sources, in first-visit import order,
+/// plus the misses and import cycles the host must report.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct DddFragments {
+    /// Each fragment as `(host-resolved path, source)`, first visit first.
+    pub fragments: Vec<(String, String)>,
+    /// Imports the fetch could not provide, as written.
+    pub missing: Vec<String>,
+    /// The import path that closed a cycle, when one exists.
+    pub cycles: Vec<String>,
+}
+
+/// Gathers a `.ddd` root's `.ddd` import closure. Import strings resolve
+/// relative to the importing file's directory (the house rule); non-`.ddd`
+/// imports are ignored here — the host gathers domains and decision models
+/// separately. A fragment's own `.ddd` imports are followed recursively, so
+/// nested fragment graphs work. Cycles and misses are reported, never
+/// looped on.
+pub fn gather_ddd_fragments(
+    path_key: &str,
+    source: &str,
+    fetch: &mut dyn FnMut(&str) -> Option<String>,
+) -> DddFragments {
+    use std::collections::BTreeSet;
+
+    fn walk(
+        path: &str,
+        source: &str,
+        fetch: &mut dyn FnMut(&str) -> Option<String>,
+        visiting: &mut Vec<String>,
+        visited: &mut BTreeSet<String>,
+        out: &mut DddFragments,
+    ) {
+        let directory = crate::engine_common::dir_of(path);
+        let Some(ast) = phero_syntax::parse_ddd(source).ast else {
+            return;
+        };
+        for import in &ast.imports {
+            if !import.path.ends_with(".ddd") {
+                continue;
+            }
+            let resolved = directory.join(&import.path).display().to_string();
+            if visiting.iter().any(|seen| seen == &resolved) {
+                out.cycles.push(resolved);
+                continue;
+            }
+            if !visited.insert(resolved.clone()) {
+                continue;
+            }
+            let Some(fragment) = fetch(&resolved) else {
+                out.missing.push(import.path.clone());
+                continue;
+            };
+            visiting.push(resolved.clone());
+            walk(&resolved, &fragment, fetch, visiting, visited, out);
+            visiting.pop();
+            out.fragments.push((resolved, fragment));
+        }
+    }
+
+    let mut out = DddFragments::default();
+    let mut visiting = vec![path_key.to_string()];
+    let mut visited = BTreeSet::from([path_key.to_string()]);
+    walk(
+        path_key,
+        source,
+        fetch,
+        &mut visiting,
+        &mut visited,
+        &mut out,
+    );
+    out
+}
+
 /// The buckets a `.uc` (or `.cmmn`) use-case file's imports resolve to:
 /// the raw domains plus the pre-compiled `.ddd`/`.actor`/`.evt` artifacts
 /// [`crate::compile_usecase_str`] consumes — the CLI's

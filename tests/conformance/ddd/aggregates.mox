@@ -1,0 +1,18 @@
+package nz.example.sales
+
+class Order {
+    id readonly String orderNo
+    int total
+    contains OrderLine[] lines opposite order
+}
+
+class OrderLine {
+    container Order order opposite lines
+    int quantity
+    int unitPrice
+}
+
+class DateRange {
+    readonly int start
+    readonly int end
+}

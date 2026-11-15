@@ -1,7 +1,7 @@
 {
   "formatVersion": 1,
   "surface": "ddd",
-  "sourceHash": "sha256:0c8bcb5f6ecb4f54947af979e6e519059a29acd71beae1487a522dd09f41ceb6",
+  "sourceHash": "sha256:3e4e3e5aa2e9ae611d26b029a9b86a97f1bd4b14634430b57feafccdc0483c8b",
   "generator": {
     "name": "pherolang",
     "version": "0.3.0"
@@ -1621,768 +1621,828 @@
       "modifiers": []
     },
     {
-      "start": 2367,
-      "end": 2377,
-      "class": "variable",
-      "modifiers": []
-    },
-    {
-      "start": 2378,
-      "end": 2394,
-      "class": "type",
-      "modifiers": [
-        "declaration"
-      ]
-    },
-    {
-      "start": 2395,
-      "end": 2396,
-      "class": "punctuation",
-      "modifiers": []
-    },
-    {
-      "start": 2409,
-      "end": 2417,
-      "class": "function",
-      "modifiers": [
-        "declaration"
-      ]
-    },
-    {
-      "start": 2417,
-      "end": 2418,
-      "class": "punctuation",
-      "modifiers": []
-    },
-    {
-      "start": 2431,
-      "end": 2438,
-      "class": "function",
-      "modifiers": [
-        "declaration"
-      ]
-    },
-    {
-      "start": 2438,
-      "end": 2439,
-      "class": "punctuation",
-      "modifiers": []
-    },
-    {
-      "start": 2452,
-      "end": 2465,
-      "class": "function",
-      "modifiers": [
-        "declaration"
-      ]
-    },
-    {
-      "start": 2465,
-      "end": 2466,
-      "class": "punctuation",
-      "modifiers": []
-    },
-    {
-      "start": 2479,
-      "end": 2489,
-      "class": "function",
-      "modifiers": [
-        "declaration"
-      ]
-    },
-    {
-      "start": 2489,
-      "end": 2490,
-      "class": "punctuation",
-      "modifiers": []
-    },
-    {
-      "start": 2503,
-      "end": 2507,
-      "class": "function",
-      "modifiers": [
-        "declaration"
-      ]
-    },
-    {
-      "start": 2507,
-      "end": 2508,
-      "class": "punctuation",
-      "modifiers": []
-    },
-    {
-      "start": 2521,
-      "end": 2527,
-      "class": "function",
-      "modifiers": [
-        "declaration"
-      ]
-    },
-    {
-      "start": 2527,
-      "end": 2528,
-      "class": "punctuation",
-      "modifiers": []
-    },
-    {
-      "start": 2541,
-      "end": 2550,
+      "start": 2379,
+      "end": 2388,
       "class": "keyword",
       "modifiers": []
     },
     {
-      "start": 2551,
-      "end": 2557,
-      "class": "type",
+      "start": 2389,
+      "end": 2400,
+      "class": "variable",
       "modifiers": []
     },
     {
-      "start": 2558,
-      "end": 2569,
+      "start": 2401,
+      "end": 2403,
+      "class": "operator",
+      "modifiers": []
+    },
+    {
+      "start": 2404,
+      "end": 2405,
+      "class": "number",
+      "modifiers": []
+    },
+    {
+      "start": 2405,
+      "end": 2406,
+      "class": "punctuation",
+      "modifiers": []
+    },
+    {
+      "start": 2419,
+      "end": 2429,
+      "class": "keyword",
+      "modifiers": []
+    },
+    {
+      "start": 2430,
+      "end": 2446,
+      "class": "type",
+      "modifiers": [
+        "declaration"
+      ]
+    },
+    {
+      "start": 2447,
+      "end": 2448,
+      "class": "punctuation",
+      "modifiers": []
+    },
+    {
+      "start": 2465,
+      "end": 2473,
       "class": "function",
       "modifiers": [
         "declaration"
       ]
     },
     {
-      "start": 2569,
-      "end": 2570,
+      "start": 2473,
+      "end": 2474,
       "class": "punctuation",
       "modifiers": []
     },
     {
-      "start": 2570,
-      "end": 2576,
+      "start": 2491,
+      "end": 2498,
+      "class": "function",
+      "modifiers": [
+        "declaration"
+      ]
+    },
+    {
+      "start": 2498,
+      "end": 2499,
+      "class": "punctuation",
+      "modifiers": []
+    },
+    {
+      "start": 2516,
+      "end": 2529,
+      "class": "function",
+      "modifiers": [
+        "declaration"
+      ]
+    },
+    {
+      "start": 2529,
+      "end": 2530,
+      "class": "punctuation",
+      "modifiers": []
+    },
+    {
+      "start": 2547,
+      "end": 2557,
+      "class": "function",
+      "modifiers": [
+        "declaration"
+      ]
+    },
+    {
+      "start": 2557,
+      "end": 2558,
+      "class": "punctuation",
+      "modifiers": []
+    },
+    {
+      "start": 2575,
+      "end": 2579,
+      "class": "function",
+      "modifiers": [
+        "declaration"
+      ]
+    },
+    {
+      "start": 2579,
+      "end": 2580,
+      "class": "punctuation",
+      "modifiers": []
+    },
+    {
+      "start": 2597,
+      "end": 2603,
+      "class": "function",
+      "modifiers": [
+        "declaration"
+      ]
+    },
+    {
+      "start": 2603,
+      "end": 2604,
+      "class": "punctuation",
+      "modifiers": []
+    },
+    {
+      "start": 2621,
+      "end": 2630,
+      "class": "keyword",
+      "modifiers": []
+    },
+    {
+      "start": 2631,
+      "end": 2637,
+      "class": "type",
+      "modifiers": []
+    },
+    {
+      "start": 2638,
+      "end": 2649,
+      "class": "function",
+      "modifiers": [
+        "declaration"
+      ]
+    },
+    {
+      "start": 2649,
+      "end": 2650,
+      "class": "punctuation",
+      "modifiers": []
+    },
+    {
+      "start": 2650,
+      "end": 2656,
       "class": "type",
       "modifiers": [
         "defaultLibrary"
       ]
     },
     {
-      "start": 2577,
-      "end": 2582,
+      "start": 2657,
+      "end": 2662,
       "class": "parameter",
       "modifiers": [
         "declaration"
       ]
     },
     {
-      "start": 2582,
-      "end": 2584,
+      "start": 2662,
+      "end": 2664,
       "class": "punctuation",
       "modifiers": []
     },
     {
-      "start": 2593,
-      "end": 2594,
+      "start": 2677,
+      "end": 2678,
       "class": "punctuation",
       "modifiers": []
     },
     {
-      "start": 2603,
-      "end": 2669,
+      "start": 2687,
+      "end": 2753,
       "class": "comment",
       "modifiers": [
         "documentation"
       ]
     },
     {
-      "start": 2678,
-      "end": 2748,
+      "start": 2762,
+      "end": 2832,
       "class": "comment",
       "modifiers": [
         "documentation"
       ]
     },
     {
-      "start": 2757,
-      "end": 2797,
+      "start": 2841,
+      "end": 2881,
       "class": "comment",
       "modifiers": [
         "documentation"
       ]
     },
     {
-      "start": 2806,
-      "end": 2811,
+      "start": 2890,
+      "end": 2895,
       "class": "keyword",
       "modifiers": []
     },
     {
-      "start": 2812,
-      "end": 2826,
+      "start": 2896,
+      "end": 2910,
       "class": "type",
       "modifiers": [
         "declaration"
       ]
     },
     {
-      "start": 2827,
-      "end": 2840,
+      "start": 2911,
+      "end": 2924,
       "class": "annotation",
       "modifiers": []
     },
     {
-      "start": 2849,
-      "end": 2917,
-      "class": "comment",
-      "modifiers": [
-        "documentation"
-      ]
+      "start": 2937,
+      "end": 2946,
+      "class": "keyword",
+      "modifiers": []
     },
     {
-      "start": 2926,
-      "end": 2945,
-      "class": "comment",
-      "modifiers": [
-        "documentation"
-      ]
+      "start": 2947,
+      "end": 2952,
+      "class": "variable",
+      "modifiers": []
     },
     {
-      "start": 2954,
+      "start": 2953,
+      "end": 2955,
+      "class": "operator",
+      "modifiers": []
+    },
+    {
+      "start": 2956,
       "end": 2957,
-      "class": "keyword",
+      "class": "number",
       "modifiers": []
     },
     {
-      "start": 2958,
-      "end": 2967,
-      "class": "type",
-      "modifiers": [
-        "declaration"
-      ]
-    },
-    {
-      "start": 2968,
-      "end": 2969,
+      "start": 2957,
+      "end": 2958,
       "class": "punctuation",
       "modifiers": []
     },
     {
-      "start": 2982,
-      "end": 2988,
-      "class": "type",
-      "modifiers": [
-        "defaultLibrary"
-      ]
-    },
-    {
-      "start": 2989,
-      "end": 2994,
-      "class": "property",
-      "modifiers": []
-    },
-    {
-      "start": 2994,
-      "end": 2995,
-      "class": "punctuation",
-      "modifiers": []
-    },
-    {
-      "start": 3008,
-      "end": 3015,
-      "class": "type",
-      "modifiers": [
-        "defaultLibrary"
-      ]
-    },
-    {
-      "start": 3016,
-      "end": 3024,
-      "class": "property",
-      "modifiers": []
-    },
-    {
-      "start": 3024,
-      "end": 3025,
-      "class": "punctuation",
-      "modifiers": []
-    },
-    {
-      "start": 3034,
+      "start": 2967,
       "end": 3035,
-      "class": "punctuation",
-      "modifiers": []
-    },
-    {
-      "start": 3045,
-      "end": 3108,
       "class": "comment",
       "modifiers": [
         "documentation"
       ]
     },
     {
-      "start": 3117,
-      "end": 3120,
-      "class": "keyword",
-      "modifiers": []
-    },
-    {
-      "start": 3121,
-      "end": 3134,
-      "class": "type",
-      "modifiers": [
-        "declaration"
-      ]
-    },
-    {
-      "start": 3135,
-      "end": 3139,
-      "class": "keyword",
-      "modifiers": []
-    },
-    {
-      "start": 3140,
-      "end": 3146,
-      "class": "type",
-      "modifiers": []
-    },
-    {
-      "start": 3147,
-      "end": 3148,
-      "class": "punctuation",
-      "modifiers": []
-    },
-    {
-      "start": 3161,
-      "end": 3169,
-      "class": "property",
-      "modifiers": []
-    },
-    {
-      "start": 3169,
-      "end": 3170,
-      "class": "punctuation",
-      "modifiers": []
-    },
-    {
-      "start": 3183,
-      "end": 3188,
-      "class": "property",
-      "modifiers": []
-    },
-    {
-      "start": 3188,
-      "end": 3189,
-      "class": "punctuation",
-      "modifiers": []
-    },
-    {
-      "start": 3202,
-      "end": 3207,
-      "class": "property",
-      "modifiers": []
-    },
-    {
-      "start": 3207,
-      "end": 3208,
-      "class": "punctuation",
-      "modifiers": []
-    },
-    {
-      "start": 3221,
-      "end": 3231,
-      "class": "property",
-      "modifiers": []
-    },
-    {
-      "start": 3232,
-      "end": 3233,
-      "class": "operator",
-      "modifiers": []
-    },
-    {
-      "start": 3234,
-      "end": 3245,
-      "class": "variable",
-      "modifiers": []
-    },
-    {
-      "start": 3246,
-      "end": 3247,
-      "class": "operator",
-      "modifiers": []
-    },
-    {
-      "start": 3248,
-      "end": 3249,
-      "class": "number",
-      "modifiers": []
-    },
-    {
-      "start": 3249,
-      "end": 3250,
-      "class": "punctuation",
-      "modifiers": []
-    },
-    {
-      "start": 3259,
-      "end": 3260,
-      "class": "punctuation",
-      "modifiers": []
-    },
-    {
-      "start": 3270,
-      "end": 3313,
+      "start": 3044,
+      "end": 3063,
       "class": "comment",
       "modifiers": [
         "documentation"
       ]
     },
     {
-      "start": 3322,
-      "end": 3328,
+      "start": 3072,
+      "end": 3075,
       "class": "keyword",
       "modifiers": []
     },
     {
-      "start": 3329,
-      "end": 3341,
+      "start": 3076,
+      "end": 3085,
       "class": "type",
       "modifiers": [
         "declaration"
       ]
     },
     {
-      "start": 3342,
-      "end": 3343,
+      "start": 3086,
+      "end": 3087,
       "class": "punctuation",
       "modifiers": []
     },
     {
-      "start": 3356,
-      "end": 3362,
+      "start": 3100,
+      "end": 3106,
+      "class": "type",
+      "modifiers": [
+        "defaultLibrary"
+      ]
+    },
+    {
+      "start": 3107,
+      "end": 3112,
+      "class": "property",
+      "modifiers": []
+    },
+    {
+      "start": 3112,
+      "end": 3113,
+      "class": "punctuation",
+      "modifiers": []
+    },
+    {
+      "start": 3126,
+      "end": 3133,
+      "class": "type",
+      "modifiers": [
+        "defaultLibrary"
+      ]
+    },
+    {
+      "start": 3134,
+      "end": 3142,
+      "class": "property",
+      "modifiers": []
+    },
+    {
+      "start": 3142,
+      "end": 3143,
+      "class": "punctuation",
+      "modifiers": []
+    },
+    {
+      "start": 3152,
+      "end": 3153,
+      "class": "punctuation",
+      "modifiers": []
+    },
+    {
+      "start": 3163,
+      "end": 3226,
+      "class": "comment",
+      "modifiers": [
+        "documentation"
+      ]
+    },
+    {
+      "start": 3235,
+      "end": 3238,
       "class": "keyword",
       "modifiers": []
     },
     {
-      "start": 3363,
-      "end": 3369,
+      "start": 3239,
+      "end": 3252,
+      "class": "type",
+      "modifiers": [
+        "declaration"
+      ]
+    },
+    {
+      "start": 3253,
+      "end": 3257,
+      "class": "keyword",
+      "modifiers": []
+    },
+    {
+      "start": 3258,
+      "end": 3264,
       "class": "type",
       "modifiers": []
     },
     {
-      "start": 3382,
-      "end": 3386,
-      "class": "keyword",
-      "modifiers": []
-    },
-    {
-      "start": 3387,
-      "end": 3388,
+      "start": 3265,
+      "end": 3266,
       "class": "punctuation",
       "modifiers": []
     },
     {
-      "start": 3405,
-      "end": 3410,
+      "start": 3279,
+      "end": 3287,
       "class": "property",
       "modifiers": []
     },
     {
-      "start": 3411,
-      "end": 3416,
+      "start": 3287,
+      "end": 3288,
+      "class": "punctuation",
+      "modifiers": []
+    },
+    {
+      "start": 3301,
+      "end": 3306,
+      "class": "property",
+      "modifiers": []
+    },
+    {
+      "start": 3306,
+      "end": 3307,
+      "class": "punctuation",
+      "modifiers": []
+    },
+    {
+      "start": 3320,
+      "end": 3325,
+      "class": "property",
+      "modifiers": []
+    },
+    {
+      "start": 3325,
+      "end": 3326,
+      "class": "punctuation",
+      "modifiers": []
+    },
+    {
+      "start": 3339,
+      "end": 3349,
+      "class": "property",
+      "modifiers": []
+    },
+    {
+      "start": 3350,
+      "end": 3351,
+      "class": "operator",
+      "modifiers": []
+    },
+    {
+      "start": 3352,
+      "end": 3363,
       "class": "variable",
       "modifiers": []
     },
     {
-      "start": 3417,
-      "end": 3418,
+      "start": 3364,
+      "end": 3365,
+      "class": "operator",
+      "modifiers": []
+    },
+    {
+      "start": 3366,
+      "end": 3367,
       "class": "number",
       "modifiers": []
     },
     {
-      "start": 3431,
-      "end": 3432,
+      "start": 3367,
+      "end": 3368,
       "class": "punctuation",
       "modifiers": []
     },
     {
-      "start": 3445,
-      "end": 3452,
+      "start": 3377,
+      "end": 3378,
+      "class": "punctuation",
+      "modifiers": []
+    },
+    {
+      "start": 3388,
+      "end": 3431,
+      "class": "comment",
+      "modifiers": [
+        "documentation"
+      ]
+    },
+    {
+      "start": 3440,
+      "end": 3446,
       "class": "keyword",
       "modifiers": []
     },
     {
-      "start": 3453,
-      "end": 3454,
+      "start": 3447,
+      "end": 3459,
+      "class": "type",
+      "modifiers": [
+        "declaration"
+      ]
+    },
+    {
+      "start": 3460,
+      "end": 3461,
       "class": "punctuation",
       "modifiers": []
     },
     {
-      "start": 3471,
-      "end": 3476,
-      "class": "property",
-      "modifiers": []
-    },
-    {
-      "start": 3493,
-      "end": 3501,
-      "class": "property",
-      "modifiers": []
-    },
-    {
-      "start": 3514,
-      "end": 3515,
-      "class": "punctuation",
-      "modifiers": []
-    },
-    {
-      "start": 3528,
-      "end": 3532,
+      "start": 3474,
+      "end": 3480,
       "class": "keyword",
       "modifiers": []
     },
     {
-      "start": 3533,
+      "start": 3481,
+      "end": 3487,
+      "class": "type",
+      "modifiers": []
+    },
+    {
+      "start": 3500,
+      "end": 3504,
+      "class": "keyword",
+      "modifiers": []
+    },
+    {
+      "start": 3505,
+      "end": 3506,
+      "class": "punctuation",
+      "modifiers": []
+    },
+    {
+      "start": 3523,
+      "end": 3528,
+      "class": "property",
+      "modifiers": []
+    },
+    {
+      "start": 3529,
       "end": 3534,
-      "class": "punctuation",
-      "modifiers": []
-    },
-    {
-      "start": 3551,
-      "end": 3556,
-      "class": "property",
-      "modifiers": []
-    },
-    {
-      "start": 3569,
-      "end": 3570,
-      "class": "punctuation",
-      "modifiers": []
-    },
-    {
-      "start": 3583,
-      "end": 3591,
-      "class": "keyword",
-      "modifiers": []
-    },
-    {
-      "start": 3592,
-      "end": 3593,
-      "class": "punctuation",
-      "modifiers": []
-    },
-    {
-      "start": 3610,
-      "end": 3618,
-      "class": "property",
-      "modifiers": []
-    },
-    {
-      "start": 3619,
-      "end": 3620,
-      "class": "operator",
-      "modifiers": []
-    },
-    {
-      "start": 3621,
-      "end": 3626,
       "class": "variable",
       "modifiers": []
     },
     {
-      "start": 3626,
-      "end": 3627,
-      "class": "punctuation",
-      "modifiers": []
-    },
-    {
-      "start": 3644,
-      "end": 3654,
-      "class": "property",
-      "modifiers": []
-    },
-    {
-      "start": 3655,
-      "end": 3656,
-      "class": "operator",
-      "modifiers": []
-    },
-    {
-      "start": 3657,
-      "end": 3659,
-      "class": "variable",
-      "modifiers": []
-    },
-    {
-      "start": 3660,
-      "end": 3671,
-      "class": "variable",
-      "modifiers": []
-    },
-    {
-      "start": 3672,
-      "end": 3673,
-      "class": "operator",
-      "modifiers": []
-    },
-    {
-      "start": 3674,
-      "end": 3675,
+      "start": 3535,
+      "end": 3536,
       "class": "number",
       "modifiers": []
     },
     {
-      "start": 3676,
-      "end": 3677,
+      "start": 3549,
+      "end": 3550,
       "class": "punctuation",
       "modifiers": []
     },
     {
-      "start": 3678,
-      "end": 3694,
-      "class": "string",
-      "modifiers": []
-    },
-    {
-      "start": 3695,
-      "end": 3696,
-      "class": "punctuation",
-      "modifiers": []
-    },
-    {
-      "start": 3697,
-      "end": 3701,
-      "class": "variable",
-      "modifiers": []
-    },
-    {
-      "start": 3702,
-      "end": 3703,
-      "class": "punctuation",
-      "modifiers": []
-    },
-    {
-      "start": 3704,
-      "end": 3715,
-      "class": "string",
-      "modifiers": []
-    },
-    {
-      "start": 3716,
-      "end": 3718,
-      "class": "punctuation",
-      "modifiers": []
-    },
-    {
-      "start": 3731,
-      "end": 3732,
-      "class": "punctuation",
-      "modifiers": []
-    },
-    {
-      "start": 3745,
-      "end": 3752,
+      "start": 3563,
+      "end": 3570,
       "class": "keyword",
       "modifiers": []
     },
     {
-      "start": 3753,
-      "end": 3757,
+      "start": 3571,
+      "end": 3572,
+      "class": "punctuation",
+      "modifiers": []
+    },
+    {
+      "start": 3589,
+      "end": 3594,
+      "class": "property",
+      "modifiers": []
+    },
+    {
+      "start": 3611,
+      "end": 3619,
+      "class": "property",
+      "modifiers": []
+    },
+    {
+      "start": 3632,
+      "end": 3633,
+      "class": "punctuation",
+      "modifiers": []
+    },
+    {
+      "start": 3646,
+      "end": 3650,
+      "class": "keyword",
+      "modifiers": []
+    },
+    {
+      "start": 3651,
+      "end": 3652,
+      "class": "punctuation",
+      "modifiers": []
+    },
+    {
+      "start": 3669,
+      "end": 3674,
+      "class": "property",
+      "modifiers": []
+    },
+    {
+      "start": 3687,
+      "end": 3688,
+      "class": "punctuation",
+      "modifiers": []
+    },
+    {
+      "start": 3701,
+      "end": 3709,
+      "class": "keyword",
+      "modifiers": []
+    },
+    {
+      "start": 3710,
+      "end": 3711,
+      "class": "punctuation",
+      "modifiers": []
+    },
+    {
+      "start": 3728,
+      "end": 3736,
+      "class": "property",
+      "modifiers": []
+    },
+    {
+      "start": 3737,
+      "end": 3738,
+      "class": "operator",
+      "modifiers": []
+    },
+    {
+      "start": 3739,
+      "end": 3744,
+      "class": "variable",
+      "modifiers": []
+    },
+    {
+      "start": 3744,
+      "end": 3745,
+      "class": "punctuation",
+      "modifiers": []
+    },
+    {
+      "start": 3762,
+      "end": 3772,
+      "class": "property",
+      "modifiers": []
+    },
+    {
+      "start": 3773,
+      "end": 3774,
+      "class": "operator",
+      "modifiers": []
+    },
+    {
+      "start": 3775,
+      "end": 3777,
+      "class": "variable",
+      "modifiers": []
+    },
+    {
+      "start": 3778,
+      "end": 3789,
+      "class": "variable",
+      "modifiers": []
+    },
+    {
+      "start": 3790,
+      "end": 3791,
+      "class": "operator",
+      "modifiers": []
+    },
+    {
+      "start": 3792,
+      "end": 3793,
+      "class": "number",
+      "modifiers": []
+    },
+    {
+      "start": 3794,
+      "end": 3795,
+      "class": "punctuation",
+      "modifiers": []
+    },
+    {
+      "start": 3796,
+      "end": 3812,
+      "class": "string",
+      "modifiers": []
+    },
+    {
+      "start": 3813,
+      "end": 3814,
+      "class": "punctuation",
+      "modifiers": []
+    },
+    {
+      "start": 3815,
+      "end": 3819,
+      "class": "variable",
+      "modifiers": []
+    },
+    {
+      "start": 3820,
+      "end": 3821,
+      "class": "punctuation",
+      "modifiers": []
+    },
+    {
+      "start": 3822,
+      "end": 3833,
+      "class": "string",
+      "modifiers": []
+    },
+    {
+      "start": 3834,
+      "end": 3836,
+      "class": "punctuation",
+      "modifiers": []
+    },
+    {
+      "start": 3849,
+      "end": 3850,
+      "class": "punctuation",
+      "modifiers": []
+    },
+    {
+      "start": 3863,
+      "end": 3870,
+      "class": "keyword",
+      "modifiers": []
+    },
+    {
+      "start": 3871,
+      "end": 3875,
       "class": "constant",
       "modifiers": []
     },
     {
-      "start": 3770,
-      "end": 3778,
+      "start": 3888,
+      "end": 3896,
       "class": "keyword",
       "modifiers": []
     },
     {
-      "start": 3779,
-      "end": 3788,
+      "start": 3897,
+      "end": 3906,
       "class": "string",
       "modifiers": []
     },
     {
-      "start": 3801,
-      "end": 3899,
+      "start": 3919,
+      "end": 4017,
       "class": "property",
       "modifiers": []
     },
     {
-      "start": 3912,
-      "end": 3922,
+      "start": 4030,
+      "end": 4040,
       "class": "keyword",
       "modifiers": []
     },
     {
-      "start": 3923,
-      "end": 3933,
+      "start": 4041,
+      "end": 4051,
       "class": "function",
       "modifiers": []
     },
     {
-      "start": 3942,
-      "end": 3943,
+      "start": 4060,
+      "end": 4061,
       "class": "punctuation",
       "modifiers": []
     },
     {
-      "start": 3948,
-      "end": 3949,
+      "start": 4066,
+      "end": 4067,
       "class": "punctuation",
       "modifiers": []
     },
     {
-      "start": 3954,
-      "end": 3960,
+      "start": 4072,
+      "end": 4078,
       "class": "keyword",
       "modifiers": []
     },
     {
-      "start": 3961,
-      "end": 3967,
+      "start": 4079,
+      "end": 4085,
       "class": "namespace",
       "modifiers": [
         "declaration"
       ]
     },
     {
-      "start": 3968,
-      "end": 3969,
+      "start": 4086,
+      "end": 4087,
       "class": "punctuation",
       "modifiers": []
     },
     {
-      "start": 3978,
-      "end": 4037,
+      "start": 4096,
+      "end": 4155,
       "class": "comment",
       "modifiers": [
         "documentation"
       ]
     },
     {
-      "start": 4046,
-      "end": 4049,
+      "start": 4164,
+      "end": 4167,
       "class": "keyword",
       "modifiers": []
     },
     {
-      "start": 4050,
-      "end": 4054,
+      "start": 4168,
+      "end": 4172,
       "class": "type",
       "modifiers": [
         "declaration"
       ]
     },
     {
-      "start": 4055,
-      "end": 4068,
+      "start": 4173,
+      "end": 4186,
       "class": "annotation",
       "modifiers": []
     },
     {
-      "start": 4073,
-      "end": 4074,
+      "start": 4191,
+      "end": 4192,
       "class": "punctuation",
       "modifiers": []
     },
     {
-      "start": 4075,
-      "end": 4076,
+      "start": 4193,
+      "end": 4194,
       "class": "punctuation",
       "modifiers": []
     }

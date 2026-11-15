@@ -35,7 +35,7 @@ use phero_driver::graph::analytics::{
     MonotonicityOptions, ReachabilityOptions, SeparationOfDutyOptions,
 };
 use phero_driver::graph::query::{affected_by, dependencies, list, node, ClosureDirection};
-use phero_driver::graph::{build, GraphFile, GraphIndex, GraphInputs};
+use phero_driver::graph::{build, GraphFile, GraphFragment, GraphIndex, GraphInputs};
 use phero_ir::graph::GraphModel;
 use phero_ir::SessionKind;
 
@@ -410,8 +410,17 @@ fn build_graph(files: Vec<PathBuf>, out: Option<PathBuf>) -> anyhow::Result<Exit
     let base = base_path(&files);
     let mut project = project_mode.then(|| Project::gather(&expanded));
     let mut inputs = GraphInputs::default();
+    let mut seen_fragments = std::collections::BTreeSet::new();
     let mut failed = 0usize;
     for file in &expanded {
+        if project
+            .as_ref()
+            .is_some_and(|project| project.is_ddd_fragment(file))
+        {
+            // A fragment is merged into its root's artifact (DD8); the root
+            // carries its path in `outcome.imports`.
+            continue;
+        }
         match compile_surface(std::slice::from_ref(file), project.as_mut(), false) {
             Ok(Some(outcome)) => {
                 let Some(artifact) = outcome.artifact else {
@@ -419,11 +428,48 @@ fn build_graph(files: Vec<PathBuf>, out: Option<PathBuf>) -> anyhow::Result<Exit
                 };
                 let display = display_path(file, &base);
                 let path = normalize(&file.display().to_string());
-                let imports = outcome
+                let imports: Vec<String> = outcome
                     .imports
                     .iter()
                     .map(|import| normalize(import))
                     .collect();
+                // DD8: every `.ddd` import of a design root is a fragment
+                // file in the same application (its declarations are already
+                // merged into the root artifact).
+                if matches!(artifact, Artifact::Design(_)) {
+                    for import in &outcome.imports {
+                        if !import.ends_with(".ddd")
+                            || Path::new(import) == file
+                            || !seen_fragments.insert(import.clone())
+                        {
+                            continue;
+                        }
+                        let fragment_path = Path::new(import);
+                        let fragment_imports = std::fs::read_to_string(fragment_path)
+                            .ok()
+                            .and_then(|source| phero_syntax::parse_ddd(&source).ast)
+                            .map(|ast| {
+                                ast.imports
+                                    .into_iter()
+                                    .map(|import| {
+                                        let joined = fragment_path
+                                            .parent()
+                                            .unwrap_or(Path::new("."))
+                                            .join(import.path)
+                                            .display()
+                                            .to_string();
+                                        normalize(&joined)
+                                    })
+                                    .collect()
+                            })
+                            .unwrap_or_default();
+                        inputs.design_fragments.push(GraphFragment {
+                            display: display_path(fragment_path, &base),
+                            path: normalize(import),
+                            imports: fragment_imports,
+                        });
+                    }
+                }
                 push(&mut inputs, display, path, imports, artifact);
             }
             Ok(None) => failed += 1,

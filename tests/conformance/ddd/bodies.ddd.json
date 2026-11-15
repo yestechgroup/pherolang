@@ -187,6 +187,7 @@
             "auditable": true,
             "optimisticLocking": true
           },
+          "isAggregateRoot": true,
           "repository": {
             "name": "PayRunRepository",
             "operations": [
@@ -275,6 +276,7 @@
             "auditable": true,
             "optimisticLocking": true
           },
+          "isAggregateRoot": true,
           "repository": {
             "name": "PayRunAuditRepository",
             "operations": [

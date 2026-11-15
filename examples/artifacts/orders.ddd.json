@@ -238,6 +238,7 @@
             "auditable": true,
             "optimisticLocking": true
           },
+          "isAggregateRoot": true,
           "repository": {
             "name": "OrderRepository",
             "operations": [
@@ -368,6 +369,17 @@
           "flags": {
             "auditable": true,
             "optimisticLocking": true
+          },
+          "isAggregateRoot": false,
+          "aggregate": {
+            "root": {
+              "type": "class",
+              "value": {
+                "package": "nz.example.shop",
+                "name": "Order"
+              }
+            },
+            "origin": "derived"
           }
         },
         {
@@ -384,6 +396,7 @@
             "auditable": true,
             "optimisticLocking": true
           },
+          "isAggregateRoot": true,
           "repository": {
             "name": "ProductRepository",
             "operations": [
@@ -550,6 +563,7 @@
             "auditable": true,
             "optimisticLocking": true
           },
+          "isAggregateRoot": true,
           "repository": {
             "name": "CustomerRepository",
             "operations": [

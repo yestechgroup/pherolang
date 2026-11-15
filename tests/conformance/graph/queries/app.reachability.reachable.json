@@ -5,7 +5,7 @@
   "to": "feature:app.mox#nz.example.graph.Note.internalNotes",
   "results": [
     {
-      "application": "app.actor",
+      "application": "GraphDesk",
       "reachable": true,
       "starts": [
         "capability:app.actor#App.RaiseRefund",

@@ -86,8 +86,13 @@ holds no counterpart surface keeps the plain compile behavior (the join is
 silent). The CLI pools from its project snapshot's component; the LSP pools
 from the open document's directory snapshot, scoped by the same relation.
 
-`applications[].id` is the component's smallest member path;
-`applications[].files` and `.packages` are sorted.
+`applications[].id` is the authored `application <Name>` when the
+import-connected component contains exactly one `.ddd` **root**; otherwise
+it is the component's smallest member path. A `.ddd` **fragment** is part of
+its root's application: the root's `.ddd` import edges put the fragment file
+in the component (so it rides in `applications[].files`), and its module
+members are merged into the root's one design artifact — never a separate
+design application. `applications[].files` and `.packages` are sorted.
 
 ## The `pherolang graph build` command
 
@@ -176,7 +181,9 @@ longer resolves its `PlaceOrder` capability against `support.actor`'s names
 application's events/actions are wired to its own design (pherolang#258). The
 best-effort emission path (a failing file renders its diagnostics, the
 artifact covers the compiling subset, the command exits `1`) is still the
-contract; it is just not exercised by `examples/` any more.
+contract; it is just not exercised by `examples/` any more. The two
+design-bearing components take their authored names — `Orders` and
+`SupportDesk` — because each holds exactly one `.ddd` root (DD8).
 
 ## Nodes (v1)
 
@@ -190,7 +197,7 @@ contract; it is just not exercised by `examples/` any more.
 | `operation` | `.mox` operation | `<package>.<Class>.<op>` |
 | `actor` | `.actor` actor (inline `.mox` actors blocks too) | `<Block>.<Actor>` |
 | `capability` | `.actor` capability | `<Block>.<Capability>` |
-| `designApplication` | `.ddd` application | `<App>` |
+| `designApplication` | `.ddd` application root (one per application; its imported fragments merge into it) | `<App>` |
 | `module` | `.ddd` module, and an `.ifml` module declaration (one declaration per pattern) | `<App>.<module>` (`.ddd`), `<Module>` (`.ifml`) |
 | `service` | `.ddd` service | `<App>.<module>.<Service>` |
 | `serviceOperation` | `.ddd` service operation | `<App>.<module>.<Service>.<op>` |
@@ -349,8 +356,9 @@ The graph mirrors the compiler; it never invents a binding:
 - Nodes sort by `(application, file, id)`; edges by
   `(from, kind, to, serialized attribute tuple)`; exact duplicates
   collapse.
-- Components sort by their smallest member path; `applications[].files`
-  and `.packages` sort.
+- Applications sort by `id` — the authored `application <Name>` when the
+  component has exactly one `.ddd` root, else its smallest member path;
+  `applications[].files` and `.packages` sort.
 - Reversed or shuffled input order produces byte-identical JSON.
 - No absolute paths, no `\` separators, no `pheroVersion`.
 
@@ -698,7 +706,9 @@ parse.
   declares none; `ddd_index` returns empty for a source with no
   `application` (the graph's stem fallback is a path fact the index cannot
   know), and `cmmn_index`/`dmn_index` skip a nameless recovered declaration
-  (it cannot key a node).
+  (it cannot key a node). A fragment's index is built with
+  `ddd_index_with_application(source, Some(root_name))`; without a supplied
+  root name it stays empty rather than guessing the application.
 - References carry `target_kinds` hints only — the name as written plus the
   kinds it may denote. Binding is the graph index's job, never the syntax
   layer's (the per-surface reference tables are in [the LSP
@@ -764,7 +774,7 @@ indexes call the same helpers — a naming rule is written once.
 | surface | builder | definitions (the graph's nodes) |
 |---|---|---|
 | `.actor` | `navigation::actors_index` | `actor`, `capability` — `<Block>.<Name>` |
-| `.ddd` | `navigation::ddd_index` | `designApplication`, `module`, `service`, `serviceOperation`, `repository`, `repositoryOperation`, `search`, `dto`, `stateMachine`, `transition`, `error` (child-scoped aggregate operations are `serviceOperation`s; a projection/standalone DTO's boundary is a `dto`, a mirror DTO's is its source `class`; an error's node is application- or module-qualified) |
+| `.ddd` | `navigation::ddd_index` for a root; `ddd_index_with_application(source, Some(root))` for a fragment | `designApplication`, `module`, `service`, `serviceOperation`, `repository`, `repositoryOperation`, `search`, `dto`, `stateMachine`, `transition`, `error` (a fragment carries no `designApplication` definition of its own; child-scoped aggregate operations are `serviceOperation`s; a projection/standalone DTO's boundary is a `dto`, a mirror DTO's is its source `class`; an error's node is application- or module-qualified) |
 | `.evt` | `navigation::evt_index` (takes the document path: the model prefix is the file stem) | `event`, `channel`, `subscription` — `<Model>.<Name>` |
 | `.deploy` | `navigation::deploy_index` | `deployApplication` (`<App>`), `deployComponent` (`<App>.<Component>`), `deployProfile` (`<Profile>`), `deployment` (`<App>.<Deployment>`) |
 | `.uc` | `navigation::uc_index` | `useCase` (`<UseCase>` — the artifact carries no model prefix) |

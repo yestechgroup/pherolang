@@ -417,7 +417,7 @@ fn query_node_prints_the_golden() {
     assert_eq!(envelope["resolved"], CAPABILITY);
     assert_eq!(envelope["results"][0]["id"], CAPABILITY);
     assert_eq!(envelope["results"][0]["file"], "support/support.actor");
-    assert_eq!(envelope["results"][0]["application"], "support/cli.ifml");
+    assert_eq!(envelope["results"][0]["application"], "SupportDesk");
     let out = envelope["edges"]["out"].as_array().expect("out edges");
     let incoming = envelope["edges"]["in"].as_array().expect("in edges");
     assert!(!out.is_empty() && !incoming.is_empty(), "both directions");
@@ -465,17 +465,17 @@ fn query_list_filters_by_kind_file_application() {
     let capabilities = parsed(&query_examples(&[
         "list",
         "--application",
-        "support/cli.ifml",
+        "SupportDesk",
         "--kind",
         "capability",
     ]));
     assert_eq!(capabilities["kind"], "capability");
-    assert_eq!(capabilities["application"], "support/cli.ifml");
+    assert_eq!(capabilities["application"], "SupportDesk");
     let capabilities = capabilities["results"].as_array().expect("results");
     assert!(!capabilities.is_empty());
     assert!(capabilities
         .iter()
-        .all(|node| node["kind"] == "capability" && node["application"] == "support/cli.ifml"));
+        .all(|node| node["kind"] == "capability" && node["application"] == "SupportDesk"));
 }
 
 /// The exit-gate answer, pinned exactly (derived from the committed artifact,

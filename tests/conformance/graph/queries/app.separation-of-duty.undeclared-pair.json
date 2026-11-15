@@ -7,7 +7,7 @@
   ],
   "results": [
     {
-      "application": "app.actor",
+      "application": "GraphDesk",
       "pair": [
         "capability:app.actor#App.ApproveRefund",
         "capability:app.actor#App.RaiseRefund"

@@ -150,9 +150,9 @@ mod services;
 
 pub use application::{Application, Module};
 pub use designs::{
-    BuiltinRepositoryOp, Design, DesignFlags, DtoDirection, DtoMember, DtoMemberKind, DtoShape,
-    EqualityPolicy, IdentityPolicy, Repository, RepositoryOperation, StateMachine, Stereotype,
-    Transition, ValueSemantics,
+    AggregateMembership, AggregateOrigin, BuiltinRepositoryOp, Design, DesignFlags, DtoDirection,
+    DtoMember, DtoMemberKind, DtoShape, EqualityPolicy, IdentityPolicy, Invariant, Repository,
+    RepositoryOperation, StateMachine, Stereotype, Transition, ValueSemantics,
 };
 pub use errors::{ErrorDecl, ErrorRef, ErrorScope};
 pub use references::{CapabilityRef, DecisionRef, EventRef, TargetKind, TargetRef};

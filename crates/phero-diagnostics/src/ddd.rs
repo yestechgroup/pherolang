@@ -158,6 +158,41 @@ pub const E_NARROWED_DELEGATION_THROWS: &str = "E0377";
 /// `duplicate field '<field>' in error '<name>'` — the payload field names
 /// of one error declaration are unique.
 pub const E_DUPLICATE_ERROR_FIELD: &str = "E0378";
+/// `entity '<class>' declares both 'root' and 'aggregate <root>'; the two
+/// boundary decisions contradict each other` (DD4, issue pherolang#301).
+pub const E_AGGREGATE_CONTRADICTION: &str = "E0379";
+/// `entity '<class>' is contained by '<owner>'; an owned class cannot be an
+/// independent aggregate root` — `root` on a contained class (DD4).
+pub const E_AGGREGATE_CONTAINED_ROOT: &str = "E0380";
+/// `entity '<class>' is contained by '<owner>', but declares aggregate
+/// '<root>'; containment fixes its root` — a conflicting authored membership
+/// (DD4).
+pub const E_AGGREGATE_CONTAINED_TARGET: &str = "E0381";
+/// `aggregate root '<root>' has no entity design in this module` (DD4).
+pub const E_AGGREGATE_UNKNOWN_ROOT: &str = "E0382";
+/// `aggregate '<class>' belongs to module '<root module>', not '<module>'`
+/// — aggregate membership cannot cross modules (DD4).
+pub const E_AGGREGATE_CROSS_MODULE: &str = "E0383";
+/// `root`/`aggregate` on a value or dto design — only entities have an
+/// aggregate boundary (DD4).
+pub const E_AGGREGATE_NON_ENTITY: &str = "E0384";
+/// `aggregate boundary of '<class>' is unknown (...)` — the union or the
+/// containment graph cannot decide it; the artifact omits
+/// `isAggregateRoot` (DD4).
+pub const E_AGGREGATE_BOUNDARY_UNKNOWN: &str = "E0385";
+/// `aggregate root '<root>' is itself a member of '<outer>'; name the
+/// outermost root` (DD4).
+pub const E_AGGREGATE_ROOT_NOT_ROOT: &str = "E0386";
+/// `'extend' is deprecated; write 'children <Class>'` — the old
+/// child-operation block keyword (DD4).
+pub const E_DEPRECATED_EXTEND: &str = "E0387";
+/// `invalid invariant in design '<design>': <detail>` — the invariant does
+/// not parse, does not type-check, is not boolean, or reads beyond the
+/// designed class's own state (DD5, issue pherolang#302).
+pub const E_INVALID_INVARIANT: &str = "E0388";
+/// `design '<design>' is a dto; a transport shape carries no invariants` —
+/// invariants are entity/value semantics (DD5).
+pub const E_DTO_INVARIANT: &str = "E0389";
 
 pub(crate) const ENTRIES: &[Entry] = &[
     Entry {
@@ -392,5 +427,92 @@ pub(crate) const ENTRIES: &[Entry] = &[
         meaning: "`duplicate field '<field>' in error '<name>'` — the payload field names of one `error` declaration are unique, since a consumer builds one field per name in declaration order.",
         fix: "Rename or remove the duplicate field.",
     },
-
+    Entry {
+        code: E_AGGREGATE_CONTRADICTION,
+        band: DDD_BAND,
+        severity: Severity::Error,
+        title: "Contradictory aggregate boundary",
+        meaning: "`entity '<class>' declares both 'root' and 'aggregate <root>'` — the two boundary decisions cannot both hold; a class is either its own aggregate root or a member of another root.",
+        fix: "Keep one clause: `root` for a root, `aggregate <Root>` for a member.",
+    },
+    Entry {
+        code: E_AGGREGATE_CONTAINED_ROOT,
+        band: DDD_BAND,
+        severity: Severity::Error,
+        title: "Contained class declared a root",
+        meaning: "`entity '<class>' is contained by '<owner>'; an owned class cannot be an independent aggregate root` — containment already places the class inside the owner's boundary, so `root` contradicts the domain model.",
+        fix: "Remove `root`, or remove the `contains` feature that owns the class and model the relationship explicitly.",
+    },
+    Entry {
+        code: E_AGGREGATE_CONTAINED_TARGET,
+        band: DDD_BAND,
+        severity: Severity::Error,
+        title: "Contained class declares a foreign root",
+        meaning: "`entity '<class>' is contained by '<owner>', but declares aggregate '<root>'; containment fixes its root` — a contained class's aggregate membership is derived from the containment chain and cannot be reassigned.",
+        fix: "Remove the `aggregate` clause, or change the domain containment so the class is not owned.",
+    },
+    Entry {
+        code: E_AGGREGATE_UNKNOWN_ROOT,
+        band: DDD_BAND,
+        severity: Severity::Error,
+        title: "Unknown aggregate root",
+        meaning: "`aggregate root '<root>' has no entity design in this module` — `aggregate <Root>` must name a class with an entity design in the same module.",
+        fix: "Declare the root's entity design in the same module, or fix the reference.",
+    },
+    Entry {
+        code: E_AGGREGATE_CROSS_MODULE,
+        band: DDD_BAND,
+        severity: Severity::Error,
+        title: "Cross-module aggregate membership",
+        meaning: "`aggregate '<class>' belongs to module '<root module>', not '<module>'` — an aggregate is a module-local consistency boundary; membership cannot cross modules.",
+        fix: "Move the member into the root's module, or model a separate aggregate.",
+    },
+    Entry {
+        code: E_AGGREGATE_NON_ENTITY,
+        band: DDD_BAND,
+        severity: Severity::Error,
+        title: "Aggregate boundary on a non-entity",
+        meaning: "`design '<class>' declares an aggregate boundary, but is a <stereotype>` — only an entity has identity and an aggregate boundary; a value is immutable and a dto is a transport shape.",
+        fix: "Remove the boundary clause, or design the class as an `entity`.",
+    },
+    Entry {
+        code: E_AGGREGATE_BOUNDARY_UNKNOWN,
+        band: DDD_BAND,
+        severity: Severity::Warning,
+        title: "Unknown aggregate boundary",
+        meaning: "`aggregate boundary of '<class>' is unknown (...)` — the imported domain union or the containment graph cannot decide the boundary (a domain failed to lower, the class sits under several roots, or a containment cycle exists). The artifact omits `isAggregateRoot` rather than guessing.",
+        fix: "Fix the imported domain, or author the boundary explicitly with `root`/`aggregate <Root>`.",
+    },
+    Entry {
+        code: E_AGGREGATE_ROOT_NOT_ROOT,
+        band: DDD_BAND,
+        severity: Severity::Error,
+        title: "Aggregate root is itself a member",
+        meaning: "`aggregate root '<root>' is itself a member of '<outer>'; name the outermost root` — an aggregate root cannot belong to another aggregate, so `aggregate <Root>` must name the boundary's outermost class.",
+        fix: "Name the outermost root, or remove the contradictory membership.",
+    },
+    Entry {
+        code: E_DEPRECATED_EXTEND,
+        band: DDD_BAND,
+        severity: Severity::Warning,
+        title: "Deprecated extend keyword",
+        meaning: "`'extend' is deprecated; write 'children <Class>'` — the child-operation block was renamed so it no longer reads like class inheritance.",
+        fix: "Rename the block keyword to `children`; the formatter rewrites it automatically.",
+    },
+    Entry {
+        code: E_INVALID_INVARIANT,
+        band: DDD_BAND,
+        severity: Severity::Error,
+        title: "Invalid invariant",
+        meaning: "`invalid invariant in design '<design>': <detail>` — the expression does not parse, does not type-check, is not boolean, or reads a repository/global name. An invariant is a state predicate over the designed class; cross-aggregate consistency belongs in a process manager or an operation guard.",
+        fix: "Use a boolean expression over the class's own stored and derived features; handle optional navigation explicitly.",
+    },
+    Entry {
+        code: E_DTO_INVARIANT,
+        band: DDD_BAND,
+        severity: Severity::Error,
+        title: "Invariant on a DTO",
+        meaning: "`design '<design>' is a dto; a transport shape carries no invariants` — invariants are consistency rules on a value or an aggregate, not on a transfer boundary.",
+        fix: "Remove the invariant, or design the class that owns the state as an `entity`/`value`.",
+    },
 ];

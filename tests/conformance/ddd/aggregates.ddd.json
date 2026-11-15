@@ -1,0 +1,100 @@
+{
+  "formatVersion": 2,
+  "pheroVersion": "0.3.0",
+  "application": {
+    "name": "Sales",
+    "base": "nz.example.sales"
+  },
+  "modules": [
+    {
+      "name": "sales",
+      "designs": [
+        {
+          "class": "Order",
+          "typeRef": {
+            "type": "class",
+            "value": {
+              "package": "nz.example.sales",
+              "name": "Order"
+            }
+          },
+          "stereotype": "entity",
+          "flags": {
+            "auditable": true,
+            "optimisticLocking": true
+          },
+          "isAggregateRoot": true,
+          "invariants": [
+            {
+              "expression": "total == lines.map(l => l.quantity * l.unitPrice).sum()"
+            },
+            {
+              "expression": "total >= 0"
+            }
+          ],
+          "repository": {
+            "name": "OrderRepository",
+            "operations": [
+              {
+                "name": "findById",
+                "builtin": "findById"
+              },
+              {
+                "name": "save",
+                "builtin": "save"
+              }
+            ]
+          }
+        },
+        {
+          "class": "OrderLine",
+          "typeRef": {
+            "type": "class",
+            "value": {
+              "package": "nz.example.sales",
+              "name": "OrderLine"
+            }
+          },
+          "stereotype": "entity",
+          "flags": {
+            "auditable": true,
+            "optimisticLocking": true
+          },
+          "isAggregateRoot": false,
+          "aggregate": {
+            "root": {
+              "type": "class",
+              "value": {
+                "package": "nz.example.sales",
+                "name": "Order"
+              }
+            },
+            "origin": "authored"
+          }
+        },
+        {
+          "class": "DateRange",
+          "typeRef": {
+            "type": "class",
+            "value": {
+              "package": "nz.example.sales",
+              "name": "DateRange"
+            }
+          },
+          "stereotype": "value",
+          "semantics": {
+            "identity": "none",
+            "immutable": true,
+            "deepImmutable": true,
+            "equality": "structural"
+          },
+          "invariants": [
+            {
+              "expression": "start <= end"
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

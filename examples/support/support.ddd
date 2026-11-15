@@ -38,19 +38,22 @@ application SupportDesk {
             protected close => TicketRepository.delete;
             findTickets => TicketSearch.search;
         }
-        entity Ticket scaffold cache repository TicketRepository {
-            findById;
-            findAll;
-            findByExample;
-            findByKeys;
-            save;
-            delete;
-            protected Ticket findByTitle(String title);
-        }
+        entity Ticket scaffold cache
+            invariant refundCents >= 0;
+            repository TicketRepository {
+                findById;
+                findAll;
+                findByExample;
+                findByKeys;
+                save;
+                delete;
+                protected Ticket findByTitle(String title);
+            }
         /// One refund decision under strict value semantics: no identity,
         /// deep-immutable, structural equality — so every stored feature of
         /// the class is readonly (R-V1–R-V3).
         value RefundDecision nonPersistent
+            invariant cents >= 0;
         /// The transport shape accepted by `raise`: a declared, source-less
         /// boundary (DD3).
         dto NewTicket {

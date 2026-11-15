@@ -1173,3 +1173,83 @@ fn a_builtin_repository_operation_with_throws_is_reported() {
         "{violations:?}"
     );
 }
+
+#[test]
+fn an_entity_without_an_effective_boundary_is_not_contract_complete() {
+    let mut model = compiled();
+    let design = model
+        .modules
+        .iter_mut()
+        .flat_map(|module| module.designs.iter_mut())
+        .find(|design| design.stereotype == Stereotype::Entity)
+        .expect("an entity design");
+    design.is_aggregate_root = None;
+    design.aggregate = None;
+    let violations = check_contract(&model);
+    assert!(
+        violations
+            .iter()
+            .any(|violation| violation.path.contains("isAggregateRoot")),
+        "{violations:?}"
+    );
+}
+
+#[test]
+fn a_member_must_name_a_root_entity_design() {
+    let mut model = compiled();
+    let member = model
+        .modules
+        .iter_mut()
+        .flat_map(|module| module.designs.iter_mut())
+        .find(|design| design.is_aggregate_root == Some(false))
+        .expect("a member design");
+    member.aggregate = Some(phero_ir::ddd::AggregateMembership {
+        root: TypeRef::Class {
+            package: "nz.example.library".to_string(),
+            name: "Missing".to_string(),
+        },
+        origin: phero_ir::ddd::AggregateOrigin::Derived,
+    });
+    let violations = check_contract(&model);
+    assert!(
+        violations.iter().any(|violation| violation
+            .message
+            .contains("not an entity design marked as a root")),
+        "{violations:?}"
+    );
+}
+
+#[test]
+fn dto_invariants_and_empty_expressions_are_refused() {
+    let mut model = compiled();
+    let position = model.modules.iter().enumerate().find_map(|(module, body)| {
+        body.designs
+            .iter()
+            .position(|design| design.stereotype == Stereotype::Dto)
+            .map(|design| (module, design))
+    });
+    let (module, design) = match position {
+        Some(position) => position,
+        None => {
+            let design = model.modules[0].designs.len();
+            model.modules[0]
+                .designs
+                .push(Design::standalone_dto("Boundary"));
+            (0, design)
+        }
+    };
+    model.modules[module].designs[design].invariants = vec![phero_ir::ddd::Invariant::new("")];
+    let violations = check_contract(&model);
+    assert!(
+        violations
+            .iter()
+            .any(|violation| violation.message.contains("cannot carry invariants")),
+        "{violations:?}"
+    );
+    assert!(
+        violations
+            .iter()
+            .any(|violation| violation.message.contains("must be non-empty")),
+        "{violations:?}"
+    );
+}

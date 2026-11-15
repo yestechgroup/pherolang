@@ -130,6 +130,65 @@ policy in [docs/VERSIONING.md](docs/VERSIONING.md).
   language types a set as `List(T)` (order unspecified). The
   `library` example gains `String[] tags { set }` with a dedup/order
   behavioral assertion.
+- **Authored aggregate boundaries and the `children` block** (DD4, issue
+  [#301](https://github.com/yestechgroup/pherolang/issues/301), epic
+  [#297](https://github.com/yestechgroup/pherolang/issues/297)): an entity
+  design may declare `root` (its own aggregate) or `aggregate <Root>`
+  (membership in a root designed in the same module) after its flags. The
+  authored decision outranks the containment derivation; a design that
+  authors none still derives its root from the topmost designed entity that
+  contains it, and incomplete or ambiguous containment is **unknown**, never
+  a guess. The artifact gains the sparse `isAggregateRoot` (absent = unknown,
+  and an incomplete domain union warns `E0385` per affected entity) plus, on
+  a member, `aggregate {root, origin}` with `origin` `"authored"` or
+  `"derived"`; rules 6 (repository placement) and 13 (cross-reference
+  constraint) read the effective boundary, and `pherolang artifact check`
+  requires the verdict. The child-operation block is renamed `extend` →
+  `children`; `extend` still parses as a deprecated alias with warning
+  `E0387`, and the formatter rewrites it. New codes `E0379`–`E0387`.
+  `formatVersion` stays 2.
+- **Invariants on entity and value designs** (DD5, issue
+  [#302](https://github.com/yestechgroup/pherolang/issues/302), epic
+  [#297](https://github.com/yestechgroup/pherolang/issues/297)):
+  `invariant <expr>;` is repeatable after the design flags/boundary and
+  before the repository/machine block. The expression is captured verbatim
+  and typed with the designed class as `self`: it must be boolean, machine
+  states bind as enum-typed names, collection algebra is available, optional
+  navigation follows R3, and a repository or global read is `E0388`; a dto
+  invariant is `E0389`. There is no deferral when the union lowered. The
+  artifact gains the sparse ordered `invariants: [{expression}]`
+  (`formatVersion` stays 2), and the consumer contract checks the predicates
+  at value construction, aggregate save (root and every member), and after
+  every transition, reporting
+  `InvariantViolation { class, aggregateRoot, invariantIndex }`.
+- **Multi-file design applications** (DD8, issue
+  [#305](https://github.com/yestechgroup/pherolang/issues/305), epic
+  [#297](https://github.com/yestechgroup/pherolang/issues/297)): a `.ddd`
+  file with `application` is a **root**; top-level `module` blocks without
+  one make a **fragment**. Fragments may import `.mox`, `.dmn`, and `.ddd`
+  fragments; modules reopen across fragments and their members concatenate
+  in first-appearance/import order, while duplicate members remain the
+  existing application-wide errors. New entry points
+  `compile_ddd_app_str`/`compile_ddd_app_str_with_decisions` produce one
+  merged `DddModel` per application and no fragment artifact; single-file
+  applications stay byte-identical. The CLI compiles roots (`check` prints
+  `OK` for roots and fragments, `build` emits one artifact per root, `ir` on
+  a fragment names the root, `fmt` formats fragments normally, and `verify`
+  hashes fragment sources without emitting a fragment artifact), the LSP
+  publishes fragment diagnostics through the root, and the semantic graph
+  treats fragments as part of the root's application. Graph
+  `applications[].id` now uses the authored `application <Name>` when a
+  component has exactly one `.ddd` root (otherwise the smallest member path
+  remains the fallback) — a pre-1.0 value change; the graph `formatVersion`
+  stays 1.
+
+### Changed
+
+- **`.ddd` resolution documentation corrected** (Phase 0 follow-up): the
+  `compile_ddd_str` reference no longer claims resolution is validation-only
+  — the artifact keeps the authored spelling and adds the resolved companion,
+  matching the shipped DD1 contract (issue
+  [#298](https://github.com/yestechgroup/pherolang/issues/298)).
 
 ## [0.3.0] — Phero Lang (2026-11-14)
 

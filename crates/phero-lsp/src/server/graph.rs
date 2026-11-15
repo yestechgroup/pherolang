@@ -572,21 +572,42 @@ impl PheroBackend {
                 )
             }
             Surface::Known(SurfaceKind::Ddd) => {
+                let fragment = phero_syntax::parse_ddd(text)
+                    .ast
+                    .is_some_and(|ast| ast.application.is_none());
                 let domains = phero_driver::project::gather_domain_sources(
                     &key,
                     text,
                     |source| {
                         phero_syntax::parse_ddd(source)
                             .ast
-                            .map(|ast| ast.imports.into_iter().map(|import| import.path).collect())
+                            .map(|ast| {
+                                ast.imports
+                                    .into_iter()
+                                    .map(|import| import.path)
+                                    .filter(|import| !import.ends_with(".ddd"))
+                                    .collect()
+                            })
                             .unwrap_or_default()
                     },
                     &mut fetch,
                 );
-                let compilation =
-                    phero_driver::compile_ddd_str(&key, text, &domains, &domain_imports(&domains));
+                // DD8: a fragment compiles through its root; only the root
+                // owns the merged artifact.
+                let (root_path, root_text, fragments) = self
+                    .ddd_app_sources(uri, text)
+                    .unwrap_or((key.clone(), text.to_string(), Vec::new()));
+                let compilation = phero_driver::compile_ddd_app_str(
+                    &root_path,
+                    &root_text,
+                    &fragments,
+                    &domains,
+                    &domain_imports(&domains),
+                );
                 (
-                    compilation.model.map(SnapshotArtifact::Design),
+                    (!fragment)
+                        .then(|| compilation.model.map(SnapshotArtifact::Design))
+                        .flatten(),
                     keyed_diagnostics(&compilation.diagnostics, &key, &map),
                 )
             }
