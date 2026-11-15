@@ -1,0 +1,73 @@
+---
+const columns = [
+  {
+    heading: 'Platform',
+    links: [
+      { href: '/platform', label: 'Overview' },
+      { href: '/languages', label: 'Languages' },
+      { href: '/architecture', label: 'Architecture' },
+      { href: '/getting-started', label: 'Get started' },
+    ],
+  },
+  {
+    heading: 'Documentation',
+    links: [
+      { href: 'https://docs.pherolang.com', label: 'Docs' },
+      { href: 'https://docs.pherolang.com/reference/language/', label: 'Language reference' },
+      { href: 'https://docs.pherolang.com/reference/graph/', label: 'Semantic graph' },
+      { href: 'https://github.com/yestechgroup/pherolang/tree/main/examples', label: 'Examples' },
+    ],
+  },
+  {
+    heading: 'Project',
+    links: [
+      { href: 'https://github.com/yestechgroup/pherolang', label: 'GitHub' },
+      { href: 'https://github.com/yestechgroup/pherolang/blob/main/CONTRIBUTING.md', label: 'Contributing' },
+      { href: 'https://github.com/yestechgroup/pherolang/blob/main/SECURITY.md', label: 'Security' },
+      { href: 'https://github.com/yestechgroup/pherolang/blob/main/LICENSE', label: 'Apache-2.0' },
+    ],
+  },
+];
+const year = new Date().getFullYear();
+---
+<footer class="mt-24 border-t border-[color-mix(in_oklab,var(--color-silver)_22%,transparent)] bg-graphite text-warm-white">
+  <div class="mx-auto max-w-6xl px-4 py-14 sm:px-6">
+    <div class="grid gap-10 sm:grid-cols-2 lg:grid-cols-[1.4fr_repeat(3,1fr)]">
+      <div>
+        <div class="flex items-center gap-2.5">
+          <img src="/brand/pherolang-mark-compact-inverse.svg" alt="" width="22" height="22" class="size-[22px]" />
+          <span class="font-display text-base font-semibold">Phero Lang</span>
+        </div>
+        <p class="mt-3 max-w-[34ch] text-sm leading-relaxed text-silver">
+          Verifiable model-driven engineering. Design software, define its meaning,
+          prove its correctness.
+        </p>
+      </div>
+      {
+        columns.map((column) => (
+          <nav aria-label={column.heading}>
+            <h2 class="font-mono text-xs font-medium uppercase tracking-[0.16em] text-silver">
+              {column.heading}
+            </h2>
+            <ul class="mt-4 flex flex-col gap-2.5">
+              {column.links.map((link) => (
+                <li>
+                  <a
+                    href={link.href}
+                    class="rounded-xs text-sm text-warm-white no-underline hover:text-lime focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-lime"
+                  >
+                    {link.label}
+                  </a>
+                </li>
+              ))}
+            </ul>
+          </nav>
+        ))
+      }
+    </div>
+    <div class="mt-12 flex flex-col gap-2 border-t border-[color-mix(in_oklab,var(--color-silver)_18%,transparent)] pt-6 font-mono text-xs text-silver sm:flex-row sm:items-center sm:justify-between">
+      <p>© {year} Phero Lang. Apache-2.0.</p>
+      <p>Open source · Rust · Extensible · Model-driven</p>
+    </div>
+  </div>
+</footer>

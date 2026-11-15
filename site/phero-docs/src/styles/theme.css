@@ -1,0 +1,94 @@
+/*
+ * Starlight, driven entirely by packages/tokens — no hex literal is allowed in
+ * this file. The docs are the light, reading-first surface; the marketing site
+ * is the dark one, and both read the same palette.
+ *
+ * Starlight's `--sl-color-accent` is used for links and controls, so it points
+ * at the measured link colour (6.24:1 on warm white). Lime is the selection and
+ * focus accent, never body text on light — see packages/tokens/contrast.json.
+ */
+@import "../../../packages/tokens/src/tokens.css";
+
+:root {
+  --sl-font: var(--palette-font-sans);
+  --sl-font-mono: var(--palette-font-mono);
+  --sl-font-system-mono: var(--palette-font-mono);
+
+  --sl-color-white: var(--palette-graphite);
+  --sl-color-black: var(--palette-warm-white);
+
+  --sl-color-accent-low: color-mix(in oklab, var(--palette-lime) 26%, var(--palette-warm-white));
+  --sl-color-accent: var(--palette-link);
+  --sl-color-accent-high: var(--palette-graphite);
+
+  --sl-color-text: var(--palette-graphite);
+  --sl-color-text-accent: var(--palette-link);
+  --sl-color-text-invert: var(--palette-warm-white);
+
+  --sl-color-bg: var(--palette-warm-white);
+  --sl-color-bg-nav: var(--palette-warm-white);
+  --sl-color-bg-sidebar: var(--palette-warm-white);
+  --sl-color-bg-inline-code: color-mix(in oklab, var(--palette-graphite) 7%, transparent);
+  --sl-color-bg-accent: var(--palette-link);
+
+  --sl-color-hairline-light: color-mix(in oklab, var(--palette-graphite) 12%, transparent);
+  --sl-color-hairline: color-mix(in oklab, var(--palette-graphite) 16%, transparent);
+  --sl-color-hairline-shade: color-mix(in oklab, var(--palette-graphite) 22%, transparent);
+
+  --sl-color-gray-1: var(--palette-graphite);
+  --sl-color-gray-2: color-mix(in oklab, var(--palette-graphite) 84%, var(--palette-warm-white));
+  --sl-color-gray-3: var(--palette-muted);
+  --sl-color-gray-4: var(--palette-silver);
+  --sl-color-gray-5: color-mix(in oklab, var(--palette-silver) 45%, var(--palette-warm-white));
+  --sl-color-gray-6: color-mix(in oklab, var(--palette-silver) 24%, var(--palette-warm-white));
+  --sl-color-gray-7: color-mix(in oklab, var(--palette-silver) 14%, var(--palette-warm-white));
+
+  --sl-content-width: 52rem;
+  --sl-text-code: 0.875rem;
+}
+
+/* Graphite ground, warm-white ink, lime selection. */
+:root[data-theme="dark"] {
+  --sl-color-white: var(--palette-warm-white);
+  --sl-color-black: var(--palette-graphite);
+
+  --sl-color-accent-low: color-mix(in oklab, var(--palette-lime) 18%, var(--palette-graphite));
+  --sl-color-accent: var(--palette-link-inverse);
+  --sl-color-accent-high: var(--palette-lime);
+
+  --sl-color-text: var(--palette-warm-white);
+  --sl-color-text-accent: var(--palette-link-inverse);
+  --sl-color-text-invert: var(--palette-graphite);
+
+  --sl-color-bg: var(--palette-graphite);
+  --sl-color-bg-nav: var(--palette-graphite);
+  --sl-color-bg-sidebar: var(--palette-graphite);
+  --sl-color-bg-inline-code: color-mix(in oklab, var(--palette-silver) 18%, transparent);
+  --sl-color-bg-accent: var(--palette-lime);
+
+  --sl-color-hairline-light: color-mix(in oklab, var(--palette-silver) 18%, transparent);
+  --sl-color-hairline: color-mix(in oklab, var(--palette-silver) 24%, transparent);
+  --sl-color-hairline-shade: color-mix(in oklab, var(--palette-silver) 32%, transparent);
+
+  --sl-color-gray-1: var(--palette-warm-white);
+  --sl-color-gray-2: var(--palette-silver);
+  --sl-color-gray-3: color-mix(in oklab, var(--palette-silver) 78%, var(--palette-graphite));
+  --sl-color-gray-4: color-mix(in oklab, var(--palette-silver) 55%, var(--palette-graphite));
+  --sl-color-gray-5: color-mix(in oklab, var(--palette-silver) 32%, var(--palette-graphite));
+  --sl-color-gray-6: color-mix(in oklab, var(--palette-silver) 18%, var(--palette-graphite));
+  --sl-color-gray-7: color-mix(in oklab, var(--palette-silver) 10%, var(--palette-graphite));
+}
+
+/* The one place lime is legal on a reading surface: a selection. */
+::selection {
+  background: var(--palette-lime);
+  color: var(--palette-graphite);
+}
+
+.sl-markdown-content :is(h1, h2, h3, h4) {
+  letter-spacing: -0.02em;
+}
+
+.sl-markdown-content table {
+  font-variant-numeric: tabular-nums;
+}

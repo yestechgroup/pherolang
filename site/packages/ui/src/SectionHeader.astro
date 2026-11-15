@@ -1,0 +1,19 @@
+---
+interface Props {
+  eyebrow?: string;
+  title: string;
+  lede?: string;
+  align?: 'start' | 'center';
+  class?: string;
+}
+const { eyebrow, title, lede, align = 'start', class: className = '' } = Astro.props;
+---
+<header class:list={['max-w-[62ch]', align === 'center' && 'mx-auto text-center', className]}>
+  {eyebrow && (
+    <p class="mb-3 font-mono text-xs font-medium uppercase tracking-[0.18em] text-[var(--text-muted)]">
+      {eyebrow}
+    </p>
+  )}
+  <h2 class="font-display text-display-2 font-semibold text-balance text-[var(--text)]">{title}</h2>
+  {lede && <p class="mt-4 text-lg leading-[1.6] text-[var(--text-muted)] text-pretty">{lede}</p>}
+</header>

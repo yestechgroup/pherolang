@@ -1,0 +1,22 @@
+{
+  "name": "phero-docs",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "node ../scripts/ingest-docs.mjs && astro dev",
+    "build": "node ../scripts/ingest-docs.mjs && astro build",
+    "preview": "astro preview",
+    "check": "node ../scripts/ingest-docs.mjs && astro check",
+    "deploy": "wrangler deploy"
+  },
+  "dependencies": {
+    "@astrojs/cloudflare": "14.4.8",
+    "@astrojs/starlight": "0.43.1",
+    "astro": "7.4.12",
+    "wrangler": "^4.125.0"
+  },
+  "devDependencies": {
+    "@astrojs/check": "^0.9.4",
+    "typescript": "^5.9.3"
+  }
+}

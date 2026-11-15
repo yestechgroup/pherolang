@@ -1,0 +1,164 @@
+/*
+ * The only place a colour, a font or a radius is defined.
+ *
+ * Source of truth for the values and their measured pairings:
+ * site/brand/README.md. Three colours in the palette cannot carry text —
+ * silver and lime on warm white, deep blue anywhere — and the semantic layer
+ * below never asks them to. `packages/tokens/contrast.json` pins every pair the
+ * system actually uses so `scripts/gate.mjs` can measure it instead of trusting
+ * this comment.
+ *
+ * Two consumers, one file:
+ *   * the marketing app runs Tailwind, which reads the `@theme inline` block
+ *     and generates utilities (`bg-graphite`, `text-warm-white`, `outline-link`);
+ *   * the docs app runs Starlight with no Tailwind, so the same values must
+ *     exist as ordinary custom properties. That is why the palette is declared
+ *     in `:root` first and `@theme inline` merely *renames* it — `inline` keeps
+ *     the var() reference instead of copying the literal, so both surfaces read
+ *     exactly one value.
+ */
+
+:root {
+  /* Palette — brand/README.md "Palette". Never compose a new hex outside this block. */
+  --palette-graphite: #111318;
+  --palette-charcoal: #1c2028;
+  --palette-warm-white: #f5f4f0;
+  --palette-silver: #a7adb7;
+  --palette-lime: #c4f56a;
+  --palette-deep-blue: #5369d8;
+
+  /* Measured substitutes for the three colours that cannot carry text. */
+  --palette-muted: #5a616b;
+  --palette-link: #3f51b5;
+  --palette-link-inverse: #8b9af5;
+
+  /* Type. Self-hosted and subset by the app; these are the stacks. */
+  --palette-font-sans: "Geist", "Inter", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  --palette-font-display: "Geist", "Inter", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  --palette-font-mono: "IBM Plex Mono", ui-monospace, SFMono-Regular, "Cascadia Code", monospace;
+
+  /* Radii — architectural, not soft. */
+  --palette-radius-xs: 2px;
+  --palette-radius-sm: 4px;
+  --palette-radius-md: 8px;
+  --palette-radius-lg: 14px;
+
+  /* One easing vocabulary; motion primitives use these. */
+  --palette-ease-out-precise: cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+@theme inline {
+  --color-graphite: var(--palette-graphite);
+  --color-charcoal: var(--palette-charcoal);
+  --color-warm-white: var(--palette-warm-white);
+  --color-silver: var(--palette-silver);
+  --color-lime: var(--palette-lime);
+  --color-deep-blue: var(--palette-deep-blue);
+  --color-muted: var(--palette-muted);
+  --color-link: var(--palette-link);
+  --color-link-inverse: var(--palette-link-inverse);
+
+  --font-sans: var(--palette-font-sans);
+  --font-display: var(--palette-font-display);
+  --font-mono: var(--palette-font-mono);
+
+  --radius-xs: var(--palette-radius-xs);
+  --radius-sm: var(--palette-radius-sm);
+  --radius-md: var(--palette-radius-md);
+  --radius-lg: var(--palette-radius-lg);
+
+  /* Display scale. Large headlines are the site's defining characteristic. */
+  --text-display-1: clamp(2.75rem, 6.2vw, 5.5rem);
+  --text-display-1--line-height: 0.98;
+  --text-display-1--letter-spacing: -0.035em;
+  --text-display-2: clamp(2rem, 3.6vw, 3.25rem);
+  --text-display-2--line-height: 1.04;
+  --text-display-2--letter-spacing: -0.028em;
+  --text-display-3: clamp(1.5rem, 2.2vw, 2.125rem);
+  --text-display-3--line-height: 1.12;
+  --text-display-3--letter-spacing: -0.02em;
+}
+
+/* Semantic layer — light is the reading surface. */
+:root {
+  color-scheme: light;
+
+  --surface: var(--palette-warm-white);
+  --surface-raised: #ffffff;
+  --surface-sunken: var(--palette-charcoal);
+
+  --text: var(--palette-graphite);
+  --text-muted: var(--palette-muted);
+  --text-inverse: var(--palette-warm-white);
+
+  /* Decorative rules only — never the sole affordance of a control. */
+  --border: color-mix(in oklab, var(--palette-graphite) 14%, transparent);
+  --border-strong: var(--palette-graphite);
+
+  --accent: var(--palette-lime);
+  --accent-ink: var(--palette-graphite);
+
+  --link: var(--palette-link);
+  --focus: var(--palette-link);
+  --diagram: var(--palette-deep-blue);
+}
+
+/* Dark surfaces: graphite ground, charcoal raised, warm white ink. */
+@media (prefers-color-scheme: dark) {
+  :root {
+    color-scheme: dark;
+
+    --surface: var(--palette-graphite);
+    --surface-raised: var(--palette-charcoal);
+    --surface-sunken: #0c0e12;
+
+    --text: var(--palette-warm-white);
+    --text-muted: var(--palette-silver);
+    --text-inverse: var(--palette-graphite);
+
+    --border: color-mix(in oklab, var(--palette-silver) 26%, transparent);
+    --border-strong: var(--palette-silver);
+
+    --accent: var(--palette-lime);
+    --accent-ink: var(--palette-graphite);
+
+    --link: var(--palette-link-inverse);
+    --focus: var(--palette-lime);
+    --diagram: var(--palette-deep-blue);
+  }
+}
+
+/* An explicit override always wins over the media query. */
+[data-theme="light"] {
+  color-scheme: light;
+  --surface: var(--palette-warm-white);
+  --surface-raised: #ffffff;
+  --surface-sunken: var(--palette-charcoal);
+  --text: var(--palette-graphite);
+  --text-muted: var(--palette-muted);
+  --text-inverse: var(--palette-warm-white);
+  --border: color-mix(in oklab, var(--palette-graphite) 14%, transparent);
+  --border-strong: var(--palette-graphite);
+  --accent: var(--palette-lime);
+  --accent-ink: var(--palette-graphite);
+  --link: var(--palette-link);
+  --focus: var(--palette-link);
+  --diagram: var(--palette-deep-blue);
+}
+
+[data-theme="dark"] {
+  color-scheme: dark;
+  --surface: var(--palette-graphite);
+  --surface-raised: var(--palette-charcoal);
+  --surface-sunken: #0c0e12;
+  --text: var(--palette-warm-white);
+  --text-muted: var(--palette-silver);
+  --text-inverse: var(--palette-graphite);
+  --border: color-mix(in oklab, var(--palette-silver) 26%, transparent);
+  --border-strong: var(--palette-silver);
+  --accent: var(--palette-lime);
+  --accent-ink: var(--palette-graphite);
+  --link: var(--palette-link-inverse);
+  --focus: var(--palette-lime);
+  --diagram: var(--palette-deep-blue);
+}

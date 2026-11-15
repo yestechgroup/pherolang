@@ -1,0 +1,22 @@
+---
+interface Props {
+  code?: string;
+  lang?: string;
+  filename?: string;
+  /** When true the block is executable documentation: scripts/gate.mjs runs it. */
+  runnable?: boolean;
+}
+const { code, lang, filename, runnable = false } = Astro.props;
+const body = code ?? '';
+---
+<figure class="my-6 overflow-hidden rounded-md border border-[var(--border)] bg-[var(--surface-raised)]">
+  {(filename || lang) && (
+    <figcaption class="flex items-center justify-between border-b border-[var(--border)] px-4 py-2 font-mono text-xs uppercase tracking-[0.12em] text-[var(--text-muted)]">
+      <span>{filename ?? lang}</span>
+      {runnable && <span class="normal-case tracking-normal">executed by CI</span>}
+    </figcaption>
+  )}
+  <pre class="overflow-x-auto p-4 font-mono text-[0.8125rem] leading-[1.65] text-[var(--text)]"><code
+      class={lang ? `language-${lang}` : undefined}
+      data-runnable={runnable ? '' : undefined}>{body}</code></pre>
+</figure>

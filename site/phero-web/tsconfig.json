@@ -1,0 +1,14 @@
+{
+  "extends": "astro/tsconfigs/strict",
+  "include": [".astro/types.d.ts", "**/*.astro", "**/*.ts", "**/*.tsx", "**/*.mdx"],
+  "exclude": ["dist"],
+  "compilerOptions": {
+    "noUncheckedIndexedAccess": true,
+    "baseUrl": ".",
+    "paths": {
+      "@ui/*": ["../packages/ui/src/*"],
+      "@tokens/*": ["../packages/tokens/src/*"],
+      "@data/*": ["../data/*"]
+    }
+  }
+}

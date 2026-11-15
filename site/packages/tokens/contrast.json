@@ -1,0 +1,107 @@
+{
+  "//": "Every foreground/background pair the design system uses, with the ratio site/brand/README.md measured and the WCAG 2.2 threshold that applies. scripts/gate.mjs recomputes each ratio from the hex values and fails on any mismatch — the audit is a test, not a document. Add a row before you add a colour pair.",
+  "pairs": [
+    {
+      "name": "graphite-on-warm-white",
+      "fg": "#111318",
+      "bg": "#F5F4F0",
+      "min": 7,
+      "use": "body text, light surfaces",
+      "verdict": "AAA"
+    },
+    {
+      "name": "warm-white-on-charcoal",
+      "fg": "#F5F4F0",
+      "bg": "#1C2028",
+      "min": 7,
+      "use": "body text, dark raised surfaces",
+      "verdict": "AAA"
+    },
+    {
+      "name": "lime-on-graphite",
+      "fg": "#C4F56A",
+      "bg": "#111318",
+      "min": 7,
+      "use": "accent text on dark only",
+      "verdict": "AAA"
+    },
+    {
+      "name": "graphite-on-lime",
+      "fg": "#111318",
+      "bg": "#C4F56A",
+      "min": 7,
+      "use": "CTA fill with graphite label",
+      "verdict": "AAA"
+    },
+    {
+      "name": "silver-on-graphite",
+      "fg": "#A7ADB7",
+      "bg": "#111318",
+      "min": 7,
+      "use": "muted text on dark",
+      "verdict": "AAA"
+    },
+    {
+      "name": "muted-on-warm-white",
+      "fg": "#5A616B",
+      "bg": "#F5F4F0",
+      "min": 4.5,
+      "use": "secondary text on light (silver substitute)",
+      "verdict": "AA"
+    },
+    {
+      "name": "link-on-warm-white",
+      "fg": "#3F51B5",
+      "bg": "#F5F4F0",
+      "min": 4.5,
+      "use": "links and interactive text on light",
+      "verdict": "AA"
+    },
+    {
+      "name": "link-inverse-on-graphite",
+      "fg": "#8B9AF5",
+      "bg": "#111318",
+      "min": 4.5,
+      "use": "links on dark",
+      "verdict": "AA"
+    },
+    {
+      "name": "graphite-on-warm-white-raised",
+      "fg": "#111318",
+      "bg": "#FFFFFF",
+      "min": 7,
+      "use": "body text on raised light surfaces",
+      "verdict": "AAA"
+    }
+  ],
+  "forbidden": [
+    {
+      "name": "silver-on-warm-white",
+      "fg": "#A7ADB7",
+      "bg": "#F5F4F0",
+      "max": 3,
+      "why": "2.05 — decoration only, never text"
+    },
+    {
+      "name": "lime-on-warm-white",
+      "fg": "#C4F56A",
+      "bg": "#F5F4F0",
+      "max": 3,
+      "why": "1.15 — never text or a thin icon on light"
+    },
+    {
+      "name": "deep-blue-on-warm-white",
+      "fg": "#5369D8",
+      "bg": "#F5F4F0",
+      "max": 4.5,
+      "why": "4.36 — below AA for body text; diagrams only"
+    },
+    {
+      "name": "deep-blue-on-graphite",
+      "fg": "#5369D8",
+      "bg": "#111318",
+      "max": 4.5,
+      "why": "3.88 — below AA; diagrams only"
+    }
+  ]
+}

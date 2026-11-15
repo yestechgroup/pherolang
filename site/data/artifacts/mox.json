@@ -1,0 +1,364 @@
+{
+  "formatVersion": 2,
+  "pheroVersion": "0.3.0",
+  "packages": [
+    {
+      "name": "nz.example.support",
+      "annotations": [],
+      "enums": [
+        {
+          "name": "TicketState",
+          "literals": [
+            {
+              "name": "Open",
+              "label": "open",
+              "value": 0
+            },
+            {
+              "name": "InProgress",
+              "label": "in_progress",
+              "value": 1
+            },
+            {
+              "name": "Resolved",
+              "label": "resolved",
+              "value": 2
+            }
+          ]
+        }
+      ],
+      "datatypes": [],
+      "interfaces": [],
+      "classes": [
+        {
+          "name": "User",
+          "extends": [],
+          "features": [
+            {
+              "id": 0,
+              "name": "userId",
+              "kind": "attribute",
+              "type": {
+                "type": "primitive",
+                "value": "string"
+              },
+              "multiplicity": {
+                "lower": 1,
+                "upper": {
+                  "finite": 1
+                }
+              },
+              "isDerived": false,
+              "isId": true,
+              "isReadOnly": true
+            },
+            {
+              "id": 1,
+              "name": "name",
+              "kind": "attribute",
+              "type": {
+                "type": "primitive",
+                "value": "string"
+              },
+              "multiplicity": {
+                "lower": 1,
+                "upper": {
+                  "finite": 1
+                }
+              },
+              "isDerived": false,
+              "isId": false,
+              "isReadOnly": false
+            },
+            {
+              "id": 2,
+              "name": "active",
+              "kind": "attribute",
+              "type": {
+                "type": "primitive",
+                "value": "boolean"
+              },
+              "multiplicity": {
+                "lower": 1,
+                "upper": {
+                  "finite": 1
+                }
+              },
+              "isDerived": false,
+              "isId": false,
+              "isReadOnly": false
+            },
+            {
+              "id": 3,
+              "name": "assignedTickets",
+              "kind": "crossReference",
+              "type": {
+                "type": "class",
+                "value": {
+                  "package": "nz.example.support",
+                  "name": "Ticket"
+                }
+              },
+              "multiplicity": {
+                "lower": 0,
+                "upper": "unbounded"
+              },
+              "opposite": {
+                "class": "Ticket",
+                "feature": "assignee"
+              },
+              "isDerived": false,
+              "isId": false,
+              "isReadOnly": false
+            }
+          ]
+        },
+        {
+          "name": "Ticket",
+          "extends": [],
+          "features": [
+            {
+              "id": 0,
+              "name": "ticketNo",
+              "kind": "attribute",
+              "type": {
+                "type": "primitive",
+                "value": "string"
+              },
+              "multiplicity": {
+                "lower": 1,
+                "upper": {
+                  "finite": 1
+                }
+              },
+              "isDerived": false,
+              "isId": true,
+              "isReadOnly": true
+            },
+            {
+              "id": 1,
+              "name": "title",
+              "kind": "attribute",
+              "type": {
+                "type": "primitive",
+                "value": "string"
+              },
+              "multiplicity": {
+                "lower": 1,
+                "upper": {
+                  "finite": 1
+                }
+              },
+              "isDerived": false,
+              "isId": false,
+              "isReadOnly": false
+            },
+            {
+              "id": 2,
+              "name": "internal",
+              "kind": "attribute",
+              "type": {
+                "type": "primitive",
+                "value": "boolean"
+              },
+              "multiplicity": {
+                "lower": 1,
+                "upper": {
+                  "finite": 1
+                }
+              },
+              "isDerived": false,
+              "isId": false,
+              "isReadOnly": false
+            },
+            {
+              "id": 3,
+              "name": "refundCents",
+              "kind": "attribute",
+              "type": {
+                "type": "primitive",
+                "value": "int"
+              },
+              "multiplicity": {
+                "lower": 1,
+                "upper": {
+                  "finite": 1
+                }
+              },
+              "isDerived": false,
+              "isId": false,
+              "isReadOnly": false
+            },
+            {
+              "id": 4,
+              "name": "state",
+              "kind": "attribute",
+              "type": {
+                "type": "enum",
+                "value": {
+                  "package": "nz.example.support",
+                  "name": "TicketState"
+                }
+              },
+              "multiplicity": {
+                "lower": 1,
+                "upper": {
+                  "finite": 1
+                }
+              },
+              "isDerived": false,
+              "isId": false,
+              "isReadOnly": false
+            },
+            {
+              "id": 5,
+              "name": "assignee",
+              "kind": "crossReference",
+              "type": {
+                "type": "class",
+                "value": {
+                  "package": "nz.example.support",
+                  "name": "User"
+                }
+              },
+              "multiplicity": {
+                "lower": 0,
+                "upper": {
+                  "finite": 1
+                }
+              },
+              "opposite": {
+                "class": "User",
+                "feature": "assignedTickets"
+              },
+              "isDerived": false,
+              "isId": false,
+              "isReadOnly": false
+            },
+            {
+              "id": 6,
+              "name": "needsRefund",
+              "kind": "attribute",
+              "type": {
+                "type": "primitive",
+                "value": "boolean"
+              },
+              "multiplicity": {
+                "lower": 0,
+                "upper": {
+                  "finite": 1
+                }
+              },
+              "isDerived": true,
+              "isId": false,
+              "isReadOnly": false,
+              "bodies": {
+                "expr": " refundCents > 0 "
+              }
+            }
+          ],
+          "operations": [
+            {
+              "name": "raiseRefund",
+              "returnType": {
+                "type": "primitive",
+                "value": "boolean"
+              },
+              "params": [
+                {
+                  "name": "cents",
+                  "type": {
+                    "type": "primitive",
+                    "value": "int"
+                  }
+                }
+              ],
+              "bodies": {
+                "expr": " refundCents + cents <= 5000 "
+              }
+            },
+            {
+              "name": "approveRefund",
+              "returnType": {
+                "type": "primitive",
+                "value": "boolean"
+              },
+              "params": [
+                {
+                  "name": "cents",
+                  "type": {
+                    "type": "primitive",
+                    "value": "int"
+                  }
+                }
+              ],
+              "bodies": {
+                "expr": " refundCents + cents <= 100000 "
+              }
+            }
+          ]
+        },
+        {
+          "name": "RefundDecision",
+          "extends": [],
+          "features": [
+            {
+              "id": 0,
+              "name": "decisionId",
+              "kind": "attribute",
+              "type": {
+                "type": "primitive",
+                "value": "string"
+              },
+              "multiplicity": {
+                "lower": 1,
+                "upper": {
+                  "finite": 1
+                }
+              },
+              "isDerived": false,
+              "isId": true,
+              "isReadOnly": true
+            },
+            {
+              "id": 1,
+              "name": "cents",
+              "kind": "attribute",
+              "type": {
+                "type": "primitive",
+                "value": "int"
+              },
+              "multiplicity": {
+                "lower": 1,
+                "upper": {
+                  "finite": 1
+                }
+              },
+              "isDerived": false,
+              "isId": false,
+              "isReadOnly": true
+            },
+            {
+              "id": 2,
+              "name": "approved",
+              "kind": "attribute",
+              "type": {
+                "type": "primitive",
+                "value": "boolean"
+              },
+              "multiplicity": {
+                "lower": 1,
+                "upper": {
+                  "finite": 1
+                }
+              },
+              "isDerived": false,
+              "isId": false,
+              "isReadOnly": true
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

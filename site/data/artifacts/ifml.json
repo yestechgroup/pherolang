@@ -1,0 +1,487 @@
+{
+  "formatVersion": 2,
+  "views": [
+    {
+      "name": "Inbox",
+      "label": "Support Inbox",
+      "isLandmark": true,
+      "isXor": false,
+      "isModal": false,
+      "params": [
+        {
+          "name": "tickets",
+          "typeRef": "Ticket",
+          "default": null
+        },
+        {
+          "name": "folders",
+          "typeRef": "Ticket",
+          "default": null
+        }
+      ],
+      "properties": [
+        {
+          "key": "landmark",
+          "value": {
+            "type": "bool",
+            "value": true
+          }
+        }
+      ],
+      "components": [
+        {
+          "name": "escalations",
+          "componentType": {
+            "type": "list"
+          },
+          "spec": null,
+          "properties": [
+            {
+              "key": "data",
+              "value": {
+                "type": "identifier",
+                "value": "Ticket"
+              }
+            },
+            {
+              "key": "fields",
+              "value": {
+                "type": "array",
+                "value": [
+                  {
+                    "type": "identifier",
+                    "value": "ticketNo"
+                  },
+                  {
+                    "type": "identifier",
+                    "value": "title"
+                  },
+                  {
+                    "type": "identifier",
+                    "value": "refundCents"
+                  }
+                ]
+              }
+            },
+            {
+              "key": "filter",
+              "value": {
+                "type": "binOp",
+                "value": {
+                  "left": {
+                    "type": "identifier",
+                    "value": "refundCents"
+                  },
+                  "op": "gt",
+                  "right": {
+                    "type": "number",
+                    "value": 0.0
+                  }
+                }
+              }
+            }
+          ],
+          "events": [
+            {
+              "eventType": {
+                "type": "select"
+              },
+              "params": [
+                "row"
+              ],
+              "condition": null,
+              "action": {
+                "type": "navigate",
+                "value": {
+                  "target": "Queue",
+                  "binding": {
+                    "pairs": [
+                      [
+                        "ticket",
+                        {
+                          "type": "fieldExpr",
+                          "value": {
+                            "object": {
+                              "type": "ident",
+                              "value": "row"
+                            },
+                            "field": "ticketNo"
+                          }
+                        }
+                      ]
+                    ]
+                  }
+                }
+              }
+            }
+          ],
+          "condition": null
+        }
+      ],
+      "moduleUses": [
+        {
+          "module": "Inbox",
+          "alias": "inbox",
+          "properties": [
+            {
+              "key": "messages",
+              "value": {
+                "type": "identifier",
+                "value": "tickets"
+              }
+            },
+            {
+              "key": "folders",
+              "value": {
+                "type": "identifier",
+                "value": "folders"
+              }
+            }
+          ]
+        }
+      ],
+      "condition": null,
+      "position": null
+    },
+    {
+      "name": "Queue",
+      "label": "Approval Queue",
+      "isLandmark": false,
+      "isXor": false,
+      "isModal": false,
+      "params": [
+        {
+          "name": "queue",
+          "typeRef": "Ticket",
+          "default": null
+        },
+        {
+          "name": "agent",
+          "typeRef": "User",
+          "default": null
+        }
+      ],
+      "components": [
+        {
+          "name": "refunds",
+          "componentType": {
+            "type": "table"
+          },
+          "spec": {
+            "type": "table",
+            "value": {
+              "columns": [
+                {
+                  "type": "expression",
+                  "value": {
+                    "label": "Refund",
+                    "expr": {
+                      "type": "binOp",
+                      "value": {
+                        "left": {
+                          "type": "ident",
+                          "value": "refundCents"
+                        },
+                        "op": "div",
+                        "right": {
+                          "type": "numLit",
+                          "value": 100.0
+                        }
+                      }
+                    }
+                  }
+                }
+              ],
+              "pagination": true
+            }
+          },
+          "properties": [
+            {
+              "key": "data",
+              "value": {
+                "type": "identifier",
+                "value": "Ticket"
+              }
+            },
+            {
+              "key": "fields",
+              "value": {
+                "type": "array",
+                "value": [
+                  {
+                    "type": "identifier",
+                    "value": "ticketNo"
+                  },
+                  {
+                    "type": "identifier",
+                    "value": "title"
+                  },
+                  {
+                    "type": "identifier",
+                    "value": "refundCents"
+                  }
+                ]
+              }
+            }
+          ],
+          "events": [
+            {
+              "eventType": {
+                "type": "custom",
+                "value": "approve"
+              },
+              "params": [
+                "row"
+              ],
+              "condition": {
+                "type": "fieldExpr",
+                "value": {
+                  "object": {
+                    "type": "ident",
+                    "value": "agent"
+                  },
+                  "field": "active"
+                }
+              },
+              "action": {
+                "type": "actionInvocation",
+                "value": {
+                  "name": "ApproveRefund",
+                  "body": {
+                    "properties": [
+                      {
+                        "key": "ticket",
+                        "value": {
+                          "type": "fieldAccess",
+                          "value": {
+                            "object": {
+                              "type": "identifier",
+                              "value": "queue"
+                            },
+                            "field": "ticketNo"
+                          }
+                        }
+                      }
+                    ]
+                  }
+                }
+              }
+            }
+          ],
+          "condition": null
+        },
+        {
+          "name": "assessment",
+          "componentType": {
+            "type": "details"
+          },
+          "spec": null,
+          "properties": [
+            {
+              "key": "data",
+              "value": {
+                "type": "identifier",
+                "value": "AssessRefund"
+              }
+            }
+          ],
+          "condition": null
+        },
+        {
+          "name": "intake",
+          "componentType": {
+            "type": "form"
+          },
+          "spec": null,
+          "properties": [
+            {
+              "key": "data",
+              "value": {
+                "type": "identifier",
+                "value": "Ticket"
+              }
+            }
+          ],
+          "events": [
+            {
+              "eventType": {
+                "type": "custom",
+                "value": "raise"
+              },
+              "params": [
+                "values"
+              ],
+              "condition": null,
+              "action": {
+                "type": "actionInvocation",
+                "value": {
+                  "name": "RaiseRefund",
+                  "body": null
+                }
+              }
+            }
+          ],
+          "condition": {
+            "type": "binOp",
+            "value": {
+              "left": {
+                "type": "ident",
+                "value": "refundCents"
+              },
+              "op": "gt",
+              "right": {
+                "type": "numLit",
+                "value": 0.0
+              }
+            }
+          }
+        }
+      ],
+      "moduleUses": [
+        {
+          "module": "ApprovalQueue",
+          "alias": "approvals",
+          "properties": [
+            {
+              "key": "queue",
+              "value": {
+                "type": "identifier",
+                "value": "queue"
+              }
+            }
+          ]
+        }
+      ],
+      "condition": null,
+      "position": null
+    },
+    {
+      "name": "Folder",
+      "label": null,
+      "isLandmark": false,
+      "isXor": false,
+      "isModal": false,
+      "params": [
+        {
+          "name": "id",
+          "typeRef": "Uuid",
+          "default": null
+        }
+      ],
+      "condition": null,
+      "position": null
+    },
+    {
+      "name": "ItemDetail",
+      "label": null,
+      "isLandmark": false,
+      "isXor": false,
+      "isModal": false,
+      "params": [
+        {
+          "name": "id",
+          "typeRef": "Uuid",
+          "default": null
+        }
+      ],
+      "condition": null,
+      "position": null
+    },
+    {
+      "name": "WorkItem",
+      "label": null,
+      "isLandmark": false,
+      "isXor": false,
+      "isModal": false,
+      "params": [
+        {
+          "name": "id",
+          "typeRef": "Uuid",
+          "default": null
+        }
+      ],
+      "condition": null,
+      "position": null
+    }
+  ],
+  "actions": [
+    {
+      "name": "MarkRead",
+      "properties": [
+        {
+          "key": "target",
+          "value": {
+            "type": "identifier",
+            "value": "Ticket"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Assign",
+      "properties": [
+        {
+          "key": "target",
+          "value": {
+            "type": "identifier",
+            "value": "Ticket"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Approve",
+      "properties": [
+        {
+          "key": "target",
+          "value": {
+            "type": "identifier",
+            "value": "Ticket"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Reject",
+      "properties": [
+        {
+          "key": "target",
+          "value": {
+            "type": "identifier",
+            "value": "Ticket"
+          }
+        }
+      ]
+    },
+    {
+      "name": "ApproveRefund",
+      "properties": [
+        {
+          "key": "target",
+          "value": {
+            "type": "identifier",
+            "value": "Ticket"
+          }
+        }
+      ]
+    },
+    {
+      "name": "RaiseRefund",
+      "properties": [
+        {
+          "key": "target",
+          "value": {
+            "type": "identifier",
+            "value": "Ticket"
+          }
+        }
+      ]
+    }
+  ],
+  "imports": [
+    "support.mox",
+    "support.dmn",
+    "../../patterns/ifml/communication.ifml",
+    "../../patterns/ifml/workflow.ifml"
+  ]
+}

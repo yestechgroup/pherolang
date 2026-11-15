@@ -1,0 +1,52 @@
+---
+import '../styles/global.css';
+
+import SkipLink from '@ui/SkipLink.astro';
+import Nav from '@ui/Nav.astro';
+import Footer from '@ui/Footer.astro';
+
+interface Props {
+  title: string;
+  description: string;
+  /** Set on pages that must not be indexed (the internal design gallery). */
+  noindex?: boolean;
+}
+const { title, description, noindex = false } = Astro.props;
+
+const canonical = new URL(Astro.url.pathname, Astro.site ?? 'https://pherolang.com');
+---
+
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>{title}</title>
+    <meta name="description" content={description} />
+    <link rel="canonical" href={canonical.href} />
+    {noindex && <meta name="robots" content="noindex, nofollow" />}
+
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="Phero Lang" />
+    <meta property="og:title" content={title} />
+    <meta property="og:description" content={description} />
+    <meta property="og:url" content={canonical.href} />
+    <meta property="og:image" content={new URL('/brand/pherolang-social-card.png', canonical).href} />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="theme-color" content="#111318" />
+
+    <link rel="icon" href="/favicons/favicon.ico" sizes="any" />
+    <link rel="icon" href="/favicons/favicon-32.png" type="image/png" sizes="32x32" />
+    <link rel="apple-touch-icon" href="/favicons/apple-touch-icon.png" />
+
+    <slot name="head" />
+  </head>
+  <body class="min-h-dvh bg-[var(--surface)] font-sans text-[var(--text)] antialiased">
+    <SkipLink />
+    <Nav current={Astro.url.pathname} />
+    <main id="main" class="mx-auto w-full max-w-6xl px-4 sm:px-6">
+      <slot />
+    </main>
+    <Footer />
+  </body>
+</html>

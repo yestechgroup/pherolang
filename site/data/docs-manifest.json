@@ -1,0 +1,131 @@
+{
+  "formatVersion": 1,
+  "generated": [
+    {
+      "source": "docs/BACKENDS.md",
+      "slug": "backends",
+      "title": "Writing a backend for Phero Lang",
+      "target": "reference/backends.md"
+    },
+    {
+      "source": "docs/CMMN.md",
+      "slug": "cmmn",
+      "title": "Case management (.cmmn)",
+      "target": "reference/cmmn.md"
+    },
+    {
+      "source": "docs/DDD.md",
+      "slug": "ddd",
+      "title": "DDD design DSL (.ddd)",
+      "target": "reference/ddd.md"
+    },
+    {
+      "source": "docs/DEPLOY.md",
+      "slug": "deploy",
+      "title": "Deployment models (.deploy)",
+      "target": "reference/deploy.md"
+    },
+    {
+      "source": "docs/DIAGNOSTICS.md",
+      "slug": "diagnostics",
+      "title": "Diagnostic codes",
+      "target": "reference/diagnostics.md"
+    },
+    {
+      "source": "docs/DMN.md",
+      "slug": "dmn",
+      "title": "DMN decision model DSL (.dmn)",
+      "target": "reference/dmn.md"
+    },
+    {
+      "source": "docs/EVENTS.md",
+      "slug": "events",
+      "title": "Event contracts (.evt)",
+      "target": "reference/events.md"
+    },
+    {
+      "source": "docs/EXPRESSIONS.md",
+      "slug": "expressions",
+      "title": "The Phero Lang expression language (Tier 2)",
+      "target": "reference/expressions.md"
+    },
+    {
+      "source": "docs/GRAPH.md",
+      "slug": "graph",
+      "title": "The unified semantic graph",
+      "target": "reference/graph.md"
+    },
+    {
+      "source": "docs/IFML.md",
+      "slug": "ifml",
+      "title": "IFML DSL",
+      "target": "reference/ifml.md"
+    },
+    {
+      "source": "docs/LANGUAGE.md",
+      "slug": "language",
+      "title": "The .mox language reference",
+      "target": "reference/language.md"
+    },
+    {
+      "source": "docs/NAMING.md",
+      "slug": "naming",
+      "title": "Naming",
+      "target": "reference/naming.md"
+    },
+    {
+      "source": "docs/README.md",
+      "slug": "index",
+      "title": "Phero Lang documentation",
+      "target": "index.md"
+    },
+    {
+      "source": "docs/REBRAND.md",
+      "slug": "rebrand",
+      "title": "Rebranding: rexlang → Phero Lang",
+      "target": "reference/rebrand.md"
+    },
+    {
+      "source": "docs/RECEIPTS.md",
+      "slug": "receipts",
+      "title": "Verification receipts",
+      "target": "reference/receipts.md"
+    },
+    {
+      "source": "docs/RELEASE-0.3.0.md",
+      "slug": "release-0.3.0",
+      "title": "Release runbook: v0.3.0 (Phero Lang)",
+      "target": "reference/release-0.3.0.md"
+    },
+    {
+      "source": "docs/RUNE-BODIES.md",
+      "slug": "rune-bodies",
+      "title": "Rune body translation — design (RFC)",
+      "target": "reference/rune-bodies.md"
+    },
+    {
+      "source": "docs/SEMANTICS.md",
+      "slug": "semantics",
+      "title": "Semantics: the claim ladder",
+      "target": "reference/semantics.md"
+    },
+    {
+      "source": "docs/USECASES.md",
+      "slug": "usecases",
+      "title": "Use case patterns (.uc)",
+      "target": "reference/usecases.md"
+    },
+    {
+      "source": "docs/VERIFICATION.md",
+      "slug": "verification",
+      "title": "Verification (proof-obligation register)",
+      "target": "reference/verification.md"
+    },
+    {
+      "source": "docs/VERSIONING.md",
+      "slug": "versioning",
+      "title": "Versioning and release policy",
+      "target": "reference/versioning.md"
+    }
+  ]
+}

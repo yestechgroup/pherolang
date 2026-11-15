@@ -1,0 +1,25 @@
+{
+  "name": "phero-web",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "astro dev",
+    "build": "astro build",
+    "preview": "astro preview",
+    "check": "astro check",
+    "deploy": "wrangler deploy"
+  },
+  "dependencies": {
+    "@astrojs/cloudflare": "14.4.8",
+    "@astrojs/mdx": "8.1.6",
+    "@astrojs/sitemap": "3.7.5",
+    "@tailwindcss/vite": "4.3.5",
+    "astro": "7.4.12",
+    "tailwindcss": "4.3.5",
+    "wrangler": "^4.125.0"
+  },
+  "devDependencies": {
+    "@astrojs/check": "^0.9.4",
+    "typescript": "^5.9.3"
+  }
+}

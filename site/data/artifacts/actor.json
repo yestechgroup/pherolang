@@ -1,0 +1,162 @@
+{
+  "formatVersion": 2,
+  "blocks": [
+    {
+      "name": "Support",
+      "actors": [
+        {
+          "name": "Customer"
+        },
+        {
+          "name": "Agent",
+          "extends": "Customer"
+        },
+        {
+          "name": "Manager",
+          "extends": "Agent"
+        },
+        {
+          "name": "Finance"
+        }
+      ],
+      "capabilities": [
+        {
+          "name": "ReadTicket",
+          "class": {
+            "type": "class",
+            "value": {
+              "package": "nz.example.support",
+              "name": "Ticket"
+            }
+          }
+        },
+        {
+          "name": "UpdateTicket",
+          "class": {
+            "type": "class",
+            "value": {
+              "package": "nz.example.support",
+              "name": "Ticket"
+            }
+          }
+        },
+        {
+          "name": "ResolveTicket",
+          "class": {
+            "type": "class",
+            "value": {
+              "package": "nz.example.support",
+              "name": "Ticket"
+            }
+          }
+        },
+        {
+          "name": "RaiseRefund",
+          "class": {
+            "type": "class",
+            "value": {
+              "package": "nz.example.support",
+              "name": "Ticket"
+            }
+          }
+        },
+        {
+          "name": "ApproveRefund",
+          "class": {
+            "type": "class",
+            "value": {
+              "package": "nz.example.support",
+              "name": "Ticket"
+            }
+          }
+        }
+      ],
+      "obligations": [
+        "audit",
+        "notifyCustomer"
+      ],
+      "grants": [
+        {
+          "actor": "Customer",
+          "entries": [
+            {
+              "effect": "permit",
+              "capability": "ReadTicket",
+              "when": "!internal"
+            }
+          ]
+        },
+        {
+          "actor": "Agent",
+          "entries": [
+            {
+              "effect": "permit",
+              "capability": "ReadTicket"
+            },
+            {
+              "effect": "permit",
+              "capability": "UpdateTicket",
+              "when": "!internal",
+              "obligations": [
+                "audit"
+              ]
+            },
+            {
+              "effect": "permit",
+              "capability": "RaiseRefund",
+              "when": "refundCents > 0 && refundCents <= 5000",
+              "obligations": [
+                "audit",
+                "notifyCustomer"
+              ]
+            }
+          ]
+        },
+        {
+          "actor": "Manager",
+          "entries": [
+            {
+              "effect": "permit",
+              "capability": "ReadTicket"
+            },
+            {
+              "effect": "permit",
+              "capability": "UpdateTicket"
+            },
+            {
+              "effect": "permit",
+              "capability": "ResolveTicket"
+            },
+            {
+              "effect": "permit",
+              "capability": "",
+              "cedar": "@why(\"internal tickets close at the manager's desk, not in the queue\")\n            forbid(principal is Support::Manager, action == Support::Action::\"ResolveTicket\", resource is Support::Ticket) when { resource.internal };"
+            }
+          ]
+        },
+        {
+          "actor": "Finance",
+          "entries": [
+            {
+              "effect": "permit",
+              "capability": "ApproveRefund",
+              "when": "refundCents <= 100000"
+            },
+            {
+              "effect": "forbid",
+              "capability": "ResolveTicket"
+            }
+          ]
+        }
+      ],
+      "neverBoth": [
+        {
+          "capabilities": [
+            "RaiseRefund",
+            "ApproveRefund"
+          ]
+        }
+      ]
+    }
+  ]
+}

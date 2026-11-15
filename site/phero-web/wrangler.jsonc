@@ -1,0 +1,13 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "pherolang-web",
+  "compatibility_date": "2026-11-01",
+  // The Astro Cloudflare adapter emits `dist/client` (assets) and `dist/server`
+  // (the entry Worker). Static output means the server bundle only carries the
+  // adapter's routing shell.
+  "assets": {
+    "directory": "./dist/client",
+    "not_found_handling": "404-page"
+  },
+  "observability": { "enabled": true }
+}
