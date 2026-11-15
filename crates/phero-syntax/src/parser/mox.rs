@@ -217,8 +217,8 @@ pub(crate) fn derived_decl<'src>(
         // Tier 2: a derived body is the same shape as an operation body —
         // target-tagged blocks (the neutral expression lives in a single
         // `expr { ... }` block) or a bare `{ ... }` the driver rejects.
-        // DD6: a constraint block may precede the body (the block is then
-        // the only tail) or follow it.
+        // DD6: the constraint block may stand alone (no body) or follow the
+        // body; the tail parser resolves a `{ ... }` block in that order.
         .then(derived_tail())
         .map_with(
             |(((type_ref, multiplicity), name), (body, bodies, constraints)), e| {
