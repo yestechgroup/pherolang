@@ -21,7 +21,12 @@
 //!   structural keys are called out with the correct spelling),
 //! * instance documents are sane: `$id`s are well-formed (`<class>/<n>`)
 //!   and unique, `$type` is present, and every `$ref` resolves within the
-//!   document.
+//!   document;
+//! * a DDD design artifact satisfies the artifact-only DDD contract from
+//!   [`phero_backend_ddd::check_contract`] (resolved companions, legal
+//!   stereotype/flag combinations, aligned parallel lists) — the one
+//!   per-kind check that inspects the deserialized artifact, not only its
+//!   JSON shape.
 //!
 //! The wire-format contract itself is normative in the `phero-ir` crate docs;
 //! `docs/BACKENDS.md` is the backend-author guide.
@@ -123,9 +128,11 @@ pub fn check_str(path: &str, text: &str) -> Result<ArtifactKind, Vec<String>> {
 ///    `phero.instance` validates as an [`ArtifactKind::Instance`]; any other
 ///    string is rejected (IR/actor/DDD/event artifacts carry no root
 ///    `$type`).
-/// 2. **`packages`/`pheroVersion` → IR artifact.** A [`phero_ir::Model`] always
-///    emits `packages` (and stamps `pheroVersion` provenance), so either key
-///    claims the document for [`ArtifactKind::IrModel`].
+/// 2. **`packages` → IR artifact.** A [`phero_ir::Model`] always emits
+///    `packages`, so that key claims the document for
+///    [`ArtifactKind::IrModel`]. `pheroVersion` is provenance and appears on
+///    several kinds (the DDD design artifact now stamps it too), so it is
+///    deliberately **not** a classifier key.
 /// 3. **`decisions` → decision-model artifact.** A `formatVersion`-bearing
 ///    root that carries that array validates as an
 ///    [`ArtifactKind::DmnModel`]. This check runs *before* the IFML shape:
@@ -237,7 +244,7 @@ pub fn check(text: &str) -> Result<ArtifactKind, Vec<String>> {
             None => Err(vec![format!("root $type must be a string, found {tag}")]),
         };
     }
-    if root.contains_key("packages") || root.contains_key("pheroVersion") {
+    if root.contains_key("packages") {
         return check_ir_model(root);
     }
     // A decision-model artifact carries a `decisions` array — a key no
@@ -336,7 +343,7 @@ pub fn check(text: &str) -> Result<ArtifactKind, Vec<String>> {
     {
         return check_cmmn_model(root);
     }
-    // No `packages`/`pheroVersion`, no decision-model shape, no IFML shape,
+    // No `packages`, no decision-model shape, no IFML shape,
     // no DDD design shape, no
     // event-contract shape, no deployment shape, no use-case shape: the
     // canonical block-less ActorModel is exactly `{"formatVersion": N}` —

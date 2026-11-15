@@ -15,8 +15,12 @@ versioned `phero_ir::ddd::DddModel` artifact (the phero-ir crate).
 The `.ddd` DSL lives alongside the `.mox` domain model as a *complementary*
 input: a design never declares classes or features — it references the
 classes the imported domains declare and records what the application makes
-of them. Downstream consumers ingest the artifact exactly like the
-`ActorModel` policy artifact; there is no in-tree backend yet.
+of them. The consumer is **codegraph**, external by decision D1 of epic
+[#297](https://github.com/yestechgroup/pherolang/issues/297): Phero Lang
+owns the language and its semantics, and codegraph transpiles the artifact
+into the executable system. There is no in-tree **code-generation** backend
+by decision rather than by omission; `phero-backend-ddd` is the in-tree
+artifact backend, and its job is the artifact-only contract check.
 
 The normative contract — entry points, resolution semantics, the validation
 rules, the aggregate-derivation rule, and the capabilities
@@ -32,9 +36,16 @@ language reference.
 docs):
 
 - Versioned independently of the domain-model marker via
-  **`DDD_MODEL_FORMAT_VERSION`** (= 1), the `ActorModel` precedent.
+  **`DDD_MODEL_FORMAT_VERSION`** (= 2), the `ActorModel` precedent.
   `DddModel::from_json` rejects absent/wrong versions with
   `IrError::UnsupportedFormatVersion` (an absent version reports as 0).
+- **Provenance, not a gate.** `DddModel` carries `pheroVersion`, the
+  phero-ir version that wrote it (stamped by `DddModel::new`, the Core IR
+  `Model` precedent). Readers gate on `formatVersion` alone: an artifact
+  written before the field existed deserializes unchanged and re-serializes
+  without inventing a stamp. The artifact-only contract check is stricter
+  than the reader — `pherolang artifact check` requires the provenance line
+  in a contract-complete artifact. See [VERSIONING.md](VERSIONING.md).
 - All struct field names serialize as `camelCase` (`formatVersion`,
   `returnType`, `optimisticLocking`, ...). Unit-only enums serialize as bare
   strings: stereotypes lowercase (`"entity" | "value" | "dto"`), built-in
@@ -50,13 +61,30 @@ docs):
   (`TransitionRef`) and its resolved guard paths (`conditionPaths`,
   `ConditionPath` rows with adjacently tagged scopes) are absent from every
   artifact that does not declare them — body-less and machine-less models
-  stay byte-identical, `DDD_MODEL_FORMAT_VERSION` stays 1. The pherolang#179
+  stay byte-identical, `DDD_MODEL_FORMAT_VERSION` stays 2. The pherolang#179
   additions follow the same discipline: a design's `childOperations`
   (ordinary `ServiceOperation` rows declared by `extend` blocks) and an
   operation's `childScope` (`ChildRef { feature, class, action }` — the
   root's child feature, the child class's full name, the `Delegation.target`
   convention, and the validated action `"add" | "remove" | "save"`) appear
   only when authored.
+- **Resolved identities** (issue
+  [#298](https://github.com/yestechgroup/pherolang/issues/298)): every
+  reference a consumer acts on carries a resolved companion alongside the
+  authored spelling — `Design.typeRef`, `Delegation.targetRef`,
+  `Service.dependencyRefs`/`decisionDependencyRefs`,
+  `ServiceOperation.capabilityRefs`/`emittedRefs`/`decisionRefs`,
+  `SearchDef.entityRef`, and each search member's `typeRef`. The list
+  companions align index-for-index with the authored lists they accompany,
+  and every companion is omitted where the authored feature is absent. The
+  optional provenance members — `declaredIn` (capabilities), `contract`
+  (events and decisions), `version` (decisions) — are absent when the
+  counterpart artifact was not supplied at compile time;
+  `emittedRefs[].contract` is always absent because `.ddd` has no `.evt`
+  bucket. The additions are additive: `formatVersion` stays 2, and a model
+  that authors none of them stays byte-identical apart from the provenance
+  line. See [Resolution semantics](#resolution-semantics) and the
+  [consumer contract](#consumer-contract).
 - Executable operation bodies (issue [#178](https://github.com/yestechgroup/pherolang/issues/178))
   ride the same additive fields: a service or repository operation's
   `bodies` map holds the checked body under the `"stmt"` target — the
@@ -69,7 +97,10 @@ docs):
 - A repository operation carries **exactly one** of a built-in op
   (`"builtin"`) or a declared signature (`returnType`/`params`).
 
-Minimal artifact: an empty model serializes as exactly `{"formatVersion":2}`.
+Minimal artifact: an empty model serializes as exactly
+`{"formatVersion":2,"pheroVersion":"0.3.0"}` — the version marker plus the
+provenance line, whose value is the crate version that wrote it (regenerated
+whenever the workspace version bumps).
 
 ```rust
 let compilation = phero_driver::compile_ddd_str("library.ddd", source, &domains, &phero_driver::DomainImports::default());
@@ -87,8 +118,9 @@ let model = phero_ir::ddd::DddModel::from_json(&json)?;    // version-gated relo
 2. **Validated against the real domain** — design class references and
    operation signatures type-check against the imported `.mox` models; a
    typo'd class is a compile error, not a silent generation mismatch.
-3. **Resolution is validation-only** — the artifact keeps every name
-   exactly as authored; consumers resolve against the domain model.
+3. **Resolution is carried** — the artifact keeps every name exactly as
+   authored and, alongside it, the identity the compiler resolved;
+   consumers act on the companion and never re-implement name resolution.
 4. **Loosely coupled dimensions** — capability references tie the design
    dimension to the actor-policy dimension by name only, never by
    construction.
@@ -268,9 +300,115 @@ scope: a bare name the base declares resolves there before the
 unique-across-packages lookup runs. `base` itself must name an existing
 domain package.
 
-Resolution is **validation-only**: the artifact keeps every name exactly as
-authored (unqualified where written qualified and vice versa), and
-consumers resolve against the domain model.
+Authored names stay exactly as written — unqualified where written,
+package-qualified where written — and remain the round-trip, diagnostics,
+and source-mapping spelling. Alongside every reference a consumer acts on,
+the artifact carries the **resolved companion**: the identity the compiler
+resolved, so a consumer acts on that companion instead of re-implementing
+the bare / `base`-preferred / unique-across-packages rules above.
+
+| Authored field | Resolved companion | Carries |
+|---|---|---|
+| `Design.class` | `typeRef` | the resolved design class (`TypeRef`) |
+| `Delegation.target` | `targetRef` | the delegated service, repository, or search |
+| `Service.dependencies[]` | `dependencyRefs[]` | one target identity per injected dependency |
+| `Service.decisionDependencies[]` | `decisionDependencyRefs[]` | one decision-service identity per injection |
+| `ServiceOperation.capabilities[]` | `capabilityRefs[]` | the capability identity, plus `declaredIn` when an `.actor` artifact was supplied |
+| `SearchDef.capabilities[]` | `capabilityRefs[]` | the capability identity guarding the search |
+| `ServiceOperation.emits[]` | `emittedRefs[]` | the event identity; `contract` stays absent (no `.evt` bucket) |
+| `ServiceOperation.invokes[]` | `decisionRefs[]` | the decision-service identity, plus `contract`/`version` when a `.dmn` artifact was supplied |
+| `SearchDef.entity` | `entityRef` | the searched class (`TypeRef`) |
+| `SearchDef.text`, `filters`, `sort` members | each member's `typeRef` | the referenced feature's declared type |
+
+The companion shapes are fixed:
+
+- `typeRef`, `entityRef`, and a search member's `typeRef` use the domain
+  IR's `TypeRef` (adjacent tagging: `{"type":"class","value":{...}}`);
+  search members may be any feature type, primitives and enums included.
+  The field is optional on the wire so older and hand-built artifacts keep
+  loading; a successful compile carries it for every reference it resolved.
+- `targetRef` and each `dependencyRefs[]` entry are
+  `{kind, qualifiedName, module}`. `kind` is the bare
+  `"service" | "repository" | "search"` tag, `qualifiedName` is the target
+  declaration's identity — `<Application>.<module>.<Name>`, or
+  `<module>.<Name>` when the design declares no application — and `module`
+  is the design module that declares it. A delegation's `operation` stays
+  authored: it names the operation on the resolved target.
+- `capabilityRefs[]` entries are `{name, declaredIn?}`, index-aligned with
+  `capabilities` (operation and search lists alike). `declaredIn` names the
+  actor block in the supplied `.actor` model that declares the capability
+  (the first declaring block when several do), and is absent when no actor
+  artifact was supplied.
+- `emittedRefs[]` entries are `{name, contract?}`, index-aligned with
+  `emits`. `contract` is always absent today: the `.ddd` compile has no
+  `.evt` bucket, so event references are unresolved by design.
+- `decisionRefs[]` and `decisionDependencyRefs[]` entries are
+  `{service, contract?, version?}`, index-aligned with `invokes` and
+  `decisionDependencies`. `contract` names the `.dmn` artifact that
+  supplied the service and `version` the version that artifact declares;
+  both are absent when no decision model was supplied.
+
+Alignment is positional: entry `i` is the companion of authored name `i`.
+An empty authored list omits its companion list, and a populated authored
+list has an equally long companion list.
+
+---
+
+## Consumer contract
+
+The artifact is the contract between Phero Lang and its consumer; this is
+the short version to implement against without reading `phero-driver`.
+
+**Pairing.** A `DddModel` is meaningful only with the domain `Model` it was
+compiled against: the design names classes and features, the domain defines
+them. Carry the pair together. The design's optional dimensions pair with
+the artifacts the compile was given — the `ActorModel`s supply capabilities
+(recorded as `declaredIn`) and the `DmnModel`s supply decision services
+(recorded as `contract`/`version`). A `.ddd` compile has no `.evt` bucket,
+so event contracts pair at the union-integrity layer (`pherolang check`),
+never through `emittedRefs`. None of the pairing needs the `.mox`, `.actor`,
+`.evt`, or `.dmn` sources.
+
+**Gate.** Accept exactly `formatVersion` 2; `DddModel::from_json` and
+`pherolang artifact check` both gate on it. `pheroVersion` is provenance:
+ignore it for compatibility.
+
+**Act on the resolved companion, not the authored spelling.**
+
+- **Classes and features** — `Design.typeRef`, `SearchDef.entityRef`, and
+  each search member's `typeRef` are the domain IR's `TypeRef`; join the
+  domain `Model` by `(package, name)`.
+- **Services, repositories, searches** — `Delegation.targetRef` and
+  `Service.dependencyRefs` identify a design declaration by
+  `qualifiedName` and `module`. That `qualifiedName` is the semantic
+  graph's node name for the declaration
+  (`<Application>.<module>.<Name>`, `<module>.<Name>` without an
+  application), so graph edges and design references join by the same
+  string; `kind` selects the node kind. A delegation's `operation` names
+  the operation on the resolved target.
+- **Capabilities, events, decisions** — `capabilityRefs`, `emittedRefs`,
+  `decisionRefs`, and `decisionDependencyRefs` are index-aligned with
+  their authored name lists; read the companion at the same index.
+- **Flags** — `Design.flags` already carries the effective value (`auditable`
+  and `optimisticLocking` are on for a plain entity design), so never
+  re-apply the source defaults.
+
+**What an absent optional member means.** `declaredIn`, `contract`, and
+`version` absent means "the counterpart artifact was not supplied at
+compile time" — unresolved by design, not an error. The authored name is
+still recorded and the companion still exists; only the cross-dimension
+join is open. A consumer that needs the join must require the counterpart
+artifact; one that does not may ignore it.
+
+**What `pherolang artifact check` guarantees.** From the serialized artifact
+alone, with no sources or models present, it checks the version gate and the
+DDD contract: every authored reference carries its resolved companion, the
+parallel lists are index-aligned, the search references are complete,
+stereotype/flag combinations are legal, and `pheroVersion` is present and
+well-formed. A hand-edited or truncated artifact that drops a companion or
+invents an illegal combination fails with a diagnostic naming the design or
+reference. It does not re-typecheck against the domain — that needs the
+paired `Model`.
 
 ---
 
@@ -343,8 +481,8 @@ consumers resolve against the domain model.
     containment cycle).
 14. **scaffold** — a scaffolded entity design must declare a repository:
     `scaffold` stands for Sculptor's generated CRUD operations (which also
-    imply the service), and the artifact stays validation-only — nothing is
-    synthesized — so the author declares the repository the scaffolding
+    imply the service), and the artifact synthesizes nothing — so the author
+    declares the repository the scaffolding
     would hang off. The service remains the author's to declare.
 15. **dto-with-ops warning** — a `dto` design whose class carries `ops`
     warns once per op, naming the design and the op: a dto is a transfer
@@ -648,14 +786,15 @@ from *declarative*, which issues
   lowering contract for the operation's behavior: the consumer decodes the
   `StmtBody`, maps `self`/bare-name receivers through `bodyReceiver` and the
   service's injections, and lowers the typed expressions with the shared
-  R1–R9 semantics. No in-tree backend emits `.ddd` bodies yet; the artifact
-  is the contract, and the compiler never attaches an unchecked one.
+  R1–R9 semantics. The lowering is the consumer's (codegraph), external by
+  decision D1; no in-tree backend emits `.ddd` bodies, so the artifact is
+  the contract, and the compiler never attaches an unchecked one.
 
-Until an in-tree `.ddd` lowering exists, compiles therefore add **no
-"lowers to nothing" diagnostics**: the artifact is the contract, and the
-consumer owns the route emission. A `protected` operation stays legal but
-off the public interface — a capability or transition carried only by
-`protected` operations reads as dead to the coverage pass, whose
+Because the lowering is external, compiles add **no "lowers to nothing"
+diagnostics**: the artifact is the contract, and the consumer owns the route
+emission. A `protected` operation stays legal but off the public interface —
+a capability or transition carried only by `protected` operations reads as
+dead to the coverage pass, whose
 warning-severity lint (`grantedCapabilityUncarried`, the
 [pherolang#128](https://github.com/yestechgroup/pherolang/issues/128)
 asymmetry) is the existing dead-trigger WARN; no new diagnostic bridges
@@ -668,7 +807,8 @@ the library entry point `compile_ddd_str_with_actors` validates the names
 against a caller-provided actor-model **slice**; capability names pool
 across every model, so a host passes all of the application's `.actor`
 artifacts. An empty slice is the plain `compile_ddd_str` behavior (the
-records-unvalidated loose-mapping contract). Since pherolang#128 the CLI
+records-unvalidated loose-mapping contract); `capabilityRefs` still records
+each capability name, without `declaredIn`. Since pherolang#128 the CLI
 project pipeline and the LSP pass the sibling artifacts, so the check is a
 compile-time language error — spanned on the capability clause, with the
 `unknownCapability` code carrying the did-you-mean closest declared name
@@ -741,9 +881,10 @@ service PayRunService {
 Like `capability` names, emitted event names are **loosely coupled**: the
 names lower into the artifact exactly as authored, and a plain
 `compile_ddd_str` never validates them — the `.ddd` compile has no `.evt`
-bucket. Both directions of the design↔event wiring are enforced by the
-union integrity pass (`phero_driver::check_integrity`, register row
-**V12**):
+bucket. The `emittedRefs` companion list records the same names, with
+`contract` absent: the unresolved-by-design shape. Both directions of the
+design↔event wiring are enforced by the union integrity pass
+(`phero_driver::check_integrity`, register row **V12**):
 
 - **Emission existence** — every emitted event name on every service
   operation must name an event declared in some provided `.evt` contract:
@@ -784,7 +925,10 @@ entry point `compile_ddd_str_with_decisions` validates the links (rule 17
 above) against a caller-provided `(path, DmnModel)` bucket — the same
 shape the `.uc` import buckets use. Decision services pool across every
 provided model, so a host gathers the sibling `.dmn` artifacts the way it
-pools actors. An empty bucket is the plain behavior.
+pools actors. An empty bucket is the plain behavior. The `decisionRefs` and
+`decisionDependencyRefs` companions exist for every reference; their
+`contract` and `version` members fill only when a decision model was
+supplied at compile time.
 
 The `.dmn` dimension stays the authority: it declares the decision
 services (with their inputs, outputs, and encapsulated decisions); the
@@ -801,7 +945,7 @@ nothing into the domain union.
 pherolang check library.ddd                  # validate design + imported domains
 pherolang ir library.ddd -o library.ddd.json # emit the DddModel artifact
 pherolang fmt --check library.ddd            # canonical formatting gate
-pherolang artifact check library.ddd.json    # validate the serialized artifact
+pherolang artifact check library.ddd.json    # validate the artifact's DDD contract
 ```
 
 - Import paths resolve **relative to the `.ddd` file's directory**; each
@@ -835,24 +979,37 @@ pherolang artifact check library.ddd.json    # validate the serialized artifact
 
 ## Sculptor concept mapping
 
-| Sculptor | Phero Lang `.ddd` |
-|---|---|
-| Entity | `entity` design |
-| ValueObject | `value` design |
-| BasicType | `.mox` datatype (referenced in signatures, never designed) |
-| Repository | `repository` block on an entity design |
-| Service (+ injected `=>` delegation) | `service` with `inject` lines and `name => target.operation` operations |
-| `scaffold` / `auditable` / `optimisticLocking` / `!aggregateRoot`-style negations | design flags (entity-only; `auditable`/`optimisticLocking` default on for entities, `!flag` opts out) |
-| `belongsTo` / `!aggregateRoot` | derived from the domain model's containment graph (see aggregate derivation) |
-| Module | `module` label grouping services and designs |
-| child-scoped aggregate operations | `extend <Root> { ... }` block (issue [#179](https://github.com/yestechgroup/pherolang/issues/179)) |
-| DTO | `dto` design |
-| `findByQuery` / `findByCondition` finders | `search` projection (intent only: text fields with boosts, filters, sorts, ranking, pagination, document projections) — the backend chooses the engine (Postgres FTS, Tantivy, OpenSearch, ...) |
-| generated `GET /things/search?q=` endpoints | consumer concern — the artifact is backend-independent |
+Sculptor concepts mapped to `.ddd`, and where the mapping deliberately
+differs or has no counterpart. The third column is the summary; the
+rationale for each divergence is in [Deliberate divergences](#deliberate-divergences).
+
+| Sculptor | Phero Lang `.ddd` | Deliberately different / absent |
+|---|---|---|
+| Entity | `entity` design | — |
+| ValueObject | `value` design | no `!immutable` opt-out: strict value immutability (decision D3) |
+| BasicType | `.mox` datatype (referenced in signatures, never designed) | a datatype wraps one platform type; a multi-field value is a class designed `value` |
+| Repository | `repository` block on an entity design | six built-in operations (`findById`, `findAll`, `findByExample`, `findByKeys`, `save`, `delete`) plus declared signatures |
+| Service (+ injected `=>` delegation) | `service` with `inject` lines and `name => target.operation` operations | a cross-module service → repository/search delegation is an error; targets carry a resolved identity (`targetRef`) |
+| `scaffold` / `auditable` / `optimisticLocking` / `!aggregateRoot`-style negations | design flags (entity-only; `auditable`/`optimisticLocking` default on for entities, `!flag` opts out) | `!immutable` is absent (D3); the artifact stores the effective flag values, never the raw spelling |
+| `belongsTo` / `!aggregateRoot` | derived from the domain model's containment graph (see aggregate derivation) | not authorable: derivation only (DD4 adds an authored override) |
+| Module | `module` label grouping services and designs | one application per file; the module is a design label, not a deployment boundary (DD8) |
+| child-scoped aggregate operations | `extend <Root> { ... }` block (issue [#179](https://github.com/yestechgroup/pherolang/issues/179)) | `extend` is not class inheritance (naming under review in DD4) |
+| DTO | `dto` design | today a `dto` reuses the referenced class's features; no subset, rename, or flatten yet (DD3); no behavior, identity, repository, or machine |
+| `findByQuery` / `findByCondition` finders | `search` projection (intent only: text fields with boosts, filters, sorts, ranking, pagination, document projections) — the backend chooses the engine (Postgres FTS, Tantivy, OpenSearch, ...) | no query language and no engine-specific ordering; the engine is the consumer's choice |
+| generated `GET /things/search?q=` endpoints | consumer concern — the artifact is backend-independent | — |
+| `Set` / `List` / `Bag` / `ordered` collections | multiplicity only (`String[]`, `Book[0,3]`) | absent as declarations: no collection kind and no ordering metadata; declaration order is retained (DD6) |
+| `Map` | — | absent everywhere, and not yet declared a non-goal (DD6) |
+| `fetch` / `cascade` / `orderColumn` | — | absent: persistence behavior belongs to the backend that owns the storage |
+| Traits | interface `extends` in the `.mox` domain model (signature-sharing half) | absent as a composition feature |
+| Gap classes | body-less `.mox` `op` as the hand-written hook | absent: whole-file generation, no generated-base/subclass split |
+| Composite natural keys | several `id` features on one class | no composite-key declaration; the `id` set is the key |
+| Date validation (`past` / `future`), custom validators | schema constraints (`unique` precedent) | absent: no runtime validator hook; constraints are schema-only |
 
 ## Deliberate divergences
 
-Sculptor concepts Phero Lang intentionally does not carry, and why:
+Sculptor concepts Phero Lang intentionally does not carry, and why. The
+mapping table's third column is the summary; this section is the detailed
+rationale.
 
 - **Composite natural keys** — expressible already: several `id` features on
   one class lower with `isId`, and the composite key is that set; the
@@ -1029,8 +1186,10 @@ delegates across modules to `PersonService` (service → service, allowed).
 (the domain), `library.ddd` (the design, formatter-canonical), and
 `library.ddd.json` (the committed artifact). The driver golden test
 byte-compares the compiled artifact, the CLI fmt gate enforces the
-canonical formatting, and `pherolang artifact check` classifies the artifact
-as a DDD design. Regenerate goldens with `PHERO_UPDATE_FIXTURES=1 cargo test
+canonical formatting, and `pherolang artifact check` validates the artifact
+against the DDD contract — resolved companions, aligned parallel lists,
+search references, stereotype/flag legality, and provenance — not just its
+wire shape. Regenerate goldens with `PHERO_UPDATE_FIXTURES=1 cargo test
 --workspace`.
 
 The machine-bearing pair `payrun.mox`/`payrun.ddd` (formatter-canonical)

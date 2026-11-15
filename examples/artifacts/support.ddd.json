@@ -1,5 +1,6 @@
 {
   "formatVersion": 2,
+  "pheroVersion": "0.3.0",
   "application": {
     "name": "SupportDesk",
     "base": "nz.example.support"
@@ -39,6 +40,11 @@
               ],
               "emits": [
                 "TicketRaised"
+              ],
+              "emittedRefs": [
+                {
+                  "name": "TicketRaised"
+                }
               ]
             },
             {
@@ -66,8 +72,18 @@
               "capabilities": [
                 "RaiseRefund"
               ],
+              "capabilityRefs": [
+                {
+                  "name": "RaiseRefund"
+                }
+              ],
               "emits": [
                 "RefundRequested"
+              ],
+              "emittedRefs": [
+                {
+                  "name": "RefundRequested"
+                }
               ]
             },
             {
@@ -105,8 +121,18 @@
               "capabilities": [
                 "ApproveRefund"
               ],
+              "capabilityRefs": [
+                {
+                  "name": "ApproveRefund"
+                }
+              ],
               "emits": [
                 "RefundApproved"
+              ],
+              "emittedRefs": [
+                {
+                  "name": "RefundApproved"
+                }
               ]
             },
             {
@@ -208,6 +234,11 @@
               ],
               "capabilities": [
                 "ReadTicket"
+              ],
+              "capabilityRefs": [
+                {
+                  "name": "ReadTicket"
+                }
               ]
             },
             {
@@ -237,6 +268,11 @@
               ],
               "capabilities": [
                 "UpdateTicket"
+              ],
+              "capabilityRefs": [
+                {
+                  "name": "UpdateTicket"
+                }
               ]
             },
             {
@@ -256,6 +292,11 @@
               ],
               "capabilities": [
                 "ResolveTicket"
+              ],
+              "capabilityRefs": [
+                {
+                  "name": "ResolveTicket"
+                }
               ]
             },
             {
@@ -275,6 +316,11 @@
               ],
               "capabilities": [
                 "UpdateTicket"
+              ],
+              "capabilityRefs": [
+                {
+                  "name": "UpdateTicket"
+                }
               ]
             },
             {
@@ -294,6 +340,11 @@
               ],
               "capabilities": [
                 "UpdateTicket"
+              ],
+              "capabilityRefs": [
+                {
+                  "name": "UpdateTicket"
+                }
               ],
               "bodies": {
                 "stmt": "{\"stmts\":[{\"kind\":\"letElse\",\"name\":\"ticket\",\"expr\":\"self.findById(ticketNo)\",\"error\":{\"variant\":\"NotFound\",\"args\":[\"\\\"Ticket\\\"\",\"ticketNo\"]}},{\"kind\":\"guard\",\"expr\":\"ticket.state != TicketState.Resolved\",\"error\":{\"variant\":\"Conflict\",\"args\":[\"\\\"already resolved\\\"\"]}},{\"kind\":\"assign\",\"path\":[\"ticket\",\"internal\"],\"expr\":\"false\"},{\"kind\":\"let\",\"name\":\"saved\",\"expr\":\"self.save(ticket)\"},{\"kind\":\"return\",\"expr\":\"true\"}]}"
@@ -318,14 +369,29 @@
               "capabilities": [
                 "ResolveTicket"
               ],
+              "capabilityRefs": [
+                {
+                  "name": "ResolveTicket"
+                }
+              ],
               "emits": [
                 "TicketResolved"
+              ],
+              "emittedRefs": [
+                {
+                  "name": "TicketResolved"
+                }
               ]
             },
             {
               "name": "close",
               "delegation": {
                 "target": "TicketRepository",
+                "targetRef": {
+                  "kind": "repository",
+                  "qualifiedName": "SupportDesk.desk.TicketRepository",
+                  "module": "desk"
+                },
                 "operation": "delete"
               },
               "isProtected": true
@@ -334,6 +400,11 @@
               "name": "findTickets",
               "delegation": {
                 "target": "TicketSearch",
+                "targetRef": {
+                  "kind": "search",
+                  "qualifiedName": "SupportDesk.desk.TicketSearch",
+                  "module": "desk"
+                },
                 "operation": "search"
               }
             }
@@ -341,12 +412,31 @@
           "dependencies": [
             "TicketRepository",
             "TicketSearch"
+          ],
+          "dependencyRefs": [
+            {
+              "kind": "repository",
+              "qualifiedName": "SupportDesk.desk.TicketRepository",
+              "module": "desk"
+            },
+            {
+              "kind": "search",
+              "qualifiedName": "SupportDesk.desk.TicketSearch",
+              "module": "desk"
+            }
           ]
         }
       ],
       "designs": [
         {
           "class": "Ticket",
+          "typeRef": {
+            "type": "class",
+            "value": {
+              "package": "nz.example.support",
+              "name": "Ticket"
+            }
+          },
           "stereotype": "entity",
           "flags": {
             "scaffold": true,
@@ -406,6 +496,13 @@
         },
         {
           "class": "RefundDecision",
+          "typeRef": {
+            "type": "class",
+            "value": {
+              "package": "nz.example.support",
+              "name": "RefundDecision"
+            }
+          },
           "stereotype": "value",
           "flags": {
             "nonPersistent": true
@@ -417,23 +514,49 @@
           "name": "TicketSearch",
           "description": "Full-text search over the ticket queue.",
           "entity": "Ticket",
+          "entityRef": {
+            "type": "class",
+            "value": {
+              "package": "nz.example.support",
+              "name": "Ticket"
+            }
+          },
           "text": [
             {
               "property": "title",
+              "typeRef": {
+                "type": "primitive",
+                "value": "string"
+              },
               "boost": 3.0
             }
           ],
           "filters": [
             {
-              "property": "state"
+              "property": "state",
+              "typeRef": {
+                "type": "enum",
+                "value": {
+                  "package": "nz.example.support",
+                  "name": "TicketState"
+                }
+              }
             },
             {
-              "property": "internal"
+              "property": "internal",
+              "typeRef": {
+                "type": "primitive",
+                "value": "boolean"
+              }
             }
           ],
           "sort": [
             {
-              "property": "title"
+              "property": "title",
+              "typeRef": {
+                "type": "primitive",
+                "value": "string"
+              }
             }
           ],
           "document": [
@@ -457,6 +580,11 @@
           },
           "capabilities": [
             "ReadTicket"
+          ],
+          "capabilityRefs": [
+            {
+              "name": "ReadTicket"
+            }
           ]
         }
       ]
@@ -466,6 +594,13 @@
       "designs": [
         {
           "class": "User",
+          "typeRef": {
+            "type": "class",
+            "value": {
+              "package": "nz.example.support",
+              "name": "User"
+            }
+          },
           "stereotype": "dto",
           "flags": {
             "nonPersistent": true

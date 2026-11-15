@@ -2313,6 +2313,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "phero-backend-ddd"
+version = "0.3.0"
+dependencies = [
+ "phero-backend-common",
+ "phero-driver",
+ "phero-ir",
+ "serde_json",
+]
+
+[[package]]
 name = "phero-backend-dmn"
 version = "0.3.0"
 dependencies = [
@@ -2367,6 +2377,7 @@ dependencies = [
  "clap_mangen",
  "phero-backend-cedar",
  "phero-backend-common",
+ "phero-backend-ddd",
  "phero-backend-jsonschema",
  "phero-backend-rust",
  "phero-diagnostics",

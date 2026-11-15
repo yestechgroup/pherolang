@@ -1,5 +1,6 @@
 {
   "formatVersion": 2,
+  "pheroVersion": "0.3.0",
   "application": {
     "name": "Library",
     "base": "nz.example.library"
@@ -39,6 +40,11 @@
               ],
               "capabilities": [
                 "BorrowMedia"
+              ],
+              "capabilityRefs": [
+                {
+                  "name": "BorrowMedia"
+                }
               ]
             },
             {
@@ -67,6 +73,11 @@
               "name": "save",
               "delegation": {
                 "target": "PhysicalMediaRepository",
+                "targetRef": {
+                  "kind": "repository",
+                  "qualifiedName": "Library.media.PhysicalMediaRepository",
+                  "module": "media"
+                },
                 "operation": "save"
               },
               "isProtected": true
@@ -75,6 +86,11 @@
               "name": "registerBorrower",
               "delegation": {
                 "target": "PersonService",
+                "targetRef": {
+                  "kind": "service",
+                  "qualifiedName": "Library.person.PersonService",
+                  "module": "person"
+                },
                 "operation": "register"
               }
             },
@@ -82,6 +98,11 @@
               "name": "findMedia",
               "delegation": {
                 "target": "MediaSearch",
+                "targetRef": {
+                  "kind": "search",
+                  "qualifiedName": "Library.media.MediaSearch",
+                  "module": "media"
+                },
                 "operation": "search"
               }
             }
@@ -91,12 +112,41 @@
             "MovieRepository",
             "PersonService",
             "MediaSearch"
+          ],
+          "dependencyRefs": [
+            {
+              "kind": "repository",
+              "qualifiedName": "Library.media.PhysicalMediaRepository",
+              "module": "media"
+            },
+            {
+              "kind": "repository",
+              "qualifiedName": "Library.media.MovieRepository",
+              "module": "media"
+            },
+            {
+              "kind": "service",
+              "qualifiedName": "Library.person.PersonService",
+              "module": "person"
+            },
+            {
+              "kind": "search",
+              "qualifiedName": "Library.media.MediaSearch",
+              "module": "media"
+            }
           ]
         }
       ],
       "designs": [
         {
           "class": "Library",
+          "typeRef": {
+            "type": "class",
+            "value": {
+              "package": "nz.example.library",
+              "name": "Library"
+            }
+          },
           "stereotype": "entity",
           "flags": {
             "scaffold": true,
@@ -144,6 +194,13 @@
         },
         {
           "class": "Book",
+          "typeRef": {
+            "type": "class",
+            "value": {
+              "package": "nz.example.library",
+              "name": "Book"
+            }
+          },
           "stereotype": "entity",
           "flags": {
             "auditable": true,
@@ -152,6 +209,13 @@
         },
         {
           "class": "Media",
+          "typeRef": {
+            "type": "class",
+            "value": {
+              "package": "nz.example.library",
+              "name": "Media"
+            }
+          },
           "stereotype": "entity",
           "isAbstract": true,
           "flags": {
@@ -161,6 +225,13 @@
         },
         {
           "class": "Chapter",
+          "typeRef": {
+            "type": "class",
+            "value": {
+              "package": "nz.example.library",
+              "name": "Chapter"
+            }
+          },
           "stereotype": "entity",
           "flags": {
             "auditable": true,
@@ -169,6 +240,13 @@
         },
         {
           "class": "Movie",
+          "typeRef": {
+            "type": "class",
+            "value": {
+              "package": "nz.example.library",
+              "name": "Movie"
+            }
+          },
           "stereotype": "entity",
           "flags": {
             "auditable": true,
@@ -217,6 +295,13 @@
         },
         {
           "class": "PhysicalMedia",
+          "typeRef": {
+            "type": "class",
+            "value": {
+              "package": "nz.example.library",
+              "name": "PhysicalMedia"
+            }
+          },
           "stereotype": "entity",
           "flags": {
             "scaffold": true,
@@ -273,24 +358,50 @@
           "name": "MediaSearch",
           "description": "Full-text search over the movie catalogue.",
           "entity": "Movie",
+          "entityRef": {
+            "type": "class",
+            "value": {
+              "package": "nz.example.library",
+              "name": "Movie"
+            }
+          },
           "text": [
             {
               "property": "title",
+              "typeRef": {
+                "type": "primitive",
+                "value": "string"
+              },
               "boost": 3.0
             },
             {
               "property": "synopsis",
+              "typeRef": {
+                "type": "primitive",
+                "value": "string"
+              },
               "analyzer": "english"
             }
           ],
           "filters": [
             {
-              "property": "genre"
+              "property": "genre",
+              "typeRef": {
+                "type": "enum",
+                "value": {
+                  "package": "nz.example.library",
+                  "name": "MovieGenre"
+                }
+              }
             }
           ],
           "sort": [
             {
-              "property": "title"
+              "property": "title",
+              "typeRef": {
+                "type": "primitive",
+                "value": "string"
+              }
             }
           ],
           "document": [
@@ -315,6 +426,14 @@
           "capabilities": [
             "SearchMedia",
             "SearchMediaAdmin"
+          ],
+          "capabilityRefs": [
+            {
+              "name": "SearchMedia"
+            },
+            {
+              "name": "SearchMediaAdmin"
+            }
           ]
         }
       ]
@@ -346,6 +465,11 @@
               ],
               "capabilities": [
                 "ManageCustomer"
+              ],
+              "capabilityRefs": [
+                {
+                  "name": "ManageCustomer"
+                }
               ]
             },
             {
@@ -365,12 +489,22 @@
               ],
               "capabilities": [
                 "ApproveCustomer"
+              ],
+              "capabilityRefs": [
+                {
+                  "name": "ApproveCustomer"
+                }
               ]
             },
             {
               "name": "register",
               "delegation": {
                 "target": "PersonRepository",
+                "targetRef": {
+                  "kind": "repository",
+                  "qualifiedName": "Library.person.PersonRepository",
+                  "module": "person"
+                },
                 "operation": "save"
               }
             },
@@ -378,18 +512,37 @@
               "name": "findByName",
               "delegation": {
                 "target": "PersonRepository",
+                "targetRef": {
+                  "kind": "repository",
+                  "qualifiedName": "Library.person.PersonRepository",
+                  "module": "person"
+                },
                 "operation": "findByName"
               }
             }
           ],
           "dependencies": [
             "PersonRepository"
+          ],
+          "dependencyRefs": [
+            {
+              "kind": "repository",
+              "qualifiedName": "Library.person.PersonRepository",
+              "module": "person"
+            }
           ]
         }
       ],
       "designs": [
         {
           "class": "Person",
+          "typeRef": {
+            "type": "class",
+            "value": {
+              "package": "nz.example.library",
+              "name": "Person"
+            }
+          },
           "stereotype": "entity",
           "flags": {
             "auditable": true,
@@ -450,23 +603,46 @@
         {
           "name": "MemberDirectory",
           "entity": "Person",
+          "entityRef": {
+            "type": "class",
+            "value": {
+              "package": "nz.example.library",
+              "name": "Person"
+            }
+          },
           "text": [
             {
               "property": "fullName",
+              "typeRef": {
+                "type": "primitive",
+                "value": "string"
+              },
               "boost": 2.0
             }
           ],
           "filters": [
             {
-              "property": "joinedOn"
+              "property": "joinedOn",
+              "typeRef": {
+                "type": "primitive",
+                "value": "date"
+              }
             }
           ],
           "sort": [
             {
-              "property": "fullName"
+              "property": "fullName",
+              "typeRef": {
+                "type": "primitive",
+                "value": "string"
+              }
             },
             {
-              "property": "joinedOn"
+              "property": "joinedOn",
+              "typeRef": {
+                "type": "primitive",
+                "value": "date"
+              }
             }
           ],
           "document": [

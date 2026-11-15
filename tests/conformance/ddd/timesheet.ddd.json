@@ -1,5 +1,6 @@
 {
   "formatVersion": 2,
+  "pheroVersion": "0.3.0",
   "application": {
     "name": "Timesheet",
     "base": "nz.example.timesheet"
@@ -16,6 +17,11 @@
               "name": "submit",
               "delegation": {
                 "target": "PayRunRepository",
+                "targetRef": {
+                  "kind": "repository",
+                  "qualifiedName": "Timesheet.payroll.PayRunRepository",
+                  "module": "payroll"
+                },
                 "operation": "save"
               },
               "condition": "payRunStatus == Draft && TimecardRepository.status == Approved",
@@ -60,6 +66,11 @@
               "name": "approve",
               "delegation": {
                 "target": "PayRunRepository",
+                "targetRef": {
+                  "kind": "repository",
+                  "qualifiedName": "Timesheet.payroll.PayRunRepository",
+                  "module": "payroll"
+                },
                 "operation": "save"
               },
               "transition": {
@@ -71,6 +82,11 @@
               "name": "reverse",
               "delegation": {
                 "target": "PayRunRepository",
+                "targetRef": {
+                  "kind": "repository",
+                  "qualifiedName": "Timesheet.payroll.PayRunRepository",
+                  "module": "payroll"
+                },
                 "operation": "save"
               },
               "transition": {
@@ -82,12 +98,31 @@
           "dependencies": [
             "PayRunRepository",
             "TimecardRepository"
+          ],
+          "dependencyRefs": [
+            {
+              "kind": "repository",
+              "qualifiedName": "Timesheet.payroll.PayRunRepository",
+              "module": "payroll"
+            },
+            {
+              "kind": "repository",
+              "qualifiedName": "Timesheet.payroll.TimecardRepository",
+              "module": "payroll"
+            }
           ]
         }
       ],
       "designs": [
         {
           "class": "PayRun",
+          "typeRef": {
+            "type": "class",
+            "value": {
+              "package": "nz.example.timesheet",
+              "name": "PayRun"
+            }
+          },
           "stereotype": "entity",
           "flags": {
             "auditable": true,
@@ -154,6 +189,13 @@
         },
         {
           "class": "Timecard",
+          "typeRef": {
+            "type": "class",
+            "value": {
+              "package": "nz.example.timesheet",
+              "name": "Timecard"
+            }
+          },
           "stereotype": "entity",
           "flags": {
             "auditable": true,

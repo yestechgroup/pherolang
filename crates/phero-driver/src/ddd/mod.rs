@@ -29,6 +29,7 @@ mod child_ops;
 mod conditions;
 mod designs;
 mod graph;
+mod links;
 mod machines;
 mod searches;
 mod services;
@@ -42,6 +43,7 @@ use child_ops::lower_module_child_operations;
 use conditions::{resolve_condition_paths, PathScan};
 use designs::lower_module_designs;
 use graph::{rule_13_aggregate_references, rule_6_aggregate_boundary};
+use links::fill_resolved_links;
 use machines::{collect_machine_scopes, lower_design_machine, MachineScopes};
 use searches::{lower_module_searches, rule_11_bind_searches};
 use services::{
@@ -63,8 +65,9 @@ pub(crate) use services::{
 pub(crate) use graph::{AggregateVerdict, NounClassification};
 
 /// A service declared anywhere in the application, for cross-reference
-/// validation (delegations, injects).
+/// validation (delegations, injects) and the resolved-identity post-pass.
 struct ServiceEntry {
+    module: String,
     ops: Vec<String>,
 }
 /// A repository declared anywhere in the application, for cross-reference
@@ -365,6 +368,11 @@ pub(crate) fn compile_ddd_file(
         &registries.decision_checks,
         decisions,
     ));
+
+    // Stage 8 — the resolved-identity companions (DD1, pherolang#298): every
+    // application-wide reference gains its resolved companion now that the
+    // registries are complete and the deferred rules have validated them.
+    fill_resolved_links(&mut model, &registries, actors, decisions);
 
     pipeline::engine_finish(path, local, diags, model)
 }

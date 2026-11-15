@@ -119,6 +119,7 @@ const GOOD_INSTANCE: &str = r#"{
 
 const GOOD_DDD_ARTIFACT: &str = r#"{
   "formatVersion": 2,
+  "pheroVersion": "0.3.0",
   "application": {
     "name": "Demo"
   },
@@ -126,7 +127,14 @@ const GOOD_DDD_ARTIFACT: &str = r#"{
     {
       "name": "core",
       "designs": [
-        { "class": "Thing", "stereotype": "entity" }
+        {
+          "class": "Thing",
+          "typeRef": {
+            "type": "class",
+            "value": { "package": "demo", "name": "Thing" }
+          },
+          "stereotype": "entity"
+        }
       ]
     }
   ]
@@ -180,6 +188,26 @@ fn artifact_check_passes_on_a_valid_ddd_artifact() {
     assert_eq!(
         String::from_utf8_lossy(&output.stdout),
         format!("OK {}\n", ddd.display())
+    );
+}
+
+#[test]
+fn artifact_check_rejects_a_ddd_artifact_missing_a_resolved_companion() {
+    let broken = GOOD_DDD_ARTIFACT.replace("\"typeRef\":", "\"typeRefOrphan\":");
+    assert_ne!(broken, GOOD_DDD_ARTIFACT, "the fixture must change");
+    let ddd = write_artifact("broken.ddd.json", &broken);
+    let output = pherolang()
+        .args(["artifact", "check", ddd.to_str().unwrap()])
+        .output()
+        .expect("run pherolang artifact check");
+    assert!(
+        !output.status.success(),
+        "a missing typeRef must fail the DDD contract"
+    );
+    assert!(
+        String::from_utf8_lossy(&output.stderr).contains("typeRef"),
+        "stderr: {:?}",
+        String::from_utf8_lossy(&output.stderr)
     );
 }
 

@@ -1,0 +1,18 @@
+[package]
+name = "phero-backend-ddd"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "The `.ddd` design-artifact backend: artifact-only contract checking and canonical serialization"
+repository.workspace = true
+
+[lints]
+workspace = true
+
+[dependencies]
+phero-backend-common = { workspace = true }
+phero-ir = { workspace = true }
+serde_json = { workspace = true }
+
+[dev-dependencies]
+phero-driver = { workspace = true }

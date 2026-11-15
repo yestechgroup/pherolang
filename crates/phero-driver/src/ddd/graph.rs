@@ -267,7 +267,17 @@ impl NounClassification {
                 .and_then(|application| application.base.as_deref());
             for module in &model.modules {
                 for design in &module.designs {
-                    let Some(key) = resolve_design_class(union, base, &design.class) else {
+                    let key = design
+                        .type_ref
+                        .as_ref()
+                        .and_then(|resolved| match resolved {
+                            phero_ir::TypeRef::Class { package, name } => {
+                                Some((package.clone(), name.clone()))
+                            }
+                            _ => None,
+                        })
+                        .or_else(|| resolve_design_class(union, base, &design.class));
+                    let Some(key) = key else {
                         continue;
                     };
                     if design.stereotype == phero_ir::ddd::Stereotype::Entity {
@@ -312,12 +322,12 @@ impl NounClassification {
 }
 
 /// Resolves one artifact design's authored class name against the union —
-/// the `.ddd` resolution rule ([`crate::lower::resolve_preferred`])
-/// re-derived over the IR, because the artifact carries names, not resolved
-/// keys. A qualified name names its package and class exactly; a bare name
-/// prefers the application's base package and otherwise must match exactly
-/// one class across all packages. `None` when nothing (or several classes)
-/// match.
+/// the fallback for a hand-built artifact without the resolved `typeRef`
+/// companion (DD1, pherolang#298). A compiler-produced artifact carries
+/// `typeRef`, so this re-derivation never runs for one. A qualified name
+/// names its package and class exactly; a bare name prefers the
+/// application's base package and otherwise must match exactly one class
+/// across all packages. `None` when nothing (or several classes) match.
 fn resolve_design_class(
     union: &phero_ir::Model,
     base: Option<&str>,

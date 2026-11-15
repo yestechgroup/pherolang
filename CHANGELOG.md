@@ -7,7 +7,21 @@ policy in [docs/VERSIONING.md](docs/VERSIONING.md).
 
 ## [Unreleased]
 
-Nothing yet.
+### Added
+
+- **Resolved identities and provenance in the `.ddd` artifact** (DD1, issue
+  #298, epic #297): `DddModel` gains `pheroVersion` and a resolved companion
+  for every reference a consumer acts on — `Design.typeRef`,
+  `Delegation.targetRef`, `Service.dependencyRefs`/`decisionDependencyRefs`,
+  `ServiceOperation.capabilityRefs`/`emittedRefs`/`decisionRefs`,
+  `SearchDef.entityRef`, and search-member `typeRef`s. `formatVersion` stays
+  **2**; the additions are optional, so body-less artifacts stay
+  byte-identical apart from the provenance line. `pherolang artifact check`
+  now validates the DDD contract from the artifact alone (resolved
+  companions, aligned parallel lists, stereotype/flag legality, search
+  references, provenance). `docs/DDD.md` gains the resolution table, the
+  consumer contract, and the Sculptor "deliberately different / absent"
+  mapping column.
 
 ## [0.3.0] — Phero Lang (2026-11-14)
 
