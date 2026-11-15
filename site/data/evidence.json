@@ -186,7 +186,7 @@
       "docs": {
         "path": "docs/LANGUAGE.md",
         "exists": true,
-        "bytes": 39970
+        "bytes": 39969
       },
       "example": {
         "path": "examples/support/support.mox",
@@ -249,7 +249,7 @@
       "docs": {
         "path": "docs/LANGUAGE.md",
         "exists": true,
-        "bytes": 39970
+        "bytes": 39969
       },
       "example": {
         "path": "examples/support/support.actor",

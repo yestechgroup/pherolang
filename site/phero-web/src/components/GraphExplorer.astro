@@ -125,11 +125,11 @@ const payloadJson = JSON.stringify(payload).replace(/</g, '\\u003c');
               href={`#graph-panel-${perspective.id}`}
               aria-controls={`graph-panel-${perspective.id}`}
               aria-selected={selected ? 'true' : 'false'}
-              aria-label={`${perspective.label}: ${perspective.nodes.length} nodes, ${perspective.edges.length} connections`}
+              aria-label={`${perspective.label} ${perspective.nodes.length} nodes, ${perspective.edges.length} connections`}
               data-graph-tab={perspective.id}
               class="inline-flex items-baseline gap-2 rounded-xs border border-[var(--border)] px-3 py-2 font-mono text-xs uppercase tracking-[0.1em] text-[var(--text-muted)] no-underline transition-colors hover:border-[var(--border-strong)] hover:text-[var(--text)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--focus)] aria-selected:border-[var(--border-strong)] aria-selected:bg-[var(--surface-raised)] aria-selected:text-[var(--text)]"
             >
-              {perspective.label}
+              {perspective.label}{' '}
               <span aria-hidden="true" class="tabular-nums text-[var(--text-muted)]">
                 {perspective.nodes.length}
               </span>

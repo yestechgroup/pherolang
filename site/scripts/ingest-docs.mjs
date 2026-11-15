@@ -289,6 +289,14 @@ if (!existsSync(INVENTORY)) {
 const inventory = JSON.parse(await readFile(INVENTORY, 'utf8'));
 
 /**
+ * Starlight derives a page's slug from the content file's path, and it strips
+ * dots: `release-0.3.0.md` becomes `/migration/release-030/`. Normalising here
+ * keeps the manifest's promised URL and the emitted route identical — a
+ * mismatch is a 404 that no other gate would see.
+ */
+const fileSlug = (slug) => slug.replace(/\./g, '');
+
+/**
  * One page per ingested document. `source` is the repository-relative path the
  * document lives at (the link resolver's anchor), `target` is the
  * collection-relative output path, `url` the route a reader gets. `index` marks
@@ -310,13 +318,18 @@ async function planPage({ source, slug, title, order, collection: placed, index 
     );
   }
 
+  // Starlight strips dots from the content id (`release-0.3.0.md` →
+  // `/migration/release-030/`), so the file name — and therefore the URL the
+  // manifest promises — must be normalised the same way.
+  const emitted = fileSlug(slug);
+
   const target = landing
     ? 'index.md'
     : isIndex
       ? `${collection}/index.md`
-      : `${collection}/${slug}.md`;
+      : `${collection}/${emitted}.md`;
 
-  const url = landing ? '/' : isIndex ? `/${collection}/` : `/${collection}/${slug}/`;
+  const url = landing ? '/' : isIndex ? `/${collection}/` : `/${collection}/${emitted}/`;
 
   return {
     source,

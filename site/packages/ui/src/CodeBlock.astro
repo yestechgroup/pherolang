@@ -16,7 +16,10 @@ const body = code ?? '';
       {runnable && <span class="normal-case tracking-normal">executed by CI</span>}
     </figcaption>
   )}
-  <pre class="overflow-x-auto p-4 font-mono text-[0.8125rem] leading-[1.65] text-[var(--text)]"><code
+  <pre
+    tabindex="0"
+    class="overflow-x-auto p-4 font-mono text-[0.8125rem] leading-[1.65] text-[var(--text)]"
+  ><code
       class={lang ? `language-${lang}` : undefined}
       data-runnable={runnable ? '' : undefined}>{body}</code></pre>
 </figure>

@@ -145,8 +145,8 @@
       "source": "docs/RELEASE-0.3.0.md",
       "slug": "release-0.3.0",
       "collection": "migration",
-      "target": "migration/release-0.3.0.md",
-      "url": "/migration/release-0.3.0/"
+      "target": "migration/release-030.md",
+      "url": "/migration/release-030/"
     },
     {
       "source": "docs/adr/README.md",

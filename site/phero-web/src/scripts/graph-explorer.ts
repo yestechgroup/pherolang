@@ -118,7 +118,7 @@ function prepare(panel: Panel): boolean {
     if (!node) return;
     group.setAttribute('tabindex', '0');
     group.setAttribute('role', 'button');
-    group.setAttribute('aria-label', `${node.label}, ${kindText(groups[index], node)}`);
+    group.setAttribute('aria-label', `${node.label} ${kindText(groups[index], node)}`);
     group.dataset.nodeIndex = String(index);
   });
 

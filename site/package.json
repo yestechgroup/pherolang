@@ -12,7 +12,10 @@
     "dev": "pnpm -r --parallel dev",
     "fetch-pherolang": "node scripts/fetch-pherolang.mjs",
     "sync-model": "node scripts/sync-model.mjs",
-    "gate": "node scripts/gate.mjs"
+    "gate": "node scripts/gate.mjs",
+    "gate:links": "node scripts/gate.mjs --only=links",
+    "gate:a11y": "node scripts/gate.mjs --only=a11y",
+    "check:commands": "node scripts/check-commands.mjs"
   },
   "pnpm": {
     "onlyBuiltDependencies": [
@@ -20,5 +23,10 @@
       "workerd",
       "sharp"
     ]
+  },
+  "devDependencies": {
+    "@axe-core/playwright": "^4.14.0",
+    "html-validate": "^11.21.1",
+    "playwright": "^1.65.1"
   }
 }

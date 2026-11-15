@@ -280,3 +280,15 @@
   outline-width: 2px;
   outline-color: var(--focus);
 }
+
+/*
+ * Starlight's search trigger carries an `aria-label="Search"` plus a visible
+ * `Ctrl K` hint, so the accessible name does not contain the visible text
+ * (WCAG 2.5.3, axe `label-content-name-mismatch`). The shortcut is already
+ * exposed to assistive tech through `aria-keyshortcuts`, and the dialog shows
+ * it once open, so the hint is removed from the button rather than duplicating
+ * it into the name.
+ */
+:root site-search button[data-open-modal] kbd {
+  display: none;
+}

@@ -32,12 +32,36 @@ import cloudflare from '@astrojs/cloudflare';
  * Every page instead declares `editUrl` in its frontmatter, pointing at the
  * `docs/` source it was generated from.
  */
+
+/**
+ * GFM task lists render `<input type="checkbox" disabled>` with no accessible
+ * name. They are decorative — the list text carries the meaning and the boxes
+ * cannot be toggled — so hide them from the accessibility tree instead of
+ * inventing a label for a control nobody can operate.
+ */
+const rehypeDecorativeTaskCheckboxes = () => (tree) => {
+  const walk = (node) => {
+    if (
+      node?.type === 'element' &&
+      node.tagName === 'input' &&
+      node.properties?.type === 'checkbox' &&
+      node.properties?.disabled !== undefined
+    ) {
+      node.properties['aria-hidden'] = 'true';
+      node.properties.tabIndex = -1;
+    }
+    for (const child of node?.children ?? []) walk(child);
+  };
+  walk(tree);
+};
+
 export default defineConfig({
   site: 'https://docs.pherolang.com',
   output: 'static',
   session: false,
   trailingSlash: 'ignore',
   adapter: cloudflare({ imageService: 'compile' }),
+  markdown: { rehypePlugins: [rehypeDecorativeTaskCheckboxes] },
   integrations: [
     starlight({
       title: 'Phero Lang',
