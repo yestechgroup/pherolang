@@ -48,6 +48,7 @@
       "errors": [
         {
           "name": "InvoiceAlreadyIssued",
+          "description": "The invoice for this order was already issued.",
           "fields": [
             {
               "name": "invoiceId",

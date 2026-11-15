@@ -276,6 +276,10 @@ fn conformance_errors_matches_golden_artifact() {
             .collect::<Vec<_>>(),
         ["InvoiceAlreadyIssued", "DeclinedDetail"]
     );
+    assert_eq!(
+        model.modules[0].errors[0].description.as_deref(),
+        Some("The invoice for this order was already issued.")
+    );
     assert!(matches!(
         model.modules[0].errors[1].fields[0].type_,
         phero_ir::ddd::DddTypeRef::Dto { .. }

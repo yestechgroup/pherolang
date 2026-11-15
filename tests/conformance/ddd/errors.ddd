@@ -6,6 +6,7 @@ application Payments {
     error PaymentDeclined(DeclineReason reason, String reference);
     error OutOfStock(String sku);
     module billing {
+        /// The invoice for this order was already issued.
         error InvoiceAlreadyIssued(String invoiceId);
         error DeclinedDetail(PaymentDetail detail);
         dto PaymentDetail {
