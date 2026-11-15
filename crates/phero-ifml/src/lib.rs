@@ -53,16 +53,17 @@
 //! `codegraph-ifml-dsl` crate did, so consumers of the moved crate need only
 //! swap the dependency.
 
-mod ast;
+pub mod ast;
 mod check;
 mod expand;
 mod fmt;
 mod index;
-mod lexer;
+pub mod lexer;
 mod lower;
 mod manifest;
 mod parser;
 mod resolve;
+pub mod words;
 
 pub use check::{check_ifml, check_ifml_with_actors, check_ifml_with_decisions};
 pub use expand::expand_ifml;

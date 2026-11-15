@@ -2372,6 +2372,7 @@ dependencies = [
  "phero-diagnostics",
  "phero-driver",
  "phero-evidence",
+ "phero-highlight",
  "phero-ifml",
  "phero-ir",
  "phero-lsp",
@@ -2440,6 +2441,18 @@ dependencies = [
  "phero-strings",
  "serde",
  "serde_json",
+ "thiserror",
+]
+
+[[package]]
+name = "phero-highlight"
+version = "0.3.0"
+dependencies = [
+ "phero-ifml",
+ "phero-syntax",
+ "serde",
+ "serde_json",
+ "sha2",
  "thiserror",
 ]
 

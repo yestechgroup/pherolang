@@ -4,6 +4,7 @@ members = [
     "crates/phero-syntax",
     "crates/phero-parser",
     "crates/phero-ir",
+    "crates/phero-highlight",
     "crates/phero-expr",
     "crates/phero-ifml",
     "crates/phero-driver",
@@ -43,6 +44,7 @@ all = "warn"
 phero-syntax = { path = "crates/phero-syntax" }
 phero-parser = { path = "crates/phero-parser" }
 phero-ir = { path = "crates/phero-ir" }
+phero-highlight = { path = "crates/phero-highlight" }
 phero-expr = { path = "crates/phero-expr" }
 phero-ifml = { path = "crates/phero-ifml" }
 phero-driver = { path = "crates/phero-driver" }

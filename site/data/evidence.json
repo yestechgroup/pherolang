@@ -10,7 +10,7 @@
     "nodes": 305,
     "edges": 463,
     "applications": 8,
-    "crates": 22
+    "crates": 23
   },
   "applications": [
     {
@@ -167,6 +167,7 @@
     "phero-driver",
     "phero-evidence",
     "phero-expr",
+    "phero-highlight",
     "phero-ifml",
     "phero-ir",
     "phero-lsp",

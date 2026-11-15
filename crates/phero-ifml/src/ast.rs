@@ -2,7 +2,7 @@
 //!
 //! Every node owns its strings and carries a byte [`Span`]. The shapes mirror
 //! the grammar (see the parser module docs for the normative EBNF), not the
-//! wire IR: lowering ([`crate::lower`]) is the only place that knows
+//! wire IR: lowering (`crate::lower`) is the only place that knows
 //! `phero_ir::ifml`. Expression values (`x: <value>` and object members) use
 //! [`ValueExpr`]; bound conditions and call arguments use [`Expr`]. Keeping
 //! two expression nodes is what makes the AST's array/object shape explicit

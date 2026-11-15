@@ -1,0 +1,7 @@
+import "demo.ddd"
+
+application Demo {
+    component api: api {
+        requires http
+    }
+}

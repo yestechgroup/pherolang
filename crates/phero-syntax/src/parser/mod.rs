@@ -870,12 +870,9 @@ pub use uc::UcParseResult;
 /// mechanically.
 #[cfg(test)]
 mod grammar_doc_tests {
-    use crate::cmmn;
     use crate::ddd;
-    use crate::deploy;
-    use crate::dmn;
     use crate::lexer::lex;
-    use crate::usecases;
+    use crate::words;
 
     /// This file's source; the leading `//!` lines are the module docs that
     /// carry the grammar blocks.
@@ -897,253 +894,29 @@ mod grammar_doc_tests {
         phero_parser::grammar_doc::grammar_words(&grammar_blocks())
     }
 
-    /// Contextual words the grammar quotes that are *not* lexer keywords and
-    /// not covered by a table below: feature modifiers, the import sigils,
-    /// the top-level `register` declaration word (pherolang#181 part A), the
-    /// delegation `to`, the session-kind modifier `human` (pherolang#181
-    /// part B), the datatype block words, `unique`, the `.evt`
-    /// subscription/channel words plus the slice-2 clause words, and the
-    /// parser-only `ranking` values (`crate::ddd` documents them as
-    /// parser-only).
-    const CONTEXTUAL_WORDS: [&str; 34] = [
-        "id",
-        "readonly",
-        "schema",
-        "sigil",
-        "to",
-        "register",
-        "human",
-        "create",
-        "convert",
-        "format",
-        "unique",
-        "bm25",
-        "tfIdf",
-        "exact",
-        "custom",
-        "entity",
-        "value",
-        "events",
-        "consumer",
-        "of",
-        "scope",
-        "owner",
-        "classification",
-        "retention",
-        "pii",
-        "cloudEvents",
-        "source",
-        "subject",
-        "delivery",
-        "mode",
-        "maxAttempts",
-        "backoffSeconds",
-        "timeoutSeconds",
-        "deadLetter",
-    ];
-
-    /// Every keyword of the lexer. Each entry is checked against the lexer
-    /// itself, so this list and `Token` cannot drift apart silently.
-    const KEYWORDS: [&str; 42] = [
-        "package",
-        "annotation",
-        "as",
-        "class",
-        "extends",
-        "interface",
-        "enum",
-        "type",
-        "wraps",
-        "opaque",
-        "contains",
-        "refers",
-        "container",
-        "opposite",
-        "op",
-        "derived",
-        "true",
-        "false",
-        "vocabulary",
-        "from",
-        "version",
-        "key",
-        "facet",
-        "actors",
-        "actor",
-        "agent",
-        "capability",
-        "grant",
-        "permit",
-        "forbid",
-        "when",
-        "obligation",
-        "on",
-        "never_both",
-        "delegation",
-        "purpose",
-        "cedar",
-        "event",
-        "channel",
-        "publishes",
-        "subscription",
-        "import",
-    ];
-
-    /// Every word the grammar is allowed to quote as a terminal.
+    /// Every word the grammar is allowed to quote as a terminal: the real
+    /// lexer keywords, every per-surface contextual table, the boolean
+    /// literals, the `.ddd` ranking values, and the constraint keywords.
     fn known_words() -> Vec<&'static str> {
-        let mut words: Vec<&'static str> = KEYWORDS.to_vec();
-        words.extend(CONTEXTUAL_WORDS);
+        let mut words: Vec<&'static str> = words::KEYWORDS.to_vec();
+        words.extend(words::BOOLEAN_WORDS);
+        words.extend(words::MOX_CONTEXTUAL);
+        words.extend(words::ACTOR_KEYWORDS);
+        words.extend(words::ACTOR_CONTEXTUAL);
+        words.extend(words::DDD_KEYWORDS);
+        words.extend(words::DDD_CONTEXTUAL);
+        words.extend(words::DDD_LITERALS);
+        words.extend(words::EVT_KEYWORDS);
+        words.extend(words::EVT_CONTEXTUAL);
+        words.extend(words::DEPLOY_KEYWORDS);
+        words.extend(words::DEPLOY_CONTEXTUAL);
+        words.extend(words::UC_KEYWORDS);
+        words.extend(words::UC_CONTEXTUAL);
+        words.extend(words::CMMN_KEYWORDS);
+        words.extend(words::CMMN_CONTEXTUAL);
+        words.extend(words::DMN_KEYWORDS);
+        words.extend(words::DMN_CONTEXTUAL);
         words.extend(super::VALUED_CONSTRAINT_KEYWORDS);
-        words.extend([
-            ddd::APPLICATION,
-            ddd::BASE,
-            ddd::MODULE,
-            ddd::SERVICE,
-            ddd::SEARCH,
-            ddd::ABSTRACT,
-            ddd::REPOSITORY,
-            ddd::INJECT,
-            ddd::DECISION,
-            ddd::EMITS,
-            ddd::INVOKES,
-            ddd::COMPATIBLE,
-            ddd::TRANSITION,
-            ddd::PROTECTED,
-            ddd::MACHINE,
-            ddd::INITIAL,
-            ddd::TERMINAL,
-            ddd::VIA,
-            ddd::BOOST,
-            ddd::ANALYZER,
-            ddd::LIMIT,
-            ddd::MAX,
-            ddd::CURSOR,
-            ddd::EXTEND,
-            ddd::LET,
-            ddd::GUARD,
-            ddd::ELSE,
-            ddd::ERROR,
-            ddd::IF,
-            ddd::RETURN,
-        ]);
-        for (keyword, _) in ddd::STEREOTYPES {
-            words.push(keyword);
-        }
-        for (keyword, _) in ddd::DESIGN_FLAGS {
-            words.push(keyword);
-        }
-        for (keyword, _) in ddd::REPOSITORY_BUILTINS {
-            words.push(keyword);
-        }
-        for (kind, keyword) in ddd::SEARCH_MEMBERS {
-            let _ = kind;
-            if let Some(keyword) = keyword {
-                words.push(keyword);
-            }
-        }
-        for word in [
-            deploy::APPLICATION,
-            deploy::COMPONENT,
-            deploy::CONNECTS,
-            deploy::PROFILE,
-            deploy::DEPLOYMENT,
-            deploy::TARGET,
-            deploy::DEFAULTS,
-            deploy::MAPPINGS,
-            deploy::REQUIRE,
-            deploy::PROHIBIT,
-            deploy::REQUIRES,
-            deploy::DESIGN,
-            deploy::FLOW,
-            deploy::ENV,
-            deploy::USE,
-            deploy::CONFIGURE,
-            deploy::FOR,
-        ] {
-            words.push(word);
-        }
-        for word in [
-            usecases::USECASE,
-            usecases::SUBJECT,
-            usecases::OCCURRENCE,
-            usecases::PERFORM,
-            usecases::MESSAGE,
-            usecases::FIRST,
-            usecases::THEN,
-            usecases::OF,
-            usecases::TO,
-            usecases::START,
-            usecases::DONE,
-            usecases::REQUIRES,
-            usecases::REALIZES,
-            usecases::SOURCE,
-            usecases::TARGET,
-        ] {
-            words.push(word);
-        }
-        for word in [
-            cmmn::CASE,
-            cmmn::ROLES,
-            cmmn::ROLE,
-            cmmn::CASE_FILE,
-            cmmn::ENTRY,
-            cmmn::EXIT,
-            cmmn::PERFORMER,
-            cmmn::EXECUTE,
-            cmmn::INVOKES,
-            cmmn::COMPATIBLE,
-            cmmn::INPUTS,
-            cmmn::OUTPUTS,
-            cmmn::REQUIRED,
-            cmmn::REPEATS,
-            cmmn::AUTO,
-            cmmn::DISCRETIONARY,
-            cmmn::STAGE,
-            cmmn::TASK,
-            cmmn::SERVICE,
-            cmmn::DECISION,
-            cmmn::MILESTONE,
-        ] {
-            words.push(word);
-        }
-        for word in [
-            dmn::DECISION_MODEL,
-            dmn::NAMESPACE,
-            dmn::ID,
-            dmn::EFFECTIVE,
-            dmn::JURISDICTION,
-            dmn::INPUTS,
-            dmn::KNOWLEDGE,
-            dmn::SOURCE,
-            dmn::MODEL,
-            dmn::PARAMETERS,
-            dmn::OUTPUT,
-            dmn::OUTPUTS,
-            dmn::DECISIONS,
-            dmn::DECISION,
-            dmn::LOGIC,
-            dmn::TABLE,
-            dmn::EXPRESSION,
-            dmn::INVOKE,
-            dmn::REQUIREMENTS,
-            dmn::INFORMATION,
-            dmn::REQUIRES,
-            dmn::INVOKES,
-            dmn::AUTHORITY,
-            dmn::GOVERNED_BY,
-            dmn::SERVICES,
-            dmn::SERVICE,
-            dmn::ENCAPSULATES,
-            dmn::VIEWS,
-            dmn::VIEW,
-            dmn::SHOW,
-            dmn::DIRECTION,
-            dmn::DESCRIPTION,
-            dmn::REFERENCE,
-            dmn::NAME,
-        ] {
-            words.push(word);
-        }
         words
     }
 
@@ -1174,7 +947,7 @@ mod grammar_doc_tests {
     #[test]
     fn every_lexed_keyword_appears_in_the_grammar() {
         let words = grammar_words();
-        for keyword in KEYWORDS {
+        for keyword in words::KEYWORDS {
             // The list itself must stay honest: each entry really is a
             // keyword token of the lexer.
             let tokens = lex(keyword).unwrap();
@@ -1185,7 +958,7 @@ mod grammar_doc_tests {
             );
             assert_eq!(
                 tokens[0].0.keyword(),
-                Some(keyword),
+                Some(*keyword),
                 "`{keyword}` is listed as a keyword but lexes otherwise — \
                  update KEYWORDS in this test"
             );

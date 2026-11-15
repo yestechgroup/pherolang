@@ -8,6 +8,7 @@ pub(crate) mod explain;
 pub(crate) mod fmt;
 pub(crate) mod gen;
 pub(crate) mod graph;
+pub(crate) mod highlight;
 pub(crate) mod integrity;
 pub(crate) mod ir;
 pub(crate) mod lsp;
