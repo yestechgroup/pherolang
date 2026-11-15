@@ -928,3 +928,248 @@ fn a_dto_cannot_carry_entity_only_state() {
         );
     }
 }
+
+// --- declared error vocabulary and throws (DD7, pherolang#304) ---------------
+
+/// A focused design over `library.mox` exercising the vocabulary: an
+/// application error, a module-private error, a DTO payload, a body raising
+/// both a declared error and the prelude, and a delegation whose `throws` is
+/// a superset of its target's.
+fn compiled_errors() -> DddModel {
+    let (domain_path, domain) = fixture("library.mox");
+    let design = r#"
+import "library.mox";
+
+application Loans {
+    base nz.example.library
+    error BookUnavailable(String isbn);
+
+    module lending {
+        error LoanAlreadyOpen(String loanId);
+        error ReceiptError(LoanReceipt receipt);
+        dto LoanReceipt { String isbn; }
+        service LoanService {
+            inject BookRepository;
+            boolean borrow(String isbn) throws BookUnavailable, NotFound => BookRepository {
+                let book = self.findById(isbn) else error NotFound("Book", isbn);
+                guard book.isbn != "" else error BookUnavailable(isbn);
+                return true;
+            }
+        }
+        service FrontDesk {
+            inject LoanService;
+            borrow => LoanService.borrow throws BookUnavailable, NotFound, LoanAlreadyOpen;
+        }
+        entity Book repository BookRepository {
+            findById;
+            LoanReceipt receipt(String isbn);
+        }
+        entity Chapter
+    }
+}
+"#;
+    let design_path = Path::new(&domain_path)
+        .with_file_name("errors.ddd")
+        .display()
+        .to_string();
+    let compilation = compile_ddd_str(
+        &design_path,
+        design,
+        &[(domain_path, domain)],
+        &DomainImports::default(),
+    );
+    assert_clean(&compilation.diagnostics);
+    compilation.model.expect("the error fixture lowers")
+}
+
+#[test]
+fn a_compiled_error_vocabulary_is_contract_complete() {
+    let model = compiled_errors();
+    assert_eq!(check_contract(&model), Vec::new());
+    assert_eq!(model.errors.len(), 1);
+    assert_eq!(model.modules[0].errors.len(), 2);
+    let service = &model.modules[0].services[0];
+    assert_eq!(service.operations[0].throws.len(), 2);
+}
+
+#[test]
+fn a_duplicate_error_name_is_reported() {
+    let mut model = compiled_errors();
+    let duplicate = model.errors[0].clone();
+    model.modules[0].errors.push(duplicate);
+    let violations = check_contract(&model);
+    assert!(
+        violations.iter().any(|violation| violation
+            .message
+            .contains("duplicate error 'BookUnavailable'")),
+        "{violations:?}"
+    );
+}
+
+#[test]
+fn a_prelude_shadowing_error_is_reported() {
+    let mut model = compiled_errors();
+    let mut shadow = model.errors[0].clone();
+    shadow.name = "NotFound".to_string();
+    model.errors.push(shadow);
+    let violations = check_contract(&model);
+    assert!(
+        violations
+            .iter()
+            .any(|violation| violation.message.contains("shadows the standard prelude")),
+        "{violations:?}"
+    );
+}
+
+#[test]
+fn a_duplicate_error_payload_field_is_reported() {
+    let mut model = compiled_errors();
+    let field = model.errors[0].fields[0].clone();
+    model.errors[0].fields.push(field);
+    let violations = check_contract(&model);
+    assert!(
+        violations
+            .iter()
+            .any(|violation| violation.message.contains("duplicate payload field 'isbn'")),
+        "{violations:?}"
+    );
+}
+
+#[test]
+fn an_unresolved_dto_error_payload_is_reported() {
+    let mut model = compiled_errors();
+    model.modules[0].errors[1].fields[0].type_ = DddTypeRef::dto("Missing");
+    let violations = check_contract(&model);
+    assert!(
+        violations
+            .iter()
+            .any(|violation| violation.message.contains("references dto 'Missing'")),
+        "{violations:?}"
+    );
+}
+
+#[test]
+fn a_throws_reference_to_no_declared_error_is_reported() {
+    let mut model = compiled_errors();
+    model.modules[0].services[0].operations[0].throws[0].name = "Nope".to_string();
+    let violations = check_contract(&model);
+    assert!(
+        violations.iter().any(|violation| violation
+            .message
+            .contains("'Nope' resolves to no declared error")),
+        "{violations:?}"
+    );
+}
+
+#[test]
+fn a_throws_reference_with_the_wrong_scope_is_reported() {
+    // An application-scoped reference naming a module-private error.
+    let mut model = compiled_errors();
+    model.modules[0].services[1].operations[0].throws[2] =
+        phero_ir::ddd::ErrorRef::application("LoanAlreadyOpen");
+    let violations = check_contract(&model);
+    assert!(
+        violations.iter().any(|violation| violation
+            .message
+            .contains("is declared in module 'lending'")),
+        "{violations:?}"
+    );
+
+    // A module-scoped reference naming an application error.
+    let mut model = compiled_errors();
+    model.modules[0].services[1].operations[0].throws[0] =
+        phero_ir::ddd::ErrorRef::module("BookUnavailable", "lending");
+    let violations = check_contract(&model);
+    assert!(
+        violations
+            .iter()
+            .any(|violation| violation.message.contains("is application-scoped")),
+        "{violations:?}"
+    );
+}
+
+#[test]
+fn a_module_scoped_reference_must_name_its_declaring_module() {
+    let mut model = compiled_errors();
+    model.modules[0].services[1].operations[0].throws[2] =
+        phero_ir::ddd::ErrorRef::module("LoanAlreadyOpen", "elsewhere");
+    let violations = check_contract(&model);
+    assert!(
+        violations
+            .iter()
+            .any(|violation| violation.message.contains("is private to module 'lending'")),
+        "{violations:?}"
+    );
+}
+
+#[test]
+fn a_prelude_reference_must_name_a_prelude_error() {
+    let mut model = compiled_errors();
+    model.modules[0].services[0].operations[0].throws[1].name = "Nope".to_string();
+    let violations = check_contract(&model);
+    assert!(
+        violations
+            .iter()
+            .any(|violation| violation.message.contains("is not a prelude error")),
+        "{violations:?}"
+    );
+}
+
+#[test]
+fn a_body_raise_outside_throws_is_reported() {
+    let mut model = compiled_errors();
+    let operation = &mut model.modules[0].services[0].operations[0];
+    let body = operation.bodies.get("stmt").expect("stmt body").clone();
+    operation.bodies.insert(
+        "stmt".to_string(),
+        body.replace(
+            "\"variant\":\"BookUnavailable\"",
+            "\"variant\":\"Conflict\"",
+        ),
+    );
+    let violations = check_contract(&model);
+    assert!(
+        violations
+            .iter()
+            .any(|violation| violation.message.contains("the body raises 'Conflict'")),
+        "{violations:?}"
+    );
+}
+
+#[test]
+fn a_narrowed_delegation_throws_is_reported() {
+    let mut model = compiled_errors();
+    model.modules[0].services[1].operations[0].throws.pop();
+    model.modules[0].services[1].operations[0].throws.pop();
+    let violations = check_contract(&model);
+    assert!(
+        violations
+            .iter()
+            .any(|violation| violation.message.contains("narrows the target's throws")),
+        "{violations:?}"
+    );
+}
+
+#[test]
+fn a_builtin_repository_operation_with_throws_is_reported() {
+    let mut model = compiled_errors();
+    let repository = model.modules[0]
+        .designs
+        .iter_mut()
+        .find(|design| design.class.as_deref() == Some("Book"))
+        .and_then(|design| design.repository.as_mut())
+        .expect("repository");
+    let builtin = repository
+        .operations
+        .iter_mut()
+        .find(|operation| operation.builtin.is_some())
+        .expect("findById");
+    builtin.throws = vec![phero_ir::ddd::ErrorRef::application("BookUnavailable")];
+    let violations = check_contract(&model);
+    assert!(
+        violations
+            .iter()
+            .any(|violation| violation.message.contains("takes no `throws` clause")),
+        "{violations:?}"
+    );
+}
