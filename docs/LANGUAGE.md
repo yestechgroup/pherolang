@@ -442,20 +442,20 @@ a list:
 - **Backend boundary (Rust).** The Rust backend stores a set as
   `std::collections::BTreeSet<T>` (deterministic iteration, order-insensitive
   equality) and a list as `Vec<T>`. A set element must be totally ordered —
-  every primitive except the IEEE `float`/`double`, enums, datatypes,
-  vocabularies, dates, and class references (their generated slotmap key type
-  is `Ord`) qualify; a `float`/`double` set is rejected at generation time
-  with an error naming the feature and type. The documented fallback is an
-  ordered unique list (`double[] scores { unique }`). `.ddd` operation
-  signatures carry multiplicity but **no collection kind**: the kind belongs
-  to the feature, and a signature is the callee's contract (see
+  every primitive except the IEEE `float`/`double` (dates are ordered),
+  enums, datatypes, vocabularies, and class references (their generated
+  slotmap key type is `Ord`) qualify; a `float`/`double` set is rejected at
+  generation time with an error naming the feature and type. The documented
+  fallback is an ordered unique list (`double[] scores { unique }`). `.ddd`
+  operation signatures carry multiplicity but **no collection kind**: the
+  kind belongs to the feature, and a signature is the callee's contract (see
   [`docs/DDD.md`](DDD.md#sculptor-concept-mapping)).
 
 **Deliberate non-goals (v1).** These are documented holes, not accidents:
 
 | Not carried | Why | Workaround |
 |---|---|---|
-| `Map<K, V>` | JSON Schema has no map type (dynamic keys are not type-checkable the same way), key ordering is unspecified, and no in-tree backend needs one. `TypeRef::Map { key, value }` remains additive if a real need lands | a pair class (`class CurrencyRate { String currency; decimal rate; }`) plus `contains CurrencyRate[]` when the map is a domain concept; an opaque datatype wrapping a platform map when it is an implementation detail; a `refers` to an entity keyed by the map's key when the values are entities |
+| `Map<K, V>` | JSON Schema has no map type (dynamic keys are not type-checkable the same way), key ordering is unspecified, and no in-tree backend needs one. `TypeRef::Map { key, value }` remains additive if a real need lands | a pair class (`class CurrencyRate { String currency; double rate; }`) plus `contains CurrencyRate[]` when the map is a domain concept; an opaque datatype wrapping a platform map when it is an implementation detail; a `refers` to an entity keyed by the map's key when the values are entities |
 | `Bag<T>` | a multiset is a storage/persistence need, not a domain fact; duplicates are the exception | a list, plus `unique` when duplicates are illegal |
 | `orderby` / `orderColumn` | JPA persistence metadata (`@OrderBy`/`@OrderColumn`), a storage knob rather than a domain fact | an explicit `int position` feature plus a list; the owning backend derives its storage ordering |
 | `Collection<T>` / `Set<T>` / `List<T>` as generic types | cardinality is orthogonal to the element type, and generic collection types leak platform APIs into the domain | multiplicity plus the collection constraint: `T[]`, `T[] { unique }`, `T[] { set }` |
