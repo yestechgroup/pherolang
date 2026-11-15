@@ -255,8 +255,8 @@ pub(crate) fn params<'src>() -> impl Parser<'src, Tokens<'src>, Vec<Param>, MoxE
         .map(|list| list.unwrap_or_default())
 }
 
-/// The closed set of value-taking constraint keywords allowed inside an
-/// attribute's constraint block, plus the value-less `unique` (handled by
+/// The closed set of value-taking constraint keywords allowed inside a
+/// feature's constraint block, plus the value-less `unique`/`set` (handled by
 /// the flag arm below). They are contextual: ordinary identifiers everywhere
 /// else, matching the `create`/`convert` precedent.
 pub(crate) const VALUED_CONSTRAINT_KEYWORDS: [&str; 5] =
