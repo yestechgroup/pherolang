@@ -723,3 +723,194 @@ fn artifact_check_rejects_a_dto_artifact_violating_the_boundary_contract() {
         );
     }
 }
+
+/// An IR artifact with one set reference, one unique list, and one set
+/// containment — the DD6 collection markers in their legal shapes.
+const GOOD_IR_COLLECTIONS_ARTIFACT: &str = r#"{
+  "formatVersion": 2,
+  "pheroVersion": "0.3.0",
+  "packages": [
+    {
+      "name": "demo",
+      "annotations": [],
+      "enums": [],
+      "datatypes": [],
+      "interfaces": [],
+      "classes": [
+        {
+          "name": "Play",
+          "extends": [],
+          "features": [
+            {
+              "id": 0,
+              "name": "tags",
+              "kind": "attribute",
+              "type": { "type": "primitive", "value": "string" },
+              "multiplicity": { "lower": 0, "upper": "unbounded" },
+              "collection": "set",
+              "isDerived": false,
+              "isId": false,
+              "isReadOnly": false,
+              "constraints": { "unique": true }
+            },
+            {
+              "id": 1,
+              "name": "labels",
+              "kind": "attribute",
+              "type": { "type": "primitive", "value": "string" },
+              "multiplicity": { "lower": 0, "upper": "unbounded" },
+              "isDerived": false,
+              "isId": false,
+              "isReadOnly": false,
+              "constraints": { "unique": true }
+            },
+            {
+              "id": 2,
+              "name": "playedBy",
+              "kind": "crossReference",
+              "type": { "type": "class", "value": { "package": "demo", "name": "Person" } },
+              "multiplicity": { "lower": 0, "upper": "unbounded" },
+              "collection": "set",
+              "isDerived": false,
+              "isId": false,
+              "isReadOnly": false,
+              "constraints": { "unique": true }
+            },
+            {
+              "id": 3,
+              "name": "lines",
+              "kind": "containment",
+              "type": { "type": "class", "value": { "package": "demo", "name": "Line" } },
+              "multiplicity": { "lower": 0, "upper": "unbounded" },
+              "collection": "set",
+              "isDerived": false,
+              "isId": false,
+              "isReadOnly": false,
+              "constraints": { "unique": true }
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}
+"#;
+
+#[test]
+fn artifact_check_passes_on_a_collection_bearing_ir_artifact() {
+    let path = write_artifact("valid.collections.phero.json", GOOD_IR_COLLECTIONS_ARTIFACT);
+    let output = pherolang()
+        .args(["artifact", "check", path.to_str().unwrap()])
+        .output()
+        .expect("run pherolang artifact check");
+    assert!(
+        output.status.success(),
+        "stderr: {:?}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    assert_eq!(
+        String::from_utf8_lossy(&output.stdout),
+        format!("OK {}\n", path.display())
+    );
+}
+
+/// One IR artifact with a single feature shape; the collection marker cases
+/// are assembled from it so each corruption is exact.
+fn ir_with_feature(feature: &str) -> String {
+    format!(
+        r#"{{
+  "formatVersion": 2,
+  "pheroVersion": "0.3.0",
+  "packages": [
+    {{
+      "name": "demo",
+      "annotations": [],
+      "enums": [],
+      "datatypes": [],
+      "interfaces": [],
+      "classes": [
+        {{
+          "name": "Play",
+          "extends": [],
+          "features": [
+{feature}
+          ]
+        }}
+      ]
+    }}
+  ]
+}}"#
+    )
+}
+
+#[test]
+fn artifact_check_rejects_collection_markers_that_disagree_with_the_feature() {
+    let cases: Vec<(&str, String, &str)> = vec![
+        (
+            "set_without_unique.phero.json",
+            ir_with_feature(
+                r#"            {
+              "id": 0,
+              "name": "tags",
+              "kind": "attribute",
+              "type": { "type": "primitive", "value": "string" },
+              "multiplicity": { "lower": 0, "upper": "unbounded" },
+              "collection": "set",
+              "isDerived": false,
+              "isId": false,
+              "isReadOnly": false
+            }"#,
+            ),
+            "constraints.unique",
+        ),
+        (
+            "set_on_single.phero.json",
+            ir_with_feature(
+                r#"            {
+              "id": 0,
+              "name": "tag",
+              "kind": "attribute",
+              "type": { "type": "primitive", "value": "string" },
+              "multiplicity": { "lower": 1, "upper": { "finite": 1 } },
+              "collection": "set",
+              "isDerived": false,
+              "isId": false,
+              "isReadOnly": false,
+              "constraints": { "unique": true }
+            }"#,
+            ),
+            "single-valued",
+        ),
+        (
+            "set_on_container.phero.json",
+            ir_with_feature(
+                r#"            {
+              "id": 0,
+              "name": "library",
+              "kind": "container",
+              "type": { "type": "class", "value": { "package": "demo", "name": "Library" } },
+              "multiplicity": { "lower": 0, "upper": { "finite": 1 } },
+              "collection": "set",
+              "isDerived": false,
+              "isId": false,
+              "isReadOnly": false,
+              "constraints": { "unique": true }
+            }"#,
+            ),
+            "container",
+        ),
+    ];
+    for (name, contents, needle) in cases {
+        let path = write_artifact(name, &contents);
+        let output = pherolang()
+            .args(["artifact", "check", path.to_str().unwrap()])
+            .output()
+            .expect("run pherolang artifact check");
+        assert_eq!(output.status.code(), Some(1), "{name} must fail");
+        let rendered = String::from_utf8_lossy(&output.stderr);
+        assert!(
+            rendered.contains(needle),
+            "{name}: the violation must name '{needle}'; stderr was: {rendered}"
+        );
+    }
+}

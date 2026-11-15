@@ -595,6 +595,13 @@ fn idempotent_on_conformance_register() {
 }
 
 #[test]
+fn idempotent_on_conformance_collections() {
+    assert_idempotent(include_str!(
+        "../../../tests/conformance/models/collections.mox"
+    ));
+}
+
+#[test]
 fn idempotent_on_conformance_actors_file() {
     let source = include_str!("../../../tests/conformance/models/actors.actor");
     let once = phero_syntax::fmt::format_actors(source).expect("format succeeds");
@@ -849,6 +856,9 @@ fn stable_on_conformance_models() {
     assert_still_parses(include_str!(
         "../../../tests/conformance/models/register.mox"
     ));
+    assert_still_parses(include_str!(
+        "../../../tests/conformance/models/collections.mox"
+    ));
 }
 
 #[test]
@@ -899,6 +909,11 @@ const GOLDENS: &[(&str, &str, Formatter)] = &[
     (
         "tests/conformance/models/register.mox",
         "tests/conformance/fmt/register.fmt.mox",
+        format,
+    ),
+    (
+        "tests/conformance/models/collections.mox",
+        "tests/conformance/fmt/collections.fmt.mox",
         format,
     ),
     (
