@@ -216,7 +216,71 @@
               "name": "PayRunLineDraft"
             }
           },
-          "stereotype": "dto"
+          "stereotype": "dto",
+          "dtoShape": {
+            "name": "PayRunLineDraft",
+            "source": {
+              "type": "class",
+              "value": {
+                "package": "nz.example.payroll",
+                "name": "PayRunLineDraft"
+              }
+            },
+            "direction": "input",
+            "members": [
+              {
+                "name": "description",
+                "kind": "select",
+                "type": {
+                  "type": "primitive",
+                  "value": "string"
+                },
+                "multiplicity": {
+                  "lower": 1,
+                  "upper": {
+                    "finite": 1
+                  }
+                },
+                "path": [
+                  "description"
+                ]
+              },
+              {
+                "name": "quantity",
+                "kind": "select",
+                "type": {
+                  "type": "primitive",
+                  "value": "int"
+                },
+                "multiplicity": {
+                  "lower": 1,
+                  "upper": {
+                    "finite": 1
+                  }
+                },
+                "path": [
+                  "quantity"
+                ]
+              },
+              {
+                "name": "unitCost",
+                "kind": "select",
+                "type": {
+                  "type": "primitive",
+                  "value": "int"
+                },
+                "multiplicity": {
+                  "lower": 1,
+                  "upper": {
+                    "finite": 1
+                  }
+                },
+                "path": [
+                  "unitCost"
+                ]
+              }
+            ]
+          }
         }
       ]
     }

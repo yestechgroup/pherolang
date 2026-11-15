@@ -2,10 +2,11 @@
 //!
 //! Definitions are the graph's design nodes: the application, its modules,
 //! services and service operations, designed repositories and their
-//! operations, search projections, the per-class state machines, their
-//! transitions, and the aggregate roots' child-scoped operations — every name
-//! derived through [`crate::graph::ids`], so the span table and the node table
-//! cannot drift.
+//! operations, search projections, the DTO boundaries (a projection or a
+//! standalone `dto` design; a mirror's boundary is its source class), the
+//! per-class state machines, their transitions, and the aggregate roots'
+//! child-scoped operations — every name derived through [`crate::graph::ids`],
+//! so the span table and the node table cannot drift.
 //!
 //! A source without an `application` declaration yields an empty index: the
 //! graph would fall back to the file stem for the application's name, which a
@@ -19,12 +20,26 @@
 //! `=> Repo.op` delegations name repository operations, and machine `via`
 //! triggers name transitions. Binding is the graph index's job.
 
-use phero_syntax::ast::{DddApplication, DddDecisionRef, DddModule};
+use phero_syntax::ast::{DddApplication, DddDecisionRef, DddDesign, DddModule};
 
 use phero_ir::graph::kinds;
 
 use super::surface::{ReferenceContext, SurfaceIndex};
 use crate::graph::ids;
+
+/// The DTO boundary name that owns a definition node (DD3): every
+/// projection and standalone DTO. A mirror DTO's boundary name is its source
+/// class — the class reference points at the domain node — so it has no
+/// definition of its own.
+fn dto_boundary_name(design: &DddDesign) -> Option<&str> {
+    if design.stereotype != phero_syntax::ast::DddStereotype::Dto {
+        return None;
+    }
+    match (&design.dto_source, &design.dto_members) {
+        (None, None) => None,
+        _ => Some(design.class.text.as_str()),
+    }
+}
 
 /// Builds the span index for one `.ddd` source. A source that does not parse
 /// (or declares no application) yields an empty index; this never panics.
@@ -140,12 +155,35 @@ fn module_index(index: &mut SurfaceIndex, application: &DddApplication, module: 
     }
 
     for design in &module.designs {
-        index.push_reference(
-            &[kinds::CLASS],
-            design.class.text.clone(),
-            design.class.span,
-            ReferenceContext::DesignClass,
-        );
+        // A class-backed design points at its domain class; a projection
+        // points at its `from` source; a standalone DTO has no class at all
+        // and only defines its boundary (DD3, pherolang#300).
+        match dto_boundary_name(design) {
+            Some(dto) => {
+                // The boundary's own node: the graph's `dto` kind (see
+                // `graph::ids::dto_name`).
+                index.push_definition(
+                    kinds::DTO,
+                    ids::dto_name(&module_name, dto),
+                    design.class.span,
+                    design.span,
+                );
+                if let Some(source) = &design.dto_source {
+                    index.push_reference(
+                        &[kinds::CLASS],
+                        source.full_name(),
+                        source.span,
+                        ReferenceContext::DesignClass,
+                    );
+                }
+            }
+            None => index.push_reference(
+                &[kinds::CLASS],
+                design.class.text.clone(),
+                design.class.span,
+                ReferenceContext::DesignClass,
+            ),
+        }
         if let Some(repository) = &design.repository {
             let repository_name = ids::repository_name(&module_name, &repository.name.text);
             index.push_definition(
@@ -498,5 +536,72 @@ application Support {
         // Parses, but declares no application: the graph would fall back to
         // the file stem, which a path-free index cannot know.
         assert!(ddd_index("import \"support.mox\";").is_empty());
+    }
+
+    #[test]
+    fn a_standalone_dto_defines_its_boundary_name() {
+        let source = concat!(
+            "application Inline {\n",
+            "    module m { dto CreateBookRequest { String title; } }\n",
+            "}\n",
+        );
+        let index = ddd_index(source);
+        let definition = index
+            .definitions_of(kinds::DTO, &ids::dto_name("Inline.m", "CreateBookRequest"))
+            .remove(0);
+        assert_eq!(
+            &source[definition.name_span.start..definition.name_span.end],
+            "CreateBookRequest",
+            "the definition span covers the boundary name"
+        );
+        assert!(
+            !index
+                .references
+                .iter()
+                .any(|reference| reference.context == ReferenceContext::DesignClass),
+            "a standalone DTO names no domain class"
+        );
+    }
+
+    #[test]
+    fn a_projection_dto_defines_its_boundary_and_references_its_source() {
+        let source = concat!(
+            "application Inline {\n",
+            "    module m { dto BookSummary from Book { title; } }\n",
+            "}\n",
+        );
+        let index = ddd_index(source);
+        let definition = index
+            .definitions_of(kinds::DTO, &ids::dto_name("Inline.m", "BookSummary"))
+            .remove(0);
+        assert_eq!(
+            &source[definition.name_span.start..definition.name_span.end],
+            "BookSummary"
+        );
+        let reference = index
+            .references
+            .iter()
+            .find(|reference| reference.context == ReferenceContext::DesignClass)
+            .expect("the projection's source class");
+        assert_eq!(reference.name, "Book");
+        assert_eq!(&source[reference.span.start..reference.span.end], "Book");
+    }
+
+    #[test]
+    fn a_mirror_dto_names_its_source_class_and_defines_no_boundary_node() {
+        let source = "application Inline { module m { dto User } }";
+        let index = ddd_index(source);
+        assert!(
+            index
+                .definitions_of(kinds::DTO, &ids::dto_name("Inline.m", "User"))
+                .is_empty(),
+            "a mirror's boundary name is its source class's node"
+        );
+        let reference = index
+            .references
+            .iter()
+            .find(|reference| reference.context == ReferenceContext::DesignClass)
+            .expect("the mirror's class");
+        assert_eq!(reference.name, "User");
     }
 }

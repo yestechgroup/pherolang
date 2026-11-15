@@ -52,19 +52,28 @@ fn entity_flags_default_on_and_negation_opts_out() {
     let compilation = compile_domain(source);
     assert_clean(&compilation);
     let designs = &compilation.model.expect("artifact").modules[0].designs;
-    let book = designs.iter().find(|d| d.class == "Book").unwrap();
+    let book = designs
+        .iter()
+        .find(|d| d.class.as_deref() == Some("Book"))
+        .unwrap();
     assert!(book.flags.auditable, "auditable defaults on for entities");
     assert!(
         book.flags.optimistic_locking,
         "optimisticLocking defaults on for entities"
     );
-    let library = designs.iter().find(|d| d.class == "Library").unwrap();
+    let library = designs
+        .iter()
+        .find(|d| d.class.as_deref() == Some("Library"))
+        .unwrap();
     assert!(!library.flags.auditable, "!auditable opts out");
     assert!(
         !library.flags.optimistic_locking,
         "!optimisticLocking opts out"
     );
-    let money = designs.iter().find(|d| d.class == "Money").unwrap();
+    let money = designs
+        .iter()
+        .find(|d| d.class.as_deref() == Some("Money"))
+        .unwrap();
     assert!(
         !money.flags.auditable && !money.flags.optimistic_locking,
         "value designs carry no entity flag defaults"

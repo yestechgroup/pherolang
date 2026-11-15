@@ -9,7 +9,10 @@
 //! E0355–E0358 are the `extend` child-operation checks; E0359–E0360 are the
 //! executable operation-body checks (issue pherolang#178); E0361–E0364 are
 //! the strict value-semantics checks (issue pherolang#299: R-V1, R-V2, R-V3,
-//! and the `abstract value` rejection).
+//! and the `abstract value` rejection); E0365–E0372 are the DTO-shape checks
+//! (issue pherolang#300: the dto-op error, member duplication/unknown/type,
+//! entity members, non-input parameters, name collisions, and entity-only
+//! constructs on a DTO).
 //! Claim a new code by adding a documented constant plus an `Entry` to
 //! `ENTRIES`.
 
@@ -98,6 +101,37 @@ pub const E_VALUE_REFERENCES_ENTITY: &str = "E0363";
 /// semantics have no abstract values (an abstract value would leave its
 /// identity/structure undefined).
 pub const E_ABSTRACT_VALUE: &str = "E0364";
+/// `dto design '<design>': class carries op '<op>'; a dto is a transfer
+/// record and carries no behavior` — rule 15 (DD3, pherolang#300): the
+/// dto-with-ops warning is an error, since a DTO is behavior-free.
+pub const E_DTO_OPERATION: &str = "E0365";
+/// `dto '<design>': duplicate member '<name>'` — two members of one DTO
+/// produce the same output field name.
+pub const E_DTO_DUPLICATE_MEMBER: &str = "E0366";
+/// `unknown dto member '<name>' on '<class>'` (or an unknown path segment)
+/// — a projection selects a feature the source class does not carry.
+pub const E_DTO_UNKNOWN_MEMBER: &str = "E0367";
+/// `invalid dto member '<name>' of '<design>': <detail>` — a projection
+/// expression does not parse, does not type-check, or produces a type a DTO
+/// boundary cannot carry; a declared member's type does not resolve.
+pub const E_DTO_MEMBER_TYPE: &str = "E0368";
+/// `dto member '<name>' of '<design>' carries entity '<entity>'` — a
+/// transport shape may not embed a mutable entity; project its fields
+/// instead.
+pub const E_DTO_ENTITY_MEMBER: &str = "E0369";
+/// `dto '<design>' is output-only: … parameter '<param>' of <context> is
+/// not input-capable` — a DTO with derived members cannot be supplied by a
+/// caller; the diagnostic names the derived members.
+pub const E_DTO_PARAM_NOT_INPUT: &str = "E0370";
+/// `dto '<name>' collides with <kind> '<name>'` (or `duplicate dto
+/// '<name>'`) — a DTO introduces an application-wide boundary name that
+/// must be unique and must not shadow a domain type (a mirror DTO is its
+/// source class and is exempt).
+pub const E_DTO_NAME_COLLISION: &str = "E0371";
+/// `dto design '<design>' carries <construct>; a dto is a transport shape`
+/// — a DTO may not carry a repository, a machine, or an entity-only flag
+/// (`scaffold`, `auditable`, `optimisticLocking`).
+pub const E_DTO_ENTITY_ONLY: &str = "E0372";
 
 pub(crate) const ENTRIES: &[Entry] = &[
     Entry {
@@ -219,5 +253,69 @@ pub(crate) const ENTRIES: &[Entry] = &[
         title: "Abstract value design",
         meaning: "`value design '<design>' in module '<module>' of application '<application>' is abstract; a value object is concrete` — the strict value semantics (DD2) admit no abstract values: a value's identity, structure, and equality are exactly its stored features, so an abstract value would leave its instances undefined.",
         fix: "Remove `abstract` from the design, or design the class as an `entity` (abstract entity designs are the sanctioned polymorphism shape).",
+    },
+    Entry {
+        code: E_DTO_OPERATION,
+        band: DDD_BAND,
+        severity: Severity::Error,
+        title: "DTO carries an operation",
+        meaning: "`dto design '<design>': class carries op '<op>'; a dto is a transfer record and carries no behavior` — rule 15 (DD3): a DTO is a behavior-free transport shape, so an `op` on a class designed `dto` is a modeling error rather than the pre-DD3 warning. A `derived` member stays legal — it is a computed wire field, not behavior.",
+        fix: "Move the behavior to an aggregate-owned class `op`, or declare a service operation that delegates to it.",
+    },
+    Entry {
+        code: E_DTO_DUPLICATE_MEMBER,
+        band: DDD_BAND,
+        severity: Severity::Error,
+        title: "Duplicate DTO member",
+        meaning: "`dto '<design>': duplicate member '<name>'` — two members of one DTO produce the same output field name, so the wire shape would carry an ambiguous field. A rename that lands on another member's name is the same collision: output names, not source paths, must be unique.",
+        fix: "Rename one of the members so every output field name is distinct.",
+    },
+    Entry {
+        code: E_DTO_UNKNOWN_MEMBER,
+        band: DDD_BAND,
+        severity: Severity::Error,
+        title: "Unknown DTO member",
+        meaning: "`unknown dto member '<name>' on '<class>'` or an unknown path segment — a projection (`dto Name from Source { … }`) selects a feature or traverses a path the source class does not carry (inherited features included).",
+        fix: "Select a feature the source class declares (the help lists them), or fix the path's spelling.",
+    },
+    Entry {
+        code: E_DTO_MEMBER_TYPE,
+        band: DDD_BAND,
+        severity: Severity::Error,
+        title: "Invalid DTO member",
+        meaning: "`invalid dto member '<name>' of '<design>': <detail>` — a projection's `name = expr` assignment does not parse, does not type-check with the source class as `self`, or yields a type a transport boundary cannot carry; a standalone member's declared type does not resolve against the domain union or the application's other DTOs.",
+        fix: "Fix the expression or the declared type, or project a value of a type the boundary can carry.",
+    },
+    Entry {
+        code: E_DTO_ENTITY_MEMBER,
+        band: DDD_BAND,
+        severity: Severity::Error,
+        title: "DTO carries an entity",
+        meaning: "`dto member '<name>' of '<design>' carries entity '<entity>'` — a transport shape may not embed a class designed as an `entity` in the same application: it would re-create the mutable, lazy-loaded coupling DTOs exist to avoid.",
+        fix: "Project the entity's fields as plain members, or refer to it by id.",
+    },
+    Entry {
+        code: E_DTO_PARAM_NOT_INPUT,
+        band: DDD_BAND,
+        severity: Severity::Error,
+        title: "Output-only DTO as a parameter",
+        meaning: "`dto '<design>' is output-only: … parameter '<param>' of <context> is not input-capable` — a DTO with derived members cannot be constructed by a caller, so it may be returned but not accepted as an operation parameter; the diagnostic names the derived members that cannot be supplied.",
+        fix: "Use an input-capable DTO (no derived members) for the parameter, or make the derived member a select.",
+    },
+    Entry {
+        code: E_DTO_NAME_COLLISION,
+        band: DDD_BAND,
+        severity: Severity::Error,
+        title: "DTO name collision",
+        meaning: "`dto '<name>' collides with <kind> '<name>'` or `duplicate dto '<name>'` — a projection or standalone DTO introduces an application-wide boundary name; it must be unique and must not shadow a domain class, enum, datatype, interface, or vocabulary. A mirror DTO's name is its source class and is exempt.",
+        fix: "Rename the DTO so its boundary name is unique and does not shadow a domain type.",
+    },
+    Entry {
+        code: E_DTO_ENTITY_ONLY,
+        band: DDD_BAND,
+        severity: Severity::Error,
+        title: "Entity-only construct on a DTO",
+        meaning: "`dto design '<design>' carries <construct>; a dto is a transport shape` — a DTO has no persistence, lifecycle, or domain identity, so a `repository`, a `machine`, or an entity-only flag (`scaffold`, `auditable`, `optimisticLocking`) is refused. `nonPersistent` and `cache` stay legal.",
+        fix: "Remove the construct from the DTO design, or design the class as an `entity` if it really owns state.",
     },
 ];

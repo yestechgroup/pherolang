@@ -58,8 +58,10 @@ pub(crate) fn lower_module_child_operations(
     base: Option<&str>,
     union: Option<&phero_ir::Model>,
     expr_context: Option<&phero_expr::TypeContext>,
+    prep: &DesignPrep,
     design_index: &[((String, String), usize)],
     designs: &mut [Design],
+    registries: &mut Registries<'_>,
 ) -> Vec<Diagnostic> {
     let mut local: Vec<Diagnostic> = Vec::new();
     // The merged child-operation names per extend target: duplicate
@@ -188,9 +190,10 @@ pub(crate) fn lower_module_child_operations(
                 op.multiplicity.as_ref(),
                 packages,
                 base,
+                &prep.dto_names,
                 &mut local,
             );
-            let params: Vec<phero_ir::OperationParam> = op
+            let params: Vec<phero_ir::ddd::DddParam> = op
                 .params
                 .iter()
                 .map(|param| {
@@ -199,13 +202,21 @@ pub(crate) fn lower_module_child_operations(
                         param.multiplicity.as_ref(),
                         packages,
                         base,
+                        &prep.dto_names,
                         &mut local,
                     );
-                    phero_ir::OperationParam {
-                        name: param.name.text.clone(),
-                        type_,
-                        multiplicity,
-                    }
+                    record_dto_param(
+                        registries,
+                        format!(
+                            "child operation '{}' of extend '{}'",
+                            op.name.text, extend.class.text
+                        ),
+                        &param.name.text,
+                        &type_,
+                        param.type_ref.span,
+                    );
+                    phero_ir::ddd::DddParam::new(param.name.text.clone(), type_)
+                        .with_multiplicity(multiplicity)
                 })
                 .collect();
 

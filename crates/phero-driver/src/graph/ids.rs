@@ -130,6 +130,17 @@ pub(crate) fn search_name(module_name: &str, search: &str) -> String {
     qualify(&[module_name, search])
 }
 
+/// The node name of a `.ddd` DTO boundary (DD3, pherolang#300):
+/// `<App>.<module>.<DTO>`.
+///
+/// A DTO is a named transport shape, so it carries the graph's `dto` node
+/// kind and a module-qualified name distinct from its source class. A
+/// **mirror** DTO has no node of its own: its boundary name *is* the source
+/// class, whose node the `.mox` surface already emits.
+pub(crate) fn dto_name(module_name: &str, dto: &str) -> String {
+    qualify(&[module_name, dto])
+}
+
 /// The node name of a designed class's state machine:
 /// `<App>.<module>.<Class>` (the class segment is the authored class name's
 /// last `.`-separated segment).

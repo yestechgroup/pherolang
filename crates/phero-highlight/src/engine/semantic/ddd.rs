@@ -3,7 +3,8 @@
 
 use phero_syntax::ast::{
     DddApplication, DddBody, DddChildOp, DddDecisionRef, DddDesign, DddFile, DddModule,
-    DddRepositoryOp, DddSearch, DddSearchField, DddService, DddServiceOp, DddStmt,
+    DddProjectionMember, DddRepositoryOp, DddSearch, DddSearchField, DddService, DddServiceOp,
+    DddStmt,
 };
 
 use crate::class::{HighlightClass, HighlightModifier, HighlightModifiers};
@@ -124,6 +125,32 @@ fn walk_child_op(ctx: &mut Ctx, operation: &DddChildOp) {
 
 fn walk_design(ctx: &mut Ctx, design: &DddDesign) {
     ctx.decl_name(&design.class, HighlightClass::Type);
+    if let Some(source) = &design.dto_source {
+        ctx.qualified(source, HighlightClass::Type);
+    }
+    if let Some(members) = &design.dto_members {
+        match members {
+            phero_syntax::ast::DddDtoMembers::Projection(members) => {
+                for member in members {
+                    match member {
+                        DddProjectionMember::Select { name, .. } => {
+                            ctx.push(name.span, HighlightClass::Property);
+                        }
+                        DddProjectionMember::Assign { name, expr, .. } => {
+                            ctx.push(name.span, HighlightClass::Property);
+                            ctx.expression(*expr);
+                        }
+                    }
+                }
+            }
+            phero_syntax::ast::DddDtoMembers::Declared(members) => {
+                for member in members {
+                    ctx.type_ref(&member.type_ref);
+                    ctx.push(member.name.span, HighlightClass::Property);
+                }
+            }
+        }
+    }
     let flags = &design.flags;
     for flag in [
         flags.scaffold,
@@ -196,8 +223,15 @@ fn walk_search(ctx: &mut Ctx, search: &DddSearch) {
         ctx.member_path(sort, HighlightClass::Property);
     }
     for entry in &search.document {
-        ctx.push(entry.name.span, HighlightClass::Property);
-        ctx.expression(entry.expr);
+        match entry {
+            DddProjectionMember::Select { name, .. } => {
+                ctx.push(name.span, HighlightClass::Property);
+            }
+            DddProjectionMember::Assign { name, expr, .. } => {
+                ctx.push(name.span, HighlightClass::Property);
+                ctx.expression(*expr);
+            }
+        }
     }
     if let Some(pagination) = &search.pagination {
         ctx.push(pagination.span, HighlightClass::Property);

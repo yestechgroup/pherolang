@@ -587,3 +587,139 @@ fn graph_edges_carry_non_empty_endpoints() {
     );
     assert!(String::from_utf8_lossy(&output.stdout).is_empty());
 }
+
+/// A DTO-bearing design artifact: an entity design, a projection DTO over
+/// it and a standalone DTO (which carries no `class`), with a service that
+/// uses both boundaries in its signature.
+const GOOD_DTO_DDD_ARTIFACT: &str = r#"{
+  "formatVersion": 2,
+  "pheroVersion": "0.3.0",
+  "application": { "name": "Library" },
+  "modules": [
+    {
+      "name": "media",
+      "services": [
+        {
+          "name": "MediaService",
+          "operations": [
+            {
+              "name": "describe",
+              "returnType": { "dto": "BookSummary" },
+              "params": [
+                { "name": "request", "type": { "dto": "CreateBookRequest" } }
+              ]
+            }
+          ]
+        }
+      ],
+      "designs": [
+        {
+          "class": "Book",
+          "typeRef": {
+            "type": "class",
+            "value": { "package": "nz.example.library", "name": "Book" }
+          },
+          "stereotype": "entity"
+        },
+        {
+          "class": "Book",
+          "typeRef": {
+            "type": "class",
+            "value": { "package": "nz.example.library", "name": "Book" }
+          },
+          "stereotype": "dto",
+          "dtoShape": {
+            "name": "BookSummary",
+            "source": {
+              "type": "class",
+              "value": { "package": "nz.example.library", "name": "Book" }
+            },
+            "direction": "input",
+            "members": [
+              {
+                "name": "title",
+                "kind": "select",
+                "type": { "type": "primitive", "value": "string" },
+                "path": ["title"]
+              }
+            ]
+          }
+        },
+        {
+          "stereotype": "dto",
+          "dtoShape": {
+            "name": "CreateBookRequest",
+            "direction": "input",
+            "members": [
+              {
+                "name": "title",
+                "kind": "declared",
+                "type": { "type": "primitive", "value": "string" }
+              }
+            ]
+          }
+        }
+      ]
+    }
+  ]
+}"#;
+
+#[test]
+fn artifact_check_passes_on_a_dto_bearing_ddd_artifact() {
+    // The standalone DTO carries no `class` at all (the optional-key half of
+    // DD3), and both DTO references resolve.
+    let ddd = write_artifact("valid.dto.ddd.json", GOOD_DTO_DDD_ARTIFACT);
+    let output = pherolang()
+        .args(["artifact", "check", ddd.to_str().unwrap()])
+        .output()
+        .expect("run pherolang artifact check");
+    assert!(
+        output.status.success(),
+        "stderr: {:?}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    assert_eq!(
+        String::from_utf8_lossy(&output.stdout),
+        format!("OK {}\n", ddd.display())
+    );
+}
+
+#[test]
+fn artifact_check_rejects_a_dto_artifact_violating_the_boundary_contract() {
+    let cases: Vec<(&str, String, &str)> = vec![
+        (
+            "missing_shape.dto.ddd.json",
+            GOOD_DTO_DDD_ARTIFACT.replace("\"dtoShape\":", "\"dtoShapeOrphan\":"),
+            "dtoShape",
+        ),
+        (
+            "unresolved_dto.dto.ddd.json",
+            GOOD_DTO_DDD_ARTIFACT.replace(
+                "\"returnType\": { \"dto\": \"BookSummary\" }",
+                "\"returnType\": { \"dto\": \"Ghost\" }",
+            ),
+            "Ghost",
+        ),
+        (
+            "standalone_class.dto.ddd.json",
+            GOOD_DTO_DDD_ARTIFACT.replace(
+                "          \"stereotype\": \"dto\",\n          \"dtoShape\": {\n            \"name\": \"CreateBookRequest\",",
+                "          \"class\": \"Book\",\n          \"stereotype\": \"dto\",\n          \"dtoShape\": {\n            \"name\": \"CreateBookRequest\",",
+            ),
+            "standalone dto",
+        ),
+    ];
+    for (name, contents, needle) in cases {
+        let path = write_artifact(name, &contents);
+        let output = pherolang()
+            .args(["artifact", "check", path.to_str().unwrap()])
+            .output()
+            .expect("run pherolang artifact check");
+        assert_eq!(output.status.code(), Some(1), "{name} must fail");
+        let rendered = String::from_utf8_lossy(&output.stderr);
+        assert!(
+            rendered.contains(needle),
+            "{name}: the violation must name '{needle}'; stderr was: {rendered}"
+        );
+    }
+}

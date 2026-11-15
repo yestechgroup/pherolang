@@ -1,0 +1,45 @@
+// DD3 DTO-boundary fixture (issue pherolang#300): the three declaration
+// forms — a mirror, a projection that selects, renames, and derives, and a
+// standalone input boundary — plus a nested DTO member and DTOs filling a
+// service operation's parameter and return slots.
+import "dtos.mox";
+
+application Catalogue {
+    base nz.example.dtos
+    module catalogue {
+        service BookService {
+            BookDraft draft(String title);
+            BookSummary summarize(String isbn);
+            boolean submit(OrderRequest request);
+        }
+        entity Book
+        value Money
+        value PriceRange
+        /// The mirror form: every stored feature of `Author`, derived excluded.
+        dto Author nonPersistent
+        /// The projection form: selections, a renamed plain path (`authorName`),
+        /// and a typed derivation (`pricey`) — so the boundary is output-only.
+        dto BookSummary from Book {
+            isbn;
+            title;
+            currency;
+            code;
+            pricey = priceCents > 5000;
+            authorName = author.name;
+        }
+
+        /// A standalone transport shape: a datatype member and a value member.
+        dto BookDraft {
+            Isbn code;
+            String title;
+            Money listPrice;
+        }
+
+        /// A standalone boundary with a nested DTO member.
+        dto OrderRequest {
+            BookDraft book;
+            Currency currency;
+            Isbn[] codes;
+        }
+    }
+}

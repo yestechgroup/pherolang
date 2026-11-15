@@ -129,6 +129,21 @@ impl<'src> Formatter<'src> {
                 }
             }
         }
+        // The DTO member suffix (issue pherolang#300): a projection's
+        // `from <Source> { ... }` or a standalone `{ ... }` block. Both
+        // blocks expand one member per line and are followed by one
+        // structural blank line when another member follows them.
+        if matches!(self.peek_tok(), Some(Token::From)) {
+            self.advance(); // `from`
+            self.scan_qname();
+            if matches!(self.peek_tok(), Some(Token::LBrace)) {
+                self.scan_body(BodyKind::DddDtoProjection);
+                self.blank_line_after_dto_block();
+            }
+        } else if matches!(self.peek_tok(), Some(Token::LBrace)) {
+            self.scan_body(BodyKind::DddDtoDeclared);
+            self.blank_line_after_dto_block();
+        }
         if matches!(self.peek_tok(), Some(Token::Ident(ddd::REPOSITORY))) {
             self.advance();
             self.take_name();
@@ -834,36 +849,54 @@ impl<'src> Formatter<'src> {
         }
     }
 
-    /// One `name = <expr>;` entry of a `document` clause: the expression is
-    /// re-emitted verbatim token by token (canonical spacing), terminating
-    /// at the depth-0 `;`. String literals are single tokens, so a `;`
-    /// inside one never terminates; a missing terminator leaves the closing
-    /// `}` for the body loop.
-    pub(crate) fn scan_ddd_search_document_item(&mut self) {
+    /// Emits exactly one structural blank line after a DTO member block,
+    /// unless the block ends the enclosing body (or a trailing comment owns
+    /// the line directly after it).
+    fn blank_line_after_dto_block(&mut self) {
+        match self.front() {
+            None | Some(Node::Token(Token::RBrace, _)) => return,
+            Some(Node::Comment {
+                own_line: false, ..
+            }) => return,
+            _ => {}
+        }
+        if !self.out.ends_with("\n\n") {
+            self.out.push('\n');
+        }
+    }
+
+    /// One member of a projection DTO block (issue pherolang#300): `name;`
+    /// or `name = <expression>;`. The expression re-emits verbatim token by
+    /// token at canonical spacing, terminating at the depth-0 `;` — the same
+    /// layout the search `document` clause uses (the two share the AST).
+    pub(crate) fn scan_ddd_projection_member(&mut self) {
         match self.peek_tok() {
             Some(Token::Ident(_) | Token::IdentEscaped(_)) => {
                 self.take_name();
-                self.take_if(|token| matches!(token, Token::Eq));
-                let mut depth = 0usize;
-                loop {
-                    match self.peek_tok() {
-                        None => break,
-                        Some(Token::Other(';')) if depth == 0 => {
-                            self.advance();
-                            break;
-                        }
-                        Some(Token::RBrace) if depth == 0 => break,
-                        Some(token) => {
-                            match token {
-                                Token::LParen | Token::LBracket | Token::LBrace => depth += 1,
-                                Token::RParen | Token::RBracket | Token::RBrace => {
-                                    depth = depth.saturating_sub(1)
-                                }
-                                _ => {}
+                if self.take_if(|token| matches!(token, Token::Eq)) {
+                    let mut depth = 0usize;
+                    loop {
+                        match self.peek_tok() {
+                            None => break,
+                            Some(Token::Other(';')) if depth == 0 => {
+                                self.advance();
+                                break;
                             }
-                            self.advance();
+                            Some(Token::RBrace) if depth == 0 => break,
+                            Some(token) => {
+                                match token {
+                                    Token::LParen | Token::LBracket | Token::LBrace => depth += 1,
+                                    Token::RParen | Token::RBracket | Token::RBrace => {
+                                        depth = depth.saturating_sub(1)
+                                    }
+                                    _ => {}
+                                }
+                                self.advance();
+                            }
                         }
                     }
+                } else {
+                    self.take_if(|token| matches!(token, Token::Other(';')));
                 }
             }
             _ => {
@@ -878,6 +911,39 @@ impl<'src> Formatter<'src> {
                 }
             }
         }
+    }
+
+    /// One member of a standalone DTO block (issue pherolang#300):
+    /// `type_ref multiplicity? name;`, one member per line.
+    pub(crate) fn scan_ddd_declared_member(&mut self) {
+        match self.peek_tok() {
+            Some(Token::Ident(_) | Token::IdentEscaped(_)) => {
+                self.scan_qname();
+                self.scan_multiplicity();
+                self.take_name();
+                self.take_if(|token| matches!(token, Token::Other(';')));
+            }
+            _ => {
+                if !matches!(self.peek_tok(), Some(Token::RBrace) | None) {
+                    self.advance();
+                    self.scan_junk_until(|token| {
+                        matches!(
+                            token,
+                            Token::RBrace | Token::Ident(_) | Token::IdentEscaped(_)
+                        )
+                    });
+                }
+            }
+        }
+    }
+
+    /// One `name = <expr>;` entry of a `document` clause: the expression is
+    /// re-emitted verbatim token by token (canonical spacing), terminating
+    /// at the depth-0 `;`. String literals are single tokens, so a `;`
+    /// inside one never terminates; a missing terminator leaves the closing
+    /// `}` for the body loop. The entry shares the projection-member layout.
+    pub(crate) fn scan_ddd_search_document_item(&mut self) {
+        self.scan_ddd_projection_member();
     }
 
     /// One `limit <int>` / `max <int>` / `cursor` member of `pagination`.

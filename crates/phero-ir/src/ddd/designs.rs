@@ -2,9 +2,9 @@ use std::collections::BTreeMap;
 
 use serde::{Deserialize, Serialize};
 
-use crate::ddd::ServiceOperation;
+use crate::ddd::{DddParam, DddTypeRef, ServiceOperation};
 use crate::wire::is_false;
-use crate::{Multiplicity, OperationParam, TypeRef};
+use crate::{Multiplicity, TypeRef};
 
 /// The DDD stereotype of a designed class.
 ///
@@ -133,17 +133,187 @@ impl ValueSemantics {
     }
 }
 
-/// The design decision for one referenced `.mox` class: its stereotype,
-/// flags, and optionally its repository.
+/// The direction of a DTO boundary (DD3, pherolang#300): whether the
+/// boundary carries data **into** a use case ([`DtoDirection::Input`]) or
+/// **out of** one ([`DtoDirection::Output`]).
+///
+/// Serializes as the bare lowercase string `"input"` / `"output"`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum DtoDirection {
+    /// An inbound boundary: the caller supplies the data.
+    Input,
+    /// An outbound boundary: the use case returns the data.
+    Output,
+}
+
+/// How a [`DtoMember`] is populated on the DTO boundary (DD3,
+/// pherolang#300).
+///
+/// Serializes as the bare lowercase string `"select"` / `"derive"` /
+/// `"declared"`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum DtoMemberKind {
+    /// A selected source feature, copied verbatim — the member's
+    /// [`DtoMember::path`] names it.
+    Select,
+    /// A derived value computed from the source — the member's
+    /// [`DtoMember::expression`] is the verbatim derivation source text.
+    Derive,
+    /// A member declared only on the boundary, with no source counterpart.
+    Declared,
+}
+
+/// The shape of a DTO boundary design ([`Design::dto_shape`]) (DD3,
+/// pherolang#300): what crosses a layer boundary — no identity, no
+/// behaviour, and possibly no `.mox` source class at all.
+///
+/// [`DtoShape::name`] is the **boundary** name (the name signatures use in
+/// a [`DddTypeRef::Dto`]), while [`DtoShape::source`] is the resolved domain
+/// class the boundary is built from — `None` for a standalone DTO, whose
+/// [`Design::class`] and [`Design::type_ref`] are `None` too.
+///
+/// Serialized shape:
+///
+/// ```json
+/// {"name":"BookSummary",
+///  "source":{"type":"class","value":{"package":"nz.example.library","name":"Book"}},
+///  "direction":"output",
+///  "members":[{"name":"title","kind":"select",
+///              "type":{"type":"primitive","value":"string"},"path":["title"]}]}
+/// ```
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DtoShape {
+    /// The DTO boundary name — the name a [`DddTypeRef::Dto`] references.
+    pub name: String,
+    /// The resolved domain class the boundary is built from. `None` for a
+    /// standalone DTO (one with no `.mox` source class).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub source: Option<TypeRef>,
+    /// The direction of the boundary.
+    pub direction: DtoDirection,
+    /// The boundary's members, in declaration order.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub members: Vec<DtoMember>,
+}
+
+impl DtoShape {
+    /// Creates a member-less DTO shape with no resolved source class.
+    pub fn new(name: impl Into<String>, direction: DtoDirection) -> Self {
+        Self {
+            name: name.into(),
+            source: None,
+            direction,
+            members: Vec::new(),
+        }
+    }
+
+    /// Chainable setter for the resolved source class.
+    pub fn with_source(mut self, source: Option<TypeRef>) -> Self {
+        self.source = source;
+        self
+    }
+
+    /// Chainable setter for the direction.
+    pub fn with_direction(mut self, direction: DtoDirection) -> Self {
+        self.direction = direction;
+        self
+    }
+
+    /// Chainable setter for the boundary's members.
+    pub fn with_members(mut self, members: Vec<DtoMember>) -> Self {
+        self.members = members;
+        self
+    }
+}
+
+/// One member of a [`DtoShape`] (DD3, pherolang#300): a selected source
+/// feature, a derived value, or a member declared only on the boundary.
+///
+/// The payload each kind uses is additive — [`DtoMember::path`] on a
+/// selection, [`DtoMember::expression`] on a derivation, neither on a
+/// declared member — and every unused payload is omitted entirely.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DtoMember {
+    /// Member name as it appears on the boundary.
+    pub name: String,
+    /// How the member is populated.
+    pub kind: DtoMemberKind,
+    /// The member's type — a domain type or another DTO boundary.
+    #[serde(rename = "type")]
+    pub type_: DddTypeRef,
+    /// Declared cardinality. `None` is single-valued.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub multiplicity: Option<Multiplicity>,
+    /// The selected source feature path, for [`DtoMemberKind::Select`]
+    /// (`["title"]`); a dotted chain for a nested feature. Omitted for
+    /// every other kind.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub path: Vec<String>,
+    /// The derivation's source text, verbatim, for [`DtoMemberKind::Derive`]
+    /// — the same "verbatim expression text" rule as an operation
+    /// `condition`; typing is a driver concern. Omitted for every other
+    /// kind.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub expression: Option<String>,
+}
+
+impl DtoMember {
+    /// Creates a single-valued member with no path or expression payload.
+    pub fn new(name: impl Into<String>, kind: DtoMemberKind, type_: DddTypeRef) -> Self {
+        Self {
+            name: name.into(),
+            kind,
+            type_,
+            multiplicity: None,
+            path: Vec::new(),
+            expression: None,
+        }
+    }
+
+    /// Chainable setter for the declared cardinality.
+    pub fn with_multiplicity(mut self, multiplicity: Option<Multiplicity>) -> Self {
+        self.multiplicity = multiplicity;
+        self
+    }
+
+    /// Chainable setter for the selected source feature path.
+    pub fn with_path(mut self, path: Vec<String>) -> Self {
+        self.path = path;
+        self
+    }
+
+    /// Chainable setter for the derivation's verbatim source text.
+    pub fn with_expression(mut self, expression: Option<String>) -> Self {
+        self.expression = expression;
+        self
+    }
+}
+
+/// The design decision for one class or DTO boundary: its stereotype, flags,
+/// and optionally its repository.
+///
+/// A design either targets a `.mox` class — [`Design::class`] names it,
+/// [`Design::type_ref`] resolves it — or, for a **standalone DTO** (DD3,
+/// pherolang#300), both are `None` and the boundary is described entirely by
+/// [`Design::dto_shape`].
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Design {
     /// The referenced `.mox` class name (unqualified or package-qualified
-    /// at this layer; resolution is a driver/consumer concern).
-    pub class: String,
+    /// at this layer; resolution is a driver/consumer concern). `None` for
+    /// a standalone DTO, which has no source class; the key is omitted
+    /// entirely there.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub class: Option<String>,
     /// The resolved identity of [`Self::class`] (DD1, pherolang#298): the
     /// class the name binds to, when the domain model was supplied at compile
-    /// time. Additive; absent when unresolved.
+    /// time. Additive; absent when unresolved or for a standalone DTO (whose
+    /// resolved source, if any, rides in
+    /// [`DtoShape::source`]).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub type_ref: Option<TypeRef>,
     /// The DDD stereotype of the class.
@@ -161,6 +331,11 @@ pub struct Design {
     /// spelling for it). Additive; omitted when absent.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub semantics: Option<ValueSemantics>,
+    /// The DTO boundary shape (DD3, pherolang#300), present on a `dto`
+    /// design and absent on every `entity`/`value` design. Additive;
+    /// omitted when absent.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub dto_shape: Option<DtoShape>,
     /// The class's repository, when designed.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub repository: Option<Repository>,
@@ -177,17 +352,41 @@ pub struct Design {
 }
 
 impl Design {
-    /// Creates a concrete design with default flags, no resolved class
-    /// reference, no value semantics, no repository, no machine, and no
-    /// child operations.
+    /// Creates a concrete design targeting the named `.mox` class, with
+    /// default flags, no resolved class reference, no value semantics, no
+    /// DTO shape, no repository, no machine, and no child operations.
     pub fn new(class: impl Into<String>, stereotype: Stereotype) -> Self {
         Self {
-            class: class.into(),
+            class: Some(class.into()),
             type_ref: None,
             stereotype,
             is_abstract: false,
             flags: DesignFlags::default(),
             semantics: None,
+            dto_shape: None,
+            repository: None,
+            machine: None,
+            child_operations: Vec::new(),
+        }
+    }
+
+    /// Creates a **standalone DTO** design (DD3, pherolang#300): a DTO
+    /// boundary with no `.mox` source class, so [`Self::class`] and
+    /// [`Self::type_ref`] are `None` and the boundary is described by a
+    /// member-less [`DtoShape`] carrying the boundary name.
+    ///
+    /// The shape starts [`DtoDirection::Output`] (the read-model default);
+    /// install the real shape — members, source, direction — with
+    /// [`Self::with_dto_shape`].
+    pub fn standalone_dto(name: impl Into<String>) -> Self {
+        Self {
+            class: None,
+            type_ref: None,
+            stereotype: Stereotype::Dto,
+            is_abstract: false,
+            flags: DesignFlags::default(),
+            semantics: None,
+            dto_shape: Some(DtoShape::new(name, DtoDirection::Output)),
             repository: None,
             machine: None,
             child_operations: Vec::new(),
@@ -199,6 +398,12 @@ impl Design {
     /// leaves every other design `None`.
     pub fn with_semantics(mut self, semantics: Option<ValueSemantics>) -> Self {
         self.semantics = semantics;
+        self
+    }
+
+    /// Chainable setter for the DTO boundary shape (DD3, pherolang#300).
+    pub fn with_dto_shape(mut self, dto_shape: Option<DtoShape>) -> Self {
+        self.dto_shape = dto_shape;
         self
     }
 
@@ -343,16 +548,17 @@ pub struct RepositoryOperation {
     /// its own.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub builtin: Option<BuiltinRepositoryOp>,
-    /// The declared return type, when this is a declared operation.
+    /// The declared return type, when this is a declared operation (DD3: a
+    /// domain type or a DTO boundary).
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub return_type: Option<TypeRef>,
+    pub return_type: Option<DddTypeRef>,
     /// The declared return cardinality; `None` is single-valued. Paired
     /// with [`RepositoryOperation::return_type`] — never set without it.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub return_multiplicity: Option<Multiplicity>,
     /// Declared parameters in declaration order.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
-    pub params: Vec<OperationParam>,
+    pub params: Vec<DddParam>,
     /// `true` for a `protected` operation: it stays off the public
     /// repository interface (Sculptor's visibility). Additive; omitted when
     /// `false`.
@@ -392,8 +598,8 @@ impl RepositoryOperation {
     /// (at least one of a return type or a parameter).
     pub fn declared(
         name: impl Into<String>,
-        return_type: Option<TypeRef>,
-        params: Vec<OperationParam>,
+        return_type: Option<DddTypeRef>,
+        params: Vec<DddParam>,
     ) -> Self {
         Self {
             name: name.into(),

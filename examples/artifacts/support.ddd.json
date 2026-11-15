@@ -24,17 +24,9 @@
               },
               "params": [
                 {
-                  "name": "title",
+                  "name": "draft",
                   "type": {
-                    "type": "primitive",
-                    "value": "string"
-                  }
-                },
-                {
-                  "name": "internal",
-                  "type": {
-                    "type": "primitive",
-                    "value": "boolean"
+                    "dto": "NewTicket"
                   }
                 }
               ],
@@ -157,6 +149,21 @@
                   "package": "nz.example.support",
                   "name": "Ticket"
                 }
+              },
+              "params": [
+                {
+                  "name": "ticketNo",
+                  "type": {
+                    "type": "primitive",
+                    "value": "string"
+                  }
+                }
+              ]
+            },
+            {
+              "name": "summarizeTicket",
+              "returnType": {
+                "dto": "TicketSummary"
               },
               "params": [
                 {
@@ -513,6 +520,118 @@
             "deepImmutable": true,
             "equality": "structural"
           }
+        },
+        {
+          "stereotype": "dto",
+          "dtoShape": {
+            "name": "NewTicket",
+            "direction": "input",
+            "members": [
+              {
+                "name": "title",
+                "kind": "declared",
+                "type": {
+                  "type": "primitive",
+                  "value": "string"
+                }
+              },
+              {
+                "name": "internal",
+                "kind": "declared",
+                "type": {
+                  "type": "primitive",
+                  "value": "boolean"
+                }
+              }
+            ]
+          }
+        },
+        {
+          "class": "Ticket",
+          "typeRef": {
+            "type": "class",
+            "value": {
+              "package": "nz.example.support",
+              "name": "Ticket"
+            }
+          },
+          "stereotype": "dto",
+          "dtoShape": {
+            "name": "TicketSummary",
+            "source": {
+              "type": "class",
+              "value": {
+                "package": "nz.example.support",
+                "name": "Ticket"
+              }
+            },
+            "direction": "output",
+            "members": [
+              {
+                "name": "ticketNo",
+                "kind": "select",
+                "type": {
+                  "type": "primitive",
+                  "value": "string"
+                },
+                "multiplicity": {
+                  "lower": 1,
+                  "upper": {
+                    "finite": 1
+                  }
+                },
+                "path": [
+                  "ticketNo"
+                ]
+              },
+              {
+                "name": "title",
+                "kind": "select",
+                "type": {
+                  "type": "primitive",
+                  "value": "string"
+                },
+                "multiplicity": {
+                  "lower": 1,
+                  "upper": {
+                    "finite": 1
+                  }
+                },
+                "path": [
+                  "title"
+                ]
+              },
+              {
+                "name": "state",
+                "kind": "select",
+                "type": {
+                  "type": "enum",
+                  "value": {
+                    "package": "nz.example.support",
+                    "name": "TicketState"
+                  }
+                },
+                "multiplicity": {
+                  "lower": 1,
+                  "upper": {
+                    "finite": 1
+                  }
+                },
+                "path": [
+                  "state"
+                ]
+              },
+              {
+                "name": "refundable",
+                "kind": "derive",
+                "type": {
+                  "type": "primitive",
+                  "value": "boolean"
+                },
+                "expression": "refundCents > 0"
+              }
+            ]
+          }
         }
       ],
       "searches": [
@@ -610,6 +729,88 @@
           "stereotype": "dto",
           "flags": {
             "nonPersistent": true
+          },
+          "dtoShape": {
+            "name": "User",
+            "source": {
+              "type": "class",
+              "value": {
+                "package": "nz.example.support",
+                "name": "User"
+              }
+            },
+            "direction": "input",
+            "members": [
+              {
+                "name": "userId",
+                "kind": "select",
+                "type": {
+                  "type": "primitive",
+                  "value": "string"
+                },
+                "multiplicity": {
+                  "lower": 1,
+                  "upper": {
+                    "finite": 1
+                  }
+                },
+                "path": [
+                  "userId"
+                ]
+              },
+              {
+                "name": "name",
+                "kind": "select",
+                "type": {
+                  "type": "primitive",
+                  "value": "string"
+                },
+                "multiplicity": {
+                  "lower": 1,
+                  "upper": {
+                    "finite": 1
+                  }
+                },
+                "path": [
+                  "name"
+                ]
+              },
+              {
+                "name": "active",
+                "kind": "select",
+                "type": {
+                  "type": "primitive",
+                  "value": "boolean"
+                },
+                "multiplicity": {
+                  "lower": 1,
+                  "upper": {
+                    "finite": 1
+                  }
+                },
+                "path": [
+                  "active"
+                ]
+              },
+              {
+                "name": "assignedTickets",
+                "kind": "select",
+                "type": {
+                  "type": "class",
+                  "value": {
+                    "package": "nz.example.support",
+                    "name": "Ticket"
+                  }
+                },
+                "multiplicity": {
+                  "lower": 0,
+                  "upper": "unbounded"
+                },
+                "path": [
+                  "assignedTickets"
+                ]
+              }
+            ]
           }
         }
       ]

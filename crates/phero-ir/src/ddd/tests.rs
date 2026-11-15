@@ -1,7 +1,7 @@
 use std::collections::BTreeMap;
 
 use super::*;
-use crate::{IrError, OperationParam, PrimitiveType, TypeRef};
+use crate::{IrError, Multiplicity, PrimitiveType, TypeRef};
 
 /// The provenance version [`DddModel::new`] stamps — derived, not
 /// pinned, so a workspace version bump edits the manifest, not these
@@ -21,12 +21,8 @@ fn class_ref(name: &str) -> TypeRef {
     }
 }
 
-fn param(name: &str, type_: TypeRef) -> OperationParam {
-    OperationParam {
-        name: name.to_string(),
-        type_,
-        multiplicity: None,
-    }
+fn param(name: &str, type_: TypeRef) -> DddParam {
+    DddParam::new(name, DddTypeRef::domain(type_))
 }
 
 /// A full-featured model: every stereotype, every flag, builtin and
@@ -47,7 +43,9 @@ fn sample_model() -> DddModel {
                 operations: vec![
                     ServiceOperation {
                         name: "borrow".to_string(),
-                        return_type: Some(TypeRef::Primitive(PrimitiveType::Boolean)),
+                        return_type: Some(DddTypeRef::domain(TypeRef::Primitive(
+                            PrimitiveType::Boolean,
+                        ))),
                         return_multiplicity: None,
                         params: vec![param("book", class_ref("Book"))],
                         delegation: None,
@@ -130,7 +128,7 @@ fn sample_model() -> DddModel {
             }],
             designs: vec![
                 Design {
-                    class: "nz.example.library::Book".to_string(),
+                    class: Some("nz.example.library::Book".to_string()),
                     type_ref: Some(class_ref("Book")),
                     stereotype: Stereotype::Entity,
                     is_abstract: false,
@@ -140,6 +138,7 @@ fn sample_model() -> DddModel {
                         ..Default::default()
                     },
                     semantics: None,
+                    dto_shape: None,
                     repository: Some(Repository {
                         name: "BookRepository".to_string(),
                         operations: vec![
@@ -149,7 +148,9 @@ fn sample_model() -> DddModel {
                             RepositoryOperation::builtin("delete", BuiltinRepositoryOp::Delete),
                             RepositoryOperation::declared(
                                 "findByTitle",
-                                Some(TypeRef::Primitive(PrimitiveType::String)),
+                                Some(DddTypeRef::domain(TypeRef::Primitive(
+                                    PrimitiveType::String,
+                                ))),
                                 vec![param("title", TypeRef::Primitive(PrimitiveType::String))],
                             ),
                         ],
@@ -158,18 +159,19 @@ fn sample_model() -> DddModel {
                     child_operations: Vec::new(),
                 },
                 Design {
-                    class: "Money".to_string(),
+                    class: Some("Money".to_string()),
                     type_ref: Some(class_ref("Money")),
                     stereotype: Stereotype::Value,
                     is_abstract: false,
                     flags: DesignFlags::default(),
                     semantics: Some(ValueSemantics::strict()),
+                    dto_shape: None,
                     repository: None,
                     machine: None,
                     child_operations: Vec::new(),
                 },
                 Design {
-                    class: "LoanSummary".to_string(),
+                    class: Some("LoanSummary".to_string()),
                     type_ref: Some(class_ref("LoanSummary")),
                     stereotype: Stereotype::Dto,
                     is_abstract: true,
@@ -180,6 +182,7 @@ fn sample_model() -> DddModel {
                         ..Default::default()
                     },
                     semantics: None,
+                    dto_shape: None,
                     repository: None,
                     machine: None,
                     child_operations: Vec::new(),
@@ -540,12 +543,13 @@ fn stereotypes_serialize_as_lowercase_strings() {
 #[test]
 fn default_flags_and_abstract_false_are_omitted() {
     let design = Design {
-        class: "Money".to_string(),
+        class: Some("Money".to_string()),
         type_ref: None,
         stereotype: Stereotype::Value,
         is_abstract: false,
         flags: DesignFlags::default(),
         semantics: None,
+        dto_shape: None,
         repository: None,
         machine: None,
         child_operations: Vec::new(),
@@ -559,7 +563,7 @@ fn default_flags_and_abstract_false_are_omitted() {
 #[test]
 fn all_flags_serialize_with_camel_case_keys() {
     let design = Design {
-        class: "Loan".to_string(),
+        class: Some("Loan".to_string()),
         type_ref: None,
         stereotype: Stereotype::Entity,
         is_abstract: true,
@@ -571,6 +575,7 @@ fn all_flags_serialize_with_camel_case_keys() {
             cache: true,
         },
         semantics: None,
+        dto_shape: None,
         repository: None,
         machine: None,
         child_operations: Vec::new(),
@@ -959,7 +964,7 @@ fn operation_bodies_are_additive_and_round_trip() {
     );
     let plain_repository = RepositoryOperation::declared(
         "total",
-        Some(TypeRef::Primitive(PrimitiveType::Int)),
+        Some(DddTypeRef::domain(TypeRef::Primitive(PrimitiveType::Int))),
         Vec::new(),
     );
     assert_eq!(
@@ -986,7 +991,7 @@ fn operation_bodies_are_additive_and_round_trip() {
 
     let repository_operation = RepositoryOperation::declared(
         "total",
-        Some(TypeRef::Primitive(PrimitiveType::Int)),
+        Some(DddTypeRef::domain(TypeRef::Primitive(PrimitiveType::Int))),
         Vec::new(),
     )
     .with_bodies(bodies);
@@ -1001,6 +1006,294 @@ fn operation_bodies_are_additive_and_round_trip() {
 
     let empty = DddModel::new();
     assert_eq!(empty.to_json().expect("serialize"), empty_model_json());
+}
+
+// -----------------------------------------------------------------------
+// DDD-local type references and DTO shapes (DD3, issue pherolang#300)
+// -----------------------------------------------------------------------
+
+fn dto_ref(name: &str) -> DddTypeRef {
+    DddTypeRef::dto(name)
+}
+
+/// A full-featured DTO shape: a resolved source class, both member
+/// flavours that carry extra payload, a declared member with a
+/// collection cardinality, and a verbatim derivation expression.
+fn sample_dto_shape() -> DtoShape {
+    DtoShape::new("BookSummary", DtoDirection::Output)
+        .with_source(Some(class_ref("Book")))
+        .with_members(vec![
+            DtoMember::new(
+                "title",
+                DtoMemberKind::Select,
+                DddTypeRef::domain(TypeRef::Primitive(PrimitiveType::String)),
+            )
+            .with_path(vec!["title".to_string()]),
+            DtoMember::new(
+                "label",
+                DtoMemberKind::Derive,
+                DddTypeRef::domain(TypeRef::Primitive(PrimitiveType::String)),
+            )
+            .with_expression(Some("title + \" - \" + synopsis".to_string())),
+            DtoMember::new("tags", DtoMemberKind::Declared, dto_ref("TagSummary"))
+                .with_multiplicity(Some(Multiplicity::MANY)),
+        ])
+}
+
+/// A DTO-typed [`DddTypeRef::Domain`] is **byte-identical** to the shared
+/// [`TypeRef`] it wraps: the enum is untagged, so the wrapper adds no
+/// level to the wire shape and existing domain-only artifacts stay
+/// byte-identical (DD3, pherolang#300).
+#[test]
+fn ddd_type_ref_domain_renders_the_shared_type_ref_bytes() {
+    let type_ref = class_ref("Book");
+    let domain = DddTypeRef::domain(type_ref.clone());
+    let expected = r#"{"type":"class","value":{"package":"nz.example.library","name":"Book"}}"#;
+    assert_eq!(
+        serde_json::to_string(&type_ref).expect("serialize the shared TypeRef"),
+        expected
+    );
+    assert_eq!(
+        serde_json::to_string(&domain).expect("serialize"),
+        expected,
+        "the untagged Domain variant adds no wrapper"
+    );
+    assert_eq!(
+        serde_json::from_str::<DddTypeRef>(expected).expect("deserialize"),
+        domain
+    );
+    assert_eq!(domain.as_domain(), Some(&type_ref));
+    assert_eq!(domain.dto_name(), None);
+    assert_eq!(DddTypeRef::domain(type_ref), domain);
+}
+
+/// A DTO boundary reference serializes as the bare boundary name under
+/// `dto` and round-trips — never as a qualified [`TypeRef`], because the
+/// DTO need not exist in the domain model at all.
+#[test]
+fn ddd_type_ref_dto_uses_the_dto_key() {
+    let dto = dto_ref("BookSummary");
+    assert_eq!(
+        serde_json::to_string(&dto).expect("serialize"),
+        r#"{"dto":"BookSummary"}"#
+    );
+    assert_eq!(dto.dto_name(), Some("BookSummary"));
+    assert_eq!(dto.as_domain(), None);
+    assert_eq!(
+        serde_json::from_str::<DddTypeRef>(r#"{"dto":"BookSummary"}"#).expect("deserialize"),
+        dto
+    );
+}
+
+#[test]
+fn dto_directions_and_member_kinds_are_bare_lowercase_strings() {
+    for (direction, json) in [
+        (DtoDirection::Input, r#""input""#),
+        (DtoDirection::Output, r#""output""#),
+    ] {
+        assert_eq!(serde_json::to_string(&direction).expect("serialize"), json);
+        assert_eq!(
+            serde_json::from_str::<DtoDirection>(json).expect("deserialize"),
+            direction
+        );
+    }
+    for (kind, json) in [
+        (DtoMemberKind::Select, r#""select""#),
+        (DtoMemberKind::Derive, r#""derive""#),
+        (DtoMemberKind::Declared, r#""declared""#),
+    ] {
+        assert_eq!(serde_json::to_string(&kind).expect("serialize"), json);
+        assert_eq!(
+            serde_json::from_str::<DtoMemberKind>(json).expect("deserialize"),
+            kind
+        );
+    }
+}
+
+/// `source`, `members`, `multiplicity`, `path`, and `expression` are all
+/// additive: an absent one is omitted entirely (the byte-identical
+/// discipline), and every populated form uses its documented camelCase
+/// key.
+#[test]
+fn a_minimal_dto_shape_omits_every_optional_member() {
+    let shape = DtoShape::new("BookSummary", DtoDirection::Input);
+    assert_eq!(
+        serde_json::to_string(&shape).expect("serialize"),
+        r#"{"name":"BookSummary","direction":"input"}"#,
+        "a source-less, member-less shape omits both keys"
+    );
+
+    let member = DtoMember::new(
+        "id",
+        DtoMemberKind::Declared,
+        DddTypeRef::domain(TypeRef::Primitive(PrimitiveType::String)),
+    );
+    assert_eq!(
+        serde_json::to_string(&member).expect("serialize"),
+        r#"{"name":"id","kind":"declared","type":{"type":"primitive","value":"string"}}"#,
+        "a payload-less member omits multiplicity, path, and expression"
+    );
+}
+
+#[test]
+fn a_full_dto_shape_round_trips() {
+    let shape = sample_dto_shape();
+    let json = serde_json::to_string(&shape).expect("serialize");
+    assert_eq!(
+        json,
+        r#"{"name":"BookSummary","source":{"type":"class","value":{"package":"nz.example.library","name":"Book"}},"direction":"output","members":[{"name":"title","kind":"select","type":{"type":"primitive","value":"string"},"path":["title"]},{"name":"label","kind":"derive","type":{"type":"primitive","value":"string"},"expression":"title + \" - \" + synopsis"},{"name":"tags","kind":"declared","type":{"dto":"TagSummary"},"multiplicity":{"lower":0,"upper":"unbounded"}}]}"#
+    );
+    assert!(!json.contains('_'), "no snake_case keys: {json}");
+    assert_eq!(
+        serde_json::from_str::<DtoShape>(&json).expect("deserialize"),
+        shape
+    );
+    assert_eq!(
+        serde_json::to_string(&shape).expect("re-serialize"),
+        json,
+        "re-serialization is byte-identical"
+    );
+
+    // With no source class the key is absent, not null.
+    let standalone =
+        DtoShape::new("BookSummary", DtoDirection::Input).with_members(vec![DtoMember::new(
+            "id",
+            DtoMemberKind::Declared,
+            dto_ref("BookId"),
+        )]);
+    let json = serde_json::to_string(&standalone).expect("serialize");
+    assert_eq!(
+        json,
+        r#"{"name":"BookSummary","direction":"input","members":[{"name":"id","kind":"declared","type":{"dto":"BookId"}}]}"#
+    );
+    assert_eq!(
+        serde_json::from_str::<DtoShape>(&json).expect("deserialize"),
+        standalone
+    );
+}
+
+/// A standalone DTO design has no `.mox` source class at all: `class` and
+/// `typeRef` are omitted and the boundary rides in `dtoShape`. A
+/// class-backed design keeps its `class` and gains the shape's resolved
+/// `source` instead.
+#[test]
+fn a_standalone_dto_design_omits_class_and_type_ref() {
+    let design = Design::standalone_dto("BookSummary");
+    assert_eq!(design.class, None);
+    assert_eq!(design.type_ref, None);
+    assert_eq!(design.stereotype, Stereotype::Dto);
+    assert_eq!(
+        design.dto_shape.as_ref().map(|shape| shape.name.as_str()),
+        Some("BookSummary")
+    );
+    assert_eq!(
+        design
+            .dto_shape
+            .as_ref()
+            .map(|shape| shape.direction)
+            .expect("a standalone dto carries a shape"),
+        DtoDirection::Output,
+        "the constructor's documented default direction"
+    );
+    let json = serde_json::to_string(&design).expect("serialize");
+    assert_eq!(
+        json,
+        r#"{"stereotype":"dto","dtoShape":{"name":"BookSummary","direction":"output"}}"#
+    );
+    assert!(!json.contains("class"), "no source class: {json}");
+    assert!(!json.contains("typeRef"), "no resolved class: {json}");
+    assert_eq!(
+        serde_json::from_str::<Design>(&json).expect("deserialize"),
+        design
+    );
+
+    let sourced =
+        Design::new("BookSummary", Stereotype::Dto).with_dto_shape(Some(sample_dto_shape()));
+    assert_eq!(sourced.class.as_deref(), Some("BookSummary"));
+    let json = serde_json::to_string(&sourced).expect("serialize");
+    assert!(
+        json.starts_with(r#"{"class":"BookSummary","stereotype":"dto","dtoShape":{"name":"BookSummary","source":{"type":"class","value":{"package":"nz.example.library","name":"Book"}},"#),
+        "a class-backed dto design keeps `class` and records its source: {json}"
+    );
+    assert_eq!(
+        serde_json::from_str::<Design>(&json).expect("deserialize"),
+        sourced
+    );
+}
+
+/// DD3 changes no domain-only signature byte: a [`DddParam`] and a
+/// `returnType` carrying a [`DddTypeRef::Domain`] serialize exactly as
+/// the shared [`TypeRef`] slots did before the DD3 types existed.
+#[test]
+fn ddd_signature_slots_keep_the_domain_byte_shape() {
+    let mut operation = ServiceOperation::new("borrow");
+    operation.return_type = Some(DddTypeRef::domain(TypeRef::Primitive(
+        PrimitiveType::Boolean,
+    )));
+    operation.params = vec![param("book", class_ref("Book"))];
+    assert_eq!(
+        serde_json::to_string(&operation).expect("serialize"),
+        r#"{"name":"borrow","returnType":{"type":"primitive","value":"boolean"},"params":[{"name":"book","type":{"type":"class","value":{"package":"nz.example.library","name":"Book"}}}]}"#
+    );
+
+    let repository_operation = RepositoryOperation::declared(
+        "total",
+        Some(DddTypeRef::domain(TypeRef::Primitive(PrimitiveType::Int))),
+        vec![param("currency", TypeRef::Primitive(PrimitiveType::String))],
+    );
+    assert_eq!(
+        serde_json::to_string(&repository_operation).expect("serialize"),
+        r#"{"name":"total","returnType":{"type":"primitive","value":"int"},"params":[{"name":"currency","type":{"type":"primitive","value":"string"}}]}"#
+    );
+}
+
+/// The DTO-typed signature slots use the same `{"dto": <name>}` reference
+/// on returns and parameters, and the parameter's cardinality stays
+/// additive.
+#[test]
+fn ddd_dto_signature_slots_round_trip() {
+    let mut operation = ServiceOperation::new("summarise");
+    operation.return_type = Some(dto_ref("BookSummary"));
+    operation.params = vec![
+        DddParam::new("books", dto_ref("BookRef")).with_multiplicity(Some(Multiplicity::MANY))
+    ];
+    let json = serde_json::to_string(&operation).expect("serialize");
+    assert_eq!(
+        json,
+        r#"{"name":"summarise","returnType":{"dto":"BookSummary"},"params":[{"name":"books","type":{"dto":"BookRef"},"multiplicity":{"lower":0,"upper":"unbounded"}}]}"#
+    );
+    assert_eq!(
+        serde_json::from_str::<ServiceOperation>(&json).expect("deserialize"),
+        operation
+    );
+
+    let repository_operation = RepositoryOperation::declared(
+        "summary",
+        Some(dto_ref("BookSummary")),
+        vec![DddParam::new("book", DddTypeRef::domain(class_ref("Book")))],
+    );
+    assert_eq!(
+        serde_json::to_string(&repository_operation).expect("serialize"),
+        r#"{"name":"summary","returnType":{"dto":"BookSummary"},"params":[{"name":"book","type":{"type":"class","value":{"package":"nz.example.library","name":"Book"}}}]}"#
+    );
+    assert_eq!(
+        serde_json::from_str::<RepositoryOperation>(
+            &serde_json::to_string(&repository_operation).expect("serialize")
+        )
+        .expect("deserialize"),
+        repository_operation
+    );
+}
+
+/// The artifact root is untouched by DD3: an empty model still serializes
+/// as exactly the version marker plus the provenance line.
+#[test]
+fn empty_model_bytes_are_unchanged_by_dd3() {
+    assert_eq!(
+        DddModel::new().to_json().expect("serialize"),
+        empty_model_json()
+    );
+    assert_eq!(DDD_MODEL_FORMAT_VERSION, 2);
 }
 
 #[test]

@@ -1196,7 +1196,8 @@ fn lsp_kind(kind: &str) -> SymbolKind {
         | kinds::DATATYPE
         | kinds::VIEW
         | kinds::SERVICE
-        | kinds::REPOSITORY => SymbolKind::CLASS,
+        | kinds::REPOSITORY
+        | kinds::DTO => SymbolKind::CLASS,
         kinds::FEATURE | kinds::CASE_FILE_ITEM | kinds::DEPLOY_COMPONENT => SymbolKind::FIELD,
         kinds::OPERATION
         | kinds::SERVICE_OPERATION

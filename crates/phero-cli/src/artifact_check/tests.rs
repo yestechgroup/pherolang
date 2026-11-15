@@ -1222,3 +1222,308 @@ fn legacy_detection_matrix_covers_every_classified_artifact_kind() {
         }
     }
 }
+
+// ---------------------------------------------------------------------------
+// DTO boundaries (DD3, pherolang#300)
+// ---------------------------------------------------------------------------
+
+/// A DTO-bearing design artifact: an entity design, a projection DTO over
+/// it (input-capable, so it may fill a parameter), a standalone DTO, and a
+/// service whose signature uses both boundaries.
+const GOOD_DTO_ARTIFACT: &str = r#"{
+  "formatVersion": 2,
+  "pheroVersion": "0.3.0",
+  "application": { "name": "Library" },
+  "modules": [
+    {
+      "name": "media",
+      "services": [
+        {
+          "name": "MediaService",
+          "operations": [
+            {
+              "name": "describe",
+              "returnType": { "dto": "BookSummary" },
+              "params": [
+                { "name": "request", "type": { "dto": "CreateBookRequest" } }
+              ]
+            }
+          ]
+        }
+      ],
+      "designs": [
+        {
+          "class": "Book",
+          "typeRef": {
+            "type": "class",
+            "value": { "package": "nz.example.library", "name": "Book" }
+          },
+          "stereotype": "entity"
+        },
+        {
+          "class": "Book",
+          "typeRef": {
+            "type": "class",
+            "value": { "package": "nz.example.library", "name": "Book" }
+          },
+          "stereotype": "dto",
+          "dtoShape": {
+            "name": "BookSummary",
+            "source": {
+              "type": "class",
+              "value": { "package": "nz.example.library", "name": "Book" }
+            },
+            "direction": "input",
+            "members": [
+              {
+                "name": "title",
+                "kind": "select",
+                "type": { "type": "primitive", "value": "string" },
+                "path": ["title"]
+              }
+            ]
+          }
+        },
+        {
+          "stereotype": "dto",
+          "dtoShape": {
+            "name": "CreateBookRequest",
+            "direction": "input",
+            "members": [
+              {
+                "name": "title",
+                "kind": "declared",
+                "type": { "type": "primitive", "value": "string" }
+              }
+            ]
+          }
+        }
+      ]
+    }
+  ]
+}"#;
+
+fn dto_artifact() -> Value {
+    serde_json::from_str(GOOD_DTO_ARTIFACT).expect("the DTO fixture is valid JSON")
+}
+
+fn dto_errors(artifact: &Value) -> Vec<String> {
+    check(&artifact.to_string()).expect_err("the artifact must violate the DTO contract")
+}
+
+fn has_error(errors: &[String], needle: &str) -> bool {
+    errors.iter().any(|error| error.contains(needle))
+}
+
+#[test]
+fn a_dto_bearing_artifact_satisfies_the_ddd_contract() {
+    assert_eq!(check(GOOD_DTO_ARTIFACT), Ok(ArtifactKind::DddModel));
+}
+
+#[test]
+fn a_dto_design_without_its_shape_is_rejected() {
+    let mut artifact = dto_artifact();
+    artifact["modules"][0]["designs"][1]
+        .as_object_mut()
+        .expect("the projection design")
+        .remove("dtoShape");
+    let errors = dto_errors(&artifact);
+    assert!(
+        has_error(&errors, "designs[1].dtoShape")
+            && has_error(&errors, "must carry its boundary shape"),
+        "{errors:?}"
+    );
+}
+
+#[test]
+fn a_non_dto_design_carrying_a_dto_shape_is_rejected() {
+    let mut artifact = dto_artifact();
+    let shape = artifact["modules"][0]["designs"][1]
+        .as_object_mut()
+        .expect("the projection design")
+        .remove("dtoShape")
+        .expect("the projection carries a shape");
+    artifact["modules"][0]["designs"][0]["dtoShape"] = shape;
+    let errors = dto_errors(&artifact);
+    assert!(
+        has_error(&errors, "designs[0].dtoShape") && has_error(&errors, "only a dto design"),
+        "{errors:?}"
+    );
+}
+
+#[test]
+fn a_standalone_dto_must_not_carry_a_class() {
+    let mut artifact = dto_artifact();
+    artifact["modules"][0]["designs"][2]["class"] = json!("Book");
+    artifact["modules"][0]["designs"][2]["typeRef"] = json!({
+        "type": "class",
+        "value": { "package": "nz.example.library", "name": "Book" }
+    });
+    let errors = dto_errors(&artifact);
+    assert!(has_error(&errors, "designs[2].class"), "{errors:?}");
+    assert!(has_error(&errors, "designs[2].typeRef"), "{errors:?}");
+}
+
+#[test]
+fn a_projection_dto_must_agree_with_its_source() {
+    let mut artifact = dto_artifact();
+    artifact["modules"][0]["designs"][1]["typeRef"] = json!({
+        "type": "class",
+        "value": { "package": "nz.example.library", "name": "Movie" }
+    });
+    let errors = dto_errors(&artifact);
+    assert!(
+        has_error(&errors, "designs[1].typeRef") && has_error(&errors, "dto boundary's source"),
+        "{errors:?}"
+    );
+}
+
+#[test]
+fn a_dto_boundary_name_must_not_shadow_a_designed_class() {
+    let mut artifact = dto_artifact();
+    artifact["modules"][0]["designs"][2]["dtoShape"]["name"] = json!("Book");
+    let errors = dto_errors(&artifact);
+    assert!(
+        has_error(&errors, "designs[2].dtoShape.name")
+            && has_error(&errors, "shadows a designed class"),
+        "{errors:?}"
+    );
+}
+
+#[test]
+fn dto_member_payloads_must_match_their_kind() {
+    let mut artifact = dto_artifact();
+    artifact["modules"][0]["designs"][1]["dtoShape"]["members"][0]["expression"] = json!("title");
+    artifact["modules"][0]["designs"][2]["dtoShape"]["members"] = json!([
+        {
+            "name": "title",
+            "kind": "derive",
+            "type": { "type": "primitive", "value": "string" },
+            "path": ["title"]
+        }
+    ]);
+    let errors = dto_errors(&artifact);
+    assert!(
+        has_error(
+            &errors,
+            "select member must not carry a derivation expression"
+        ),
+        "{errors:?}"
+    );
+    assert!(
+        has_error(
+            &errors,
+            "derive member must carry the derivation's source text"
+        ),
+        "{errors:?}"
+    );
+    assert!(
+        has_error(
+            &errors,
+            "derive member must not carry a selected feature path"
+        ),
+        "{errors:?}"
+    );
+}
+
+#[test]
+fn a_duplicate_dto_member_is_rejected() {
+    let mut artifact = dto_artifact();
+    artifact["modules"][0]["designs"][1]["dtoShape"]["members"]
+        .as_array_mut()
+        .expect("the members array")
+        .push(json!({
+            "name": "title",
+            "kind": "select",
+            "type": { "type": "primitive", "value": "string" },
+            "path": ["title"]
+        }));
+    let errors = dto_errors(&artifact);
+    assert!(
+        has_error(&errors, "designs[1].dtoShape.members[1].name")
+            && has_error(&errors, "duplicate dto member 'title'"),
+        "{errors:?}"
+    );
+}
+
+#[test]
+fn a_dto_reference_must_resolve() {
+    let mut artifact = dto_artifact();
+    artifact["modules"][0]["services"][0]["operations"][0]["returnType"] =
+        json!({ "dto": "Ghost" });
+    artifact["modules"][0]["services"][0]["operations"][0]["params"][0]["type"] =
+        json!({ "dto": "Ghost" });
+    let errors = dto_errors(&artifact);
+    assert!(
+        has_error(&errors, "operations[0].returnType") && has_error(&errors, "dto 'Ghost'"),
+        "{errors:?}"
+    );
+    assert!(
+        has_error(&errors, "operations[0].params[0].type"),
+        "{errors:?}"
+    );
+}
+
+#[test]
+fn an_output_dto_cannot_fill_a_parameter() {
+    let mut artifact = dto_artifact();
+    artifact["modules"][0]["designs"][1]["dtoShape"]["direction"] = json!("output");
+    artifact["modules"][0]["designs"][1]["dtoShape"]["members"]
+        .as_array_mut()
+        .expect("the members array")
+        .push(json!({
+            "name": "label",
+            "kind": "derive",
+            "type": { "type": "primitive", "value": "string" },
+            "expression": "title"
+        }));
+    artifact["modules"][0]["services"][0]["operations"][0]["params"][0]["type"] =
+        json!({ "dto": "BookSummary" });
+    let errors = dto_errors(&artifact);
+    assert!(
+        has_error(&errors, "operations[0].params[0].type")
+            && has_error(&errors, "output-only")
+            && has_error(&errors, "label"),
+        "{errors:?}"
+    );
+}
+
+#[test]
+fn a_dto_cannot_carry_a_repository_or_a_machine() {
+    let mut artifact = dto_artifact();
+    artifact["modules"][0]["designs"][1]["repository"] = json!({
+        "name": "BookRepository",
+        "operations": []
+    });
+    artifact["modules"][0]["designs"][1]["machine"] = json!({
+        "field": "state",
+        "enumType": {
+            "type": "enum",
+            "value": { "package": "nz.example.library", "name": "MediaStatus" }
+        },
+        "initial": "available"
+    });
+    let errors = dto_errors(&artifact);
+    assert!(
+        has_error(&errors, "designs[1].repository")
+            && has_error(&errors, "only an entity design may declare a repository"),
+        "{errors:?}"
+    );
+    assert!(
+        has_error(&errors, "designs[1].machine")
+            && has_error(&errors, "only an entity design may declare a state machine"),
+        "{errors:?}"
+    );
+}
+
+#[test]
+fn a_dto_direction_is_checked_against_its_members() {
+    let mut artifact = dto_artifact();
+    artifact["modules"][0]["designs"][1]["dtoShape"]["direction"] = json!("output");
+    let errors = dto_errors(&artifact);
+    assert!(
+        has_error(&errors, "designs[1].dtoShape.direction")
+            && has_error(&errors, "has no derive member"),
+        "{errors:?}"
+    );
+}

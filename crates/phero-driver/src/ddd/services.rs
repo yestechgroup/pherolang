@@ -10,7 +10,7 @@ use phero_diagnostics::dmn::{
     E_AMBIGUOUS_SERVICE_VERSION, E_NO_USABLE_SERVICE_VERSION, E_PINNED_VERSION_NOT_AVAILABLE,
     E_UNKNOWN_INJECTED_SERVICE, E_UNKNOWN_INVOKED_SERVICE,
 };
-use phero_ir::ddd::{DecisionPin, Delegation, Service, ServiceOperation, TransitionRef};
+use phero_ir::ddd::{DddParam, DecisionPin, Delegation, Service, ServiceOperation, TransitionRef};
 use phero_ir::dmn::VersionPin;
 use phero_syntax::ast as dsl;
 
@@ -717,6 +717,7 @@ pub(crate) fn lower_module_services<'a>(
     repository_scopes: &[RepositoryScope],
     union: Option<&phero_ir::Model>,
     expr_context: Option<&phero_expr::TypeContext>,
+    prep: &DesignPrep,
     registries: &mut Registries<'a>,
 ) -> (Vec<Service>, Vec<Diagnostic>) {
     let mut local: Vec<Diagnostic> = Vec::new();
@@ -925,11 +926,12 @@ pub(crate) fn lower_module_services<'a>(
                             op.multiplicity.as_ref(),
                             packages,
                             base,
+                            &prep.dto_names,
                             &mut local,
                         )
                     })
                     .map_or((None, None), |(type_, mult)| (Some(type_), mult));
-                let params = op
+                let params: Vec<DddParam> = op
                     .params
                     .iter()
                     .map(|param| {
@@ -938,13 +940,21 @@ pub(crate) fn lower_module_services<'a>(
                             param.multiplicity.as_ref(),
                             packages,
                             base,
+                            &prep.dto_names,
                             &mut local,
                         );
-                        phero_ir::OperationParam {
-                            name: param.name.text.clone(),
-                            type_,
-                            multiplicity,
-                        }
+                        record_dto_param(
+                            registries,
+                            format!(
+                                "operation '{}' of service '{}'",
+                                op.name.text, service.name.text
+                            ),
+                            &param.name.text,
+                            &type_,
+                            param.type_ref.span,
+                        );
+                        DddParam::new(param.name.text.clone(), type_)
+                            .with_multiplicity(multiplicity)
                     })
                     .collect();
                 let condition_text_out = op

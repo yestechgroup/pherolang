@@ -119,7 +119,7 @@ pub const ACTOR_KEYWORDS: &[&str] = &[
 pub const ACTOR_CONTEXTUAL: &[&str] = &["human", "to"];
 
 /// The real lexer keywords the `.ddd` grammar recognizes.
-pub const DDD_KEYWORDS: &[&str] = &["import", "capability", "when", "version"];
+pub const DDD_KEYWORDS: &[&str] = &["import", "capability", "when", "version", "from"];
 
 /// The contextual words of `.ddd`, in the same order as the parser's
 /// grammar: declarations, clauses, flags, built-ins, search members, the
@@ -470,6 +470,13 @@ mod tests {
             (include_str!("cmmn.rs"), CMMN_CONTEXTUAL),
         ] {
             for word in string_constants(source) {
+                // A constant may name an existing real lexer keyword rather
+                // than a contextual word — `.ddd`'s `FROM` names the
+                // already-real `from` token (the DTO projection source
+                // word). Those live in the surface's `*_KEYWORDS` table.
+                if KEYWORDS.contains(&word) {
+                    continue;
+                }
                 assert!(
                     table.contains(&word),
                     "parser constant `{word}` is missing from its public word table"

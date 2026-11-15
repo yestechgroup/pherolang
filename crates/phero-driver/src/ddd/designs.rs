@@ -5,14 +5,16 @@
 //! pherolang#299); the rules that keep the properties honest are deferred to
 //! [`super::values`].
 
+use phero_diagnostics::ddd::{E_DTO_ENTITY_ONLY, E_DTO_OPERATION};
 use phero_ir::ddd::{
-    BuiltinRepositoryOp, Design, DesignFlags, Repository, RepositoryOperation, Stereotype,
+    BuiltinRepositoryOp, DddParam, Design, DesignFlags, Repository, RepositoryOperation, Stereotype,
 };
 use phero_syntax::ast as dsl;
 
 use crate::diagnostic::Diagnostic;
 use crate::lower::{self, DomainPackage};
 
+use super::dtos::{DesignPrep, DtoForm};
 use super::machines::{class_operations, MachineScopes};
 use super::*;
 
@@ -31,44 +33,88 @@ pub(crate) fn lower_module_designs(
     union: Option<&phero_ir::Model>,
     machines: &MachineScopes,
     expr_context: Option<&phero_expr::TypeContext>,
+    prep: &DesignPrep,
     registries: &mut Registries<'_>,
 ) -> (Vec<Design>, Vec<Diagnostic>) {
     let mut local: Vec<Diagnostic> = Vec::new();
     let mut designs_out = Vec::new();
     // Every resolved design class paired with its artifact position: the
     // child-operation stage (5b, issue pherolang#179) attaches `extend`
-    // blocks to their target design by class.
+    // blocks to their target design by class. DTO designs are not aggregate
+    // roots, so they never enter this index.
     let mut design_index: Vec<((String, String), usize)> = Vec::new();
     for design in &module.designs {
-        // Rule 3 — the design target must resolve to a domain class.
-        let design_help = format!(
-            "the design of '{}' in module '{}' must target a class \
-             declared in the imported domains",
-            design.class.text, module.name.text
-        );
-        let resolved = lower::resolve_ddd_class(
-            &class_type_ref(&design.class),
-            packages,
-            base,
-            &design_help,
-            &mut local,
-        );
+        let prepared = prep.declaration(design);
+        let form = prepared.map(|decl| decl.form).or_else(|| dto_form(design));
+        let module_label = prepared
+            .map(|decl| decl.module.as_str())
+            .unwrap_or(&module.name.text);
+        let authored = prepared
+            .map(|decl| decl.name.as_str())
+            .unwrap_or(design.class.text.as_str());
+        // Rule 3 — the design target must resolve to a domain class. A
+        // projection resolves its `from` source; a standalone DTO has no
+        // source at all; every other design resolves its class name.
+        let design_help = match form {
+            Some(DtoForm::Projection) => format!(
+                "the projection source of dto '{authored}' in module '{module_label}' must \
+                 target a class declared in the imported domains"
+            ),
+            _ => format!(
+                "the design of '{authored}' in module '{module_label}' must target a class \
+                 declared in the imported domains"
+            ),
+        };
+        let resolved = match form {
+            Some(DtoForm::Standalone) => None,
+            Some(DtoForm::Projection) => design
+                .dto_source
+                .as_ref()
+                .and_then(|source| {
+                    lower::resolve_ddd_class(
+                        &qualified_type_ref(source),
+                        packages,
+                        base,
+                        &design_help,
+                        &mut local,
+                    )
+                })
+                .or_else(|| prepared.and_then(|decl| decl.source.clone())),
+            _ => lower::resolve_ddd_class(
+                &class_type_ref(&design.class),
+                packages,
+                base,
+                &design_help,
+                &mut local,
+            )
+            .or_else(|| prepared.and_then(|decl| decl.source.clone())),
+        };
 
         // Rule 2 — one design per class per application, keyed by the
-        // resolved class (two spellings of one class collide).
-        let key = resolved
-            .clone()
-            .unwrap_or_else(|| (String::new(), design.class.text.clone()));
-        if registries.design_keys.contains(&key) {
-            local.push(
-                Diagnostic::error(
-                    format!("duplicate design for class '{}'", design.class.text),
-                    Some(design.class.span),
-                )
-                .with_help("a class has one design per application"),
-            );
-        } else {
-            registries.design_keys.push(key);
+        // resolved class (two spellings of one class collide). Projection
+        // and standalone DTOs introduce their own boundary names instead
+        // (the pre-pass checks those for uniqueness); a projection may
+        // legitimately coexist with its source class's entity design.
+        let key = match form {
+            Some(DtoForm::Projection | DtoForm::Standalone) => None,
+            _ => Some(
+                resolved
+                    .clone()
+                    .unwrap_or_else(|| (String::new(), design.class.text.clone())),
+            ),
+        };
+        if let Some(key) = &key {
+            if registries.design_keys.contains(key) {
+                local.push(
+                    Diagnostic::error(
+                        format!("duplicate design for class '{}'", design.class.text),
+                        Some(design.class.span),
+                    )
+                    .with_help("a class has one design per application"),
+                );
+            } else {
+                registries.design_keys.push(key.clone());
+            }
         }
 
         // Rule 4 — flag/stereotype compatibility.
@@ -77,8 +123,16 @@ pub(crate) fn lower_module_designs(
         // Rule 12 — the value contract.
         local.extend(rule_12_value_contract(design, resolved.as_ref(), union));
 
-        // Rule 15 — the dto-with-ops warning.
-        local.extend(rule_15_dto_ops_warnings(design, resolved.as_ref(), union));
+        // Rule 15 — a dto carries no behavior (DD3: an error, not the
+        // pre-DD3 warning). A projection reads a source class that may
+        // legitimately carry ops, so the rule covers the mirror form (the
+        // boundary *is* the class's shape).
+        local.extend(rule_15_dto_ops_errors(
+            design,
+            form,
+            resolved.as_ref(),
+            union,
+        ));
 
         // Rule 16 — status-like fields are typed lifecycles.
         local.extend(rule_16_bare_string_status(design, resolved.as_ref(), union));
@@ -88,9 +142,21 @@ pub(crate) fn lower_module_designs(
             local.push(diagnostic);
         }
 
-        let mut design_out = Design::new(design.class.text.clone(), stereotype(design));
+        let mut design_out = match form {
+            Some(DtoForm::Standalone) => Design::standalone_dto(design.class.text.clone()),
+            Some(DtoForm::Projection) => Design::new(
+                design
+                    .dto_source
+                    .as_ref()
+                    .map(|source| source.full_name())
+                    .unwrap_or_default(),
+                Stereotype::Dto,
+            ),
+            _ => Design::new(design.class.text.clone(), stereotype(design)),
+        };
         // The resolved companion (DD1): the class the authored name binds
-        // to. Absent only when rule 3 already failed (the artifact drops).
+        // to. Absent only when rule 3 already failed (the artifact drops)
+        // or for a standalone DTO (which has no source class at all).
         design_out.type_ref = resolved
             .as_ref()
             .map(|(package, class)| phero_ir::TypeRef::Class {
@@ -103,6 +169,36 @@ pub(crate) fn lower_module_designs(
         // design — lowers the fixed strict semantics block.
         design_out.semantics = value_semantics(design);
 
+        // DD3 (pherolang#300): every dto design lowers its boundary shape.
+        if let Some(form) = form {
+            let shape = lower_dto_shape(
+                design,
+                form,
+                resolved.as_ref(),
+                union,
+                expr_context,
+                packages,
+                base,
+                prep,
+                design_source,
+                &mut local,
+            );
+            design_out.dto_shape = Some(shape);
+            if let Some(machine) = &design.machine {
+                local.push(
+                    Diagnostic::error(
+                        format!(
+                            "{E_DTO_ENTITY_ONLY} dto design '{}' carries a machine block; a \
+                             dto is a transfer shape with no lifecycle",
+                            design.class.text
+                        ),
+                        Some(machine.span),
+                    )
+                    .with_help("remove the `machine` block, or design the class as an `entity`"),
+                );
+            }
+        }
+
         if let Some(repository) = &design.repository {
             let (repository_out, stage_diags) = lower_design_repository(
                 design,
@@ -114,6 +210,7 @@ pub(crate) fn lower_module_designs(
                 machines,
                 expr_context,
                 design_source,
+                prep,
                 registries,
             );
             local.extend(stage_diags);
@@ -121,18 +218,20 @@ pub(crate) fn lower_module_designs(
         }
 
         if let Some(machine) = &design.machine {
-            design_out.machine = lower_design_machine(
-                machine,
-                design,
-                resolved.as_ref(),
-                union,
-                packages,
-                base,
-                &machines.machines,
-                expr_context,
-                design_source,
-                &mut local,
-            );
+            if form.is_none() {
+                design_out.machine = lower_design_machine(
+                    machine,
+                    design,
+                    resolved.as_ref(),
+                    union,
+                    packages,
+                    base,
+                    &machines.machines,
+                    expr_context,
+                    design_source,
+                    &mut local,
+                );
+            }
         }
 
         if design.stereotype == dsl::DddStereotype::Entity {
@@ -169,7 +268,7 @@ pub(crate) fn lower_module_designs(
             });
         }
 
-        if let Some(key) = resolved {
+        if let (None, Some(key)) = (form, resolved) {
             design_index.push((key, designs_out.len()));
         }
         designs_out.push(design_out);
@@ -185,8 +284,10 @@ pub(crate) fn lower_module_designs(
         base,
         union,
         expr_context,
+        prep,
         &design_index,
         &mut designs_out,
+        registries,
     ));
     (designs_out, local)
 }
@@ -228,40 +329,42 @@ fn rule_12_value_contract(
     }
     diagnostics
 }
-/// Rule 15 — the dto-with-ops warning: a dto design marks a transfer
-/// record, and `ops` on a transfer record are almost always a modeling
-/// mistake: behavior confined to one aggregate belongs on the class itself
-/// (a domain layer `op`), behavior spanning aggregates belongs on a
-/// service operation that delegates down. The warning names the design and
-/// the op; the artifact is unaffected (warnings never drop it), and the
-/// union is only consulted when fully lowered (a failed domain may hide
+/// Rule 15 — a dto carries no behavior (DD3, issue pherolang#300): a DTO is
+/// a behavior-free transport shape, so an `op` on its class is an error —
+/// the pre-DD3 warning promoted. `derived` features stay legal (a computed
+/// wire field, not behavior). The mirror form is the one whose boundary
+/// *is* the class's shape; a projection reads a source class that may
+/// legitimately carry behavior, so its ops are not the boundary's. The
+/// union is consulted only when fully lowered (a failed domain may hide
 /// ops).
-fn rule_15_dto_ops_warnings(
+fn rule_15_dto_ops_errors(
     design: &dsl::DddDesign,
+    form: Option<DtoForm>,
     resolved: Option<&(String, String)>,
     union: Option<&phero_ir::Model>,
 ) -> Vec<Diagnostic> {
     let mut diagnostics = Vec::new();
-    if design.stereotype == dsl::DddStereotype::Dto {
-        if let (Some((package, class)), Some(union)) = (resolved, union) {
-            if let Some(operations) = class_operations(union, package, class) {
-                for operation in operations {
-                    diagnostics.push(
-                        Diagnostic::warning(
-                            format!(
-                                "dto design '{}': class carries op '{}'; a dto is a \
-                                 transfer record, and behavior on it is usually a \
-                                 modeling mistake",
-                                design.class.text, operation.name
-                            ),
-                            Some(design.class.span),
-                        )
-                        .with_help(
-                            "move the behavior to an aggregate-owned class `op`, or \
-                             declare a service operation that delegates to it",
+    if form != Some(DtoForm::Mirror) {
+        return diagnostics;
+    }
+    if let (Some((package, class)), Some(union)) = (resolved, union) {
+        if let Some(operations) = class_operations(union, package, class) {
+            for operation in operations {
+                diagnostics.push(
+                    Diagnostic::error(
+                        format!(
+                            "{E_DTO_OPERATION} dto design '{}': class carries op '{}'; a \
+                             dto is a transfer record and carries no behavior",
+                            design.class.text, operation.name
                         ),
-                    );
-                }
+                        Some(design.class.span),
+                    )
+                    .with_help(
+                        "move the behavior to an aggregate-owned class `op`, or declare \
+                         a service operation that delegates to it; a `derived` member \
+                         stays legal",
+                    ),
+                );
             }
         }
     }
@@ -358,15 +461,22 @@ fn lower_design_repository(
     machines: &MachineScopes,
     expr_context: Option<&phero_expr::TypeContext>,
     design_source: &str,
+    prep: &DesignPrep,
     registries: &mut Registries<'_>,
 ) -> (Option<Repository>, Vec<Diagnostic>) {
     let mut local: Vec<Diagnostic> = Vec::new();
 
-    // Rule 5 — repositories live on entity designs only.
+    // Rule 5 — repositories live on entity designs only. The DTO variant
+    // carries the DD3 entity-only code (a DTO has no persistence).
     if design.stereotype != dsl::DddStereotype::Entity {
+        let code = if design.stereotype == dsl::DddStereotype::Dto {
+            format!("{E_DTO_ENTITY_ONLY} ")
+        } else {
+            String::new()
+        };
         local.push(Diagnostic::error(
             format!(
-                "repository '{}' requires an entity design; '{}' is designed as a {}",
+                "{code}repository '{}' requires an entity design; '{}' is designed as a {}",
                 repository.name.text,
                 design.class.text,
                 stereotype_label(design.stereotype)
@@ -403,6 +513,8 @@ fn lower_design_repository(
         resolved,
         machines,
         expr_context,
+        &prep.dto_names,
+        registries,
     );
     if !registries
         .repositories
@@ -508,9 +620,14 @@ fn check_flags(design: &dsl::DddDesign, local: &mut Vec<Diagnostic>) {
         dsl::DddStereotype::Value | dsl::DddStereotype::Dto => {
             for (occurrence, flag) in entity_only {
                 if let Some(span) = occurrence.map(|flag| flag.span) {
+                    let code = if design.stereotype == dsl::DddStereotype::Dto {
+                        format!("{E_DTO_ENTITY_ONLY} ")
+                    } else {
+                        String::new()
+                    };
                     local.push(Diagnostic::error(
                         format!(
-                            "flag '{flag}' requires an entity design; '{}' is designed \
+                            "{code}flag '{flag}' requires an entity design; '{}' is designed \
                              as a {}",
                             design.class.text,
                             stereotype_label(design.stereotype)
@@ -536,6 +653,8 @@ fn lower_repository_ops(
     self_class: Option<&(String, String)>,
     machines: &MachineScopes,
     context: Option<&phero_expr::TypeContext>,
+    dto_names: &[String],
+    registries: &mut Registries<'_>,
 ) -> Vec<RepositoryOperation> {
     let mut ops: Vec<String> = Vec::new();
     let mut operations = Vec::new();
@@ -577,10 +696,17 @@ fn lower_repository_ops(
                 .return_type
                 .as_ref()
                 .map(|type_ref| {
-                    signature_type(type_ref, op.multiplicity.as_ref(), packages, base, local)
+                    signature_type(
+                        type_ref,
+                        op.multiplicity.as_ref(),
+                        packages,
+                        base,
+                        dto_names,
+                        local,
+                    )
                 })
                 .map_or((None, None), |(type_, mult)| (Some(type_), mult));
-            let params = op
+            let params: Vec<DddParam> = op
                 .params
                 .iter()
                 .map(|param| {
@@ -589,13 +715,20 @@ fn lower_repository_ops(
                         param.multiplicity.as_ref(),
                         packages,
                         base,
+                        dto_names,
                         local,
                     );
-                    phero_ir::OperationParam {
-                        name: param.name.text.clone(),
-                        type_,
-                        multiplicity,
-                    }
+                    record_dto_param(
+                        registries,
+                        format!(
+                            "operation '{}' of repository '{}'",
+                            op.name.text, repository.name.text
+                        ),
+                        &param.name.text,
+                        &type_,
+                        param.type_ref.span,
+                    );
+                    DddParam::new(param.name.text.clone(), type_).with_multiplicity(multiplicity)
                 })
                 .collect();
             operations.push(

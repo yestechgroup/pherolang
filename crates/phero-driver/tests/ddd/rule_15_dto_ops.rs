@@ -2,15 +2,18 @@
 
 use crate::support::*;
 
-// --- rule 15: the dto-with-ops warning ----------------------------------------
+// --- rule 15: the dto-with-ops error -----------------------------------------
 
 /// A class carrying ops — one with an `expr` body, one body-less (the
-/// abstract-hook contract) — for the dto-with-ops warning.
+/// abstract-hook contract) — for the dto-with-ops rule.
 const OPS_DOMAIN: &str = r#"
 package nz.example.library
 
 class Line {
     String sku
+    derived int weight {
+        expr { 1 }
+    }
     op int scaledWeight(int factor) {
         expr { factor + 1 }
     }
@@ -19,7 +22,7 @@ class Line {
 "#;
 
 #[test]
-fn a_dto_design_with_ops_warns_per_op_and_keeps_the_artifact() {
+fn a_dto_design_with_ops_errors_per_op_and_drops_the_artifact() {
     let source = r#"
 import "library.mox";
 
@@ -30,39 +33,37 @@ application Shop {
 }
 "#;
     let compilation = compile(source, &[("library.mox", OPS_DOMAIN)]);
-    let warnings: Vec<&Diagnostic> = compilation
+    let errors: Vec<&Diagnostic> = compilation
         .diagnostics
         .iter()
-        .filter(|(_, diagnostic)| diagnostic.severity == phero_driver::Severity::Warning)
+        .filter(|(_, diagnostic)| diagnostic.severity == phero_driver::Severity::Error)
         .map(|(_, diagnostic)| diagnostic)
         .collect();
-    assert_eq!(warnings.len(), 2, "one warning per op: {:?}", warnings);
+    assert_eq!(errors.len(), 2, "one error per op: {:?}", errors);
     assert_eq!(
-        warnings[0].message,
-        "dto design 'Line': class carries op 'scaledWeight'; a dto is a transfer \
-         record, and behavior on it is usually a modeling mistake"
+        errors[0].message,
+        "E0365 dto design 'Line': class carries op 'scaledWeight'; a dto is a \
+         transfer record and carries no behavior"
     );
     assert_eq!(
-        warnings[1].message,
-        "dto design 'Line': class carries op 'blank'; a dto is a transfer record, \
-         and behavior on it is usually a modeling mistake"
+        errors[1].message,
+        "E0365 dto design 'Line': class carries op 'blank'; a dto is a transfer \
+         record and carries no behavior"
     );
-    // The artifact survives: warnings never drop it (and no other
-    // diagnostic fired).
     assert!(
-        compilation.model.is_some(),
-        "warnings must not block the design artifact"
+        compilation.model.is_none(),
+        "an error on a dto drops the design artifact"
     );
     assert_eq!(
         compilation.diagnostics.len(),
         2,
-        "the warnings are the only diagnostics: {:?}",
+        "the op errors are the only diagnostics: {:?}",
         compilation.diagnostics
     );
 }
 
 #[test]
-fn an_entity_design_with_ops_stays_warning_free() {
+fn an_entity_design_with_ops_stays_clean() {
     let source = r#"
 import "library.mox";
 
@@ -74,4 +75,38 @@ application Shop {
 "#;
     let compilation = compile(source, &[("library.mox", OPS_DOMAIN)]);
     assert_clean(&compilation);
+}
+
+#[test]
+fn a_derived_feature_stays_legal_on_a_dto() {
+    // `derived` is a computed wire field, not behavior: a mirror DTO copies
+    // every *stored* feature and leaves the derived one out, with no error.
+    let source = r#"
+import "library.mox";
+
+application Shop {
+    module Catalog {
+        dto Line
+    }
+}
+"#;
+    let domain = OPS_DOMAIN.replace(
+        "    op int scaledWeight(int factor) {\n        expr { factor + 1 }\n    }\n    op boolean blank()\n",
+        "",
+    );
+    let compilation = compile(source, &[("library.mox", &domain)]);
+    assert_clean(&compilation);
+    let shape = compilation.model.expect("artifact").modules[0].designs[0]
+        .dto_shape
+        .clone()
+        .expect("the mirror shape");
+    assert_eq!(
+        shape
+            .members
+            .iter()
+            .map(|member| member.name.as_str())
+            .collect::<Vec<_>>(),
+        ["sku"],
+        "the derived feature is not a stored member"
+    );
 }

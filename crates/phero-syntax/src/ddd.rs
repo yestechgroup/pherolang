@@ -27,8 +27,10 @@
 //! The remaining single words ([`APPLICATION`], [`BASE`], [`MODULE`],
 //! [`SERVICE`], [`SEARCH`], [`EXTEND`], [`ABSTRACT`], [`REPOSITORY`],
 //! [`INJECT`], [`DECISION`], [`EMITS`], [`INVOKES`], [`TRANSITION`],
-//! [`BOOST`], [`ANALYZER`], [`LIMIT`], [`MAX`], [`CURSOR`]) are matched on
-//! both sides at fixed grammar positions; they carry no canonical order.
+//! [`FROM`], [`BOOST`], [`ANALYZER`], [`LIMIT`], [`MAX`], [`CURSOR`]) are
+//! matched on both sides at fixed grammar positions; they carry no canonical
+//! order. [`FROM`] names an existing lexer keyword rather than a contextual
+//! word (see its doc).
 //! The `ranking` value words (`bm25`, `tfIdf`, `exact`, `custom`) are
 //! parser-only — the formatter re-emits whatever follows the `ranking`
 //! keyword — so they stay in the parser alone.
@@ -135,6 +137,16 @@ pub(crate) const LIMIT: &str = "limit";
 pub(crate) const MAX: &str = "max";
 /// The `cursor` member of a `pagination` block.
 pub(crate) const CURSOR: &str = "cursor";
+/// The `from <source>` word of a DTO projection (issue pherolang#300):
+/// `dto BookSummary from Book { ... }` names the designed class the
+/// projection reads. Unlike the other words here, `from` is **already a
+/// real lexer keyword** (the `.mox` import / `.actor` delegation word), so
+/// this constant only names the token text the `.ddd` DTO grammar
+/// recognizes — no new lexer keyword is introduced. It is special only in
+/// the DTO-suffix position directly after a `dto` design's flags; anywhere
+/// else it remains the ordinary keyword, and the escaped `^from` form is an
+/// ordinary name even there.
+pub(crate) const FROM: &str = "from";
 
 // The executable statement-body words (issue pherolang#178). They are
 // contextual like every `.ddd` word: `let`/`guard`/`if`/`return` lead a

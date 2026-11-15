@@ -1032,7 +1032,7 @@ fn ddd_pipeline_designs_sigil_domain_types() {
     );
     let model = compilation.model.expect("design lowered");
     let design = &model.modules[0].designs[0];
-    assert_eq!(design.class, "Trade");
+    assert_eq!(design.class.as_deref(), Some("Trade"));
     assert!(design.repository.is_some());
     // The union model carries the synthetic packages for consumers.
     let domains_model = compilation.domains_model.expect("domains lowered");

@@ -59,6 +59,15 @@ const VALUES_DESIGN_PATH: &str = "tests/conformance/ddd/values.ddd";
 const VALUES_DOMAIN_PATH: &str = "tests/conformance/ddd/values.mox";
 const VALUES_ARTIFACT_PATH: &str = "tests/conformance/ddd/values.ddd.json";
 
+/// The DD3 DTO-boundary fixture (issue pherolang#300): the mirror,
+/// projection (select, rename, derive), and standalone forms, a nested DTO
+/// member, and DTOs filling a service operation's parameter and return
+/// slots; the golden carries each `dtoShape` and the `DddTypeRef` DTO
+/// references.
+const DTOS_DESIGN_PATH: &str = "tests/conformance/ddd/dtos.ddd";
+const DTOS_DOMAIN_PATH: &str = "tests/conformance/ddd/dtos.mox";
+const DTOS_ARTIFACT_PATH: &str = "tests/conformance/ddd/dtos.ddd.json";
+
 /// Compiles one `(design, domain)` fixture pair the way the CLI resolves
 /// the import (paths relative to the design file) and returns the lowered
 /// artifact, failing on any diagnostic.
@@ -163,7 +172,7 @@ fn conformance_childops_matches_golden_artifact() {
     let design = model.modules[0]
         .designs
         .iter()
-        .find(|design| design.class == "PayRun")
+        .find(|design| design.class.as_deref() == Some("PayRun"))
         .expect("the PayRun design");
     assert_eq!(
         design
@@ -215,7 +224,7 @@ fn conformance_bodies_matches_golden_artifact() {
     let run = model.modules[0]
         .designs
         .iter()
-        .find(|design| design.class == "PayRun")
+        .find(|design| design.class.as_deref() == Some("PayRun"))
         .expect("the PayRun design");
     let total = run
         .repository
@@ -242,7 +251,7 @@ fn conformance_values_matches_golden_artifact() {
         model.modules[0]
             .designs
             .iter()
-            .map(|design| design.class.as_str())
+            .map(|design| design.class.as_deref().unwrap_or_default())
             .collect::<Vec<_>>(),
         ["Money", "PriceRange", "Snapshot"],
     );
@@ -251,11 +260,86 @@ fn conformance_values_matches_golden_artifact() {
             design.semantics.as_ref(),
             Some(&phero_ir::ddd::ValueSemantics::strict()),
             "value design '{}' carries the fixed block",
-            design.class
+            design.class.as_deref().unwrap_or_default()
         );
     }
     assert!(model.modules[0].designs[2].flags.non_persistent);
     assert_golden_artifact(model, VALUES_ARTIFACT_PATH, VALUES_DESIGN_PATH);
+}
+
+/// The DD3 DTO fixture (issue pherolang#300): the mirror copies the source
+/// class's stored features, the projection selects/renames/derives in
+/// declaration order (and is therefore output-only), the standalone
+/// boundary declares its members — one of them a nested DTO — and the
+/// service operation's parameter and return slots carry the DTO references.
+#[test]
+fn conformance_dtos_matches_golden_artifact() {
+    use phero_ir::ddd::{DddTypeRef, DtoDirection, DtoMemberKind};
+
+    let model = compile_fixture(DTOS_DESIGN_PATH, DTOS_DOMAIN_PATH);
+    let designs = &model.modules[0].designs;
+    let shape = |name: &str| {
+        designs
+            .iter()
+            .filter_map(|design| design.dto_shape.as_ref())
+            .find(|shape| shape.name == name)
+            .unwrap_or_else(|| panic!("expected the dto shape '{name}'"))
+    };
+    let member_names = |name: &str| -> Vec<&str> {
+        shape(name)
+            .members
+            .iter()
+            .map(|member| member.name.as_str())
+            .collect()
+    };
+
+    // Mirror: every stored feature of the source class, in declaration
+    // order; `Author` has no entity design, so the mirror is its only design.
+    assert_eq!(member_names("Author"), ["name", "handle"]);
+    assert_eq!(shape("Author").direction, DtoDirection::Input);
+
+    // Projection: selections, a renamed plain path, and a derivation.
+    assert_eq!(
+        member_names("BookSummary"),
+        ["isbn", "title", "currency", "code", "pricey", "authorName"],
+    );
+    assert_eq!(shape("BookSummary").direction, DtoDirection::Output);
+    let summary = shape("BookSummary");
+    assert_eq!(summary.members[4].kind, DtoMemberKind::Derive);
+    assert_eq!(
+        summary.members[4].expression.as_deref(),
+        Some("priceCents > 5000")
+    );
+    assert_eq!(summary.members[5].kind, DtoMemberKind::Select);
+    assert_eq!(summary.members[5].path, ["author", "name"]);
+
+    // Standalone: declared members, one of them another DTO boundary.
+    let request = shape("OrderRequest");
+    assert_eq!(request.direction, DtoDirection::Input);
+    assert_eq!(member_names("OrderRequest"), ["book", "currency", "codes"]);
+    assert_eq!(request.members[0].kind, DtoMemberKind::Declared);
+    assert_eq!(
+        request.members[0].type_,
+        DddTypeRef::dto("BookDraft"),
+        "a nested DTO member keeps its boundary reference"
+    );
+
+    // Service slots: a DTO return and a DTO parameter.
+    let operations = &model.modules[0].services[0].operations;
+    assert_eq!(
+        operations[0].return_type,
+        Some(DddTypeRef::dto("BookDraft"))
+    );
+    assert_eq!(
+        operations[1].return_type,
+        Some(DddTypeRef::dto("BookSummary"))
+    );
+    assert_eq!(
+        operations[2].params[0].type_,
+        DddTypeRef::dto("OrderRequest")
+    );
+
+    assert_golden_artifact(model, DTOS_ARTIFACT_PATH, DTOS_DESIGN_PATH);
 }
 
 #[test]

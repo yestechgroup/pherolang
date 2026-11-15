@@ -276,7 +276,12 @@ impl NounClassification {
                             }
                             _ => None,
                         })
-                        .or_else(|| resolve_design_class(union, base, &design.class));
+                        .or_else(|| {
+                            design
+                                .class
+                                .as_deref()
+                                .and_then(|class| resolve_design_class(union, base, class))
+                        });
                     let Some(key) = key else {
                         continue;
                     };

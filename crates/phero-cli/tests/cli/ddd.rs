@@ -114,7 +114,7 @@ fn ir_ddd_file_emits_the_machine_and_its_derivations() {
         .expect("stdout is DDD design JSON");
     let design = &emitted.modules[0].designs[0];
     let machine = design.machine.as_ref().expect("the machine lowers");
-    assert_eq!(design.class, "PayRun");
+    assert_eq!(design.class.as_deref(), Some("PayRun"));
     assert_eq!(machine.field, "status");
     assert_eq!(machine.initial, "Draft");
     assert_eq!(machine.terminals, ["Reversed", "Posted"]);

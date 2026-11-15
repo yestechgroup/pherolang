@@ -46,6 +46,32 @@ policy in [docs/VERSIONING.md](docs/VERSIONING.md).
   immutable collection views, structural equality/hash in declaration
   order, derived features computed, surrogate id never public or
   equality-bearing — is written into `docs/DDD.md`.
+- **DTO boundaries in the `.ddd` surface** (DD3, issue #300, epic #297): a
+  `dto` design is now a transport shape in three forms — **mirror**
+  (`dto User`, every stored feature of the class), **projection**
+  (`dto BookSummary from Book { title; isbn; rating = playLength / 60; }`,
+  selecting a feature, renaming a plain path, or deriving with the source
+  class as `self`), and **standalone** (`dto CreateBookRequest { String
+  title; }`, no domain class). Members are ordered and their names are the
+  wire names; duplicate output names are errors, and a member may not
+  embed or select a designed entity. Direction is derived: any derived
+  member makes the DTO `output`, and an output DTO is refused in a
+  parameter slot (a return type may be output). Boundary names are
+  application-wide unique and may not shadow a domain type (mirror DTOs
+  are exempt), and a DTO carries no `op` (now an **error**, not the
+  pre-DD3 warning), repository, machine, or entity-only flag. The artifact
+  adds `dtoShape` (`name`, optional `source`, `direction`, ordered
+  `members`) and the `DddTypeRef` signature slot — domain refs stay the
+  byte-identical `TypeRef` object, DTO refs are `{"dto":"Name"}`;
+  `Design.class` is optional for standalone DTOs, `formatVersion` stays 2,
+  and domain-only signatures stay byte-identical. A search `document`
+  entry and a DTO projection share one projection AST (`document DtoName;`
+  convergence is a follow-up, not shipped). `phero-backend-ddd` /
+  `pherolang artifact check` enforce the DTO contract from the artifact
+  alone (a `dtoShape` on every dto design and nowhere else, well-formed
+  ordered members, resolvable DTO references, no output DTO as a
+  parameter), and `docs/DDD.md` gains the section, the rules, the wire
+  shapes, the consumer contract, and the Sculptor mapping update.
 
 ## [0.3.0] — Phero Lang (2026-11-14)
 

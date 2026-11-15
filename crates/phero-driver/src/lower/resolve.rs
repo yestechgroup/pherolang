@@ -232,6 +232,45 @@ pub(crate) fn resolve_ddd_type(
     )
 }
 
+/// Resolves a `.ddd` **signature** type to a [`DddTypeRef`] (DD3,
+/// pherolang#300): a domain type or an application DTO boundary.
+///
+/// Resolution tries the domain namespace first (the rule above); when that
+/// fails and the authored name is a single segment matching one of
+/// `dto_names`, the name is a DTO boundary and the failed domain diagnostics
+/// are discarded. A name matching **both** is the pre-pass's
+/// [`E_DTO_NAME_COLLISION`](phero_diagnostics::ddd::E_DTO_NAME_COLLISION)
+/// error, so the domain wins deterministically when it happens (the artifact
+/// is dropped either way; mirror DTOs deliberately share their source
+/// class's name and resolve as the class).
+pub(crate) fn resolve_ddd_type_ref(
+    type_ref: &mox::TypeRef,
+    packages: &[DomainPackage],
+    base: Option<&str>,
+    dto_names: &[String],
+    diags: &mut Vec<Diagnostic>,
+) -> ir::ddd::DddTypeRef {
+    let before = diags.len();
+    let resolution = resolve_preferred(type_ref, packages, base, diags);
+    let fallback = base.unwrap_or_else(|| {
+        packages
+            .first()
+            .map(|package| package.name.as_str())
+            .unwrap_or("")
+    });
+    if let Some(resolution) = resolution {
+        return ir::ddd::DddTypeRef::Domain(ir_type_of(Some(&resolution), fallback, type_ref));
+    }
+    if type_ref.name.segments.len() == 1 {
+        let name = &type_ref.name.segments[0].text;
+        if dto_names.iter().any(|dto| dto == name) {
+            diags.truncate(before);
+            return ir::ddd::DddTypeRef::Dto { dto: name.clone() };
+        }
+    }
+    ir::ddd::DddTypeRef::Domain(ir_type_of(None, fallback, type_ref))
+}
+
 /// Resolves a `.ddd` design's class target: only a class resolves. On
 /// failure the resolution diagnostics stand, enriched with `design_help`
 /// when they do not already carry a help line; a non-class resolution gets

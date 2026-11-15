@@ -1299,3 +1299,38 @@ fn integrity_codes_are_registered() {
         assert_eq!(entry.severity, severity, "{code}");
     }
 }
+
+/// A standalone DTO has no source class and no capabilities/aggregates; the
+/// union pass must read its artifact without panicking and report nothing
+/// (DD3, issue pherolang#300).
+#[test]
+fn a_standalone_dto_artifact_passes_the_union_checks() {
+    let domains = [(
+        "library.mox".to_string(),
+        "package nz.example.library\n\nclass Book { String title }".to_string(),
+    )];
+    let source = concat!(
+        "import \"library.mox\";\n",
+        "\n",
+        "application Library {\n",
+        "    module catalogue {\n",
+        "        dto CreateBookRequest { String title; }\n",
+        "    }\n",
+        "}\n",
+    );
+    let compilation = phero_driver::compile_ddd_str(
+        "library.ddd",
+        source,
+        &domains,
+        &phero_driver::DomainImports::default(),
+    );
+    assert!(
+        compilation.diagnostics.is_empty(),
+        "{:?}",
+        compilation.diagnostics
+    );
+    let model = compilation.model.expect("artifact");
+    assert_eq!(model.modules[0].designs[0].class, None);
+    let diagnostics = check_integrity(&[("library.ddd".to_string(), model)], &[], &[], &[], &[]);
+    assert!(diagnostics.is_empty(), "{diagnostics:?}");
+}

@@ -48,11 +48,26 @@
 //!   its optional provenance members (`declared_in`, `contract`, `version`)
 //!   stay `None` when the counterpart artifact was not supplied at compile
 //!   time.
-//! - **Shared IR types.** Signatures reuse the domain IR's [`crate::TypeRef`]
-//!   (adjacent tagging: `{"type": "class", "value": {...}}`) and
-//!   [`crate::OperationParam`] (`{"name": ..., "type": ...}`); there are no
-//!   parallel wire-level signature types. A [`StateMachine`]'s enum is the
-//!   same [`crate::TypeRef::Enum`].
+//! - **Signature types (DD3).** Operation signatures carry a
+//!   [`DddTypeRef`] — **the DDD-local** type slot — because a DTO boundary
+//!   is not a resolved domain class: it serializes untagged, so
+//!   [`DddTypeRef::Domain`] is *exactly* the domain IR's [`crate::TypeRef`]
+//!   object (`{"type": "class", "value": {...}}`, byte-identical to the
+//!   pre-DD3 signatures) while [`DddTypeRef::Dto`] is
+//!   `{"dto": "BookSummary"}`. Parameters are [`DddParam`]
+//!   (`{"name": ..., "type": ..., "multiplicity": ...}`), the DDD twin of
+//!   the domain's [`crate::OperationParam`]; the domain artifact's own
+//!   `TypeRef`/`OperationParam` stay unchanged, since a `.mox` operation
+//!   never references a DTO. A [`StateMachine`]'s enum is still the shared
+//!   [`crate::TypeRef::Enum`].
+//! - **DTO boundaries.** A `dto`-stereotyped [`Design`] carries its
+//!   boundary in [`Design::dto_shape`] (DD3, pherolang#300): the boundary
+//!   [`DtoShape::name`] (the name a [`DddTypeRef::Dto`] references), the
+//!   resolved `source` class it is built from, the [`DtoDirection`], and
+//!   the boundary [`DtoMember`]s (`select` / `derive` / `declared`). A
+//!   **standalone** DTO has no `.mox` source at all, so [`Design::class`]
+//!   and [`Design::type_ref`] are `None` — the keys are omitted — and the
+//!   shape's `source` is `None` too.
 //! - **State machines.** A [`Design`] may carry a [`StateMachine`] (`machine`
 //!   block). The state set is derived — `initial` + `terminals` + transition
 //!   endpoints — never serialized as a separate list; terminalness is
@@ -89,8 +104,9 @@
 //!   hashing, and ordering.
 //!
 //! [`Design::class`] names the referenced `.mox` class (unqualified or
-//! package-qualified at this layer); resolution against the domain
-//! [`crate::Model`] is a driver/consumer concern, never a wire concern.
+//! package-qualified at this layer) and is absent for a standalone DTO
+//! boundary; resolution against the domain [`crate::Model`] is a
+//! driver/consumer concern, never a wire concern.
 //! Likewise [`ServiceOperation::capabilities`] loosely references actor
 //! capability names (the [`crate::ActorModel`] dimension),
 //! [`ServiceOperation::emits`] loosely references event names (the
@@ -124,8 +140,9 @@ mod services;
 
 pub use application::{Application, Module};
 pub use designs::{
-    BuiltinRepositoryOp, Design, DesignFlags, EqualityPolicy, IdentityPolicy, Repository,
-    RepositoryOperation, StateMachine, Stereotype, Transition, ValueSemantics,
+    BuiltinRepositoryOp, Design, DesignFlags, DtoDirection, DtoMember, DtoMemberKind, DtoShape,
+    EqualityPolicy, IdentityPolicy, Repository, RepositoryOperation, StateMachine, Stereotype,
+    Transition, ValueSemantics,
 };
 pub use references::{CapabilityRef, DecisionRef, EventRef, TargetKind, TargetRef};
 pub use searches::{
@@ -133,8 +150,8 @@ pub use searches::{
     SearchSort,
 };
 pub use services::{
-    ChildRef, ConditionPath, ConditionScope, DecisionPin, Delegation, Service, ServiceOperation,
-    TransitionRef,
+    ChildRef, ConditionPath, ConditionScope, DddParam, DddTypeRef, DecisionPin, Delegation,
+    Service, ServiceOperation, TransitionRef,
 };
 
 /// The artifact format version this crate writes and accepts for DDD design

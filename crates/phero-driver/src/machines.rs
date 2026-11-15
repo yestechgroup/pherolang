@@ -54,6 +54,17 @@ fn derived_trigger(target: &str) -> String {
     }
 }
 
+/// The design's name for the machine bridge: the authored class, or the DTO
+/// boundary name for a class-less standalone DTO (DD3 — a DTO carries no
+/// machine legally, but the bridge never panics on the artifact shape).
+fn design_name(design: &phero_ir::ddd::Design) -> String {
+    design
+        .class
+        .clone()
+        .or_else(|| design.dto_shape.as_ref().map(|shape| shape.name.clone()))
+        .unwrap_or_default()
+}
+
 /// Lowers every designed machine of the artifact onto the restingstate
 /// `xstate-ir` `Machine` form, in artifact order (modules, then designs).
 pub fn lower_design_machines(model: &DddModel) -> Vec<Machine> {
@@ -108,7 +119,7 @@ pub fn lower_design_machines(model: &DddModel) -> Vec<Machine> {
                 });
             }
             machines.push(Machine {
-                id: design.class.clone(),
+                id: design_name(design),
                 initial: machine.initial.clone(),
                 context: ContextSchema {
                     fields: vec![ContextField {
@@ -143,7 +154,7 @@ pub fn derived_events(model: &DddModel) -> Vec<DerivedEvent> {
             };
             events.push(DerivedEvent {
                 event: "state_changed".to_string(),
-                entity: design.class.clone(),
+                entity: design_name(design),
                 field: machine.field.clone(),
             });
         }

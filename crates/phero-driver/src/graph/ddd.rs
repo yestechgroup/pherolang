@@ -21,6 +21,30 @@ use phero_ir::graph::{kinds, GraphEdge};
 use super::resolve::Symbols;
 use super::{ids, pooled, pooled_with, Builder, FileRef};
 
+/// The design's local name segment for the graph's design-derived node names
+/// (`stateMachine`, child operations): the authored class's last segment, or
+/// the DTO boundary name for a class-less standalone DTO (DD3).
+fn design_name_segment(design: &Design) -> String {
+    design
+        .class
+        .as_deref()
+        .map(|class| ids::last_segment(class).to_string())
+        .or_else(|| dto_boundary_node(design).map(str::to_string))
+        .unwrap_or_default()
+}
+
+/// The DTO boundary name that owns its own graph node (DD3): a projection
+/// and a standalone DTO. A mirror DTO's boundary name is its source class —
+/// the `.mox` node already represents it — so it returns `None` and the
+/// graph emits no second node.
+fn dto_boundary_node(design: &Design) -> Option<&str> {
+    let shape = design.dto_shape.as_ref()?;
+    match design.class.as_deref().map(ids::last_segment) {
+        Some(class) if class == shape.name => None,
+        _ => Some(shape.name.as_str()),
+    }
+}
+
 /// Emits the design file's nodes.
 pub(super) fn nodes(builder: &mut Builder, file: &FileRef, model: &DddModel) {
     builder.add_node(ids::file_node(&file.display, &file.application));
@@ -77,9 +101,20 @@ pub(super) fn nodes(builder: &mut Builder, file: &FileRef, model: &DddModel) {
                     );
                 }
             }
-            let class_segment = ids::last_segment(&design.class);
+            // A projection/standalone DTO owns a named boundary node (DD3):
+            // the graph's `dto` kind. A mirror DTO's name is the source
+            // class, whose `.mox` node already exists, so it emits none.
+            if let Some(dto) = dto_boundary_node(design) {
+                builder.add_named(
+                    kinds::DTO,
+                    &file.display,
+                    &file.application,
+                    &ids::dto_name(&module_name, dto),
+                );
+            }
+            let class_segment = design_name_segment(design);
             if let Some(machine) = &design.machine {
-                let machine_name = ids::state_machine_name(&module_name, class_segment);
+                let machine_name = ids::state_machine_name(&module_name, &class_segment);
                 builder.add_named_attr(
                     kinds::STATE_MACHINE,
                     &file.display,
@@ -99,7 +134,7 @@ pub(super) fn nodes(builder: &mut Builder, file: &FileRef, model: &DddModel) {
             }
             for operation in &design.child_operations {
                 let operation_name =
-                    ids::child_operation_name(&module_name, class_segment, &operation.name);
+                    ids::child_operation_name(&module_name, &class_segment, &operation.name);
                 builder.add_named(
                     kinds::SERVICE_OPERATION,
                     &file.display,
@@ -220,7 +255,27 @@ fn module_edges(
     // Machines, kept for the trigger pass.
     let mut machines: Vec<(String, &Design, &StateMachine)> = Vec::new();
     for design in &module.designs {
-        let class = symbols.resolve_class(&design.class, base, application);
+        let class = design
+            .class
+            .as_deref()
+            .and_then(|class| symbols.resolve_class(class, base, application));
+        // A projection/standalone DTO's boundary node designs its source
+        // class (a standalone DTO has none).
+        if let Some(dto) = dto_boundary_node(design) {
+            let dto_node = ids::dto_name(&module_name, dto);
+            let dto_id = ids::node(kinds::DTO, display, &dto_node);
+            edges.push(GraphEdge::new(
+                dto_id.clone(),
+                module_id.clone(),
+                kinds::MEMBER_OF,
+            ));
+            if let Some(class) = &class {
+                edges.push(
+                    GraphEdge::new(dto_id, class.id.clone(), kinds::DESIGNS)
+                        .attribute("via", "dto"),
+                );
+            }
+        }
         if let Some(repository) = &design.repository {
             let repository_name = ids::repository_name(&module_name, &repository.name);
             let repository_id = ids::node(kinds::REPOSITORY, display, &repository_name);
@@ -245,7 +300,7 @@ fn module_edges(
                     kinds::MEMBER_OF,
                 ));
                 if let Some(return_type) = &operation.return_type {
-                    if let Some(target) = symbols.type_target(return_type, application) {
+                    if let Some(target) = symbols.ddd_type_target(return_type, application) {
                         edges.push(
                             GraphEdge::new(operation_id.clone(), target.id.clone(), kinds::TYPE_OF)
                                 .attribute("role", "return"),
@@ -253,7 +308,7 @@ fn module_edges(
                     }
                 }
                 for param in &operation.params {
-                    if let Some(target) = symbols.type_target(&param.type_, application) {
+                    if let Some(target) = symbols.ddd_type_target(&param.type_, application) {
                         edges.push(
                             GraphEdge::new(operation_id.clone(), target.id.clone(), kinds::TYPE_OF)
                                 .attribute("role", "param")
@@ -264,10 +319,11 @@ fn module_edges(
             }
         }
         // The designed class's local name: the node table's `<Class>` segment
-        // (an authored `pkg::Class` spelling is qualified, not a local name).
-        let class_segment = ids::last_segment(&design.class);
+        // (an authored `pkg::Class` spelling is qualified, not a local name;
+        // a class-less DTO falls back to its boundary name).
+        let class_segment = design_name_segment(design);
         if let Some(machine) = &design.machine {
-            let machine_name = ids::state_machine_name(&module_name, class_segment);
+            let machine_name = ids::state_machine_name(&module_name, &class_segment);
             let machine_id = ids::node(kinds::STATE_MACHINE, display, &machine_name);
             edges.push(GraphEdge::new(
                 machine_id.clone(),
@@ -293,7 +349,7 @@ fn module_edges(
         }
         for operation in &design.child_operations {
             let operation_name =
-                ids::child_operation_name(&module_name, class_segment, &operation.name);
+                ids::child_operation_name(&module_name, &class_segment, &operation.name);
             let operation_id = ids::node(kinds::SERVICE_OPERATION, display, &operation_name);
             edges.push(GraphEdge::new(
                 operation_id.clone(),
@@ -422,7 +478,9 @@ fn operation_binds_transition(
             phero_ir::TypeRef::Enum { name, .. } => Some(name.as_str()),
             _ => None,
         };
-        if enum_name != Some(qualifier.as_str()) && design.class != *qualifier {
+        if enum_name != Some(qualifier.as_str())
+            && design.class.as_deref() != Some(qualifier.as_str())
+        {
             return false;
         }
     }
@@ -455,7 +513,7 @@ fn operation_edges(
         );
     }
     if let Some(return_type) = &operation.return_type {
-        if let Some(target) = symbols.type_target(return_type, application) {
+        if let Some(target) = symbols.ddd_type_target(return_type, application) {
             edges.push(
                 GraphEdge::new(operation_id, target.id.clone(), kinds::TYPE_OF)
                     .attribute("role", "return"),
@@ -463,7 +521,7 @@ fn operation_edges(
         }
     }
     for param in &operation.params {
-        if let Some(target) = symbols.type_target(&param.type_, application) {
+        if let Some(target) = symbols.ddd_type_target(&param.type_, application) {
             edges.push(
                 GraphEdge::new(operation_id, target.id.clone(), kinds::TYPE_OF)
                     .attribute("role", "param")

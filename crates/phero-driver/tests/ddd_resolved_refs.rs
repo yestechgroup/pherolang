@@ -185,12 +185,17 @@ fn every_design_carries_its_resolved_class() {
         designed += 1;
         match design.type_ref.as_ref() {
             Some(TypeRef::Class { package, name }) => {
-                assert_eq!(package, "nz.example.library", "design '{}'", design.class);
+                let authored = design.class.as_deref().expect("a class-backed design");
+                assert_eq!(package, "nz.example.library", "design '{authored}'");
                 // The authored name is the class name, unqualified in this
                 // fixture.
-                assert_eq!(name, &design.class);
+                assert_eq!(name, authored);
             }
-            other => panic!("design '{}' has {:?}", design.class, other),
+            other => panic!(
+                "design '{}' has {:?}",
+                design.class.as_deref().unwrap_or_default(),
+                other
+            ),
         }
     }
     assert_eq!(designed, 7, "every library design was checked");

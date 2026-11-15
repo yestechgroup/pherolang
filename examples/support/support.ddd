@@ -1,8 +1,9 @@
 // Support-desk application design over support.mox, tied by name to the
 // support.actor capabilities: the desk module designs the ticket queue
-// (entity with a scaffolded repository, an immutable refund decision,
-// and a full-text search projection), the people module projects the
-// user register as a read-side DTO.
+// (entity with a scaffolded repository, an immutable refund decision, and a
+// full-text search projection) plus its transport boundaries — a standalone
+// input DTO and a projected read-side summary — while the people module
+// mirrors the user register as a read-side DTO.
 import "support.mox";
 
 application SupportDesk {
@@ -12,11 +13,12 @@ application SupportDesk {
         service TicketService {
             inject TicketRepository;
             inject TicketSearch;
-            Ticket raise(String title, boolean internal) emits TicketRaised;
+            Ticket raise(NewTicket draft) emits TicketRaised;
             boolean raiseRefund(String ticketNo, int cents) capability RaiseRefund emits RefundRequested;
             boolean approveRefund(String ticketNo, int cents, User approver) capability ApproveRefund emits RefundApproved;
             Ticket[] listTickets();
             Ticket getTicket(String ticketNo);
+            TicketSummary summarizeTicket(String ticketNo);
             boolean claimTicket(String ticketNo, User helper);
             boolean refundTicket(String ticketNo, int cents);
             boolean markRead(String ticketNo) capability ReadTicket;
@@ -47,6 +49,21 @@ application SupportDesk {
         /// deep-immutable, structural equality — so every stored feature of
         /// the class is readonly (R-V1–R-V3).
         value RefundDecision nonPersistent
+        /// The transport shape accepted by `raise`: a declared, source-less
+        /// boundary (DD3).
+        dto NewTicket {
+            String title;
+            boolean internal;
+        }
+
+        /// Read-side ticket summary: a projection, not a domain class.
+        dto TicketSummary from Ticket {
+            ticketNo;
+            title;
+            state;
+            refundable = refundCents > 0;
+        }
+
         /// Full-text search over the ticket queue.
         search TicketSearch {
             entity Ticket

@@ -4,7 +4,104 @@ use serde::{Deserialize, Serialize};
 
 use crate::ddd::{CapabilityRef, DecisionRef, EventRef, TargetRef};
 use crate::wire::is_false;
-use crate::{Multiplicity, OperationParam, TypeRef};
+use crate::{Multiplicity, TypeRef};
+
+/// A signature type reference of a DDD operation (DD3, pherolang#300):
+/// either a **resolved domain type** or a **DTO boundary name**.
+///
+/// **Untagged**, so the wire shape is the reference's own rather than a
+/// wrapper's:
+///
+/// - [`DddTypeRef::Domain`] is exactly the shared [`TypeRef`] object
+///   (`{"type":"class","value":{...}}`), which keeps every domain-only DDD
+///   signature byte-identical to what it was before DD3.
+/// - [`DddTypeRef::Dto`] is `{"dto":"BookSummary"}`.
+///
+/// A DTO reference is deliberately *not* a [`TypeRef`]: a DTO boundary need
+/// not exist in the domain model at all (a standalone DTO has no `.mox`
+/// source), so there is no package-qualified identity to resolve. The
+/// boundary name matches the [`DtoShape::name`](crate::ddd::DtoShape::name)
+/// of the design that defines it.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(untagged)]
+pub enum DddTypeRef {
+    /// A fully resolved domain type, exactly as the domain IR spells it.
+    Domain(TypeRef),
+    /// A DTO boundary, by the boundary name.
+    Dto {
+        /// The DTO boundary name.
+        dto: String,
+    },
+}
+
+impl DddTypeRef {
+    /// Wraps a resolved domain type.
+    pub fn domain(type_ref: TypeRef) -> Self {
+        Self::Domain(type_ref)
+    }
+
+    /// References a DTO boundary by its boundary name.
+    pub fn dto(name: impl Into<String>) -> Self {
+        Self::Dto { dto: name.into() }
+    }
+
+    /// The wrapped domain type, or `None` for a DTO boundary.
+    pub fn as_domain(&self) -> Option<&TypeRef> {
+        match self {
+            Self::Domain(type_ref) => Some(type_ref),
+            Self::Dto { .. } => None,
+        }
+    }
+
+    /// The DTO boundary name, or `None` for a domain type.
+    pub fn dto_name(&self) -> Option<&str> {
+        match self {
+            Self::Domain(_) => None,
+            Self::Dto { dto } => Some(dto),
+        }
+    }
+}
+
+/// A parameter of a DDD operation signature ([`ServiceOperation`] or
+/// [`RepositoryOperation`](crate::ddd::RepositoryOperation)) (DD3,
+/// pherolang#300).
+///
+/// The wire shape matches the shared [`crate::OperationParam`] for a
+/// domain-typed parameter (`{"name": ..., "type": {...}}`), but the type
+/// slot is a [`DddTypeRef`] so a parameter may also be DTO-typed
+/// (`{"name": ..., "type": {"dto": "BookSummary"}}`). The domain IR's own
+/// [`crate::OperationParam`] stays unchanged on purpose: a `.mox` operation
+/// never references a DTO, so widening it would put a DDD-only concept into
+/// the domain artifact.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DddParam {
+    /// Parameter name.
+    pub name: String,
+    /// The resolved parameter type, domain or DTO.
+    #[serde(rename = "type")]
+    pub type_: DddTypeRef,
+    /// Declared cardinality. `None` is single-valued.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub multiplicity: Option<Multiplicity>,
+}
+
+impl DddParam {
+    /// Creates a single-valued parameter of the given type.
+    pub fn new(name: impl Into<String>, type_: DddTypeRef) -> Self {
+        Self {
+            name: name.into(),
+            type_,
+            multiplicity: None,
+        }
+    }
+
+    /// Chainable setter for the declared cardinality.
+    pub fn with_multiplicity(mut self, multiplicity: Option<Multiplicity>) -> Self {
+        self.multiplicity = multiplicity;
+        self
+    }
+}
 
 /// An application service: stateless use-case orchestration over
 /// repositories and other services.
@@ -89,17 +186,18 @@ pub struct DecisionPin {
 pub struct ServiceOperation {
     /// Operation name, unique within its service.
     pub name: String,
-    /// The resolved return type. `None` for delegation operations whose
-    /// signature is copied from the delegated target.
+    /// The resolved return type (DD3: a domain type or a DTO boundary).
+    /// `None` for delegation operations whose signature is copied from the
+    /// delegated target.
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub return_type: Option<TypeRef>,
+    pub return_type: Option<DddTypeRef>,
     /// The declared return cardinality; `None` is single-valued. Paired
     /// with [`ServiceOperation::return_type`] — never set without it.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub return_multiplicity: Option<Multiplicity>,
     /// Parameters in declaration order.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
-    pub params: Vec<OperationParam>,
+    pub params: Vec<DddParam>,
     /// Delegation target, when this operation forwards to a dependency's
     /// operation instead of declaring its own body.
     #[serde(default, skip_serializing_if = "Option::is_none")]

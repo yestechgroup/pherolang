@@ -302,6 +302,11 @@ pub mod kinds {
     pub const REPOSITORY_OPERATION: &str = "repositoryOperation";
     /// Node: a `.ddd` search.
     pub const SEARCH: &str = "search";
+    /// Node: a `.ddd` DTO boundary — a projection (`dto X from Y { … }`) or a
+    /// standalone (`dto X { … }`) `dto` design (DD3). A mirror DTO's boundary
+    /// name is its source class, whose `class` node already exists, so it
+    /// emits none.
+    pub const DTO: &str = "dto";
     /// Node: a `.ddd` state machine.
     pub const STATE_MACHINE: &str = "stateMachine";
     /// Node: a `.ddd` state-machine transition.
@@ -567,6 +572,7 @@ mod tests {
             (kinds::REPOSITORY, "repository"),
             (kinds::REPOSITORY_OPERATION, "repositoryOperation"),
             (kinds::SEARCH, "search"),
+            (kinds::DTO, "dto"),
             (kinds::STATE_MACHINE, "stateMachine"),
             (kinds::TRANSITION, "transition"),
             (kinds::DECISION_MODEL, "decisionModel"),

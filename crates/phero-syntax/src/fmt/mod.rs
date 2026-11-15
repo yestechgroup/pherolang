@@ -61,7 +61,14 @@
 //!   design's flags are canonicalized to the fixed order `scaffold
 //!   auditable optimisticLocking nonPersistent cache` regardless of source
 //!   order (with `abstract` before the stereotype), and every
-//!   operation/`inject`/import line ends in `;`. The `capability a, b`
+//!   operation/`inject`/import line ends in `;`. A `dto` design may carry a
+//!   member block after its flags: a projection `dto Name from Source {
+//!   ... }` renders its `name;`/`name = <expr>;` members one per line, a
+//!   standalone `dto Name { ... }` renders its `type_ref multiplicity? name;`
+//!   members one per line, and a mirror DTO (no block) stays on one line
+//!   with its flags. A projection/standalone block is followed by one
+//!   structural blank line when another member follows it; no blank line is
+//!   emitted inside a block. The `capability a, b`
 //!   clause stays on the operation's line. A search projection's members
 //!   are canonicalized to the fixed order `entity text filters sort
 //!   document ranking analyzer pagination capability` regardless of source
@@ -377,6 +384,11 @@ enum BodyKind {
     DddSearchNames,
     /// `name = expr;` entries of a `.ddd` search's `document` clause.
     DddSearchDocument,
+    /// `name;`/`name = expr;` members of a `.ddd` projection DTO block.
+    DddDtoProjection,
+    /// `type_ref multiplicity? name;` members of a `.ddd` standalone DTO
+    /// block.
+    DddDtoDeclared,
     /// `limit`/`max`/`cursor` members of a `.ddd` search's `pagination`.
     DddSearchPagination,
     /// typed payload fields of an `.evt` event declaration.
@@ -1118,6 +1130,8 @@ impl<'src> Formatter<'src> {
                 BodyKind::DddSearchField => self.scan_ddd_search_field_item(),
                 BodyKind::DddSearchNames => self.scan_ddd_search_name_item(),
                 BodyKind::DddSearchDocument => self.scan_ddd_search_document_item(),
+                BodyKind::DddDtoProjection => self.scan_ddd_projection_member(),
+                BodyKind::DddDtoDeclared => self.scan_ddd_declared_member(),
                 BodyKind::DddSearchPagination => self.scan_ddd_search_pagination_item(),
                 BodyKind::EvtEvent => self.scan_evt_event_item(),
                 BodyKind::EvtChannel => self.scan_evt_channel_item(),

@@ -389,70 +389,63 @@ fn rule_11_search_document_fields(
     let mut document = Vec::new();
     let mut document_names: Vec<&str> = Vec::new();
     for entry in &search.document {
-        if document_names.contains(&entry.name.text.as_str()) {
+        // The shared projection AST also models a DTO's `name;` selection;
+        // search syntax is assignment-only (the parser refuses the select
+        // shorthand inside `document`), so anything else is unreachable.
+        let dsl::DddProjectionMember::Assign { name, expr, .. } = entry else {
+            continue;
+        };
+        if document_names.contains(&name.text.as_str()) {
             local.push(
                 Diagnostic::error(
                     format!(
                         "duplicate document field '{}' in search '{}'",
-                        entry.name.text, search.name.text
+                        name.text, search.name.text
                     ),
-                    Some(entry.name.span),
+                    Some(name.span),
                 )
                 .with_help("a document field is declared once per search"),
             );
         } else {
-            document_names.push(&entry.name.text);
+            document_names.push(&name.text);
         }
-        let text = design_source[entry.expr.start..entry.expr.end].trim();
+        let text = design_source[expr.start..expr.end].trim();
         let parsed = phero_expr::parse(text);
         for error in &parsed.errors {
-            let start = entry
-                .expr
-                .start
-                .saturating_add(error.span.start)
-                .min(entry.expr.end);
-            let end = entry
-                .expr
+            let start = expr.start.saturating_add(error.span.start).min(expr.end);
+            let end = expr
                 .start
                 .saturating_add(error.span.end)
-                .clamp(start, entry.expr.end);
+                .clamp(start, expr.end);
             local.push(Diagnostic::error(
                 format!(
                     "invalid document expression in field '{}': {}",
-                    entry.name.text, error.message
+                    name.text, error.message
                 ),
                 Some((start..end).into()),
             ));
         }
         if let (Some(ast), Some((package, class))) = (&parsed.ast, resolved_entity) {
-            let context = phero_expr::TypeContext::from_model(union);
-            let checker = phero_expr::TypeChecker::new(context).with_self(package, class);
+            let types = phero_expr::DomainTypes::from_model(union);
+            let checker = phero_expr::TypeChecker::new(types).with_self(package, class);
             if let Err(errors) = checker.type_of(ast) {
                 for error in errors {
-                    let start = entry
-                        .expr
-                        .start
-                        .saturating_add(error.span.start)
-                        .min(entry.expr.end);
-                    let end = entry
-                        .expr
+                    let start = expr.start.saturating_add(error.span.start).min(expr.end);
+                    let end = expr
                         .start
                         .saturating_add(error.span.end)
-                        .clamp(start, entry.expr.end);
+                        .clamp(start, expr.end);
                     local.push(Diagnostic::error(
                         format!(
                             "invalid document expression in field '{}': {}",
-                            entry.name.text, error.message
+                            name.text, error.message
                         ),
                         Some((start..end).into()),
                     ));
                 }
             }
         }
-        document.push(DocumentField::new(
-            entry.name.text.clone(),
-            text.to_string(),
-        ));
+        document.push(DocumentField::new(name.text.clone(), text.to_string()));
     }
     (document, local)
 }
