@@ -52,6 +52,10 @@ const MODELS: &[(&str, &str)] = &[
         "tests/conformance/models/currency.mox",
         "tests/conformance/schemas/currency.wire.schema.json",
     ),
+    (
+        "tests/conformance/models/collections.mox",
+        "tests/conformance/schemas/collections.wire.schema.json",
+    ),
 ];
 
 #[test]

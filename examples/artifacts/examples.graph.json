@@ -395,6 +395,13 @@
       "application": "library/library.mox"
     },
     {
+      "id": "feature:library/library.mox#nz.example.library.Book.tags",
+      "kind": "feature",
+      "name": "nz.example.library.Book.tags",
+      "file": "library/library.mox",
+      "application": "library/library.mox"
+    },
+    {
       "id": "feature:library/library.mox#nz.example.library.Book.title",
       "kind": "feature",
       "name": "nz.example.library.Book.title",
@@ -3328,6 +3335,11 @@
     },
     {
       "from": "feature:library/library.mox#nz.example.library.Book.pages",
+      "to": "class:library/library.mox#nz.example.library.Book",
+      "kind": "memberOf"
+    },
+    {
+      "from": "feature:library/library.mox#nz.example.library.Book.tags",
       "to": "class:library/library.mox#nz.example.library.Book",
       "kind": "memberOf"
     },

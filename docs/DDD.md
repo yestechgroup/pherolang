@@ -1282,9 +1282,10 @@ rationale for each divergence is in [Deliberate divergences](#deliberate-diverge
 | DTO | `dto` design in three forms: mirror (`dto User`), projection (`dto BookSummary from Book { ... }`), standalone (`dto CreateBookRequest { ... }`) | real parity, shaped differently: a projection selects (`name;`), renames a path (`name = path;`), or derives (`name = expr;`, source class as `self`); no identity, aggregate membership, repository, machine, invariants, or behavior; `input`/`output` is derived from the member set, and an output boundary is not a parameter; a standalone DTO has no domain class |
 | `findByQuery` / `findByCondition` finders | `search` projection (intent only: text fields with boosts, filters, sorts, ranking, pagination, document projections) — the backend chooses the engine (Postgres FTS, Tantivy, OpenSearch, ...) | no query language and no engine-specific ordering; the engine is the consumer's choice |
 | generated `GET /things/search?q=` endpoints | consumer concern — the artifact is backend-independent | — |
-| `Set` / `List` / `Bag` / `ordered` collections | multiplicity only (`String[]`, `Book[0,3]`) | absent as declarations: no collection kind and no ordering metadata; declaration order is retained (DD6) |
-| `Map` | — | absent everywhere, and not yet declared a non-goal (DD6) |
-| `fetch` / `cascade` / `orderColumn` | — | absent: persistence behavior belongs to the backend that owns the storage |
+| `Set` / `List` collections | `.mox` collection kinds on a multiplicity: `T[]` is an ordered list, `T[] { unique }` an ordered distinct list, `T[] { set }` an unordered distinct set (DD6); an operation **signature** carries only the multiplicity | no collection kind on a signature slot: the kind belongs to the feature, and a signature is the callee's contract. `Collection<T>`/`List<T>`/`Set<T>` are spelled by multiplicity + collection constraint, never as generic types |
+| `Bag` / `ordered` collections | — | absent: a multiset is a storage need, and declaration/insertion order is the only semantic order (DD6) |
+| `Map` | — | deliberate non-goal (DD6): no JSON Schema map type, unspecified key order, and no in-tree backend need. Workaround: a pair class + `contains` when the map is a domain concept, an opaque datatype wrapping a platform map for an implementation detail, or `refers` to an entity keyed by the map key |
+| `fetch` / `cascade` / `orderby` / `orderColumn` | — | absent: persistence behavior belongs to the backend that owns the storage |
 | Traits | interface `extends` in the `.mox` domain model (signature-sharing half) | absent as a composition feature |
 | Gap classes | body-less `.mox` `op` as the hand-written hook | absent: whole-file generation, no generated-base/subclass split |
 | Composite natural keys | several `id` features on one class | no composite-key declaration; the `id` set is the key |
@@ -1313,10 +1314,25 @@ rationale.
   multiplicity annotation (`String[1..10] tags`), which the JSON Schema
   backend already lowers to `minItems`/`maxItems`; a constraint-block
   spelling would duplicate it.
-- **Ordered collections (`orderby` / `orderColumn`, Set/List/Bag)** —
-  persistence-engine metadata (JPA `@OrderBy`/`@OrderColumn`); Phero Lang
-  features keep declaration order, and a backend that needs a different
-  ordering derives it from its own configuration, not from the artifact.
+- **Collection kinds in signatures (`Set` / `List` / `Bag` / `Map`)** — the
+  `.mox` domain model carries the semantic collection kind on the *feature*
+  (`T[]` list, `T[] { unique }` ordered distinct list, `T[] { set }`
+  unordered distinct set — DD6, issue
+  [#303](https://github.com/yestechgroup/pherolang/issues/303)); the `.ddd`
+  signature grammar carries multiplicity only. A signature's collection kind
+  is the callee's contract: if a set is needed in a return, return a
+  DTO/value with a set feature rather than growing the signature grammar.
+  `Bag` is out (a multiset is a storage need), and `Map` is a deliberate
+  non-goal: JSON Schema has no map type, key ordering is unspecified, and no
+  in-tree backend needs one — model a domain map as a pair class plus
+  `contains`, an implementation detail as an opaque datatype, or a keyed
+  entity lookup as `refers` (see `docs/LANGUAGE.md`, *Collections*).
+- **Persistence ordering (`orderby` / `orderColumn`)** — JPA
+  `@OrderBy`/`@OrderColumn` metadata, a storage knob, not a domain fact. A
+  list's order is declaration/insertion order; a user-controlled order is an
+  explicit ordinal feature (`int position`) plus a list, and a set has no
+  semantic order. A backend that needs a different storage ordering derives
+  it from its own configuration, not from the artifact.
 - **Fetch / cascade** — JPA persistence knobs with aggregate-derived
   defaults in Sculptor's generator; the artifact is backend-independent,
   so persistence behavior belongs to the backend that owns the storage.

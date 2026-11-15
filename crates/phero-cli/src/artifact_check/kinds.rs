@@ -106,8 +106,53 @@ pub(super) fn check_ir_model(
         phero_ir::FORMAT_VERSION,
         "IR artifact",
         &["packages"],
-        no_extra,
+        check_ir_collections,
     )
+}
+
+/// DD6 (issue #303): a `collection` marker must agree with its feature. A set
+/// is duplicate-free, so `collection: "set"` requires `constraints.unique`;
+/// a collection kind is only meaningful on a many-valued, non-container
+/// feature. The check runs only when the version gate passes and the
+/// document deserializes as the Core IR — a malformed artifact is the shape
+/// gate's problem, not this contract's.
+fn check_ir_collections(root: &serde_json::Map<String, Value>, errors: &mut Vec<String>) {
+    if format_version_error(root, phero_ir::FORMAT_VERSION, "IR artifact").is_some() {
+        return;
+    }
+    let Ok(model) = serde_json::from_value::<phero_ir::Model>(Value::Object(root.clone())) else {
+        return;
+    };
+    for package in &model.packages {
+        for class in &package.classes {
+            for feature in &class.features {
+                if feature.collection.is_none() {
+                    continue;
+                }
+                let location = format!("class '{}' feature '{}'", class.name, feature.name);
+                if feature.kind == phero_ir::FeatureKind::Container {
+                    errors.push(format!(
+                        "IR artifact {location}: a collection kind on a container feature; \
+                         a container is the single-valued owner slot and cannot be a collection"
+                    ));
+                    continue;
+                }
+                if !feature.multiplicity.is_many() {
+                    errors.push(format!(
+                        "IR artifact {location}: a collection kind on a single-valued feature; \
+                         collection kinds apply to many-valued features only"
+                    ));
+                    continue;
+                }
+                if !feature.constraints.unique {
+                    errors.push(format!(
+                        "IR artifact {location}: collection \"set\" without constraints.unique; \
+                         a set is duplicate-free, so the two markers must agree"
+                    ));
+                }
+            }
+        }
+    }
 }
 
 pub(super) fn check_actor_model(

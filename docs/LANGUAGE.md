@@ -359,7 +359,9 @@ what follows is what they mean.
 - **`derived`** features are computed, not stored; a body must be the neutral
   expression language in a single `expr { ... }` block (Tier 2), e.g.
   `derived String citation { expr { title } }`. Backends lower it into a
-  getter; a bare `{ ... }` body is rejected.
+  getter; a bare `{ ... }` body is rejected. A derived feature may also carry
+  a constraint block — alone or after the body — for the collection
+  constraints (`unique`, `set`).
 - **Defaults**: string/int/boolean literals or an enum literal name (for
   enum-typed attributes only).
 - **Constraints** (attributes only) declare value bounds, e.g.
@@ -382,20 +384,82 @@ what follows is what they mean.
   family bounds literal values — and both may coexist; a numeric or length
   bound that admits zero literals is a compile error, while `pattern` is
   allowed but never statically validated (descriptive only). Class and
-  interface types take no constraints. Length bounds must be non-negative
+  interface types take no value bounds. Length bounds must be non-negative
   and `min` ≤ `max` in both families. On a many-valued attribute the
-  value bounds apply to the elements. The sixth keyword, **`unique`**, takes
-  no value (`String[] tags { unique }`) and is the one collection-level
-  constraint: it is admitted only on many-valued attributes — of any element
-  type — and rejected on single-valued ones. It is schema-only: it surfaces
-  as `uniqueItems: true` on the attribute's array schema, with element
-  equality following JSON value equality, and implies no runtime
-  validation. They surface as the JSON Schema
-  keywords of the same names (`pattern`, `minLength`, `maxLength`,
-  `minimum`, `maximum`, `uniqueItems`).
+  value bounds apply to the elements. The **collection constraints** — the
+  value-less `unique` and `set` — are admitted on every many-valued feature
+  kind (attributes, `contains`, `refers`, and `derived`) and rejected on a
+  single-valued one; value bounds stay attribute-only, so a `pattern`,
+  length, or numeric bound on a relationship or derived feature is an error
+  naming the constraint family. A `derived` feature may carry a constraint
+  block with or without a body (`derived String[] tags { set }`,
+  `derived String[] tags { expr { ... } } { set }`). They surface as the
+  JSON Schema keywords of the same names (`pattern`, `minLength`,
+  `maxLength`, `minimum`, `maximum`, `uniqueItems`).
 
 Multiplicity shorthand: `[]` = `[0..*]`; absent: attributes are `1..1`,
 `contains`/`refers` are `0..*`, `container` and `derived` are `0..1`.
+
+### Collections: lists and sets
+
+Multiplicity answers *how many*; the constraint block answers *what kind*.
+Two collection kinds exist, and a feature without a collection constraint is
+a list:
+
+| Kind | Order | Duplicates | Spelling | Core IR |
+|---|---|---|---|---|
+| list | insertion/declaration order preserved | allowed | `String[] tags` | `collection` absent |
+| list + `unique` | insertion/declaration order preserved | rejected | `String[] tags { unique }` | `collection` absent, `constraints.unique: true` |
+| set | unordered | rejected | `String[] tags { set }` | `collection: "set"` **and** `constraints.unique: true` |
+
+- **`set` implies `unique`.** A set is unordered *and* duplicate-free, so it
+  lowers both markers; writing `{ unique set }` is legal but redundant, and
+  `pherolang fmt` canonicalises it to `{ set }`. A unique list is ordered —
+  the two are not interchangeable. `pherolang artifact check` rejects an
+  artifact whose `collection: "set"` lacks `constraints.unique`, carries a
+  collection kind on a single-valued feature, or puts one on a `container`
+  (the single-valued owner slot).
+- **Where the block is legal.** `unique`/`set` apply to many-valued
+  attributes, `contains`, `refers`, and `derived` features. A single-valued
+  feature rejects either with a spanned error; value bounds
+  (`pattern`, `minLength`, `maxLength`, `minimum`, `maximum`) remain
+  attribute-only. Container features take no constraint block.
+- **Ordering.** A list's order is insertion/declaration order and is a real
+  domain fact (a playlist, a sequence of steps). A user-controlled order is
+  modelled as an explicit ordinal feature (`int position`) plus a list —
+  never as persistence metadata. A set has no semantic order.
+- **Deterministic serialization.** A set serializes as a JSON array in sorted
+  order by the element's comparison key (strings lexicographic, numbers
+  numeric, enums by declared variant, datatypes by wrapped value, references
+  by canonical id), so byte-golden output is reproducible. Consumers must not
+  read meaning into that order; equality is order-insensitive by
+  construction.
+- **JSON Schema.** Both a set and a unique list emit `uniqueItems: true` on
+  the array schema. JSON Schema has no standard "unordered" keyword and none
+  is invented, so the list/set distinction lives in the artifact
+  (`collection`) alone; the schema governs duplicate-freedom, the artifact
+  the semantic kind.
+- **Backend boundary (Rust).** The Rust backend stores a set as
+  `std::collections::BTreeSet<T>` (deterministic iteration, order-insensitive
+  equality) and a list as `Vec<T>`. A set element must be totally ordered —
+  every primitive except the IEEE `float`/`double` (dates are ordered),
+  enums, datatypes, vocabularies, and class references (their generated
+  slotmap key type is `Ord`) qualify; a `float`/`double` set is rejected at
+  generation time with an error naming the feature and type. The documented
+  fallback is an ordered unique list (`double[] scores { unique }`). `.ddd`
+  operation signatures carry multiplicity but **no collection kind**: the
+  kind belongs to the feature, and a signature is the callee's contract (see
+  [`docs/DDD.md`](DDD.md#sculptor-concept-mapping)).
+
+**Deliberate non-goals (v1).** These are documented holes, not accidents:
+
+| Not carried | Why | Workaround |
+|---|---|---|
+| `Map<K, V>` | JSON Schema has no map type (dynamic keys are not type-checkable the same way), key ordering is unspecified, and no in-tree backend needs one. `TypeRef::Map { key, value }` remains additive if a real need lands | a pair class (`class CurrencyRate { String currency; double rate; }`) plus `contains CurrencyRate[]` when the map is a domain concept; an opaque datatype wrapping a platform map when it is an implementation detail; a `refers` to an entity keyed by the map's key when the values are entities |
+| `Bag<T>` | a multiset is a storage/persistence need, not a domain fact; duplicates are the exception | a list, plus `unique` when duplicates are illegal |
+| `orderby` / `orderColumn` | JPA persistence metadata (`@OrderBy`/`@OrderColumn`), a storage knob rather than a domain fact | an explicit `int position` feature plus a list; the owning backend derives its storage ordering |
+| `Collection<T>` / `Set<T>` / `List<T>` as generic types | cardinality is orthogonal to the element type, and generic collection types leak platform APIs into the domain | multiplicity plus the collection constraint: `T[]`, `T[] { unique }`, `T[] { set }` |
+| Sorted-set ordering semantics | a set has no order beyond deterministic serialization | sort in the consumer for a presentation order |
 
 A class may declare its storage table right after the name:
 `class PayRunStatus table "pay_run_status" { ... }` (the `table_annotation`

@@ -159,7 +159,7 @@ fn library_example_parses_without_errors() {
     // class Book { ... }
     let book = expect_class(&model.declarations[3], "Book");
     assert!(book.extends.is_empty());
-    assert_eq!(book.features.len(), 7);
+    assert_eq!(book.features.len(), 8);
     assert!(span_text(LIBRARY, book.span).starts_with("class Book"));
 
     expect_feature(&book.features, 0, "container", "library", |feature| {
@@ -207,7 +207,21 @@ fn library_example_parses_without_errors() {
         );
         assert_eq!(opposite.as_ref().map(|n| n.text.as_str()), Some("books"));
     });
-    expect_feature(&book.features, 6, "derived", "citation", |feature| {
+    expect_feature(&book.features, 6, "attribute", "tags", |feature| {
+        let (type_ref, multiplicity, default) = expect_attribute(feature);
+        assert_eq!(type_ref.name.full_name(), "String");
+        assert_eq!(
+            multiplicity.as_ref().map(|m| &m.kind),
+            Some(&MultiplicityKind::Unbounded)
+        );
+        assert!(default.is_none());
+        let FeatureDecl::Attribute { constraints, .. } = feature else {
+            unreachable!("checked by expect_attribute")
+        };
+        assert_eq!(constraints.len(), 1);
+        assert_eq!(constraints[0].name.text, "set");
+    });
+    expect_feature(&book.features, 7, "derived", "citation", |feature| {
         let FeatureDecl::Derived {
             type_ref,
             multiplicity,

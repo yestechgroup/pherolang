@@ -63,6 +63,14 @@ mod example_assertions {
                 book.set_pages(412);
                 book.set_copyright(Date("1965-08-01".to_string()));
                 book.set_category(BookCategory::ScienceFiction);
+                // DD6: a set attribute stores a `BTreeSet` — the deliberate
+                // duplicate and the reversed insertion order prove the
+                // dedup + deterministic-order contract at the mutator.
+                let mut tags = std::collections::BTreeSet::new();
+                tags.insert("desert".to_string());
+                tags.insert("classic".to_string());
+                tags.insert("classic".to_string());
+                book.set_tags(tags);
             }
             res.book_add_authors(dune, frank);
 
@@ -72,6 +80,10 @@ mod example_assertions {
                 book.set_pages(310);
                 book.set_copyright(Date("1937-09-21".to_string()));
                 book.set_category(BookCategory::Mystery);
+                let mut tags = std::collections::BTreeSet::new();
+                tags.insert("fantasy".to_string());
+                tags.insert("classic".to_string());
+                book.set_tags(tags);
             }
             res.book_add_authors(hobbit, frank);
             res.book_add_authors(hobbit, tolkien);
@@ -132,6 +144,53 @@ mod example_assertions {
                 Some("Book: The Hobbit".to_string()),
                 "every book cites the same way"
             );
+        }
+
+        #[test]
+        fn set_tags_dedups_and_sorts() {
+            // DD6: `String[] tags { set }` is a `BTreeSet<String>`, so the
+            // injected duplicate collapses and iteration is sorted regardless
+            // of insertion order. Equality is order-insensitive by
+            // construction, and serialization order is deterministic.
+            let res = conformance_resource();
+            let dune = res
+                .books
+                .iter()
+                .find(|(_, book)| book.title == "Dune")
+                .map(|(key, _)| key)
+                .unwrap();
+            let hobbit = res
+                .books
+                .iter()
+                .find(|(_, book)| book.title == "The Hobbit")
+                .map(|(key, _)| key)
+                .unwrap();
+            let tags = |key| {
+                res.book(key)
+                    .unwrap()
+                    .tags
+                    .iter()
+                    .cloned()
+                    .collect::<Vec<String>>()
+            };
+            assert_eq!(
+                tags(dune),
+                vec!["classic".to_string(), "desert".to_string()],
+                "Dune's duplicate collapses and the set iterates sorted"
+            );
+            assert_eq!(
+                tags(hobbit),
+                vec!["classic".to_string(), "fantasy".to_string()],
+                "Hobbit's reversed insertion order still iterates sorted"
+            );
+            // Equal sets built in opposite insertion orders compare equal.
+            let mut left = std::collections::BTreeSet::new();
+            left.insert("a".to_string());
+            left.insert("b".to_string());
+            let mut right = std::collections::BTreeSet::new();
+            right.insert("b".to_string());
+            right.insert("a".to_string());
+            assert_eq!(left, right, "set equality is order-insensitive");
         }
 
         #[test]

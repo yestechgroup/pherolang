@@ -26,6 +26,7 @@ class Book {
     Date copyright
     BookCategory category
     refers Writer[] authors opposite books
+    String[] tags { set }
     derived String citation {
         expr { "Book: " + title }
     }

@@ -56,6 +56,10 @@ const MODELS: &[(&str, &str)] = &[
         "tests/conformance/models/register.mox",
         "tests/conformance/artifacts/register.phero.json",
     ),
+    (
+        "tests/conformance/models/collections.mox",
+        "tests/conformance/artifacts/collections.phero.json",
+    ),
 ];
 
 /// The one conformance model with `import schema` declarations. The driver

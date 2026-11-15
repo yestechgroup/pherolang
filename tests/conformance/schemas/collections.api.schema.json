@@ -1,0 +1,95 @@
+{
+  "$defs": {
+    "Line": {
+      "$comment": "omitted: container 'play' (reconstructed from nesting on load)",
+      "additionalProperties": false,
+      "properties": {
+        "sku": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "sku"
+      ],
+      "type": "object"
+    },
+    "Person": {
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "plays": {
+          "items": {
+            "pattern": "^play/[0-9]+$",
+            "type": "string"
+          },
+          "type": "array",
+          "uniqueItems": true
+        }
+      },
+      "required": [
+        "name"
+      ],
+      "type": "object"
+    },
+    "Play": {
+      "additionalProperties": false,
+      "properties": {
+        "acts": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array",
+          "uniqueItems": true
+        },
+        "labels": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array",
+          "uniqueItems": true
+        },
+        "lines": {
+          "items": {
+            "$ref": "#/$defs/Line"
+          },
+          "type": "array",
+          "uniqueItems": true
+        },
+        "notes": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "playedBy": {
+          "items": {
+            "pattern": "^person/[0-9]+$",
+            "type": "string"
+          },
+          "type": "array",
+          "uniqueItems": true
+        },
+        "tags": {
+          "items": {
+            "type": "string"
+          },
+          "readOnly": true,
+          "type": "array",
+          "uniqueItems": true
+        },
+        "title": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "lines",
+        "title"
+      ],
+      "type": "object"
+    }
+  },
+  "$id": "urn:phero:model:phero.conformance.collections:api",
+  "$schema": "https://json-schema.org/draft/2020-12/schema"
+}

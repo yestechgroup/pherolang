@@ -8,7 +8,9 @@ use phero_ir::{FeatureKind, TypeRef};
 use crate::naming::{rust_ident, snake_case};
 
 use super::ops::expr_return_type;
-use super::types::{feature_doc, field_type, is_reference, op_type, value_type};
+use super::types::{
+    collection_type, feature_doc, field_type, is_reference, many_default, op_type, value_type,
+};
 use super::validate::emit_validate_method;
 use super::*;
 pub(crate) fn emit_struct(
@@ -54,7 +56,7 @@ pub(crate) fn emit_struct(
         }
         let field = rust_ident(&snake_case(&feature.name));
         let value = if feature.multiplicity.is_many() {
-            "Vec::new()".to_string()
+            many_default(feature).to_string()
         } else if is_reference(feature.kind) || feature.multiplicity.lower == 0 {
             "None".to_string()
         } else {
@@ -80,7 +82,7 @@ pub(crate) fn emit_struct(
                     continue;
                 }
                 let value_type = if feature.multiplicity.is_many() {
-                    format!("Vec<{}>", value_type(&feature.type_)?)
+                    collection_type(feature, &value_type(&feature.type_)?)?
                 } else {
                     value_type(&feature.type_)?
                 };

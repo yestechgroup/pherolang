@@ -3,8 +3,8 @@
 use super::*;
 
 use phero_ir::{
-    DefaultValue, EnumLiteral, Feature, FeatureKind, Multiplicity, Operation, OperationParam,
-    Package, PrimitiveType, VocabularyDef, VocabularyEntry,
+    CollectionKind, DefaultValue, EnumLiteral, Feature, FeatureKind, Multiplicity, Operation,
+    OperationParam, Package, PrimitiveType, VocabularyDef, VocabularyEntry,
 };
 
 const PKG: &str = "nz.example.payments";
@@ -207,7 +207,7 @@ fn vocabulary_enum_with_key_and_facet_accessors() {
         code.contains("#[repr(u8)]\npub enum Currency {\n    USD,\n    EUR,\n    JPY,\n}"),
         "enum shape:\n{code}"
     );
-    assert!(code.contains("#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]"));
+    assert!(code.contains("#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]"));
     assert!(
         code.contains("Vocabulary Currency")
             && code.contains("iso:4217")
@@ -1405,4 +1405,223 @@ fn distinct_class_pairs_keep_the_class_named_value_parameter() {
         ),
         "{code}"
     );
+}
+
+// ---------------------------------------------------------------------------
+// Collection kinds (DD6, issue #303): a `set` feature stores a `BTreeSet`,
+// so equality is order-insensitive and serialization is deterministic.
+// ---------------------------------------------------------------------------
+
+/// `Play` owns `Line` children (one set containment) and refers to `Person`
+/// players (one set cross reference); `tags` is a set attribute.
+fn collections_model() -> Model {
+    let mut model = Model::new();
+    let mut package = Package::new(PKG);
+    package.classes.push(ClassDef::new(
+        "Play",
+        vec![],
+        vec![
+            Feature::new(
+                "tags",
+                FeatureKind::Attribute,
+                TypeRef::Primitive(PrimitiveType::String),
+                Multiplicity::MANY,
+            )
+            .with_collection(CollectionKind::Set),
+            Feature::new(
+                "lines",
+                FeatureKind::Containment,
+                class_ref("Line"),
+                Multiplicity::MANY,
+            )
+            .with_collection(CollectionKind::Set),
+            Feature::new(
+                "playedBy",
+                FeatureKind::CrossReference,
+                class_ref("Person"),
+                Multiplicity::MANY,
+            )
+            .with_collection(CollectionKind::Set)
+            .with_opposite("Person", "plays"),
+        ],
+    ));
+    package.classes.push(ClassDef::new(
+        "Line",
+        vec![],
+        vec![Feature::new(
+            "sku",
+            FeatureKind::Attribute,
+            TypeRef::Primitive(PrimitiveType::String),
+            Multiplicity::REQUIRED,
+        )],
+    ));
+    package.classes.push(ClassDef::new(
+        "Person",
+        vec![],
+        vec![Feature::new(
+            "plays",
+            FeatureKind::CrossReference,
+            class_ref("Play"),
+            Multiplicity::MANY,
+        )
+        .with_collection(CollectionKind::Set)
+        .with_opposite("Play", "playedBy")],
+    ));
+    model.packages.push(package);
+    model
+}
+
+fn generate_collections() -> String {
+    generate(&collections_model())
+        .expect("generate")
+        .remove("models.rs")
+        .expect("models.rs")
+}
+
+#[test]
+fn set_attributes_store_and_set_a_btree_set() {
+    let code = generate_collections();
+    assert!(
+        code.contains("pub tags: std::collections::BTreeSet<String>,"),
+        "{code}"
+    );
+    assert!(
+        code.contains("tags: std::collections::BTreeSet::new(),"),
+        "the Default is an empty BTreeSet:\n{code}"
+    );
+    assert!(
+        code.contains("pub fn set_tags(&mut self, tags: std::collections::BTreeSet<String>)"),
+        "the setter takes the set:\n{code}"
+    );
+}
+
+#[test]
+fn set_references_use_the_generated_key_type() {
+    let code = generate_collections();
+    assert!(
+        code.contains("pub played_by: std::collections::BTreeSet<PersonId>,"),
+        "{code}"
+    );
+    assert!(
+        code.contains("pub lines: std::collections::BTreeSet<LineId>,"),
+        "{code}"
+    );
+}
+
+#[test]
+fn set_pair_mutators_insert_instead_of_push() {
+    let code = generate_collections();
+    assert!(
+        code.contains("a.played_by.insert(person);")
+            || code.contains("a.played_by.insert(played_by);"),
+        "a set end inserts:\n{code}"
+    );
+    assert!(
+        !code.contains(".played_by.push("),
+        "a set end must never push:\n{code}"
+    );
+    assert!(
+        code.contains("b.plays.insert(play);") || code.contains("b.plays.insert(plays);"),
+        "the opposite set end inserts too:\n{code}"
+    );
+    // One-sided set containment inserts as well.
+    assert!(code.contains("a.lines.insert(line);"), "{code}");
+}
+
+#[test]
+fn set_load_paths_collect_into_a_btree_set() {
+    let code = generate_collections();
+    assert!(
+        code.contains("let mut parsed = std::collections::BTreeSet::new();"),
+        "{code}"
+    );
+    assert!(
+        code.contains("parsed.insert(expect_string(element, \"Play.tags\")?.to_string());"),
+        "{code}"
+    );
+    assert!(
+        code.contains("obj.lines.insert(child);"),
+        "containment loading inserts into the set:\n{code}"
+    );
+    assert!(
+        code.contains("obj.played_by.insert(target);"),
+        "cross-reference loading inserts into the set:\n{code}"
+    );
+}
+
+#[test]
+fn set_serialization_iterates_the_sorted_set() {
+    let code = generate_collections();
+    assert!(
+        code.contains("serde_json::Value::Array(obj.tags.iter().map(|v| serde_json::Value::String(v.clone())).collect())"),
+        "{code}"
+    );
+    assert!(
+        code.contains("obj.played_by\n                    .iter()\n                    .map(|child| ref_object(&ids.persons[child]))"),
+        "the set iterates in deterministic order:\n{code}"
+    );
+}
+
+#[test]
+fn set_element_types_must_be_totally_ordered() {
+    let mut model = Model::new();
+    let mut package = Package::new(PKG);
+    package.classes.push(ClassDef::new(
+        "Measurements",
+        vec![],
+        vec![Feature::new(
+            "scores",
+            FeatureKind::Attribute,
+            TypeRef::Primitive(PrimitiveType::Double),
+            Multiplicity::MANY,
+        )
+        .with_collection(CollectionKind::Set)],
+    ));
+    model.packages.push(package);
+    let error = generate(&model).expect_err("a float set has no total order");
+    let message = error.to_string();
+    assert!(
+        message.contains("set feature 'scores'") && message.contains("double"),
+        "the error names the feature and the type: {message}"
+    );
+}
+
+#[test]
+fn set_representable_value_types_derive_a_total_order() {
+    let mut model = currency_model();
+    package_with_set_enum_and_datatype(&mut model);
+    let code = generate(&model)
+        .expect("generate")
+        .remove("models.rs")
+        .expect("models.rs");
+    // Enums, datatypes, and vocabularies all gain `PartialOrd, Ord` so a set
+    // of any of them can be a `BTreeSet`.
+    assert!(
+        code.contains("#[derive(Debug, Clone, PartialEq, Eq, Default, Hash, PartialOrd, Ord)]\npub struct Amount(pub String);"),
+        "datatypes derive Ord:\n{code}"
+    );
+    assert!(
+        code.contains("#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]\n#[repr(i64)]\npub enum Grade {"),
+        "enums derive Ord:\n{code}"
+    );
+    assert!(
+        code.contains("#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]\n#[repr(u8)]\npub enum Currency {"),
+        "vocabularies derive Ord:\n{code}"
+    );
+}
+
+/// Adds an enum and a datatype to the currency model's package.
+fn package_with_set_enum_and_datatype(model: &mut Model) {
+    let package = &mut model.packages[0];
+    package.enums.push(phero_ir::EnumDef::new(
+        "Grade",
+        vec![
+            EnumLiteral::new("A", None, 0),
+            EnumLiteral::new("B", None, 1),
+        ],
+    ));
+    package.datatypes.push(phero_ir::DatatypeDef::new(
+        "Amount",
+        Some("String".to_string()),
+    ));
 }
