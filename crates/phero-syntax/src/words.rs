@@ -86,6 +86,7 @@ pub const MOX_CONTEXTUAL: &[&str] = &[
     "convert",
     "format",
     "unique",
+    "set",
     "pattern",
     "minLength",
     "maxLength",

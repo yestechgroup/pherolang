@@ -1011,6 +1011,91 @@ fn constraint_blocks_survive_as_written_inside_the_block() {
     assert!(once.contains("// note"), "interior comments are preserved");
 }
 
+#[test]
+fn constraint_blocks_render_on_references_and_containments() {
+    let formatted = format(concat!(
+        "class P {",
+        " refers Person[] playedBy { set }",
+        " contains Line[] lines opposite run { unique }",
+        " }",
+    ))
+    .unwrap();
+    assert_eq!(
+        formatted,
+        concat!(
+            "class P {\n",
+            "    refers Person[] playedBy { set }\n",
+            "    contains Line[] lines opposite run { unique }\n",
+            "}\n",
+        )
+    );
+    assert_eq!(format(&formatted).unwrap(), formatted);
+}
+
+#[test]
+fn a_redundant_unique_beside_set_canonicalises_to_set() {
+    // `set` implies `unique`: writing both is legal, the canonical form keeps
+    // only `set` (the other entries keep their source order).
+    let formatted =
+        format("class P { String[] tags { unique set } int[] ns { minLength 1 set unique } }")
+            .unwrap();
+    assert_eq!(
+        formatted,
+        concat!(
+            "class P {\n",
+            "    String[] tags { set }\n",
+            "    int[] ns { minLength 1 set }\n",
+            "}\n",
+        )
+    );
+    assert_eq!(format(&formatted).unwrap(), formatted);
+}
+
+#[test]
+fn derived_constraint_block_stays_inline_without_a_body() {
+    let formatted = format("class P { derived Person[] active { set } }").unwrap();
+    assert_eq!(
+        formatted,
+        "class P {\n    derived Person[] active { set }\n}\n"
+    );
+    assert_eq!(format(&formatted).unwrap(), formatted);
+}
+
+#[test]
+fn derived_body_and_constraint_block_render_on_the_closing_brace_line() {
+    let formatted = format(concat!(
+        "class P {",
+        " derived Person[] active { expr { members.filter(m => m.active) } } { set }",
+        " }",
+    ))
+    .unwrap();
+    assert_eq!(
+        formatted,
+        concat!(
+            "class P {\n",
+            "    derived Person[] active {\n",
+            "        expr { members.filter(m => m.active) }\n",
+            "    } { set }\n",
+            "}\n",
+        )
+    );
+    assert_eq!(format(&formatted).unwrap(), formatted);
+}
+
+#[test]
+fn set_is_contextual_and_escape_is_preserved() {
+    // `set` names a feature without escaping; an escaped `^set` keeps its
+    // caret and never reads as the constraint word.
+    assert_eq!(
+        fmt("class P { String set }"),
+        "class P {\n    String set\n}\n"
+    );
+    assert_eq!(
+        fmt("class P { String ^set }"),
+        "class P {\n    String ^set\n}\n"
+    );
+}
+
 // ---------------------------------------------------------------------------
 // Doc comments
 // ---------------------------------------------------------------------------

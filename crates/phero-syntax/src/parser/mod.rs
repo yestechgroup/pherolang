@@ -77,12 +77,14 @@
 //!                               | op_decl | derived_decl | attribute )
 //! modifier         := "id" | "readonly"
 //! containment      := "contains" type_ref multiplicity? name
-//!                     ("opposite" name)?
+//!                     ("opposite" name)? constraint_block?
 //! reference        := "refers" type_ref multiplicity? name
-//!                     ("opposite" name)?
+//!                     ("opposite" name)? constraint_block?
 //! container        := "container" type_ref name ("opposite" name)?
 //! op_decl          := "op" type_ref name "(" params? ")" op_body?
-//! derived_decl     := "derived" type_ref multiplicity? name op_body?
+//! derived_decl     := "derived" type_ref multiplicity? name derived_tail
+//! derived_tail     := ( target_bodies | constraint_block | raw_body )?
+//!                     constraint_block?
 //! attribute        := type_ref multiplicity? name ("=" default)?
 //!                     constraint_block?
 //! params           := param ("," param)*
@@ -91,7 +93,7 @@
 //! op_body          := "{" target_body+ "}" | raw_body
 //! target_body      := name raw_body
 //! constraint_block := "{" constraint_entry* "}"
-//! constraint_entry := constraint_keyword (string | int) | "unique"
+//! constraint_entry := constraint_keyword (string | int) | "unique" | "set"
 //! constraint_keyword := "pattern" | "minLength" | "maxLength"
 //!                     | "minimum" | "maximum"
 //! enum_decl        := "enum" name "{" literal+ "}"
@@ -118,10 +120,17 @@
 //!   error — a whole namespace set is imported, never one type.
 //! * `op_body`'s bare `raw_body` alternative parses but is rejected by the
 //!   driver; a `derived` body must be a single `expr` target body (the
-//!   neutral expression language, `docs/EXPRESSIONS.md`).
-//! * Constraint keywords each at most once per block; `unique` takes no
-//!   value (a literal after it is an error) and is the collection-level
-//!   constraint.
+//!   neutral expression language, `docs/EXPRESSIONS.md`). A `derived` tail's
+//!   `{ ... }` block resolves tagged-body first, then constraint block, then
+//!   bare body, so `{ expr { ... } } { set }` is a body followed by its
+//!   collection constraint.
+//! * Constraint keywords each at most once per block; `unique` and `set`
+//!   take no value (a literal after either is an error). `unique` is the
+//!   ordered distinct list; `set` is the unordered distinct collection and
+//!   implies `unique`. Both are contextual words (`^set` escapes). The block
+//!   is admitted on attributes, `contains`, `refers`, and `derived`; the
+//!   driver restricts value bounds to attributes and the collection
+//!   constraints to many-valued features.
 //! * `table` (the class annotation) is an ordinary identifier in every
 //!   other position — a class, feature, or enum may still be named `table`.
 //!   The annotation is recognized only directly after the class name and at

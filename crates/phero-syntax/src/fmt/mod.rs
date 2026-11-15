@@ -21,9 +21,11 @@
 //!   bodies.
 //! * `id`/`readonly` modifiers normalize to that order, single-spaced,
 //!   before the feature's type. Enum literals keep `as`/`=` only when
-//!   present in the source. An attribute's constraint block renders
+//!   present in the source. A feature's constraint block renders
 //!   single-spaced on the feature's line (`{ pattern "..." minLength 3 }`);
-//!   an empty block collapses to `{}`.
+//!   an empty block collapses to `{}`. A `set` entry implies `unique`, so a
+//!   redundant `unique` in the same block is dropped (`{ unique set }` →
+//!   `{ set }`).
 //! * Comments are preserved verbatim. An own-line comment attaches to the
 //!   following line at its indentation (before a closing `}` it keeps the
 //!   body indent); consecutive own-line comments form a block. A comment that
@@ -31,7 +33,9 @@
 //!   multi-line block comment keeps its internal newlines; only its first
 //!   line is indented.
 //! * The raw `{ ... }` body of a `derived` feature is emitted on one line
-//!   (braces balanced, single spaces), since its contents are not grammar.
+//!   (braces balanced, single spaces), since its contents are not grammar. A
+//!   constraint block after a derived body joins the body's closing-brace
+//!   line (`} { set }`) — the canonical shape the parser reads back.
 //! * An `op` body is target-tagged (`{ <target> { ... } ... }`): the op's
 //!   `{` closes its own line and each `<target> {` block sits at the next
 //!   indent. A target body whose inner bytes contain no newline renders
@@ -835,11 +839,14 @@ impl<'src> Formatter<'src> {
         }
     }
 
-    /// Consumes and emits an attribute's `{ pattern "..." minLength 3 }`
+    /// Consumes and emits a feature's `{ pattern "..." minLength 3 }`
     /// constraint block. The empty block stays inline (`{}`); a non-empty
     /// block renders its `keyword value` pairs single-spaced on the
     /// feature's line, with an interior comment (unusual) forcing the
     /// following pairs onto a continuation line — both shapes are fixpoints.
+    ///
+    /// DD6 canonicalisation: `set` implies `unique`, so a redundant `unique`
+    /// in the same block is dropped (`{ unique set }` → `{ set }`).
     fn scan_constraint_block(&mut self) {
         if !matches!(self.peek_tok(), Some(Token::LBrace)) {
             return;
@@ -854,13 +861,22 @@ impl<'src> Formatter<'src> {
             self.push_text("{}", false);
             return;
         }
+        let set_present = self.constraint_block_has_set();
         self.advance(); // the `{` joins the feature's line
         self.indent += 1;
         loop {
             self.flush_pending(self.indent);
             match self.peek_tok() {
                 Some(Token::RBrace) | None => break,
-                Some(Token::Ident(text)) if is_constraint_keyword(text) => {
+                Some(Token::Ident("unique"))
+                    if set_present
+                        && !matches!(self.peek_tok_nth(1), Some(Token::Str(_) | Token::Int(_))) =>
+                {
+                    // Implied by `set`; drop the redundant name (a literal
+                    // after `unique` is invalid source and is left intact).
+                    self.bump_token();
+                }
+                Some(Token::Ident(text)) if is_constraint_keyword(&text) => {
                     self.advance();
                     if let Some(Token::Str(_) | Token::Int(_)) = self.peek_tok() {
                         self.advance();
@@ -876,6 +892,69 @@ impl<'src> Formatter<'src> {
         self.indent -= 1;
         self.take_if(|token| matches!(token, Token::RBrace));
         self.flush_line();
+    }
+
+    /// Whether the constraint block starting at the front contains a `set`
+    /// entry (read ahead to the matching `}`).
+    fn constraint_block_has_set(&self) -> bool {
+        for node in &self.nodes[self.pos + 1..] {
+            match node {
+                Node::Token(Token::RBrace, _) => return false,
+                Node::Token(Token::Ident("set"), _) => return true,
+                _ => {}
+            }
+        }
+        false
+    }
+
+    /// Whether the `{ ... }` block at the front is a constraint block by the
+    /// parser's derived-tail resolution: an empty block or one led by a
+    /// constraint keyword. Anything else is a body (tagged bodies start with
+    /// `<target> {`, so they are never mistaken for constraints).
+    fn front_is_constraint_block(&mut self) -> bool {
+        if !matches!(self.peek_tok(), Some(Token::LBrace)) {
+            return false;
+        }
+        match self.peek_tok_nth(1) {
+            Some(Token::RBrace) => true,
+            Some(Token::Ident(text)) => is_constraint_keyword(&text),
+            _ => false,
+        }
+    }
+
+    /// Consumes and emits a `derived` feature's tail: the body-or-constraint
+    /// resolution above, plus an optional constraint block after a body
+    /// (`{ expr { ... } } { set }`). The trailing block joins the body's
+    /// closing-brace line.
+    fn scan_derived_tail(&mut self) {
+        if self.front_is_constraint_block() {
+            self.scan_constraint_block();
+            return;
+        }
+        self.scan_op_body();
+        if matches!(self.peek_tok(), Some(Token::LBrace)) {
+            self.resume_last_line();
+            self.scan_constraint_block();
+        }
+    }
+
+    /// Moves the last emitted line (sans its newline) back into the line
+    /// under construction so the next token joins it.
+    fn resume_last_line(&mut self) {
+        if !self.line.is_empty() || self.out.is_empty() {
+            return;
+        }
+        let Some(trimmed) = self.out.strip_suffix('\n') else {
+            return;
+        };
+        let start = trimmed.rfind('\n').map(|index| index + 1).unwrap_or(0);
+        let last = &trimmed[start..];
+        let content = last.trim_start();
+        // The resumed line sits at the body indent (the closing brace of a
+        // feature body is emitted at `self.indent`).
+        self.line_indent = self.indent;
+        self.line = content.to_string();
+        self.out.truncate(start);
     }
 
     /// Consumes and emits the balanced `{ ... }` raw body of a `derived`
@@ -1240,14 +1319,14 @@ fn is_top_keyword(token: &Token<'_>) -> bool {
     )
 }
 
-/// The closed set of constraint keywords allowed inside an attribute's
-/// constraint block (mirrors the parser's set). `unique` is the one
-/// value-less keyword; the scanner already consumes its literal value only
+/// The closed set of constraint keywords allowed inside a feature's
+/// constraint block (mirrors the parser's set). `unique` and `set` are the
+/// value-less keywords; the scanner already consumes a literal value only
 /// when present.
 fn is_constraint_keyword(text: &str) -> bool {
     matches!(
         text,
-        "pattern" | "minLength" | "maxLength" | "minimum" | "maximum" | "unique"
+        "pattern" | "minLength" | "maxLength" | "minimum" | "maximum" | "unique" | "set"
     )
 }
 

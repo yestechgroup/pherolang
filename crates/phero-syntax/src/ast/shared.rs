@@ -131,14 +131,15 @@ pub struct Param {
     pub span: Span,
 }
 
-/// A single constraint entry of an attribute's constraint block, e.g.
-/// `pattern "[A-Z]{3}-[0-9]{4}"`.
+/// A single constraint entry of a feature's constraint block, e.g.
+/// `pattern "[A-Z]{3}-[0-9]{4}"` or the value-less `set`.
 #[derive(Debug, Clone, PartialEq)]
 pub struct Constraint {
     /// The constraint keyword, e.g. `pattern`. Only the constraint keywords
     /// are accepted (`pattern`, `minLength`, `maxLength`, `minimum`,
-    /// `maximum`, and the value-less `unique`); other identifiers do not
-    /// enter the block.
+    /// `maximum`, and the value-less `unique` and `set`); other identifiers do
+    /// not enter the block. `set` is contextual: an ordinary identifier
+    /// everywhere else, and escapable as `^set`.
     pub name: Name,
     /// The constraint value.
     pub value: ConstraintValue,
@@ -147,7 +148,8 @@ pub struct Constraint {
 }
 
 /// The value of a [`Constraint`] entry: a string (`pattern`), an integer
-/// (length and numeric bounds), or the value-less `unique` marker.
+/// (length and numeric bounds), or a value-less collection marker (`unique`,
+/// `set`).
 #[derive(Debug, Clone, PartialEq)]
 pub enum ConstraintValue {
     /// A string literal (unescaped).
@@ -164,7 +166,7 @@ pub enum ConstraintValue {
         /// Span of the literal.
         span: Span,
     },
-    /// No value: the `unique` constraint is a bare flag.
+    /// No value: `unique` and `set` are bare flags.
     Flag {
         /// Span of the whole entry.
         span: Span,
