@@ -72,6 +72,31 @@ policy in [docs/VERSIONING.md](docs/VERSIONING.md).
   ordered members, resolvable DTO references, no output DTO as a
   parameter), and `docs/DDD.md` gains the section, the rules, the wire
   shapes, the consumer contract, and the Sculptor mapping update.
+- **Collection semantics in the `.mox` surface** (DD6, issue #303, epic
+  #297): a feature now carries a collection kind alongside its multiplicity.
+  The constraint block extends to many-valued attributes, `contains`,
+  `refers`, and `derived` features and gains the value-less contextual
+  `set`: `T[]` is an ordered list (duplicates allowed), `T[] { unique }` an
+  ordered distinct list, and `T[] { set }` an unordered, duplicate-free set
+  (`{ unique set }` is legal and formats to `{ set }`). The Core IR gains
+  the sparse `Feature.collection` (`"set"`, absent for a list) and a set
+  lowers `constraints.unique: true` at the same time, so the semantic kind
+  and the schema rule cannot diverge; list-only artifacts stay
+  byte-identical. `pherolang artifact check` rejects a set without `unique`,
+  a collection kind on a single-valued feature, or one on a `container`, and
+  value bounds stay attribute-only (a relationship/derived bound is an error
+  naming its family). The Rust backend emits `std::collections::BTreeSet<T>`
+  for sets (order-insensitive equality, deterministic serialization) and
+  rejects `float`/`double` set elements at generation time with the
+  documented ordered-unique-list fallback; enums, datatypes, and
+  vocabularies gain `PartialOrd, Ord`. JSON Schema keeps `uniqueItems: true`
+  and invents no unordered keyword, so the list/set distinction lives in the
+  artifact. `Map`, `Bag`, persistence ordering (`orderby`/`orderColumn`), and
+  generic `Collection<T>` are documented non-goals with workarounds, `.ddd`
+  signatures deliberately carry no collection kind, and the expression
+  language types a set as `List(T)` (order unspecified). The
+  `library` example gains `String[] tags { set }` with a dedup/order
+  behavioral assertion.
 
 ## [0.3.0] — Phero Lang (2026-11-14)
 

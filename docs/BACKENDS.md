@@ -69,6 +69,27 @@ an actor artifact).
   (`formatVersion`, `isReadOnly`, `"crossReference"`). Note that `$type` /
   `$id` / `$ref` belong to the *instance* format; IR artifacts tag their
   enums **adjacently** as `{"type": "<variant>", "value": <payload>}`.
+- **Collection kinds (DD6, issue #303).** `Feature.collection` is sparse: an
+  absent field means an ordered **list**, and `"set"` means an unordered,
+  duplicate-free **set**. A set always carries `constraints.unique: true` as
+  well — the two are not redundant, because a unique *list* is ordered. The
+  consumer contract: list → insertion/declaration order, duplicates allowed
+  unless `unique`; set → no semantic order, order-insensitive equality, and
+  deterministic serialization (iterate the element key order) so byte
+  output is reproducible. `pherolang artifact check` refuses a set without
+  `unique`, a collection kind on a single-valued feature, or one on a
+  `container`. `Map` is a deliberate non-goal (a pair class / opaque
+  datatype / keyed entity is the workaround), and `Bag` and persistence
+  ordering (`orderby`/`orderColumn`) stay out — see `docs/LANGUAGE.md`,
+  *Collections*.
+- **Rust set lowering.** The Rust backend stores a set as
+  `std::collections::BTreeSet<T>` (`Vec<T>` for a list), so generated
+  equality is order-insensitive and iteration is sorted. Set elements must
+  be totally ordered: enums, datatypes, and vocabularies gain `PartialOrd,
+  Ord`, primitives except `float`/`double` are ordered, and class references
+  use the generated slotmap key type (already `Ord`). A `float`/`double` set
+  element is a generate-time error naming the feature and type; the
+  documented fallback is an ordered unique list.
 - **DDD signature slots (DD3, issue #300).** A design operation's return and
   parameter types are `DddTypeRef`, serialized **untagged**: the domain form
   is exactly the shared `TypeRef` object, so domain-only signature bytes are
