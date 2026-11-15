@@ -12,6 +12,9 @@
  * regardless of specificity, so the palette below is the one that lands without
  * `!important` anywhere.
  */
+@import "@fontsource-variable/geist/index.css";
+@import "@fontsource/ibm-plex-mono/400.css";
+@import "@fontsource/ibm-plex-mono/500.css";
 @import "../../../packages/tokens/src/tokens.css";
 
 /* ---------------------------------------------------------------------------
