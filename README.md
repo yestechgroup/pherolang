@@ -75,6 +75,7 @@ pherolang check model.mox           # validate, render diagnostics
 pherolang check model/              # batch: every supported surface under a directory
 pherolang fmt model/                # format every supported surface under a directory
 pherolang fmt --check model/        # gate: exit 1 naming any unformatted file (formatter-golden X.fmt.<ext> outputs are skipped, like check's)
+pherolang highlight model.mox --format json   # compiler-backed highlight spans (`--format html`; `--surface` for stdin)
 pherolang ir model.mox -o model.phero.json
 pherolang graph build examples/ -o graph.json   # one semantic graph across every surface (`graph` needs a verb: build|query)
 pherolang graph query graph.json node Support.RaiseRefund   # artifact-only: node/list/affected-by/dependencies + cross-policy analytics

@@ -20,6 +20,7 @@ mod gen;
 mod gen_cedar;
 mod gen_tools;
 mod graph;
+mod highlight;
 mod ifml;
 mod import_schema;
 mod import_sigil;

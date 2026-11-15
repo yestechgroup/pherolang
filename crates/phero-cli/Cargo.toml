@@ -16,6 +16,7 @@ path = "src/main.rs"
 [dependencies]
 phero-diagnostics = { workspace = true }
 phero-syntax = { workspace = true }
+phero-highlight = { workspace = true }
 phero-ir = { workspace = true }
 phero-driver = { workspace = true }
 phero-ifml = { workspace = true }

@@ -25,8 +25,13 @@ use phero_parser::Span;
 /// One `.ifml` token. Words are identifiers; there are no keyword variants.
 #[derive(Logos, Debug, Clone, PartialEq, Eq)]
 #[logos(skip r"[ \t\r\n]+")]
-#[logos(skip r"//[^\n]*")]
 pub enum Token<'src> {
+    /// A `// ...` line comment. Captured as a token for tooling (the syntax
+    /// highlighter keeps comments); [`lex`] filters it out, so the parser's
+    /// input is unchanged.
+    #[regex(r"//[^\n]*", priority = 3)]
+    LineComment(&'src str),
+
     /// An identifier: `[A-Za-z][A-Za-z0-9_]*`.
     #[regex(r"[A-Za-z][A-Za-z0-9_]*")]
     Ident(&'src str),
@@ -135,8 +140,25 @@ fn string_payload<'src>(lex: &mut logos::Lexer<'src, Token<'src>>) -> &'src str 
 }
 
 /// Lex `source` into tokens and byte spans. Never fails: invalid regions
-/// become [`Token::Error`].
+/// become [`Token::Error`]. Line comments are filtered out — the parser uses
+/// this entry and its input is unchanged.
 pub fn lex(source: &str) -> Vec<(Token<'_>, Span)> {
+    let mut tokens = Vec::new();
+    let mut lexer = Token::lexer(source);
+    while let Some(result) = lexer.next() {
+        let span: Span = lexer.span().into();
+        match result.unwrap_or(Token::Error) {
+            Token::LineComment(_) => {}
+            token => tokens.push((token, span)),
+        }
+    }
+    tokens
+}
+
+/// Lex `source` into tokens and byte spans **including** line comments.
+/// Never fails: invalid regions become [`Token::Error`]. The highlighter
+/// uses this entry; the parser uses [`lex`].
+pub fn lex_with_trivia(source: &str) -> Vec<(Token<'_>, Span)> {
     let mut tokens = Vec::new();
     let mut lexer = Token::lexer(source);
     while let Some(result) = lexer.next() {
@@ -152,6 +174,7 @@ impl std::fmt::Display for Token<'_> {
             Token::Ident(text) => write!(f, "`{text}`"),
             Token::Number(text) => write!(f, "`{text}`"),
             Token::Str(_) => write!(f, "a string literal"),
+            Token::LineComment(_) => write!(f, "a comment"),
             Token::Error => write!(f, "an invalid token"),
             other => write!(f, "`{}`", other.symbol()),
         }
@@ -190,7 +213,11 @@ impl Token<'_> {
             Token::RBracket => "]",
             Token::LParen => "(",
             Token::RParen => ")",
-            Token::Ident(_) | Token::Number(_) | Token::Str(_) | Token::Error => "",
+            Token::Ident(_)
+            | Token::Number(_)
+            | Token::Str(_)
+            | Token::LineComment(_)
+            | Token::Error => "",
         }
     }
 }

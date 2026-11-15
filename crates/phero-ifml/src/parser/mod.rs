@@ -529,6 +529,26 @@ pub(crate) fn parse_file(text: &str) -> Result<IfmlFile, IfmlParseError> {
     }
 }
 
+/// Parse one `.ifml` source into its spanned syntax tree **without**
+/// resolving imports or touching a domain model.
+///
+/// This is the tooling entry point (the syntax highlighter uses it): it is
+/// the same parser the compiler uses, not a second grammar. The strict
+/// contract rejects any parse issue; [`parse_ifml_syntax_recovering`] is
+/// the total, best-effort twin.
+pub fn parse_ifml_syntax(text: &str) -> Result<IfmlFile, IfmlParseError> {
+    parse_file(text)
+}
+
+/// Parse one `.ifml` source into a partial syntax tree plus every parse
+/// issue. Never fails: a source whose top-level declaration could not be
+/// recovered yields `None` and the issues that explain why.
+pub fn parse_ifml_syntax_recovering(
+    text: &str,
+) -> (Option<IfmlFile>, Vec<phero_parser::ParseError>) {
+    parse_file_recovering(text)
+}
+
 /// Build the crate's parse error from an optional span and a message.
 pub(crate) fn parse_error(span: Option<Span>, message: &str) -> IfmlParseError {
     IfmlParseError::Parse {
@@ -613,44 +633,7 @@ mod grammar_doc_tests {
     /// This file's source; the leading `//!` lines carry the grammar blocks.
     const PARSER_SOURCE: &str = include_str!("mod.rs");
 
-    /// Declaration/body/action words (grammar positions, not data vocabularies).
-    const STRUCTURAL_WORDS: &[&str] = &[
-        "import",
-        "domain",
-        "schema",
-        "view",
-        "action",
-        "module",
-        "actor",
-        "command",
-        "params",
-        "label",
-        "container",
-        "component",
-        "column",
-        "field",
-        "chart",
-        "lookup",
-        "via",
-        "expr",
-        "input",
-        "output",
-        "argument",
-        "option",
-        "prompt",
-        "on",
-        "use",
-        "as",
-        "if",
-        "requires",
-        "navigate",
-        "refresh",
-        "stay",
-    ];
-
-    const TYPE_REFS: &[&str] = &["Uuid", "String", "Int", "Float", "Boolean", "DateTime"];
-
-    const BOOLEANS: &[&str] = &["true", "false"];
+    use crate::words::{BOOLEANS, STRUCTURAL_WORDS, TYPE_REFS};
 
     /// The closed data vocabularies come from the `phero-ir` enums — the same
     /// tables the parser and lowering consume, so the EBNF tripwire cannot

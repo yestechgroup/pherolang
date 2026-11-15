@@ -1,0 +1,6 @@
+import "demo.mox"
+
+actors demo {
+    actor Customer
+    capability Read on Book
+}

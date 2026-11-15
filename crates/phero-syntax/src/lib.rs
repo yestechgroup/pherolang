@@ -39,6 +39,7 @@ pub mod fmt;
 pub mod lexer;
 pub mod parser;
 pub(crate) mod usecases;
+pub mod words;
 
 pub use ast::{
     ActorFile, AnnotationDecl, BindingEntry, ChannelDecl, ClassDecl, CmmnCase, CmmnCriterion,

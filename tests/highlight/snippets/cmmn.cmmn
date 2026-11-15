@@ -1,0 +1,7 @@
+import "demo.mox"
+
+case Review {
+    roles {
+        role Clerk;
+    }
+}

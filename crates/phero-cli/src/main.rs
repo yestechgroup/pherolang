@@ -51,6 +51,12 @@
 //!   artifacts (Core IR, standalone actor policy, DDD design, canonical
 //!   instance) without the originating model; exits `1` on any violation.
 //!   The portable test kit for out-of-tree backends (see docs/BACKENDS.md).
+//! * `pherolang highlight <file|dir|-> ... [-o <path>]` — compiler-backed
+//!   syntax highlighting for any supported surface: the stable versioned
+//!   JSON span artifact or the semantic-class HTML fragment. Directories
+//!   expand like `check`; `-` reads stdin (with `--surface`). Highlighting
+//!   never fails: a fragment or a parse error yields a degraded best-effort
+//!   result, never an error page. See docs/HIGHLIGHTING.md.
 //! * `pherolang verify <files>... -o <receipt.json>` — compile the surfaces
 //!   and emit a **verification receipt**: one canonical, versioned JSON
 //!   document recording the hash of every source file the compile read
@@ -197,6 +203,28 @@ enum Command {
         /// Write the JSON to this path instead of stdout.
         #[arg(short, long, value_name = "FILE")]
         out: Option<PathBuf>,
+    },
+    /// Highlight Phero Lang source with the compiler's own lexers and
+    /// parsers: emit the stable versioned JSON span artifact or the
+    /// semantic-class HTML fragment. Directories expand like `check`; `-`
+    /// reads stdin and requires `--surface`. Degraded results are still
+    /// success — highlighting never fails.
+    Highlight {
+        /// Files, directories, or `-` for stdin.
+        files: Vec<PathBuf>,
+        /// Output encoding: the JSON contract (default) or HTML.
+        #[arg(long, value_enum, default_value = "json")]
+        format: commands::highlight::Format,
+        /// Parse mode. Defaults to `strict` for files and `lenient` for
+        /// stdin; a degraded result always exits `0`.
+        #[arg(long, value_enum)]
+        mode: Option<commands::highlight::Mode>,
+        /// Surface id (or extension) for stdin, or to force one input file.
+        #[arg(long, value_name = "ID")]
+        surface: Option<String>,
+        /// Write to this file (one input) or directory (several inputs).
+        #[arg(short, long, value_name = "PATH")]
+        output: Option<PathBuf>,
     },
     /// Emit a verification receipt for the given model surfaces: one
     /// canonical, versioned JSON document recording every source file the
@@ -387,6 +415,13 @@ fn run(cli: Cli) -> anyhow::Result<ExitCode> {
         Command::Build { files, out } => commands::build::run(files, out),
         Command::Graph { action } => commands::graph::run(action),
         Command::Manifest { file, out } => commands::manifest::run(vec![file], out),
+        Command::Highlight {
+            files,
+            format,
+            mode,
+            surface,
+            output,
+        } => commands::highlight::run(files, format, mode, surface, output),
         Command::Verify {
             files,
             out,

@@ -1,0 +1,68 @@
+{
+  "formatVersion": 1,
+  "surface": "mox",
+  "sourceHash": "sha256:54add36acb8556b6e812437e459d97cd3542af5b70d53281548c8fcfffd585bf",
+  "generator": {
+    "name": "pherolang",
+    "version": "0.3.0"
+  },
+  "degraded": false,
+  "spans": [
+    {
+      "start": 0,
+      "end": 7,
+      "class": "keyword",
+      "modifiers": []
+    },
+    {
+      "start": 8,
+      "end": 12,
+      "class": "namespace",
+      "modifiers": [
+        "declaration"
+      ]
+    },
+    {
+      "start": 13,
+      "end": 18,
+      "class": "keyword",
+      "modifiers": []
+    },
+    {
+      "start": 19,
+      "end": 23,
+      "class": "type",
+      "modifiers": [
+        "declaration"
+      ]
+    },
+    {
+      "start": 24,
+      "end": 25,
+      "class": "punctuation",
+      "modifiers": []
+    },
+    {
+      "start": 26,
+      "end": 32,
+      "class": "type",
+      "modifiers": [
+        "defaultLibrary"
+      ]
+    },
+    {
+      "start": 33,
+      "end": 38,
+      "class": "property",
+      "modifiers": [
+        "declaration"
+      ]
+    },
+    {
+      "start": 39,
+      "end": 40,
+      "class": "punctuation",
+      "modifiers": []
+    }
+  ]
+}

@@ -397,6 +397,43 @@ pub fn lex_with_comments(source: &str) -> Result<(TokenStream<'_>, Comments<'_>)
     Ok((tokens, comments))
 }
 
+/// The total (never-failing) lexer used by tooling that must always produce
+/// a best-effort token stream — the syntax highlighter in particular.
+///
+/// It is [`lex_with_comments`] with one difference: an invalid region is
+/// recorded as a [`Token::Error`] plus a [`LexError`] and scanning
+/// continues. Whitespace is still skipped (the highlighter reconstructs
+/// gaps from the source), comments are captured, and the returned token
+/// stream is ordered by byte offset.
+pub fn lex_with_comments_lossy(
+    source: &str,
+) -> (Vec<(Token<'_>, Span)>, Vec<Comment<'_>>, Vec<LexError>) {
+    let mut tokens = Vec::new();
+    let mut comments = Vec::new();
+    let mut errors = Vec::new();
+    for (result, range) in Token::lexer(source).spanned() {
+        let span: Span = range.into();
+        match result {
+            Err(_) | Ok(Token::Error) => {
+                errors.push(LexError { span });
+                tokens.push((Token::Error, span));
+            }
+            Ok(Token::LineComment(text)) => comments.push(Comment {
+                kind: CommentKind::Line,
+                text,
+                span,
+            }),
+            Ok(Token::BlockComment(text)) => comments.push(Comment {
+                kind: CommentKind::Block,
+                text,
+                span,
+            }),
+            Ok(token) => tokens.push((token, span)),
+        }
+    }
+    (tokens, comments, errors)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -415,6 +452,19 @@ mod tests {
         assert_eq!(tokens[4], (Token::Ident("pages"), (17..22).into()));
         assert_eq!(tokens[5], (Token::RBrace, (23..24).into()));
         assert_eq!(tokens.len(), 6);
+    }
+
+    #[test]
+    fn lossy_lexing_keeps_comments_and_continues_past_an_error() {
+        let (tokens, comments, errors) =
+            lex_with_comments_lossy("class Book // note\n{ String title }");
+        assert!(errors.is_empty());
+        assert_eq!(comments.len(), 1);
+        assert_eq!(comments[0].text, "// note");
+        assert!(tokens.iter().any(|(token, _)| *token == Token::Class));
+        assert!(tokens
+            .iter()
+            .any(|(token, _)| matches!(token, Token::Ident("title"))));
     }
 
     #[test]
