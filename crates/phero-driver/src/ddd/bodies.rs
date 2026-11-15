@@ -31,7 +31,7 @@ use std::collections::BTreeMap;
 
 use phero_diagnostics::ddd::{E_INVALID_OPERATION_BODY, E_UNKNOWN_BODY_RECEIVER};
 use phero_expr::body::BodyOutput;
-use phero_expr::stmt::{check_stmt_body, BodyRaise, Stmt, StmtBody, StmtReceiver};
+use phero_expr::stmt::{check_stmt_body, BodyRaise, RaiseSignature, Stmt, StmtBody, StmtReceiver};
 use phero_expr::DomainTypes;
 use phero_ir::ddd::{DddParam, DddTypeRef, Design, Repository, ServiceOperation};
 use phero_ir::{Multiplicity, Operation, OperationParam, PrimitiveType, TypeRef};
@@ -42,6 +42,7 @@ use crate::diagnostic::Diagnostic;
 use crate::lower::{self, DomainPackage};
 
 use super::dtos::{self, DesignPrep};
+use super::errors::ErrorTable;
 use super::{class_features, class_type_ref};
 
 /// The synthetic package key every injected-repository class registers
@@ -60,11 +61,12 @@ struct RepositoryInfo {
 }
 
 impl RepositoryInfo {
-    fn receiver<'a>(&'a self, name: &'a str) -> StmtReceiver<'a> {
+    fn receiver<'a>(&'a self, name: &'a str, is_primary: bool) -> StmtReceiver<'a> {
         StmtReceiver {
             name,
             package: SYNTHETIC_PACKAGE,
             class: &self.key,
+            is_primary,
         }
     }
 }
@@ -82,6 +84,7 @@ pub(crate) fn lower_module_bodies(
     union: Option<&phero_ir::Model>,
     expr_context: Option<&phero_expr::TypeContext>,
     prep: &DesignPrep,
+    error_table: &ErrorTable,
     services: &mut [phero_ir::ddd::Service],
     designs: &mut [Design],
 ) -> Vec<Diagnostic> {
@@ -97,6 +100,12 @@ pub(crate) fn lower_module_bodies(
     if repositories.is_empty() && !body_operations(module) {
         return local;
     }
+
+    // The module's raise vocabulary (DD7): the prelude plus every declared
+    // error visible here. The per-operation `throws` subset comes from the
+    // lowered operation (the clause was resolved during service/design
+    // lowering).
+    let raises = error_table.raise_signatures(&module.name.text);
 
     // The synthetic repository classes register into a clone of the shared
     // union context; the union itself is never mutated. DTO boundaries
@@ -189,7 +198,7 @@ pub(crate) fn lower_module_bodies(
 
             // `self` is the primary repository; every other injected
             // repository of this module binds by its bare name.
-            let mut receivers = vec![primary.receiver("self")];
+            let mut receivers = vec![primary.receiver("self", true)];
             for dependency in &service.dependencies {
                 if dependency.text == receiver.text {
                     continue;
@@ -199,14 +208,22 @@ pub(crate) fn lower_module_bodies(
                     .find(|repository| repository.name == dependency.text)
                 {
                     if !receivers.iter().any(|bound| bound.name == dependency.text) {
-                        receivers.push(other.receiver(&dependency.text));
+                        receivers.push(other.receiver(&dependency.text, false));
                     }
                 }
             }
 
+            let throws: Vec<String> = operation_out
+                .throws
+                .iter()
+                .map(|reference| reference.name.clone())
+                .collect();
+            let throw_names: Vec<&str> = throws.iter().map(String::as_str).collect();
             attach_body(
                 &context,
                 &receivers,
+                &raises,
+                Some(&throw_names),
                 operation_out,
                 body,
                 operation.span,
@@ -232,7 +249,7 @@ pub(crate) fn lower_module_bodies(
         else {
             continue;
         };
-        let receivers = vec![info.receiver("self")];
+        let receivers = vec![info.receiver("self", true)];
         for operation in &repository.operations {
             let Some(body) = &operation.body else {
                 continue;
@@ -244,9 +261,17 @@ pub(crate) fn lower_module_bodies(
             else {
                 continue;
             };
+            let throws: Vec<String> = operation_out
+                .throws
+                .iter()
+                .map(|reference| reference.name.clone())
+                .collect();
+            let throw_names: Vec<&str> = throws.iter().map(String::as_str).collect();
             attach_body(
                 &context,
                 &receivers,
+                &raises,
+                Some(&throw_names),
                 operation_out,
                 body,
                 operation.span,
@@ -423,6 +448,8 @@ fn synthetic_operation(
 fn attach_body(
     context: &DomainTypes,
     receivers: &[StmtReceiver<'_>],
+    raises: &[RaiseSignature],
+    throws: Option<&[&str]>,
     operation: &mut impl BodyOperation,
     body: &dsl::DddBody,
     operation_span: Span,
@@ -452,7 +479,15 @@ fn attach_body(
         multiplicity: operation.return_multiplicity(),
     });
     let params = dtos::body_params(operation.params());
-    if let Err(errors) = check_stmt_body(context, &params, output, receivers, &lowered.body) {
+    if let Err(errors) = check_stmt_body(
+        context,
+        &params,
+        output,
+        receivers,
+        raises,
+        throws,
+        &lowered.body,
+    ) {
         for error in errors {
             let span = lowered
                 .slots

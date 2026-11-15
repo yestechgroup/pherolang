@@ -12,7 +12,10 @@
 //! and the `abstract value` rejection); E0365–E0372 are the DTO-shape checks
 //! (issue pherolang#300: the dto-op error, member duplication/unknown/type,
 //! entity members, non-input parameters, name collisions, and entity-only
-//! constructs on a DTO).
+//! constructs on a DTO); E0373–E0378 are the declared error-vocabulary and
+//! `throws` checks (DD7, issue pherolang#304: unknown throws name,
+//! duplicate/shadowed error, module-private visibility, entity payload
+//! field, narrowed delegation throws, and duplicate error field).
 //! Claim a new code by adding a documented constant plus an `Entry` to
 //! `ENTRIES`.
 
@@ -132,6 +135,29 @@ pub const E_DTO_NAME_COLLISION: &str = "E0371";
 /// — a DTO may not carry a repository, a machine, or an entity-only flag
 /// (`scaffold`, `auditable`, `optimisticLocking`).
 pub const E_DTO_ENTITY_ONLY: &str = "E0372";
+/// `unknown error '<name>' in throws of <context>` — a `throws` entry names
+/// no error declared at application scope, none private to the operation's
+/// module, and none of the standard prelude.
+pub const E_UNKNOWN_THROWN_ERROR: &str = "E0373";
+/// `duplicate error '<name>'` or `error '<name>' shadows a prelude error` —
+/// error names are application-wide unique, and the standard prelude
+/// (`NotFound`, `Conflict`) cannot be shadowed.
+pub const E_DUPLICATE_ERROR: &str = "E0374";
+/// `error '<name>' is private to module '<module>'` — a module-level error is
+/// visible only inside its module; another module cannot name it in
+/// `throws`, so the cross-module contract must be application-scoped.
+pub const E_MODULE_PRIVATE_ERROR: &str = "E0375";
+/// `error '<name>' field '<field>' carries entity '<entity>'` — an error
+/// payload crosses boundaries and must be serializable data, so it may not
+/// embed a class designed as an entity.
+pub const E_ERROR_PAYLOAD_ENTITY: &str = "E0376";
+/// `delegation on <context> narrows the throws of '<target>.<operation>':
+/// missing '<error>'` — a delegation is contract-preserving: its `throws`
+/// must be a superset of the delegated operation's.
+pub const E_NARROWED_DELEGATION_THROWS: &str = "E0377";
+/// `duplicate field '<field>' in error '<name>'` — the payload field names
+/// of one error declaration are unique.
+pub const E_DUPLICATE_ERROR_FIELD: &str = "E0378";
 
 pub(crate) const ENTRIES: &[Entry] = &[
     Entry {
@@ -318,4 +344,53 @@ pub(crate) const ENTRIES: &[Entry] = &[
         meaning: "`dto design '<design>' carries <construct>; a dto is a transport shape` — a DTO has no persistence, lifecycle, or domain identity, so a `repository`, a `machine`, or an entity-only flag (`scaffold`, `auditable`, `optimisticLocking`) is refused. `nonPersistent` and `cache` stay legal.",
         fix: "Remove the construct from the DTO design, or design the class as an `entity` if it really owns state.",
     },
+    Entry {
+        code: E_UNKNOWN_THROWN_ERROR,
+        band: DDD_BAND,
+        severity: Severity::Error,
+        title: "Unknown thrown error",
+        meaning: "`unknown error '<name>' in throws of <context>` — a `throws` entry names no error of the application's vocabulary: application-scoped declarations are visible everywhere, module-scoped ones only inside their module (the message names the declaring module when that is the reason), and the standard prelude (`NotFound`, `Conflict`) is always available. The help lists the declared set in scope.",
+        fix: "Declare the error with `error <Name>(...)` at application (or the operation's module) scope, or fix the spelling — a did-you-mean names the closest declared error when one is plausible.",
+    },
+    Entry {
+        code: E_DUPLICATE_ERROR,
+        band: DDD_BAND,
+        severity: Severity::Error,
+        title: "Duplicate or shadowed error",
+        meaning: "`duplicate error '<name>'` or `error '<name>' shadows a prelude error` — error names are application-wide unique (like service names), and the standard prelude's `NotFound` and `Conflict` cannot be shadowed by a user declaration. The first declaration keeps resolving; the later one is reported.",
+        fix: "Rename the error, or reference the existing application-wide declaration instead of redeclaring it. The prelude's shapes are fixed; choose another name for a domain error.",
+    },
+    Entry {
+        code: E_MODULE_PRIVATE_ERROR,
+        band: DDD_BAND,
+        severity: Severity::Error,
+        title: "Module-private error referenced",
+        meaning: "`error '<name>' is private to module '<module>'` — a module-level `error` declaration is visible only inside its module, so an operation in another module cannot name it in `throws`. Module errors are the private detail; application-scoped errors are the cross-module contract.",
+        fix: "Declare the error at application scope (move the declaration out of the module body), or keep the operation inside the declaring module.",
+    },
+    Entry {
+        code: E_ERROR_PAYLOAD_ENTITY,
+        band: DDD_BAND,
+        severity: Severity::Error,
+        title: "Entity in an error payload",
+        meaning: "`error '<name>' field '<field>' carries entity '<entity>'; an error payload is data` — an error crosses a boundary with its payload unchanged, so the payload must be serializable data. Embedding a class designed as an `entity` in the same application would put mutable state on the wire.",
+        fix: "Refer to the entity by id (a string/primitive field), embed a `value` object, or carry a DTO boundary.",
+    },
+    Entry {
+        code: E_NARROWED_DELEGATION_THROWS,
+        band: DDD_BAND,
+        severity: Severity::Error,
+        title: "Delegation narrows throws",
+        meaning: "`delegation on <context> narrows the throws of '<target>.<operation>': missing '<error>'` — a delegation is contract-preserving: the delegating operation's `throws` must be a superset of the delegated operation's, so a caller can rely on the declared set. A missing entry names the error (and, when the target's error is module-private, the application-scope fix).",
+        fix: "Add every missing error to the delegation's `throws` clause; if the target's error is module-private, declare it at application scope first.",
+    },
+    Entry {
+        code: E_DUPLICATE_ERROR_FIELD,
+        band: DDD_BAND,
+        severity: Severity::Error,
+        title: "Duplicate error payload field",
+        meaning: "`duplicate field '<field>' in error '<name>'` — the payload field names of one `error` declaration are unique, since a consumer builds one field per name in declaration order.",
+        fix: "Rename or remove the duplicate field.",
+    },
+
 ];

@@ -100,11 +100,37 @@ pub(crate) fn ddd_emits<'src>() -> impl Parser<'src, Tokens<'src>, Vec<Name>, Mo
 /// unknown name are driver diagnostics.
 pub(crate) fn ddd_throws<'src>(
 ) -> impl Parser<'src, Tokens<'src>, Vec<Name>, MoxExtra<'src>> + Clone {
+    // Each entry is scanned as a qualified name so a dotted spelling gets a
+    // **clear** diagnostic rather than a generic `expected ';'`: the error
+    // vocabulary is application-wide unique, so the bare last segment is the
+    // canonical spelling.
+    let entry =
+        qname()
+            .map_with(|qname, e| (qname, e.span()))
+            .validate(|(qname, span), _e, emitter| {
+                let segments = qname.segments.len();
+                let last = qname.segments.last().cloned().unwrap_or(Name {
+                    text: String::new(),
+                    span,
+                    escaped: false,
+                });
+                if segments > 1 {
+                    emitter.emit(Rich::custom(
+                        span,
+                        format!(
+                            "`throws` entries are bare error names; error '{}' is referenced \
+                         application-wide, so write `{}`",
+                            last.text, last.text
+                        ),
+                    ));
+                }
+                last
+            });
     ddd_keyword(ddd::THROWS)
-        .ignore_then(name().or_not())
+        .ignore_then(entry.clone().or_not())
         .then(
             kw(Token::Comma)
-                .ignore_then(name())
+                .ignore_then(entry)
                 .repeated()
                 .collect::<Vec<_>>(),
         )
@@ -547,6 +573,12 @@ impl<'src> BodyParser<'_, 'src> {
 
     /// The statement dispatch. `None` means the statement was refused (the
     /// named error is recorded and the cursor resynchronized).
+    ///
+    /// The deliberate exclusions are **named** refusals, not the generic
+    /// unsupported-statement message: loops (`for`/`while`), `try`/`catch`,
+    /// compound assignment, collection mutation, and non-binding expression
+    /// statements are the orchestration-only cap DD7 states, so a body says
+    /// exactly which construct it refused and where the construct belongs.
     fn parse_statement(&mut self) -> Option<DddStmt> {
         if self.at_ident(ddd::LET) {
             return self.parse_let();
@@ -560,18 +592,79 @@ impl<'src> BodyParser<'_, 'src> {
         if self.at_ident(ddd::RETURN) {
             return self.parse_return();
         }
-        if let Some(path) = self.assignment_path() {
-            self.pos += 1; // the `=`
-            let Some(expr) = self.scan_expr(ExprStop::Semi) else {
-                self.error_here("expected an expression after `=`");
-                self.resync();
-                return None;
-            };
-            if !self.take(|token| matches!(token, Token::Other(';'))) {
-                self.error_here("expected `;` to end the assignment");
-                self.resync();
+        if self.at_ident("for") || self.at_ident("while") {
+            let word = if self.at_ident("for") { "for" } else { "while" };
+            self.error_here(format!(
+                "unsupported statement '{word}' in a {} body: loops (`for`, `while`) are \
+                 outside the orchestration-only subset; move the iteration into a domain \
+                 `op` the body calls",
+                self.kind.label()
+            ));
+            self.resync();
+            return None;
+        }
+        if self.at_ident("try") || self.at_ident("catch") {
+            let word = if self.at_ident("try") { "try" } else { "catch" };
+            self.error_here(format!(
+                "unsupported statement '{word}' in a {} body: `try`/`catch` is outside the \
+                 orchestration-only subset — a body raises an error, it never catches one",
+                self.kind.label()
+            ));
+            self.resync();
+            return None;
+        }
+        if let Some((path, next)) = self.path_ahead() {
+            match self.tokens.get(next).map(|(token, _)| token) {
+                Some(Token::Eq) => {
+                    self.pos = next + 1; // the `=`
+                    let Some(expr) = self.scan_expr(ExprStop::Semi) else {
+                        self.error_here("expected an expression after `=`");
+                        self.resync();
+                        return None;
+                    };
+                    if !self.take(|token| matches!(token, Token::Other(';'))) {
+                        self.error_here("expected `;` to end the assignment");
+                        self.resync();
+                    }
+                    return Some(DddStmt::Assign { path, expr });
+                }
+                Some(Token::Other(operator @ ('+' | '-' | '*' | '/' | '%')))
+                    if matches!(
+                        self.tokens.get(next + 1).map(|(token, _)| token),
+                        Some(Token::Eq)
+                    ) =>
+                {
+                    self.error_here(format!(
+                        "unsupported compound assignment '{operator}=' in a {} body: the \
+                         orchestration-only subset has no compound assignment; assign the \
+                         computed value to a feature path (`<local>.<feature> = …`)",
+                        self.kind.label()
+                    ));
+                    self.resync();
+                    return None;
+                }
+                Some(Token::LParen) => {
+                    let callee = path.last().map(|name| name.text.as_str()).unwrap_or("");
+                    if matches!(callee, "push" | "remove" | "clear") {
+                        self.error_here(format!(
+                            "unsupported collection mutation '{callee}' in a {} body: the \
+                             orchestration-only subset mutates no collection; move the \
+                             mutation into a domain `op` the body calls",
+                            self.kind.label()
+                        ));
+                    } else {
+                        self.error_here(format!(
+                            "unsupported expression statement in a {} body: bind the call's \
+                             result (`let <name> = <expression>;`) — the orchestration-only \
+                             subset has no bare expression statements",
+                            self.kind.label()
+                        ));
+                    }
+                    self.resync();
+                    return None;
+                }
+                _ => {}
             }
-            return Some(DddStmt::Assign { path, expr });
         }
 
         // Anything else is outside the closed subset: name the construct and
@@ -591,9 +684,11 @@ impl<'src> BodyParser<'_, 'src> {
         None
     }
 
-    /// Looks ahead for `name ("." name)* "="`; on success consumes the path
-    /// and leaves the cursor on the `=`.
-    fn assignment_path(&mut self) -> Option<Vec<Name>> {
+    /// Looks ahead for `name ("." name)*`; on success returns the path and the
+    /// index of the token after it, without moving the cursor. The caller
+    /// decides whether the following token makes it an assignment, a
+    /// compound assignment, an expression statement, or ordinary junk.
+    fn path_ahead(&self) -> Option<(Vec<Name>, usize)> {
         let mut index = self.pos;
         let mut path = Vec::new();
         loop {
@@ -605,12 +700,7 @@ impl<'src> BodyParser<'_, 'src> {
             }
             break;
         }
-        if matches!(self.tokens.get(index), Some((Token::Eq, _))) {
-            self.pos = index;
-            Some(path)
-        } else {
-            None
-        }
+        Some((path, index))
     }
 
     fn parse_let(&mut self) -> Option<DddStmt> {

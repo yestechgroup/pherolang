@@ -29,6 +29,7 @@ mod child_ops;
 mod conditions;
 mod designs;
 mod dtos;
+mod errors;
 mod graph;
 mod links;
 mod machines;
@@ -48,6 +49,7 @@ use dtos::{
     check_dto_parameters, collect_design_prep, dto_form, lower_dto_shape, qualified_type_ref,
     record_dto_param, DesignPrep,
 };
+use errors::{check_entity_payloads, collect_errors};
 use graph::{rule_13_aggregate_references, rule_6_aggregate_boundary};
 use links::fill_resolved_links;
 use machines::{collect_machine_scopes, lower_design_machine, MachineScopes};
@@ -76,12 +78,18 @@ pub(crate) use graph::{AggregateVerdict, NounClassification};
 struct ServiceEntry {
     module: String,
     ops: Vec<String>,
+    /// The operation names' resolved `throws` sets (DD7), for the
+    /// delegation-superset check (rule 8).
+    op_throws: Vec<(String, Vec<String>)>,
 }
 /// A repository declared anywhere in the application, for cross-reference
 /// validation (delegations, injects).
 struct RepositoryEntry {
     module: String,
     ops: Vec<String>,
+    /// The declared operations' resolved `throws` sets (DD7), for the
+    /// delegation-superset check (rule 8).
+    op_throws: Vec<(String, Vec<String>)>,
 }
 /// One entity design that declares a repository: the candidate aggregate
 /// root the containment closure is checked against.
@@ -118,7 +126,13 @@ struct SearchEntry {
 /// A delegation awaiting the completed service/repository registries.
 struct DelegationCheck<'a> {
     module: String,
+    /// The delegating operation's human label (`operation 'x' of service
+    /// 'Y'`), which the narrowed-throws message embeds.
+    context: String,
     delegation: &'a dsl::DddDelegation,
+    /// The delegating operation's resolved `throws` names (DD7) — the
+    /// superset the target's set must fit in.
+    throws: Vec<String>,
 }
 /// A search awaiting the completed entity-design registry: the binding
 /// check (rule 11) runs after every module so a search may reference an
@@ -285,6 +299,18 @@ pub(crate) fn compile_ddd_file(
     // pre-pass also emits the DTO-name collision diagnostics.
     let design_prep = collect_design_prep(application, &packages, base.as_deref(), &mut local);
 
+    // The declared error vocabulary (DD7, issue pherolang#304): lowered and
+    // name-checked before any module, because every `throws` clause and body
+    // raise resolves against it. The entity-payload rule is deferred to the
+    // design registry's completion.
+    let error_table = collect_errors(
+        application,
+        &packages,
+        base.as_deref(),
+        &design_prep,
+        &mut local,
+    );
+
     // The shared expression context: conditions (machine edge guards, service
     // and repository operation guards) type-check against the union model
     // once, here. Feature-level checks only run against a fully lowered
@@ -295,7 +321,9 @@ pub(crate) fn compile_ddd_file(
     // The application name is the diagnostics context of the deferred
     // value-semantics pass (DD2), so keep it before the header moves.
     let application_name = application_out.name.clone();
-    let mut model = DddModel::new().application(application_out);
+    let mut model = DddModel::new()
+        .application(application_out)
+        .with_errors(error_table.application_errors().to_vec());
 
     for module in &application.modules {
         // Stage 2 — the module's machine scopes, collected before its
@@ -315,6 +343,7 @@ pub(crate) fn compile_ddd_file(
         rule_2_module_name_unique(module, &mut registries.module_names, &mut local);
 
         let mut module_out = Module::new(module.name.text.clone());
+        module_out.errors = error_table.module_errors(&module.name.text).to_vec();
 
         // Stage 3 — the condition scope of the module's service operations:
         // a module with no machine-bearing design has no own-record scope
@@ -338,6 +367,7 @@ pub(crate) fn compile_ddd_file(
             union.as_ref(),
             expr_context.as_ref(),
             &design_prep,
+            &error_table,
             &mut registries,
         );
         local.extend(stage_diags);
@@ -353,6 +383,7 @@ pub(crate) fn compile_ddd_file(
             &machines,
             expr_context.as_ref(),
             &design_prep,
+            &error_table,
             &mut registries,
         );
         local.extend(stage_diags);
@@ -370,6 +401,7 @@ pub(crate) fn compile_ddd_file(
             union.as_ref(),
             expr_context.as_ref(),
             &design_prep,
+            &error_table,
             &mut module_out.services,
             &mut module_out.designs,
         ));
@@ -394,6 +426,15 @@ pub(crate) fn compile_ddd_file(
     // slot. Deferred until every design lowered (services lower first, and
     // a DTO may be declared after the operation that uses it).
     local.extend(check_dto_parameters(&registries.dto_param_checks, &model));
+
+    // Stage 6.6 — the error-payload rule (DD7): an error payload is data, so
+    // a field may not carry a class designed as an entity. Deferred to here
+    // because the entity-design registry is complete only after every module
+    // lowered.
+    local.extend(check_entity_payloads(
+        &error_table,
+        &registries.entity_designs,
+    ));
 
     // Stage 7 — the deferred validations, in emission order: rules
     // 11-binding, 6, 13, 9, 8, 10, 17, then the strict value-semantics pass

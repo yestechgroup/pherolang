@@ -76,7 +76,7 @@ save;
 delete;
 findByExample;
 findByKeys;
-int totalQuantity(String runId) when (status == Draft) {
+int totalQuantity(String runId) throws NotFound when (status == Draft) {
     let run = self.findById(runId) else error NotFound("Run", runId);
     return run.lines.map(line => line.quantity).sum();
 }"#;
@@ -88,7 +88,7 @@ AuditRecord record(String note);"#;
 /// The default service operations: a void body exercising every statement
 /// form and reduction, a value-returning body with `if`/`else`, an injected
 /// bare-name repository call, and a returning single-expression body.
-const SERVICE_OPERATIONS: &str = r#"submit(DraftLine draft) capability SubmitRun => RunRepository {
+const SERVICE_OPERATIONS: &str = r#"submit(DraftLine draft) capability SubmitRun throws NotFound, Conflict => RunRepository {
     let run = self.findById("current") else error NotFound("Run", "current");
     guard run.total >= 0 else error Conflict("total");
     let units = run.lines.map(line => line.quantity).sum();
@@ -99,7 +99,7 @@ const SERVICE_OPERATIONS: &str = r#"submit(DraftLine draft) capability SubmitRun
     let saved = self.save(run);
     let audit = AuditRepository.record("submit");
 }
-boolean approve() capability ApproveRun when (status == Draft) => RunRepository {
+boolean approve() capability ApproveRun throws NotFound when (status == Draft) => RunRepository {
     let run = self.findById("current") else error NotFound("Run", "current");
     if (run.total > 0) {
         return true;
@@ -111,7 +111,7 @@ boolean note(String text) => AuditRepository {
     let record = self.record(text);
     return record.accepted;
 }
-int totalFor(String runId) => RunRepository {
+int totalFor(String runId) throws NotFound => RunRepository {
     let run = self.findById(runId) else error NotFound("Run", runId);
     return run.lines.map(line => line.quantity * line.unitCost).sum();
 }"#;
@@ -452,7 +452,7 @@ fn unknown_error_variant_and_arity_emit_e0360() {
     return true;
 }"#;
     assert_error(&design_with_op(unknown), "E0360");
-    assert_error(&design_with_op(unknown), "unknown error variant `Maybe`");
+    assert_error(&design_with_op(unknown), "unknown error `Maybe`");
 
     let wrong_arity = r#"boolean submit() => RunRepository {
     guard true else error NotFound("only-one");
@@ -498,7 +498,7 @@ fn unsupported_statement_is_named() {
     assert!(
         diagnostics.iter().any(|diagnostic| diagnostic
             .message
-            .contains("unsupported statement 'while' in a service body")),
+            .contains("unsupported statement 'while' in a service body: loops")),
         "expected the named refusal, got: {diagnostics:?}"
     );
 }

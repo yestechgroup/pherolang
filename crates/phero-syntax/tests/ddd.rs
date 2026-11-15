@@ -2486,7 +2486,7 @@ application A {
     assert!(
         result.errors.iter().any(|error| error
             .message
-            .contains("unsupported statement 'while' in a service body")),
+            .contains("unsupported statement 'while' in a service body: loops")),
         "expected the named refusal, got: {:?}",
         result.errors
     );
@@ -3202,4 +3202,123 @@ fn malformed_error_vocabulary_inputs_do_not_panic() {
         let _ = parse_ddd(source);
         let _ = format_ddd(source);
     }
+}
+
+/// The orchestration-only exclusions are named refusals: loops,
+/// `try`/`catch`, compound assignment, collection mutation, and bare
+/// expression statements each say what was refused and where it belongs.
+#[test]
+fn orchestration_only_exclusions_are_named_refusals() {
+    let body = |statement: &str| {
+        format!(
+            "application A {{\n    module M {{\n        service S {{\n            \
+             boolean submit() => R {{\n                {statement}\n            }}\n        }}\n    }}\n}}\n"
+        )
+    };
+    let cases = [
+        (
+            "for (x in run.lines) { }",
+            "unsupported statement 'for' in a service body: loops (`for`, `while`)",
+        ),
+        (
+            "while (true) { return true; }",
+            "unsupported statement 'while' in a service body: loops (`for`, `while`)",
+        ),
+        (
+            "try { return true; } catch { }",
+            "unsupported statement 'try' in a service body: `try`/`catch`",
+        ),
+        (
+            "run.total += 1;",
+            "unsupported compound assignment '+=' in a service body",
+        ),
+        (
+            "run.lines.push(line);",
+            "unsupported collection mutation 'push' in a service body",
+        ),
+        (
+            "run.lines.remove(0);",
+            "unsupported collection mutation 'remove' in a service body",
+        ),
+        (
+            "run.lines.clear();",
+            "unsupported collection mutation 'clear' in a service body",
+        ),
+        (
+            "self.save(run);",
+            "unsupported expression statement in a service body: bind the call's result",
+        ),
+    ];
+    for (statement, expected) in cases {
+        let result = parse_ddd(&body(statement));
+        assert!(
+            result
+                .errors
+                .iter()
+                .any(|error| error.message.contains(expected)),
+            "expected `{expected}` for `{statement}`, got: {:?}",
+            result.errors
+        );
+    }
+}
+
+/// Feature-path assignment, a domain `op` call bound by `let`, and a
+/// feature-path expression statement are legal (the orchestration cap keeps
+/// the assignment form).
+#[test]
+fn orchestration_only_keeps_feature_path_assignment_and_bound_calls() {
+    let source = concat!(
+        "application A {\n",
+        "    module M {\n",
+        "        service S {\n",
+        "            boolean submit() => R {\n",
+        "                let run = self.findById(\"x\") else error NotFound(\"Run\", \"x\");\n",
+        "                let submitted = run.submit();\n",
+        "                run.total = submitted;\n",
+        "                return true;\n",
+        "            }\n",
+        "        }\n",
+        "    }\n",
+        "}\n",
+    );
+    let result = parse_ddd(source);
+    assert!(
+        result.errors.is_empty(),
+        "unexpected errors: {:?}",
+        result.errors
+    );
+    let module = &result.ast.unwrap().application.unwrap().modules[0];
+    let operation = &module.services[0].operations[0];
+    let body = operation.body.as_ref().expect("body");
+    assert!(matches!(
+        &body.stmts[1],
+        DddStmt::Let { name, expr, .. }
+            if name.text == "submitted" && &source[expr.start..expr.end] == "run.submit()"
+    ));
+}
+
+/// A qualified `throws` spelling gets the bare-name diagnostic and resolves
+/// to the last segment (the application-wide vocabulary's spelling).
+#[test]
+fn qualified_throws_spelling_gets_a_bare_name_diagnostic() {
+    let source = concat!(
+        "application A {\n",
+        "    module m {\n",
+        "        service S { boolean pay() throws billing.PaymentDeclined; }\n",
+        "    }\n",
+        "}\n",
+    );
+    let result = parse_ddd(source);
+    assert!(
+        result.errors.iter().any(|error| error
+            .message
+            .contains("`throws` entries are bare error names")),
+        "expected the bare-name diagnostic, got: {:?}",
+        result.errors
+    );
+    let module = &result.ast.unwrap().application.unwrap().modules[0];
+    assert_eq!(
+        module.services[0].operations[0].throws[0].text,
+        "PaymentDeclined"
+    );
 }
