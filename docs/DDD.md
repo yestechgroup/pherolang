@@ -406,10 +406,19 @@ A `.ddd` compilation unit is either a **root** or a **fragment** (DD8, issue
   application name, or application-scoped errors.
 
 A fragment may `import` `.mox` domains, `.dmn` decision models, and other
-`.ddd` fragments; the fragment closure is transitive. The import graph is
-refused, never guessed, on a cycle, a fragment reached by two roots, a root
-imported as a fragment, a fragment with no root, and two roots declaring the
-same application name.
+`.ddd` fragments; the fragment closure is transitive. **An import resolves
+relative to the file that declares it**, so a fragment's `import
+"domain.mox"` names that fragment's own directory, never the root's; the
+compiler lowers the root's and every fragment's domains against one union
+(the host gathers the whole closure from the same per-file rule).
+
+The import graph is refused, never guessed, on a cycle, a fragment reached
+by two roots, a root imported as a fragment, a fragment with no root, and
+two roots declaring the same application name. In a directory batch those
+five tree-level failures are **spanned diagnostics** anchored at the import
+declaration that causes them (the fragment's first module for an orphan),
+with stable codes `E0390`–`E0395` (see
+[DIAGNOSTICS.md](DIAGNOSTICS.md#band-driverddd-e0350e0399)).
 
 Modules may **reopen** across fragments: a `module core { ... }` block in the
 root and another in a fragment are one module in the artifact, and their
@@ -432,11 +441,16 @@ fragment error naming the root to compile. `pherolang fmt` formats a fragment
 normally. `pherolang verify` hashes fragment sources as part of the root's
 closure but emits no fragment artifact. The LSP compiles an open fragment
 through its root and publishes the diagnostics against the fragment; its
-navigation index can carry the root's application name for a fragment
-(`ddd_index_with_application`). The semantic graph includes the root's
-`.ddd` import edges and fragment files in the application, and names the
-application by the authored `application <Name>` when the component has
-exactly one design root ([GRAPH.md](GRAPH.md#applications)).
+fragment span index is built with the root's application name
+(`ddd_index_with_application`), and a definition search looks in the
+declaration's file, then the node's own application, then the rest of the
+snapshot — a merged fragment's declarations are attributed to the root
+artifact, so the editor must fall back to the file that spells them. The
+semantic graph includes the root's `.ddd` import edges and fragment files in
+the application, names the application by the authored `application <Name>`
+when the component has exactly one design root
+([GRAPH.md](GRAPH.md#applications)), and the editor snapshot supplies the
+same fragment file inputs the CLI does.
 
 ---
 
@@ -958,6 +972,170 @@ classes, nor the DTO member typing, which reads the source class.
     deferral**: every invariant is either typed or an error. Each expression
     lowers verbatim into the sparse `invariants` list; the consumer
     contract is [above](#consumer-contract).
+25. **Repository queries** (DD9, issue
+    [#306](https://github.com/yestechgroup/pherolang/issues/306)) — a
+    declared repository operation carrying a `where` predicate is a
+    **query**: `where` is mandatory, `sort` keys must be direct stored
+    scalar features (`E0398` names the reason for a class reference, a
+    collection, or a derived feature), `page` sizes must be positive with
+    `limit <= max` (`E0399`), and the predicate is typed boolean over the
+    designed class plus the operation's parameters (`E0397`; a
+    parameter/feature name collision is an error with the `self.` help). A
+    query is read-only (`E0396`): no body, no `when`, no `throws`;
+    `capability` is the read authorization. The artifact carries the sparse
+    `query` block with `readOnly: true`, and `pherolang artifact check`
+    refuses a published query that breaks those invariants. Contract:
+    [Typed repository queries](#typed-repository-queries-dd9).
+
+## Typed repository queries (DD9)
+
+A declared repository operation may be a **finder**: a read-only selection
+over the designed aggregate, with a typed predicate, an explicit sort, and
+bounded pagination. The predicate is the thing a `when` guard is not — a
+`when` is a precondition on one operation, `where` says *which rows*.
+
+```ddd
+import "../tests/conformance/ddd/queries.mox";
+
+application Queries {
+    base demo.queries
+    module ordering {
+        entity Order repository OrderRepository {
+            findById;
+            save;
+
+            // A many-valued finder: newest first, one bounded page, read-authorized.
+            Order[] openFor(OrderStatus targetState, int minimumTotal)
+                where (self.status == targetState && self.total >= minimumTotal)
+                sort createdDate desc
+                page limit 20 max 100
+                capability ReadOrders;
+
+            // A single-result finder: `0..1` is the optional contract.
+            Order[0..1] byNumber(String number) where (self.orderNo == number);
+
+            // The read side of a projection: the boundary is the DTO.
+            OrderSummary[] summaries(int minimumTotal)
+                where (self.total >= minimumTotal)
+                sort createdDate desc
+                page limit 10 max 50;
+        }
+
+        dto OrderSummary from Order {
+            orderNo;
+            total;
+            status;
+        }
+    }
+}
+```
+
+The canonical clause order is `where? sort? page? capability?`; `asc` is the
+default sort direction and is omitted in canonical output. A query is
+legal on an **effective aggregate root's** repository only (rule 6) — a
+query over a contained child is expressed through the root's feature, not a
+second repository.
+
+### Predicate scoping and typing
+
+The predicate is a `phero-expr` expression over two scopes:
+
+- the **designed class's** features — bare (`status`) or explicit
+  (`self.status`). Feature access follows the class's `extends` chain, so
+  inherited features are in scope;
+- the **operation's parameters** — bare (`customer`) or `<param>.<field>`.
+
+A parameter whose name is also a feature of the designed class is an
+**error** (`E0397`) with the help "write `self.<name>` for the feature, or
+rename the parameter": a silent shadow in a selection predicate is a
+data-leak bug, so there is no shadowing rule to remember.
+
+The predicate must type as **boolean**. There is **no deferral** when the
+domain union lowered: an unsupported construct, an unknown feature, an
+optional navigation that is not handled (R3), a repository/global read, a
+decision call, or a subquery is an error naming the construct. The predicate
+may not mutate anything — it is a filter, not a body.
+
+### Sort
+
+A sort key must be a **direct, stored, scalar** feature of the designed
+class — a primitive, enum, datatype, or vocabulary. Each of the other
+shapes is refused with its reason (`E0398`):
+
+| sort target | why refused |
+|---|---|
+| a class reference | ordering would need a join |
+| a collection | no stored scalar order to index |
+| a derived feature | not stored, so it cannot be indexed |
+
+Parameters may appear in the predicate but **never** in `sort` or `page`: a
+dynamic ordering is a different (injection-prone) feature and is out of
+scope.
+
+### Pagination
+
+`page` is metadata, not a signature parameter. `limit` is the default page
+size, `max` the cap; both must be positive and `limit > max` is an error
+(`E0399`). `cursor` selects key-set pagination; a cursor query never
+requires an offset from the consumer, while an offset query is free to
+ignore it. A `page` clause may carry `limit`, `max`, `cursor`, or any
+combination; the consumer's runtime parameters are generated, never
+authored.
+
+### Read-only rules
+
+A query operation is read-only **by construction** (`E0396`):
+
+- no statement body, no `when` guard (two predicates would be ambiguous),
+  no `throws` (a finder raises no declared domain error), and no `emits`,
+  `transition`, or `invokes` (the grammar already refuses those on every
+  repository operation);
+- `capability` **is** allowed: it is the read authorization, checked
+  against the application's `.actor` artifacts exactly like a service
+  operation's;
+- the artifact carries `readOnly: true`, lowered rather than inferred from
+  the presence of `query` (epic decision D1), and the artifact-only check
+  refuses a query that carries a body, a guard, or a `throws`.
+
+### Artifact
+
+A query lowers to a sparse `query` block on the repository operation —
+`predicate` verbatim (typing is proven at compile time), `sort` with each
+key's **resolved** field type and direction, `pagination`, and
+`readOnly: true`. Operations without a query are byte-identical to before
+(`DDD_MODEL_FORMAT_VERSION` stays 2). The wire shape is in
+[BACKENDS.md](BACKENDS.md#the-serialized-artifact-contract-summary); the
+artifact-only contract lives in `phero-backend-ddd`.
+
+### Consumer contract (codegraph)
+
+- Emit a **parameterized** query: the predicate lowers to the store's query
+  language, `sort` to an `ORDER BY`, the pagination to `LIMIT`/`OFFSET` or a
+  keyset predicate. **Never** string-interpolate a parameter value — the
+  predicate is a typed AST, so injection is structurally impossible.
+- Return the declared type and multiplicity: `0..1` returns an optional and
+  never throws "not found".
+- A query never mutates and never advances a machine; it may be audited but
+  it emits no domain event.
+- If the store cannot express a predicate construct, fail generation with a
+  **named rejection** (the `.cmmn`/Cedar precedent), never silently broaden
+  the result.
+- An unsorted query's row order is the store's; declare `sort` for a
+  deterministic page (add the identity feature as the last key).
+
+### `search` vs `query`
+
+| Surface | Question it answers | Store |
+|---|---|---|
+| `search` | "find documents matching these words/facets, ranked" | search index |
+| `query` | "select these records by structured predicate, in this order, this page" | system of record |
+
+A finder is not a search and a search is not a query: full-text matching,
+relevance ranking, and analyzers belong to `search`; an exact structured
+predicate, an explicit order, and page bounds belong to `query`. A view
+that needs both composes them outside the design layer.
+
+---
 
 ## The executable-body posture
 
@@ -995,6 +1173,8 @@ Not yet (deliberately out of scope, not accidental omissions): compensation
 and saga orchestration, retry policies, and compiler-generated error
 hierarchies. A domain error hierarchy is a consumer concern over the flat
 declared vocabulary; the body never catches.
+
+---
 
 ## State machines
 
@@ -1455,15 +1635,23 @@ A capability is granted on a class (`capability X on <Class>`), and the
 class's place in the aggregate machinery decides whether that noun is a
 sound grant. With designs provided, `NounClassification`
 (`crates/phero-driver/src/ddd/graph.rs`) — a pure table over the union model
-and the designs, using the containment derivation's root predicate —
-classifies every resolved design class:
+and the designs — classifies every resolved design class, reading each
+design's **effective** aggregate boundary from the artifact
+(`isAggregateRoot`/`aggregate`, DD4) and falling back to the containment
+derivation only for a hand-built artifact that carries no verdict:
 
 | verdict | class | a grant on it |
 |---|---|---|
 | `Value` | a value design — no aggregate to escape | clean |
 | `Root` | an entity with a repository that no stereotyped entity contains | clean |
-| `NonRoot` | an entity with a repository that another stereotyped entity's class contains (transitively) | **warning** |
-| none | no design, a dto, or a repository-less entity | silent |
+| `NonRoot` | an entity with a repository whose artifact places it in another root's aggregate (authored, or derived from containment) | **warning** |
+| none | no design, a dto, a repository-less entity, or an **undecided** boundary (`isAggregateRoot` absent — the compile already warned `E0385`) | silent |
+
+An authored `aggregate <Root>` verdict is authoritative: it convicts even
+when no feature of the pooled designs contains the class. A `root` verdict
+is only as good as that file's visibility, so another pooled design's
+containment still convicts (a design split across files cannot see its
+sibling's `contains`). An undecided boundary is **never** re-guessed.
 
 The warning is `capability '<X>' is granted on '<Class>', a non-root
 aggregate member` (plus `of '<Root>'` and a "grant the capability on the
@@ -1598,7 +1786,10 @@ pherolang artifact check library.ddd.json    # validate the artifact's DDD contr
   rewritten to `children` — and each child operation is one
   canonical line — `boolean addLine(PayRunLineDraft line) => lines.add;`,
   with an optional leading `protected` and the trailing `when (...)` in
-  the service-operation order.
+  the service-operation order. A repository query's clauses stay on its one
+  operation line in the canonical `throws? when? where? sort? page?
+  capability?` order, with `asc` (the default direction) omitted and the
+  predicate re-emitted verbatim between its parentheses.
 - Directory batch mode (`pherolang check <dir>`) compiles each `.ddd`
   **root** with its imported fragments, imports resolved relative to the
   importing file, and prints `OK` for the root and for every fragment. A
@@ -1626,7 +1817,8 @@ rationale for each divergence is in [Deliberate divergences](#deliberate-diverge
 | Module | `module` label grouping services and designs; an application may span a root file and its imported fragments (DD8) | a root owns the application name, `base`, and application-scoped errors; fragments contribute modules only (they may reopen a module); the module is a design label, not a deployment boundary, and duplicate members stay application-wide errors |
 | child-scoped aggregate operations | `children <Root> { ... }` block (issue [#179](https://github.com/yestechgroup/pherolang/issues/179)) | not class inheritance; the pre-DD4 `extend` spelling parses as a deprecated alias (`E0387`) and formats to `children` |
 | DTO | `dto` design in three forms: mirror (`dto User`), projection (`dto BookSummary from Book { ... }`), standalone (`dto CreateBookRequest { ... }`) | real parity, shaped differently: a projection selects (`name;`), renames a path (`name = path;`), or derives (`name = expr;`, source class as `self`); no identity, aggregate membership, repository, machine, invariants, or behavior; `input`/`output` is derived from the member set, and an output boundary is not a parameter; a standalone DTO has no domain class |
-| `findByQuery` / `findByCondition` finders | `search` projection (intent only: text fields with boosts, filters, sorts, ranking, pagination, document projections) — the backend chooses the engine (Postgres FTS, Tantivy, OpenSearch, ...) | no query language and no engine-specific ordering; the engine is the consumer's choice |
+| `findByQuery` / `findByCondition` finders | declared repository **query** operations: `where` (typed predicate over the designed class + parameters), `sort` (direct stored scalar features with direction), `page` (`limit`/`max`/`cursor`), optional `capability` (DD9, issue [#306](https://github.com/yestechgroup/pherolang/issues/306)) | declarative and typed, not a string query language: no `ConditionalCriteriaBuilder`, no generated properties class, no dynamic ordering from user input, no joins/aggregations (project into a DTO instead); the consumer lowers the typed predicate to its store and never interpolates parameter values |
+| full-text search | `search` projection (intent only: text fields with boosts, filters, sorts, ranking, pagination, document projections) — the backend chooses the engine (Postgres FTS, Tantivy, OpenSearch, ...) | a search is not a structured query: no query language and no engine-specific ordering; the engine is the consumer's choice |
 | generated `GET /things/search?q=` endpoints | consumer concern — the artifact is backend-independent | — |
 | `Set` / `List` collections | `.mox` collection kinds on a multiplicity: `T[]` is an ordered list, `T[] { unique }` an ordered distinct list, `T[] { set }` an unordered distinct set (DD6); an operation **signature** carries only the multiplicity | no collection kind on a signature slot: the kind belongs to the feature, and a signature is the callee's contract. `Collection<T>`/`List<T>`/`Set<T>` are spelled by multiplicity + collection constraint, never as generic types |
 | `Bag` / `ordered` collections | — | absent: a multiset is a storage need, and declaration/insertion order is the only semantic order (DD6) |
@@ -1948,3 +2140,33 @@ The value rules (rule 12's R-V1 to R-V3) are pinned by the driver's
 negative-compile matrix, one case per rule: no in-tree backend consumes
 `.ddd`, so the design-aware generator is codegraph's, external by D1, and
 the in-tree proof is the rule matrix plus the artifact contract.
+
+The query pair `queries.mox`/`queries.ddd` (formatter-canonical) is the DD9
+fixture (issue pherolang#306): a many-valued finder with a predicate, sort,
+and bounded pagination, a single-result `[0..1]` finder, a DTO-projection
+return, a capability-gated finder, and a cursor-paginated one. Its committed
+golden `queries.ddd.json` carries each operation's `query` block (verbatim
+predicate, resolved `fieldType`, direction, pagination, `readOnly`) and the
+resolved `capabilities`; the acceptance rules — including the negative
+matrix for a non-boolean predicate, an unknown feature, a parameter/feature
+collision, a sort on a reference/derived/collection, `limit > max`, and a
+body/`when`/`throws` on a query — are pinned by
+`crates/phero-driver/tests/ddd_queries.rs`.
+
+The fragmented application `app/` (root `app.ddd`, fragments `sales.ddd` and
+`billing.ddd`, domain `app.mox`) is the DD8 end-to-end fixture: one merged
+artifact golden (`app/app.ddd.json`) byte-compared by
+`crates/phero-driver/tests/ddd_golden.rs`, with the ledger below pinning
+per-origin import resolution, graph membership, and receipts:
+
+| Behaviour | Test |
+|---|---|
+| A fragment resolves its own domain import relative to itself | `crates/phero-driver/tests/ddd_app.rs::a_fragment_resolves_its_own_domain_import_relative_to_itself` |
+| The app gatherer collects fragment domains | `crates/phero-driver/tests/ddd_app.rs::the_app_gatherer_collects_fragment_domains` |
+| A `.uc` importing a fragmented root sees every module | `crates/phero-driver/tests/ddd_app.rs::a_use_case_importing_a_fragmented_design_sees_every_module` |
+| The CLI resolves a fragment's domain from its own directory | `crates/phero-cli/tests/cli/ddd.rs::check_directory_resolves_a_fragment_domain_from_its_own_directory` |
+| `graph build` lists fragments as application files | `crates/phero-cli/tests/cli/ddd.rs::graph_build_lists_a_design_roots_fragments_as_application_files` |
+| `verify` hashes fragments and emits one artifact | `crates/phero-cli/tests/cli/ddd.rs::verify_hashes_a_design_roots_fragments_and_emits_one_artifact` |
+| A root reference lands in the fragment | `crates/phero-lsp/src/server/tests/graph.rs::a_root_reference_to_a_fragment_declaration_lands_in_the_fragment` |
+| A fragment reference resolves through the root | `crates/phero-lsp/src/server/tests/graph.rs::a_fragment_reference_resolves_to_a_root_declaration` |
+| The editor snapshot supplies fragment file inputs | `crates/phero-lsp/src/server/tests/graph.rs::the_editor_snapshot_lists_a_roots_fragments_as_application_files` |

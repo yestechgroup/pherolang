@@ -1,0 +1,18 @@
+package demo.app
+
+class Order {
+    String orderNo
+    int total
+    contains OrderLine[] lines opposite order
+}
+
+class OrderLine {
+    container Order order opposite lines
+    String sku
+    int quantity
+}
+
+class Invoice {
+    String invoiceNo
+    int amount
+}

@@ -52,7 +52,7 @@ use std::collections::BTreeMap;
 use crate::engine_common::dir_of;
 use crate::workspace_imports::{collect_schema_imports, collect_sigil_imports};
 use crate::{
-    compile_actors_str, compile_ddd_str, compile_dmn_str, compile_evt_str, compile_str, render,
+    compile_actors_str, compile_ddd_app_str, compile_dmn_str, compile_evt_str, compile_str, render,
     Diagnostic, DomainImports,
 };
 
@@ -437,6 +437,22 @@ pub fn gather_domain_sources(
     gather_domains_relative(path_key, source, import_paths, fetch, false).unwrap_or_default()
 }
 
+/// One written `.ddd` import site: who wrote it, what it named, the resolved
+/// path it denotes, and the declaring `import` declaration's span — the
+/// anchor a host uses for a **spanned** tree-level diagnostic (a cycle, a
+/// two-root fragment, a root imported as a fragment).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct DddFragmentSite {
+    /// The importing file's resolved path.
+    pub importer: String,
+    /// The import string as written.
+    pub import: String,
+    /// The resolved path the import denotes (relative to the importer).
+    pub resolved: String,
+    /// Span of the `import` declaration, `import` keyword included.
+    pub span: phero_syntax::Span,
+}
+
 /// The `.ddd` import closure of a design root (DD8, issue pherolang#305):
 /// the transitively imported fragment sources, in first-visit import order,
 /// plus the misses and import cycles the host must report.
@@ -448,6 +464,9 @@ pub struct DddFragments {
     pub missing: Vec<String>,
     /// The import path that closed a cycle, when one exists.
     pub cycles: Vec<String>,
+    /// Every written `.ddd` import, in visit order — the span anchors for
+    /// tree-level diagnostics.
+    pub sites: Vec<DddFragmentSite>,
 }
 
 /// Gathers a `.ddd` root's `.ddd` import closure. Import strings resolve
@@ -480,6 +499,12 @@ pub fn gather_ddd_fragments(
                 continue;
             }
             let resolved = directory.join(&import.path).display().to_string();
+            out.sites.push(DddFragmentSite {
+                importer: path.to_string(),
+                import: import.path.clone(),
+                resolved: resolved.clone(),
+                span: import.span,
+            });
             if visiting.iter().any(|seen| seen == &resolved) {
                 out.cycles.push(resolved);
                 continue;
@@ -510,6 +535,113 @@ pub fn gather_ddd_fragments(
         &mut out,
     );
     out
+}
+
+/// The gathered import closure of one `.ddd` design **root**, domains
+/// included (DD8): the transitive fragment sources, every `.mox` domain the
+/// root **or any fragment** imports (each resolved relative to the file that
+/// declares it), and the misses a host must report.
+///
+/// This is the one gatherer the CLI reader, the driver's downstream
+/// importers (`gather_design_model`), and the LSP snapshot all use — a
+/// design application is compiled whole or not at all, and an import's
+/// directory is the declaring file's, never the root's.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct DddAppImports {
+    /// Each fragment as `(host-resolved path, source)`, first visit first.
+    pub fragments: Vec<(String, String)>,
+    /// Each imported `.mox` domain as `(resolved key, source)`, in first
+    /// appearance order across the root and its fragments, deduplicated by
+    /// resolved key.
+    pub domains: Vec<(String, String)>,
+    /// `.ddd` fragment imports the fetch could not provide, as written.
+    pub missing: Vec<String>,
+    /// Domain imports the fetch could not provide, as
+    /// `(resolved key, importing file)`.
+    pub missing_domains: Vec<(String, String)>,
+    /// The import path that closed a `.ddd` cycle, when one exists.
+    pub cycles: Vec<String>,
+    /// Every written `.ddd` import across the root and its fragments, in
+    /// visit order — the span anchors for tree-level diagnostics.
+    pub sites: Vec<DddFragmentSite>,
+}
+
+/// Gathers a `.ddd` root's whole import closure: fragments (transitively),
+/// and the `.mox` domains declared by the root **and** by every fragment,
+/// each resolved relative to its declaring file's directory.
+///
+/// Misses and cycles are reported, never looped on, and never fatal here —
+/// what to do about them is host policy (the CLI hard-errors, the LSP
+/// degrades).
+pub fn gather_ddd_app_imports(
+    path_key: &str,
+    source: &str,
+    fetch: &mut dyn FnMut(&str) -> Option<String>,
+) -> DddAppImports {
+    let fragments = gather_ddd_fragments(path_key, source, fetch);
+    let mut gathered = DddAppImports {
+        fragments: fragments.fragments,
+        domains: Vec::new(),
+        missing: fragments.missing,
+        missing_domains: Vec::new(),
+        cycles: fragments.cycles,
+        sites: fragments.sites,
+    };
+    gather_ddd_domains(
+        path_key,
+        source,
+        fetch,
+        &mut gathered.domains,
+        &mut gathered.missing_domains,
+    );
+    for (fragment_path, fragment_source) in &gathered.fragments {
+        gather_ddd_domains(
+            fragment_path,
+            fragment_source,
+            fetch,
+            &mut gathered.domains,
+            &mut gathered.missing_domains,
+        );
+    }
+    gathered
+}
+
+/// The `.mox` imports one `.ddd` source declares (`.ddd` fragments and
+/// `.dmn` decision models are other buckets).
+fn ddd_domain_imports(source: &str) -> Vec<String> {
+    phero_syntax::parse_ddd(source)
+        .ast
+        .map(|ast| {
+            ast.imports
+                .into_iter()
+                .map(|import| import.path)
+                .filter(|import| !import.ends_with(".ddd") && !import.ends_with(".dmn"))
+                .collect()
+        })
+        .unwrap_or_default()
+}
+
+/// Appends the `.mox` domains `source` imports (relative to its own
+/// directory) to `domains`, deduplicated by resolved key; a miss lands in
+/// `missing` as `(resolved key, importer)`.
+fn gather_ddd_domains(
+    path_key: &str,
+    source: &str,
+    fetch: &mut dyn FnMut(&str) -> Option<String>,
+    domains: &mut Vec<(String, String)>,
+    missing: &mut Vec<(String, String)>,
+) {
+    let directory = dir_of(path_key);
+    for import in ddd_domain_imports(source) {
+        let key = directory.join(&import).display().to_string();
+        if domains.iter().any(|(existing, _)| *existing == key) {
+            continue;
+        }
+        match fetch(&key) {
+            Some(text) => domains.push((key, text)),
+            None => missing.push((key, path_key.to_string())),
+        }
+    }
 }
 
 /// The buckets a `.uc` (or `.cmmn`) use-case file's imports resolve to:
@@ -793,34 +925,46 @@ pub fn gather_deploy_imports(
     Ok(pairs)
 }
 
-/// Gathers and compiles one imported `.ddd` design: its own `.mox`
-/// imports resolve relative to its resolved key (exactly like `pherolang
-/// check` on the design), hard-erroring on the first miss. Compilation
-/// failure reads ``imported design {key} does not compile`` plus the
-/// error-diagnostic lines.
+/// Gathers and compiles one imported `.ddd` design **application**: the
+/// whole root — its transitive fragments and every domain the root or a
+/// fragment imports, each resolved relative to its declaring file (DD8). A
+/// fragmented design compiles whole or not at all; compiling the root alone
+/// would silently drop its fragments' modules.
+///
+/// Compilation failure reads ``imported design {key} does not compile`` plus
+/// the error-diagnostic lines.
 fn gather_design_model(
     key: &str,
     text: &str,
     fetch: &mut dyn FnMut(&str) -> Option<String>,
 ) -> Result<phero_ir::ddd::DddModel, String> {
-    let domains = gather_domains_relative(
+    let gathered = gather_ddd_app_imports(key, text, fetch);
+    if let Some(missing) = gathered.missing.first() {
+        return Err(format!(
+            "imported design fragment \"{missing}\" was not provided"
+        ));
+    }
+    if let Some((resolved, importer)) = gathered.missing_domains.first() {
+        return Err(cannot_read(resolved, importer));
+    }
+    if let Some(cycle) = gathered.cycles.first() {
+        return Err(format!("design import cycle through {cycle}"));
+    }
+    let schemas = collect_schema_imports(&gathered.domains).map_err(|error| error.to_string())?;
+    let sigil = collect_sigil_imports(&gathered.domains).map_err(|error| error.to_string())?;
+    let fragments: Vec<crate::DddFragment> = gathered
+        .fragments
+        .iter()
+        .map(|(path, source)| crate::DddFragment {
+            path: path.clone(),
+            source: source.clone(),
+        })
+        .collect();
+    let compilation = compile_ddd_app_str(
         key,
         text,
-        |source| {
-            phero_syntax::parse_ddd(source)
-                .ast
-                .map(|ast| ast.imports.into_iter().map(|import| import.path).collect())
-                .unwrap_or_default()
-        },
-        fetch,
-        true,
-    )?;
-    let schemas = collect_schema_imports(&domains).map_err(|error| error.to_string())?;
-    let sigil = collect_sigil_imports(&domains).map_err(|error| error.to_string())?;
-    let compilation = compile_ddd_str(
-        key,
-        text,
-        &domains,
+        &fragments,
+        &gathered.domains,
         &DomainImports {
             schemas,
             sigil: sigil.imports,

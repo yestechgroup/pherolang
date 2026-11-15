@@ -1,0 +1,324 @@
+{
+  "formatVersion": 2,
+  "pheroVersion": "0.3.0",
+  "application": {
+    "name": "Queries",
+    "base": "demo.queries"
+  },
+  "modules": [
+    {
+      "name": "ordering",
+      "designs": [
+        {
+          "class": "Order",
+          "typeRef": {
+            "type": "class",
+            "value": {
+              "package": "demo.queries",
+              "name": "Order"
+            }
+          },
+          "stereotype": "entity",
+          "flags": {
+            "auditable": true,
+            "optimisticLocking": true
+          },
+          "isAggregateRoot": true,
+          "repository": {
+            "name": "OrderRepository",
+            "operations": [
+              {
+                "name": "findById",
+                "builtin": "findById"
+              },
+              {
+                "name": "save",
+                "builtin": "save"
+              },
+              {
+                "name": "openFor",
+                "returnType": {
+                  "type": "class",
+                  "value": {
+                    "package": "demo.queries",
+                    "name": "Order"
+                  }
+                },
+                "returnMultiplicity": {
+                  "lower": 0,
+                  "upper": "unbounded"
+                },
+                "params": [
+                  {
+                    "name": "targetState",
+                    "type": {
+                      "type": "enum",
+                      "value": {
+                        "package": "demo.queries",
+                        "name": "OrderStatus"
+                      }
+                    }
+                  },
+                  {
+                    "name": "minimumTotal",
+                    "type": {
+                      "type": "primitive",
+                      "value": "int"
+                    }
+                  }
+                ],
+                "query": {
+                  "predicate": "self.status == targetState && self.total >= minimumTotal",
+                  "sort": [
+                    {
+                      "field": "createdDate",
+                      "fieldType": {
+                        "type": "primitive",
+                        "value": "date"
+                      },
+                      "direction": "desc"
+                    },
+                    {
+                      "field": "orderNo",
+                      "fieldType": {
+                        "type": "primitive",
+                        "value": "string"
+                      },
+                      "direction": "asc"
+                    }
+                  ],
+                  "pagination": {
+                    "limit": 20,
+                    "max": 100,
+                    "cursor": false
+                  },
+                  "readOnly": true
+                },
+                "capabilities": [
+                  {
+                    "name": "ReadOrders"
+                  }
+                ]
+              },
+              {
+                "name": "recentFor",
+                "returnType": {
+                  "type": "class",
+                  "value": {
+                    "package": "demo.queries",
+                    "name": "Order"
+                  }
+                },
+                "returnMultiplicity": {
+                  "lower": 0,
+                  "upper": "unbounded"
+                },
+                "params": [
+                  {
+                    "name": "minimumTotal",
+                    "type": {
+                      "type": "primitive",
+                      "value": "int"
+                    }
+                  }
+                ],
+                "query": {
+                  "predicate": "self.total >= minimumTotal",
+                  "sort": [
+                    {
+                      "field": "createdDate",
+                      "fieldType": {
+                        "type": "primitive",
+                        "value": "date"
+                      },
+                      "direction": "desc"
+                    }
+                  ],
+                  "pagination": {
+                    "limit": 10,
+                    "max": 50,
+                    "cursor": false
+                  },
+                  "readOnly": true
+                }
+              },
+              {
+                "name": "byNumber",
+                "returnType": {
+                  "type": "class",
+                  "value": {
+                    "package": "demo.queries",
+                    "name": "Order"
+                  }
+                },
+                "returnMultiplicity": {
+                  "lower": 0,
+                  "upper": {
+                    "finite": 1
+                  }
+                },
+                "params": [
+                  {
+                    "name": "number",
+                    "type": {
+                      "type": "primitive",
+                      "value": "string"
+                    }
+                  }
+                ],
+                "query": {
+                  "predicate": "self.orderNo == number",
+                  "readOnly": true
+                }
+              },
+              {
+                "name": "summaries",
+                "returnType": {
+                  "dto": "OrderSummary"
+                },
+                "returnMultiplicity": {
+                  "lower": 0,
+                  "upper": "unbounded"
+                },
+                "params": [
+                  {
+                    "name": "minimumTotal",
+                    "type": {
+                      "type": "primitive",
+                      "value": "int"
+                    }
+                  }
+                ],
+                "query": {
+                  "predicate": "self.total >= minimumTotal",
+                  "sort": [
+                    {
+                      "field": "createdDate",
+                      "fieldType": {
+                        "type": "primitive",
+                        "value": "date"
+                      },
+                      "direction": "desc"
+                    }
+                  ],
+                  "readOnly": true
+                }
+              },
+              {
+                "name": "shipped",
+                "returnType": {
+                  "type": "class",
+                  "value": {
+                    "package": "demo.queries",
+                    "name": "Order"
+                  }
+                },
+                "returnMultiplicity": {
+                  "lower": 0,
+                  "upper": "unbounded"
+                },
+                "params": [
+                  {
+                    "name": "targetState",
+                    "type": {
+                      "type": "enum",
+                      "value": {
+                        "package": "demo.queries",
+                        "name": "OrderStatus"
+                      }
+                    }
+                  }
+                ],
+                "query": {
+                  "predicate": "self.status == targetState",
+                  "pagination": {
+                    "cursor": true
+                  },
+                  "readOnly": true
+                }
+              }
+            ]
+          }
+        },
+        {
+          "class": "Order",
+          "typeRef": {
+            "type": "class",
+            "value": {
+              "package": "demo.queries",
+              "name": "Order"
+            }
+          },
+          "stereotype": "dto",
+          "dtoShape": {
+            "name": "OrderSummary",
+            "source": {
+              "type": "class",
+              "value": {
+                "package": "demo.queries",
+                "name": "Order"
+              }
+            },
+            "direction": "input",
+            "members": [
+              {
+                "name": "orderNo",
+                "kind": "select",
+                "type": {
+                  "type": "primitive",
+                  "value": "string"
+                },
+                "multiplicity": {
+                  "lower": 1,
+                  "upper": {
+                    "finite": 1
+                  }
+                },
+                "path": [
+                  "orderNo"
+                ]
+              },
+              {
+                "name": "total",
+                "kind": "select",
+                "type": {
+                  "type": "primitive",
+                  "value": "int"
+                },
+                "multiplicity": {
+                  "lower": 1,
+                  "upper": {
+                    "finite": 1
+                  }
+                },
+                "path": [
+                  "total"
+                ]
+              },
+              {
+                "name": "status",
+                "kind": "select",
+                "type": {
+                  "type": "enum",
+                  "value": {
+                    "package": "demo.queries",
+                    "name": "OrderStatus"
+                  }
+                },
+                "multiplicity": {
+                  "lower": 1,
+                  "upper": {
+                    "finite": 1
+                  }
+                },
+                "path": [
+                  "status"
+                ]
+              }
+            ]
+          }
+        }
+      ]
+    }
+  ]
+}

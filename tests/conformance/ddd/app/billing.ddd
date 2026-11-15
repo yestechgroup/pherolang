@@ -1,0 +1,12 @@
+// The billing fragment reopens `core` (declared in the root and in this
+// file): module members merge in import order into one module. It imports
+// the domain by its **own** directory's relative path so the fixture pins
+// per-origin import resolution (DD8).
+import "app.mox";
+
+module core {
+    entity Invoice repository InvoiceRepository {
+        findById;
+        findAll;
+    }
+}

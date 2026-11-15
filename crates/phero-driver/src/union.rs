@@ -55,13 +55,34 @@ pub(crate) struct LoweredDomains {
     /// the retained rosetta texts); each caller appends them after its own
     /// diagnostics, following the domain ones.
     pub(crate) sigil_diagnostics: Vec<(String, Diagnostic)>,
+    /// Every `.mox` import string, **as written**, that resolved to a
+    /// provided domain (deduplicated). The design prologue's "was not
+    /// provided" check reads this instead of the lowered units, so a second
+    /// spelling of one file (`"a.mox"` from the root, `"../a.mox"` from a
+    /// fragment) is provided too.
+    pub(crate) provided_imports: Vec<String>,
+}
+
+/// One file whose `import` declarations name domains: the file's resolved
+/// path (the base for semantic import resolution) and its import list.
+///
+/// A `.ddd` application root and each imported **fragment** are distinct
+/// origins (DD8, issue pherolang#305): an import string resolves relative to
+/// the directory of the file that declares it, so merging the fragment
+/// imports under the root's path would silently resolve them against the
+/// wrong directory.
+pub(crate) struct DomainOrigin<'a> {
+    /// The declaring file's resolved path.
+    pub path: &'a str,
+    /// The file's own `import` declarations.
+    pub imports: &'a [phero_syntax::Import],
 }
 
 /// The body shared by [`compile_actors_with`] and [`compile_ddd_with`]:
-/// resolve `imports` against `domains` (deduplicated by import path, in
-/// first-appearance order; only imported domains are compiled — extras are
-/// ignored so their diagnostics do not leak), lower every named domain
-/// against the shared union namespace, and collect the results.
+/// resolve `imports` against `domains` (deduplicated by **resolved domain
+/// path**, in first-appearance order; only imported domains are compiled —
+/// extras are ignored so their diagnostics do not leak), lower every named
+/// domain against the shared union namespace, and collect the results.
 ///
 /// A domain with errors yields no model while the remaining domains keep
 /// resolving, so the tails can still bind capabilities and resolve designs
@@ -73,23 +94,59 @@ pub(crate) fn lower_domains(
     domains: &[SourceFile],
     provided: &DomainImports,
 ) -> LoweredDomains {
+    lower_domains_from(
+        db,
+        &[DomainOrigin {
+            path: origin_path,
+            imports,
+        }],
+        domains,
+        provided,
+    )
+}
+
+/// [`lower_domains`] over several origins — a `.ddd` root plus its imported
+/// fragments. Each import resolves against the directory of the file that
+/// declares it; two spellings (or two files) that name the same domain
+/// lower it **once**, keyed by the resolved domain path.
+pub(crate) fn lower_domains_from(
+    db: &dyn Db,
+    origins: &[DomainOrigin<'_>],
+    domains: &[SourceFile],
+    provided: &DomainImports,
+) -> LoweredDomains {
+    // `(import as written, resolved file)` — the written spelling names the
+    // unit (the design prologue's provision check and domain-diagnostic
+    // rendering both key by it, the historical contract), the resolved path
+    // deduplicates. A second spelling of one file is provided but not
+    // lowered twice.
     let mut lookups: Vec<(String, SourceFile)> = Vec::new();
-    for import in imports {
-        // `.dmn` imports are not domains — they name the design's decision
-        // models, which the host provides as pre-compiled `DmnModel`s (the
-        // decisions bucket). A plain compile simply ignores them; treating
-        // them as `.mox` sources would mis-parse the artifact.
-        if import.path.ends_with(".dmn") || import.path.ends_with(".ddd") {
-            continue;
-        }
-        if lookups.iter().any(|(path, _)| *path == import.path) {
-            continue;
-        }
-        if let Some(domain) = domains
-            .iter()
-            .find(|file| import_matches(&import.path, origin_path, &file.path(db)))
-        {
-            lookups.push((import.path.clone(), *domain));
+    let mut provided_imports: Vec<String> = Vec::new();
+    for origin in origins {
+        for import in origin.imports {
+            // `.dmn` imports are not domains — they name the design's
+            // decision models, which the host provides as pre-compiled
+            // `DmnModel`s (the decisions bucket). A plain compile simply
+            // ignores them; treating them as `.mox` sources would mis-parse
+            // the artifact. A `.ddd` import is a fragment, merged by the
+            // entry point before this runs.
+            if import.path.ends_with(".dmn") || import.path.ends_with(".ddd") {
+                continue;
+            }
+            if let Some(domain) = domains
+                .iter()
+                .find(|file| import_matches(&import.path, origin.path, &file.path(db)))
+            {
+                if !provided_imports.contains(&import.path) {
+                    provided_imports.push(import.path.clone());
+                }
+                if !lookups
+                    .iter()
+                    .any(|(_, existing)| existing.path(db) == domain.path(db))
+                {
+                    lookups.push((import.path.clone(), *domain));
+                }
+            }
         }
     }
 
@@ -153,6 +210,7 @@ pub(crate) fn lower_domains(
         domain_units,
         domains_model,
         sigil_diagnostics,
+        provided_imports,
     }
 }
 /// The one-shot wrappers' domain sources: each `(path, source)` pair as a

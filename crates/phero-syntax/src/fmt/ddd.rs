@@ -433,6 +433,56 @@ impl<'src> Formatter<'src> {
         }
     }
 
+    /// Consumes and emits a repository query operation's clause sequence
+    /// (DD9, typed repository queries) in canonical order `where? sort?
+    /// page?`: the `where` predicate re-emits through
+    /// [`Formatter::scan_raw_parens`] — the `when`-guard convention, so the
+    /// source between the parentheses stays verbatim — the `sort` keys one
+    /// after another with the default `asc` direction dropped, and the
+    /// `page` members (`limit`, `max`, `cursor`) as written (`page` must
+    /// follow `sort`, and the caller scans the trailing `capability` clause).
+    /// The clause order itself is canonicalized ahead of the scan by
+    /// [`Formatter::reorder_ddd_repository_clauses`].
+    pub(crate) fn scan_ddd_query_clauses(&mut self) {
+        if self.take_if(|token| matches!(token, Token::Ident(ddd::WHERE))) {
+            self.scan_raw_parens();
+        }
+        if self.take_if(|token| matches!(token, Token::Ident(ddd::SORT))) {
+            self.scan_ddd_sort_key();
+            while self.take_if(|token| matches!(token, Token::Comma)) {
+                self.scan_ddd_sort_key();
+            }
+        }
+        if self.take_if(|token| matches!(token, Token::Ident(ddd::PAGE))) {
+            loop {
+                match self.peek_tok() {
+                    Some(Token::Ident(text)) if text == ddd::LIMIT || text == ddd::MAX => {
+                        self.advance();
+                        self.take_if(|token| matches!(token, Token::Int(_)));
+                    }
+                    Some(Token::Ident(ddd::CURSOR)) => self.advance(),
+                    _ => break,
+                }
+            }
+        }
+    }
+
+    /// One `field ("asc" | "desc")?` key of a repository query's `sort`
+    /// clause (DD9): the field re-emits as written and `desc` is kept, while
+    /// the default `asc` is consumed without emitting — canonical output
+    /// omits it (`sort createdDate desc, id asc` formats to
+    /// `sort createdDate desc, id`).
+    fn scan_ddd_sort_key(&mut self) {
+        if !self.take_name() {
+            return;
+        }
+        if matches!(self.peek_tok(), Some(Token::Ident(ddd::ASC))) {
+            self.bump_token();
+        } else if matches!(self.peek_tok(), Some(Token::Ident(ddd::DESC))) {
+            self.advance();
+        }
+    }
+
     /// Like [`Formatter::scan_params`], but for `.ddd` parameters, which may
     /// carry a multiplicity between the type and the name.
     pub(crate) fn scan_ddd_params(&mut self) {
@@ -453,7 +503,89 @@ impl<'src> Formatter<'src> {
         self.take_if(|token| matches!(token, Token::RParen));
     }
 
+    /// Rewrites the node stream of one repository operation ahead of the
+    /// formatter (positioned at the operation's first token) so its clauses
+    /// appear in the canonical order `throws? when? where? sort? page?
+    /// capability?` whatever the source order — the same node-range technique
+    /// [`Formatter::reorder_ddd_search_members`] uses for search bodies.
+    ///
+    /// The operation's extent is the token run up to (not including) its
+    /// depth-0 terminator: the `;`, the opening `{` of a statement body, or
+    /// the repository body's closing `}`. Segments split at the clause-leading
+    /// words only when the word's shape confirms the clause (a `where` must
+    /// be followed by `(`, a `sort` by a key, a `page` by one of its members
+    /// or the terminator), so a contextual identifier that merely spells a
+    /// clause word — an operation named `where`, a sort key named `page` —
+    /// is never mistaken for a boundary. The first segment (the signature)
+    /// keeps the lowest rank; comments travel with the segment they precede.
+    /// An already-canonical operation is left untouched.
+    pub(crate) fn reorder_ddd_repository_clauses(&mut self) {
+        self.drain_comments();
+        let start = self.pos;
+        let mut depth = 0usize;
+        let mut end = self.nodes.len();
+        let mut index = start;
+        while let Some(node) = self.nodes.get(index) {
+            match node {
+                Node::Token(Token::Other(';') | Token::RBrace, _) if depth == 0 => {
+                    end = index;
+                    break;
+                }
+                Node::Token(Token::LBrace, _) if depth == 0 => {
+                    end = index;
+                    break;
+                }
+                Node::Token(Token::LParen | Token::LBracket | Token::LBrace, _) => depth += 1,
+                Node::Token(Token::RParen | Token::RBracket | Token::RBrace, _) => {
+                    depth = depth.saturating_sub(1)
+                }
+                _ => {}
+            }
+            index += 1;
+        }
+        let region = &self.nodes[start..end];
+        let mut segments: Vec<(usize, Vec<Node<'src>>)> = Vec::new();
+        let mut depth = 0usize;
+        for (offset, node) in region.iter().enumerate() {
+            let rank = if depth == 0 {
+                repository_clause_rank(region, offset)
+            } else {
+                None
+            };
+            if segments.is_empty() {
+                // The signature segment leads; every clause ranks above it.
+                segments.push((rank.unwrap_or(usize::MIN), Vec::new()));
+            } else if let Some(rank) = rank {
+                segments.push((rank, Vec::new()));
+            }
+            match node {
+                Node::Token(Token::LParen | Token::LBracket | Token::LBrace, _) => depth += 1,
+                Node::Token(Token::RParen | Token::RBracket | Token::RBrace, _) => {
+                    depth = depth.saturating_sub(1)
+                }
+                _ => {}
+            }
+            segments.last_mut().unwrap().1.push(node.clone());
+        }
+        if segments.windows(2).all(|pair| pair[0].0 <= pair[1].0) {
+            return;
+        }
+        segments.sort_by_key(|(rank, _)| *rank);
+        let mut reordered: Vec<Node<'src>> = self.nodes[..start].to_vec();
+        for (_, segment) in &segments {
+            reordered.extend(segment.iter().cloned());
+        }
+        reordered.extend(self.nodes[end..].iter().cloned());
+        self.nodes = reordered;
+        self.pos = start;
+    }
+
     pub(crate) fn scan_ddd_repository_item(&mut self) {
+        // The query clauses are re-emitted in the canonical order
+        // `throws? where? sort? page? capability?` whatever the source order
+        // (DD9); every other repository operation is already in order, so
+        // the rewrite is the identity for it.
+        self.reorder_ddd_repository_clauses();
         match self.peek_tok() {
             // A `protected` modifier on a built-in (`protected findByKeys;`):
             // both tokens re-emit verbatim via `advance()`.
@@ -488,10 +620,14 @@ impl<'src> Formatter<'src> {
                 if self.take_if(|token| matches!(token, Token::When)) {
                     self.scan_raw_parens();
                 }
+                // The query clauses (DD9), canonical order `where sort page`,
+                // followed by the operation's `capability` clause.
+                self.scan_ddd_query_clauses();
                 if matches!(self.peek_tok(), Some(Token::LBrace)) {
                     self.scan_ddd_body();
                     return;
                 }
+                self.scan_ddd_capabilities();
                 self.take_if(|token| matches!(token, Token::Other(';')));
             }
             _ => {
@@ -1182,5 +1318,46 @@ impl<'src> Formatter<'src> {
             }
         }
         self.flush_line();
+    }
+}
+
+/// The canonical rank of a repository operation's clause keyword at `index`
+/// (DD9 plus the pre-existing `throws`/`when`), or `None` when the token does
+/// not start a clause.
+///
+/// The ranks are the canonical clause order
+/// `throws(1) when(2) where(3) sort(4) page(5) capability(6)`; the operation's
+/// signature segment takes [`usize::MIN`] so it always leads. Each contextual
+/// word additionally has to be **shaped** like its clause — `where` followed
+/// by `(`, `sort` followed by a key, `page` followed by a member or the
+/// terminator, `throws` followed by an error name — so an ordinary identifier
+/// that happens to spell a clause word never becomes a segment boundary.
+fn repository_clause_rank(nodes: &[Node<'_>], index: usize) -> Option<usize> {
+    let token = match nodes.get(index) {
+        Some(Node::Token(token, _)) => token,
+        _ => return None,
+    };
+    let next = nodes[index + 1..].iter().find_map(|node| match node {
+        Node::Token(token, _) => Some(token),
+        Node::Comment { .. } => None,
+    });
+    match token {
+        Token::Ident(ddd::THROWS) => {
+            matches!(next, Some(Token::Ident(_) | Token::IdentEscaped(_))).then_some(1)
+        }
+        Token::When => Some(2),
+        Token::Ident(ddd::WHERE) => matches!(next, Some(Token::LParen)).then_some(3),
+        Token::Ident(ddd::SORT) => {
+            matches!(next, Some(Token::Ident(_) | Token::IdentEscaped(_))).then_some(4)
+        }
+        Token::Ident(ddd::PAGE) => matches!(
+            next,
+            Some(Token::Ident(ddd::LIMIT | ddd::MAX | ddd::CURSOR))
+                | Some(Token::Other(';'))
+                | None
+        )
+        .then_some(5),
+        Token::Capability => Some(6),
+        _ => None,
     }
 }

@@ -436,3 +436,106 @@ fn aggregates_and_invariants_fixture_matches_its_golden() {
     );
     assert_golden_artifact(model, AGGREGATES_ARTIFACT_PATH, AGGREGATES_DESIGN_PATH);
 }
+
+// --- DD8: a fragmented application (issue pherolang#305) ---------------------
+
+/// The root of the fragmented fixture: an application with `sales` and
+/// `billing` fragments, where `billing` reopens the root's `core` module and
+/// resolves its own domain import from its own directory.
+const APP_ROOT_PATH: &str = "tests/conformance/ddd/app/app.ddd";
+/// The fixture's fragments, in the root's import order.
+const APP_FRAGMENT_PATHS: [&str; 2] = [
+    "tests/conformance/ddd/app/sales.ddd",
+    "tests/conformance/ddd/app/billing.ddd",
+];
+/// The domain the root and the billing fragment import.
+const APP_DOMAIN_PATH: &str = "tests/conformance/ddd/app/app.mox";
+/// The one merged artifact the application lowers to.
+const APP_ARTIFACT_PATH: &str = "tests/conformance/ddd/app/app.ddd.json";
+
+#[test]
+fn a_fragmented_application_matches_one_merged_golden_artifact() {
+    let root_absolute = fixture_path(APP_ROOT_PATH);
+    let root = std::fs::read_to_string(&root_absolute).expect("read the fixture root");
+    let fragments: Vec<phero_driver::DddFragment> = APP_FRAGMENT_PATHS
+        .iter()
+        .map(|relative| {
+            let absolute = fixture_path(relative);
+            phero_driver::DddFragment {
+                path: absolute.display().to_string(),
+                source: std::fs::read_to_string(&absolute).expect("read a fixture fragment"),
+            }
+        })
+        .collect();
+    let domain_absolute = fixture_path(APP_DOMAIN_PATH);
+    let domains = [(
+        domain_absolute.display().to_string(),
+        std::fs::read_to_string(&domain_absolute).expect("read the fixture domain"),
+    )];
+    let compilation = phero_driver::compile_ddd_app_str(
+        root_absolute.to_str().expect("utf-8 path"),
+        &root,
+        &fragments,
+        &domains,
+        &phero_driver::DomainImports::default(),
+    );
+    assert!(
+        compilation.diagnostics.is_empty(),
+        "the fragmented fixture must compile clean: {:?}",
+        compilation.diagnostics
+    );
+    let model = compilation.model.expect("one merged design artifact");
+    // `core` reopened across the root and the billing fragment: one module,
+    // members in import order.
+    let core = model
+        .modules
+        .iter()
+        .find(|module| module.name == "core")
+        .expect("the root's core module");
+    let designs: Vec<&str> = core
+        .designs
+        .iter()
+        .filter_map(|design| design.class.as_deref())
+        .collect();
+    assert_eq!(
+        designs,
+        ["Order", "Invoice"],
+        "core reopens in import order"
+    );
+    assert_eq!(core.services.len(), 1);
+    assert!(
+        model.modules.iter().any(|module| module.name == "sales"),
+        "the sales fragment contributes its module"
+    );
+    assert_golden_artifact(model, APP_ARTIFACT_PATH, APP_ROOT_PATH);
+}
+
+// --- DD9: typed repository queries (issue pherolang#306) ---------------------
+
+/// The query fixture: a many-valued finder, a single-result `[0..1]` finder,
+/// a DTO-projection return, a capability-gated finder, and a cursor one. Its
+/// golden carries each operation's `query` block (verbatim predicate,
+/// resolved sort field types, pagination, `readOnly`) and the resolved
+/// capability references.
+const QUERIES_DESIGN_PATH: &str = "tests/conformance/ddd/queries.ddd";
+const QUERIES_DOMAIN_PATH: &str = "tests/conformance/ddd/queries.mox";
+const QUERIES_ARTIFACT_PATH: &str = "tests/conformance/ddd/queries.ddd.json";
+
+#[test]
+fn conformance_queries_matches_golden_artifact() {
+    let model = compile_fixture(QUERIES_DESIGN_PATH, QUERIES_DOMAIN_PATH);
+    let repository = model.modules[0].designs[0]
+        .repository
+        .as_ref()
+        .expect("the fixture designs a repository");
+    let query = repository
+        .operations
+        .iter()
+        .find(|operation| operation.name == "openFor")
+        .and_then(|operation| operation.query.as_ref())
+        .expect("the finder lowers its query");
+    assert!(query.read_only);
+    assert_eq!(query.sort.len(), 2);
+    assert_eq!(query.sort[0].field, "createdDate");
+    assert_golden_artifact(model, QUERIES_ARTIFACT_PATH, QUERIES_DESIGN_PATH);
+}

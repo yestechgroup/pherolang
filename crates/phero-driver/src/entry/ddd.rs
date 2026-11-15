@@ -10,7 +10,7 @@ use crate::diagnostic::Diagnostic;
 use crate::entry::finish_surface;
 use crate::imports::DomainImports;
 use crate::session::{parse_ddd_query, Database, SourceFile};
-use crate::union::{domain_files, lower_domains};
+use crate::union::{domain_files, lower_domains, lower_domains_from, DomainOrigin};
 
 /// One imported `.ddd` design fragment (DD8, issue pherolang#305): the
 /// host-resolved path and its source text. Fragments are merged into the
@@ -69,6 +69,7 @@ fn compile_ddd_with(
         parsed.ast.as_ref(),
         &parsed.diagnostics,
         &domains.domain_units,
+        &domains.provided_imports,
         actors,
         decisions,
     );
@@ -547,6 +548,10 @@ fn compile_ddd_app_str_inner(
     let mut combined = source.to_string();
     let mut ranges: Vec<(String, usize, usize)> = vec![(path.to_string(), 0, source.len())];
     let mut fragment_modules = Vec::new();
+    // The root's own import list, kept separate from the merged one: an
+    // import resolves relative to the file that declares it (DD8).
+    let root_imports = ast.imports.clone();
+    let mut fragment_origins: Vec<(String, Vec<phero_syntax::Import>)> = Vec::new();
     let mut merged_imports = ast.imports.clone();
     for fragment in fragments {
         let base = combined.len();
@@ -571,6 +576,7 @@ fn compile_ddd_app_str_inner(
                     ),
                 ));
             } else {
+                fragment_origins.push((fragment.path.clone(), fragment_ast.imports.clone()));
                 fragment_modules.extend(fragment_ast.fragments);
                 merged_imports.extend(fragment_ast.imports);
             }
@@ -586,13 +592,24 @@ fn compile_ddd_app_str_inner(
 
     let db = Database::new();
     let files = domain_files(&db, domains);
-    let lowered = lower_domains(&db, path, &ast.imports, &files, imports);
+    let mut origins = vec![DomainOrigin {
+        path,
+        imports: &root_imports,
+    }];
+    for (fragment_path, fragment_imports) in &fragment_origins {
+        origins.push(DomainOrigin {
+            path: fragment_path,
+            imports: fragment_imports,
+        });
+    }
+    let lowered = lower_domains_from(&db, &origins, &files, imports);
     let (model, local_diagnostics) = ddd::compile_ddd_file(
         path,
         &combined,
         Some(&ast),
         &[],
         &lowered.domain_units,
+        &lowered.provided_imports,
         actors,
         decisions,
     );

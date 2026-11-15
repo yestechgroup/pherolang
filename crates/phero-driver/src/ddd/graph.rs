@@ -586,6 +586,22 @@ pub(crate) enum AggregateVerdict {
     },
 }
 
+/// The aggregate boundary one design artifact carries (DD4, issue
+/// pherolang#301): the **effective** verdict the compiler lowered.
+enum Boundary {
+    /// An effective aggregate root (`isAggregateRoot: true`).
+    Root,
+    /// A member of an aggregate (`isAggregateRoot: false`); `Some` names the
+    /// resolved root, `None` when the artifact omitted it.
+    Member(Option<(String, String)>),
+    /// The compile could not decide (`isAggregateRoot` absent in a
+    /// compiler-produced artifact): never re-guessed here.
+    Unknown,
+    /// No verdict at all — a hand-built artifact without provenance; the
+    /// historical containment derivation applies.
+    Absent,
+}
+
 /// The capability-noun classification (pherolang#144): an aggregate verdict
 /// per resolved `(package, class)`, derived purely from the union model and
 /// the provided designs. Absence is silence by construction: classes with
@@ -597,18 +613,27 @@ pub(crate) struct NounClassification {
 
 impl NounClassification {
     /// Classifies every provided design's class against the union's
-    /// containment graph. Designs resolve their authored class names the
-    /// `.ddd` way (base package first for bare names, otherwise exactly one
-    /// class across all packages); a design whose class the union does not
-    /// declare contributes nothing. When several designs target one class,
-    /// the first provided wins.
+    /// containment graph — **preferring the artifact's effective aggregate
+    /// boundary** (DD4, issue pherolang#301) and falling back to the
+    /// containment derivation only for a hand-built artifact that carries no
+    /// verdict at all.
+    ///
+    /// Designs resolve their authored class names the `.ddd` way (base
+    /// package first for bare names, otherwise exactly one class across all
+    /// packages); a design whose class the union does not declare contributes
+    /// nothing. When several designs target one class, the first provided
+    /// wins. A design whose boundary the compiler could not decide
+    /// (`isAggregateRoot` absent, DD4) is **unknown**, never re-guessed: the
+    /// compile already warned E0385, and the join does not convict on an
+    /// artifact that says "unknown".
     pub(crate) fn classify(designs: &[phero_ir::ddd::DddModel], union: &phero_ir::Model) -> Self {
         let edges = containment_edges(union);
         // Pass 1 — the stereotyped entity pool (the rule-6 container
         // universe): every entity design resolved to its domain class,
         // repository or not, plus the design entries in provided order.
         let mut entities: Vec<(String, String)> = Vec::new();
-        let mut resolved: Vec<((String, String), phero_ir::ddd::Stereotype, bool)> = Vec::new();
+        let mut resolved: Vec<((String, String), phero_ir::ddd::Stereotype, bool, Boundary)> =
+            Vec::new();
         for model in designs {
             let base = model
                 .application
@@ -637,30 +662,69 @@ impl NounClassification {
                     if design.stereotype == phero_ir::ddd::Stereotype::Entity {
                         entities.push(key.clone());
                     }
-                    resolved.push((key, design.stereotype, design.repository.is_some()));
+                    let boundary = match (design.is_aggregate_root, &design.aggregate) {
+                        (Some(true), _) => Boundary::Root,
+                        (Some(false), Some(membership)) => {
+                            let root = match &membership.root {
+                                phero_ir::TypeRef::Class { package, name } => {
+                                    Some((package.clone(), name.clone()))
+                                }
+                                _ => None,
+                            };
+                            Boundary::Member(root)
+                        }
+                        (Some(false), None) => Boundary::Member(None),
+                        // A compiler-produced artifact always carries the
+                        // verdict; absence means the compile could not derive
+                        // it (unknown, never false). An artifact with no
+                        // provenance is hand-built and keeps the historical
+                        // containment derivation.
+                        (None, _) if model.phero_version.is_none() => Boundary::Absent,
+                        (None, _) => Boundary::Unknown,
+                    };
+                    resolved.push((
+                        key,
+                        design.stereotype,
+                        design.repository.is_some(),
+                        boundary,
+                    ));
                 }
             }
         }
-        // Pass 2 — the verdicts: value designs are values; entity designs
-        // with a repository are roots unless another stereotyped entity
-        // contains them (rule 6's predicate, transitive over the
-        // containment closure).
+        // Pass 2 — the verdicts: value designs are values; an entity design
+        // with a repository takes the artifact's boundary, and only a
+        // hand-built artifact without one falls back to containment (rule
+        // 6's predicate, transitive over the containment closure).
         let mut verdicts: HashMap<(String, String), AggregateVerdict> = HashMap::new();
-        for (key, stereotype, has_repository) in resolved {
+        for (key, stereotype, has_repository, boundary) in resolved {
             let verdict = match stereotype {
                 phero_ir::ddd::Stereotype::Value => AggregateVerdict::Value,
-                phero_ir::ddd::Stereotype::Entity if has_repository => {
-                    let contained = entities.iter().any(|entity| {
-                        *entity != key && reaches(&edges, (&entity.0, &entity.1), (&key.0, &key.1))
-                    });
-                    if contained {
-                        AggregateVerdict::NonRoot {
-                            root: aggregate_root(&edges, (&key.0, &key.1)),
+                phero_ir::ddd::Stereotype::Entity if has_repository => match boundary {
+                    // The artifact's authored/derived membership is
+                    // authoritative: a class another design placed in an
+                    // aggregate is a member even when no feature of this
+                    // pool contains it (the DD4 `aggregate <Root>` case).
+                    Boundary::Member(root) => AggregateVerdict::NonRoot { root },
+                    // A root verdict is only as good as that file's
+                    // visibility: another pooled design's containment still
+                    // convicts (a design split across files cannot see its
+                    // sibling's `contains`). `Absent` is the hand-built
+                    // artifact's fallback and derives the same way.
+                    Boundary::Root | Boundary::Absent => {
+                        let contained = entities.iter().any(|entity| {
+                            *entity != key
+                                && reaches(&edges, (&entity.0, &entity.1), (&key.0, &key.1))
+                        });
+                        if contained {
+                            AggregateVerdict::NonRoot {
+                                root: aggregate_root(&edges, (&key.0, &key.1)),
+                            }
+                        } else {
+                            AggregateVerdict::Root
                         }
-                    } else {
-                        AggregateVerdict::Root
                     }
-                }
+                    Boundary::Unknown => continue,
+                },
                 // Repository-less entities and dtos get no verdict.
                 _ => continue,
             };
@@ -721,4 +785,124 @@ fn resolve_design_class(
         return Some((package.to_string(), name.to_string()));
     }
     None
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// A domain whose `Library` contains `Book` (the containment derivation
+    /// case).
+    fn containing_union() -> phero_ir::Model {
+        crate::compile_str(
+            "domain.mox",
+            "package demo\n\nclass Library {\n    String name\n    contains Book[] books\n}\n\nclass Book {\n    String title\n}\n",
+            &crate::DomainImports::default(),
+        )
+        .model
+        .expect("the domain compiles")
+    }
+
+    /// A domain with no containment at all (`Library` and `Book` unrelated).
+    fn flat_union() -> phero_ir::Model {
+        crate::compile_str(
+            "domain.mox",
+            "package demo\n\nclass Library {\n    String name\n}\n\nclass Book {\n    String title\n}\n",
+            &crate::DomainImports::default(),
+        )
+        .model
+        .expect("the domain compiles")
+    }
+
+    fn artifact(designs: &str, provenance: bool) -> phero_ir::ddd::DddModel {
+        let provenance = if provenance {
+            r#""pheroVersion": "0.3.0","#
+        } else {
+            ""
+        };
+        phero_ir::ddd::DddModel::from_json(&format!(
+            r#"{{
+  "formatVersion": 2,
+  {provenance}
+  "application": {{ "name": "App" }},
+  "modules": [{{ "name": "m", "designs": [{designs}] }}]
+}}"#
+        ))
+        .expect("the hand-built artifact reads")
+    }
+
+    fn design(class: &str, boundary: &str) -> String {
+        format!(
+            r#"{{
+  "class": "{class}",
+  "typeRef": {{ "type": "class", "value": {{ "package": "demo", "name": "{class}" }} }},
+  "stereotype": "entity",
+  {boundary}
+  "repository": {{ "name": "{class}Repository", "operations": [] }}
+}}"#
+        )
+    }
+
+    #[test]
+    fn an_authored_membership_verdict_wins_without_containment() {
+        // The shape the compiler can only produce once rule 6 admits a
+        // member-side read (or a hand-built artifact): the artifact says
+        // `Book` belongs to `Library`, and no feature contains it. The
+        // classification must trust the artifact, not re-derive.
+        let model = artifact(
+            &format!(
+                "{},{}",
+                design("Library", r#""isAggregateRoot": true,"#),
+                design(
+                    "Book",
+                    r#""isAggregateRoot": false,
+                    "aggregate": { "root": { "type": "class", "value": { "package": "demo", "name": "Library" } }, "origin": "authored" },"#
+                )
+            ),
+            true,
+        );
+        let classification = NounClassification::classify(&[model], &flat_union());
+        assert_eq!(
+            classification.verdict("demo", "Book"),
+            Some(&AggregateVerdict::NonRoot {
+                root: Some(("demo".to_string(), "Library".to_string()))
+            }),
+            "the artifact's membership is authoritative"
+        );
+    }
+
+    #[test]
+    fn an_undecided_boundary_is_never_guessed() {
+        // A compiler-produced artifact (it carries `pheroVersion`) with no
+        // verdict: the compile already warned E0385, so the join stays
+        // silent instead of deriving a verdict the compiler refused.
+        let model = artifact(
+            &format!("{},{}", design("Library", ""), design("Book", "")),
+            true,
+        );
+        let classification = NounClassification::classify(&[model], &containing_union());
+        assert_eq!(
+            classification.verdict("demo", "Book"),
+            None,
+            "an unknown boundary never convicts"
+        );
+    }
+
+    #[test]
+    fn a_hand_built_artifact_falls_back_to_containment() {
+        // No `pheroVersion` and no boundary fields: a hand-built artifact.
+        // The historical containment derivation still applies.
+        let model = artifact(
+            &format!("{},{}", design("Library", ""), design("Book", "")),
+            false,
+        );
+        let classification = NounClassification::classify(&[model], &containing_union());
+        assert_eq!(
+            classification.verdict("demo", "Book"),
+            Some(&AggregateVerdict::NonRoot {
+                root: Some(("demo".to_string(), "Library".to_string()))
+            }),
+            "containment derivation is the hand-built fallback"
+        );
+    }
 }

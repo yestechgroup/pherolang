@@ -277,6 +277,89 @@
                   }
                 ],
                 "isProtected": true
+              },
+              {
+                "name": "inCurrency",
+                "returnType": {
+                  "type": "class",
+                  "value": {
+                    "package": "nz.example.shop",
+                    "name": "Order"
+                  }
+                },
+                "returnMultiplicity": {
+                  "lower": 0,
+                  "upper": "unbounded"
+                },
+                "params": [
+                  {
+                    "name": "code",
+                    "type": {
+                      "type": "vocabulary",
+                      "value": {
+                        "package": "nz.example.shop",
+                        "name": "Currency"
+                      }
+                    }
+                  }
+                ],
+                "query": {
+                  "predicate": "self.currency == code",
+                  "sort": [
+                    {
+                      "field": "orderNo",
+                      "fieldType": {
+                        "type": "primitive",
+                        "value": "string"
+                      },
+                      "direction": "asc"
+                    }
+                  ],
+                  "pagination": {
+                    "limit": 20,
+                    "max": 100,
+                    "cursor": false
+                  },
+                  "readOnly": true
+                },
+                "capabilities": [
+                  {
+                    "name": "ReadOrders"
+                  }
+                ]
+              },
+              {
+                "name": "recent",
+                "returnType": {
+                  "type": "class",
+                  "value": {
+                    "package": "nz.example.shop",
+                    "name": "Order"
+                  }
+                },
+                "returnMultiplicity": {
+                  "lower": 0,
+                  "upper": "unbounded"
+                },
+                "query": {
+                  "predicate": "self.orderNo != \"\"",
+                  "sort": [
+                    {
+                      "field": "orderNo",
+                      "fieldType": {
+                        "type": "primitive",
+                        "value": "string"
+                      },
+                      "direction": "desc"
+                    }
+                  ],
+                  "pagination": {
+                    "limit": 10,
+                    "max": 50,
+                    "cursor": false
+                  },
+                  "readOnly": true
+                }
               }
             ]
           },

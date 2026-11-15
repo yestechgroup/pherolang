@@ -1,0 +1,12 @@
+// The sales fragment: no `application` declaration and no `base` — a
+// fragment contributes modules to the root that imports it. `OrderLine` is
+// contained by `Order`, so it is a non-root aggregate member and declares no
+// repository.
+module sales {
+    /// A declared (non-delegating) operation: the module-coupling rule
+    /// forbids reaching another module's repository from here.
+    service LinePricing {
+        int price(int quantity, int unitCents);
+    }
+    entity OrderLine
+}

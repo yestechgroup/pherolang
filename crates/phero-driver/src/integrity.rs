@@ -206,6 +206,33 @@ fn check_capability_existence(
                     }
                 }
             }
+            // DD9: a query's `capability` clause is a read authorization and
+            // participates in coverage like any other carrier.
+            for design in &module.designs {
+                let Some(repository) = &design.repository else {
+                    continue;
+                };
+                for operation in &repository.operations {
+                    for capability in &operation.capabilities {
+                        if !declared.contains(&capability.name) {
+                            diagnostics.push((
+                                path.clone(),
+                                Diagnostic::warning(
+                                    coded(
+                                        X_UNKNOWN_OP_CAPABILITY,
+                                        format!(
+                                            "unknown capability '{}' on operation '{}' of                                              repository '{}'",
+                                            capability.name, operation.name, repository.name
+                                        ),
+                                    ),
+                                    None,
+                                )
+                                .with_help(help.clone()),
+                            ));
+                        }
+                    }
+                }
+            }
             for search in &module.searches {
                 for capability in &search.capabilities {
                     if !declared.contains(capability) {
@@ -252,10 +279,25 @@ fn check_capability_coverage(
             module
                 .services
                 .iter()
-                .flat_map(|service| service.operations.iter().map(|op| &op.capabilities))
-                .chain(module.searches.iter().map(|search| &search.capabilities))
+                .flat_map(|service| service.operations.iter())
+                .flat_map(|operation| &operation.capabilities)
+                .chain(
+                    module
+                        .searches
+                        .iter()
+                        .flat_map(|search| &search.capabilities),
+                )
+                // DD9: a query's read authorization is a carrier too.
+                .chain(
+                    module
+                        .designs
+                        .iter()
+                        .filter_map(|design| design.repository.as_ref())
+                        .flat_map(|repository| &repository.operations)
+                        .flat_map(|operation| &operation.capabilities)
+                        .map(|capability| &capability.name),
+                )
         })
-        .flatten()
         .cloned()
         .collect();
     let help = "declare the capability on an operation or search of a design, \

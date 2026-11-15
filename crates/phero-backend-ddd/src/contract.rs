@@ -1177,6 +1177,99 @@ fn validate_repository_operation(
         &format!("{path}.bodies.stmt"),
         violations,
     );
+    validate_repository_query(operation, path, violations);
+}
+
+/// The typed-query contract (DD9), checked from the artifact alone: a
+/// repository operation's `query` block must be a pure read.
+///
+/// - a built-in operation carries no query (it has no authored shape at
+///   all);
+/// - a query is always `readOnly: true` (an absent key deserializes as
+///   `false`, which is exactly the violation);
+/// - the predicate is non-empty;
+/// - a query carries no executable body, no `when` condition, and no
+///   `throws` clause — it reads, it does not run;
+/// - the pagination window is coherent: each present bound is positive and
+///   `limit` never exceeds `max`;
+/// - capabilities guard a query and are illegal on every other repository
+///   operation.
+fn validate_repository_query(
+    operation: &RepositoryOperation,
+    path: &str,
+    violations: &mut Vec<Violation>,
+) {
+    let Some(query) = &operation.query else {
+        if !operation.capabilities.is_empty() {
+            violations.push(Violation::new(
+                format!("{path}.capabilities"),
+                "a repository operation may carry capabilities only when it carries a query",
+            ));
+        }
+        return;
+    };
+    if operation.builtin.is_some() {
+        violations.push(Violation::new(
+            format!("{path}.query"),
+            "a builtin repository operation cannot carry a query",
+        ));
+    }
+    if !query.read_only {
+        violations.push(Violation::new(
+            format!("{path}.query.readOnly"),
+            "a repository query must be read-only (\"readOnly\": true)",
+        ));
+    }
+    if query.predicate.trim().is_empty() {
+        violations.push(Violation::new(
+            format!("{path}.query.predicate"),
+            "a repository query must carry a non-empty predicate",
+        ));
+    }
+    if !operation.bodies.is_empty() {
+        violations.push(Violation::new(
+            format!("{path}.bodies"),
+            "a repository query cannot carry an executable body",
+        ));
+    }
+    if operation.condition.is_some() {
+        violations.push(Violation::new(
+            format!("{path}.condition"),
+            "a repository query cannot carry a condition",
+        ));
+    }
+    if !operation.throws.is_empty() {
+        violations.push(Violation::new(
+            format!("{path}.throws"),
+            "a repository query cannot carry a `throws` clause",
+        ));
+    }
+    if let Some(pagination) = &query.pagination {
+        if let Some(limit) = pagination.limit {
+            if limit == 0 {
+                violations.push(Violation::new(
+                    format!("{path}.query.pagination.limit"),
+                    "the pagination limit must be greater than zero",
+                ));
+            }
+        }
+        if let Some(max) = pagination.max {
+            if max == 0 {
+                violations.push(Violation::new(
+                    format!("{path}.query.pagination.max"),
+                    "the pagination max must be greater than zero",
+                ));
+            }
+        }
+        if let (Some(limit), Some(max)) = (pagination.limit, pagination.max) {
+            if limit > max {
+                violations.push(Violation::new(
+                    format!("{path}.query.pagination.limit"),
+                    format!("the pagination limit ({limit}) must not exceed max ({max})"),
+                ));
+            }
+        }
+    }
 }
 
 fn validate_operation(

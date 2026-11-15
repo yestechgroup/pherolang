@@ -1497,3 +1497,161 @@ fn invariants_are_omitted_when_empty_and_ordered_when_present() {
         r#"{"class":"Order","stereotype":"entity","invariants":[{"expression":"total >= 0"},{"expression":"total <= 100"}]}"#
     );
 }
+
+// -----------------------------------------------------------------------
+// Typed repository queries (DD9)
+// -----------------------------------------------------------------------
+
+/// The canonical query shape: one typed sort key and a fully-bounded
+/// pagination window (`limit`, `max`, and an explicit `cursor`).
+fn sample_query() -> QuerySpec {
+    QuerySpec::new("customer == self.customer and self.status == state")
+        .with_sort(vec![QuerySortKey::new(
+            "createdDate",
+            TypeRef::Primitive(PrimitiveType::Date),
+            SortDirection::Desc,
+        )])
+        .with_pagination(Some(QueryPagination {
+            limit: Some(20),
+            max: Some(100),
+            cursor: false,
+        }))
+}
+
+/// A declared query operation over `Book`, returning the matching
+/// aggregates.
+fn query_operation() -> RepositoryOperation {
+    RepositoryOperation::declared(
+        "findByCustomer",
+        Some(DddTypeRef::domain(class_ref("Book"))),
+        Vec::new(),
+    )
+    .with_return_multiplicity(Some(Multiplicity::MANY))
+    .with_query(Some(sample_query()))
+    .with_capabilities(vec![
+        CapabilityRef::new("SearchBooks").with_declared_in(Some("Support".to_string()))
+    ])
+}
+
+/// The query block serializes exactly as advertised, after the operation's
+/// signature and before its capabilities: `predicate`, typed `sort`, the
+/// `pagination` window (with `cursor` always present), and the never-skipped
+/// `readOnly` key.
+#[test]
+fn a_query_operation_serializes_the_documented_shape() {
+    let json = serde_json::to_string(&query_operation()).expect("serialize");
+    assert_eq!(
+        json,
+        r#"{"name":"findByCustomer","returnType":{"type":"class","value":{"package":"nz.example.library","name":"Book"}},"returnMultiplicity":{"lower":0,"upper":"unbounded"},"query":{"predicate":"customer == self.customer and self.status == state","sort":[{"field":"createdDate","fieldType":{"type":"primitive","value":"date"},"direction":"desc"}],"pagination":{"limit":20,"max":100,"cursor":false},"readOnly":true},"capabilities":[{"name":"SearchBooks","declaredIn":"Support"}]}"#
+    );
+    assert!(!json.contains('_'), "no snake_case keys: {json}");
+}
+
+/// A non-query operation keeps the pre-DD9 bytes: neither `query` nor
+/// `capabilities` rides an operation that declares none.
+#[test]
+fn an_operation_without_a_query_omits_the_query_and_capabilities_keys() {
+    let operation = RepositoryOperation::declared(
+        "findByTitle",
+        Some(DddTypeRef::domain(TypeRef::Primitive(
+            PrimitiveType::String,
+        ))),
+        vec![param("title", TypeRef::Primitive(PrimitiveType::String))],
+    );
+    let json = serde_json::to_string(&operation).expect("serialize");
+    assert_eq!(
+        json,
+        r#"{"name":"findByTitle","returnType":{"type":"primitive","value":"string"},"params":[{"name":"title","type":{"type":"primitive","value":"string"}}]}"#
+    );
+    assert!(!json.contains("query"), "{json}");
+    assert!(!json.contains("capabilities"), "{json}");
+    let parsed: RepositoryOperation = serde_json::from_str(&json).expect("deserialize");
+    assert_eq!(parsed, operation, "the additive fields default to absent");
+}
+
+/// `sort` and `pagination` are themselves additive: a predicate-only query
+/// serializes as exactly the predicate plus the read-only marker.
+#[test]
+fn a_query_without_sort_or_pagination_omits_both_keys() {
+    let spec = QuerySpec::new("self.status == state");
+    assert_eq!(
+        serde_json::to_string(&spec).expect("serialize"),
+        r#"{"predicate":"self.status == state","readOnly":true}"#
+    );
+
+    let with_sort = spec.clone().with_sort(vec![QuerySortKey::new(
+        "createdDate",
+        TypeRef::Primitive(PrimitiveType::Date),
+        SortDirection::Asc,
+    )]);
+    let json = serde_json::to_string(&with_sort).expect("serialize");
+    assert!(json.contains(r#""sort":[{"field":"createdDate""#), "{json}");
+    assert!(!json.contains("pagination"), "{json}");
+}
+
+/// `readOnly` is never skipped: a query that is not read-only still emits
+/// the key (the artifact contract refuses it), and an artifact written
+/// without the key reads as `false`.
+#[test]
+fn a_query_always_serializes_read_only() {
+    let spec = QuerySpec::new("self.status == state").with_read_only(false);
+    let json = serde_json::to_string(&spec).expect("serialize");
+    assert_eq!(
+        json,
+        r#"{"predicate":"self.status == state","readOnly":false}"#
+    );
+
+    let parsed: QuerySpec = serde_json::from_str(r#"{"predicate":"self.status == state"}"#)
+        .expect("deserialize without the key");
+    assert!(
+        !parsed.read_only,
+        "an absent readOnly key defaults to false"
+    );
+}
+
+#[test]
+fn sort_directions_serialize_as_bare_lowercase_strings() {
+    for (direction, json) in [
+        (SortDirection::Asc, r#""asc""#),
+        (SortDirection::Desc, r#""desc""#),
+    ] {
+        assert_eq!(serde_json::to_string(&direction).expect("serialize"), json);
+        assert_eq!(
+            serde_json::from_str::<SortDirection>(json).expect("deserialize"),
+            direction
+        );
+    }
+}
+
+/// The whole artifact round-trips: a model carrying a query operation
+/// reloads to the same value and re-serializes byte-identically.
+#[test]
+fn a_query_operation_round_trips_through_the_artifact() {
+    let mut design = Design::new("Book", Stereotype::Entity);
+    design.repository = Some(Repository {
+        name: "BookRepository".to_string(),
+        operations: vec![query_operation()],
+    });
+    let mut module = Module::new("catalogue");
+    module.designs.push(design);
+    let model = DddModel::new().module(module);
+
+    let json = model.to_json().expect("serialize");
+    assert!(
+        json.contains(r#""readOnly":true"#),
+        "the query rides the artifact: {json}"
+    );
+    let parsed = DddModel::from_json(&json).expect("deserialize");
+    assert_eq!(parsed, model);
+    assert_eq!(parsed.to_json().expect("re-serialize"), json);
+    assert_eq!(
+        parsed.modules[0].designs[0]
+            .repository
+            .as_ref()
+            .unwrap()
+            .operations[0]
+            .query,
+        Some(sample_query()),
+        "the query block survives the round trip"
+    );
+}

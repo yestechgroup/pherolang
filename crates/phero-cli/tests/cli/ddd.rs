@@ -467,3 +467,293 @@ fn two_roots_with_one_application_name_are_refused() {
         String::from_utf8_lossy(&output.stderr)
     );
 }
+
+// --- DD8: fragment import origins, graph membership, receipts ---------------
+
+#[test]
+fn check_directory_resolves_a_fragment_domain_from_its_own_directory() {
+    // `product.mox` sits next to the fragment in `sub/`, not next to the
+    // root: an import resolves against the file that declares it (DD8).
+    let dir = ddd_app_dir("fragment-domain");
+    write_app(&dir, "demo.mox", DDD_APP_DOMAIN);
+    let sub = dir.join("sub");
+    std::fs::create_dir_all(&sub).expect("create sub dir");
+    std::fs::write(
+        sub.join("product.mox"),
+        "package shop\n\nclass Product { String sku }\n",
+    )
+    .expect("write domain");
+    std::fs::write(
+        sub.join("catalogue.ddd"),
+        "import \"product.mox\"\n\nmodule catalogue {\n    entity Product repository ProductRepository { findById; }\n}\n",
+    )
+    .expect("write fragment");
+    write_app(
+        &dir,
+        "app.ddd",
+        concat!(
+            "import \"demo.mox\"\n",
+            "import \"sub/catalogue.ddd\"\n",
+            "application Shop {\n",
+            "    base demo\n",
+            "    module core { entity Order }\n",
+            "}\n",
+        ),
+    );
+    let output = pherolang()
+        .args(["check", dir.to_str().expect("utf-8")])
+        .output()
+        .expect("run check");
+    assert!(
+        output.status.success(),
+        "stderr: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    assert!(
+        String::from_utf8_lossy(&output.stderr).is_empty(),
+        "stderr: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+}
+
+#[test]
+fn graph_build_lists_a_design_roots_fragments_as_application_files() {
+    let out = scratch_dir().join("app.graph.json");
+    let output = pherolang()
+        .args([
+            "graph",
+            "build",
+            "tests/conformance/ddd/app",
+            "-o",
+            out.to_str().expect("utf-8"),
+        ])
+        .current_dir(workspace_root())
+        .output()
+        .expect("run graph build");
+    assert!(
+        output.status.success(),
+        "stderr: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let graph: serde_json::Value =
+        serde_json::from_str(&std::fs::read_to_string(&out).expect("read graph"))
+            .expect("graph JSON");
+    let application = &graph["applications"][0];
+    assert_eq!(application["id"], "Shop", "the authored application id");
+    let files: Vec<&str> = application["files"]
+        .as_array()
+        .expect("files")
+        .iter()
+        .map(|file| file.as_str().expect("a path"))
+        .collect();
+    for expected in ["app.ddd", "sales.ddd", "billing.ddd"] {
+        assert!(
+            files.iter().any(|file| file.ends_with(expected)),
+            "the fragment is an application file: {files:?}"
+        );
+    }
+    let fragment_nodes: Vec<&str> = graph["nodes"]
+        .as_array()
+        .expect("nodes")
+        .iter()
+        .filter(|node| node["kind"] == "file")
+        .filter_map(|node| node["file"].as_str())
+        .collect();
+    for expected in ["sales.ddd", "billing.ddd"] {
+        assert!(
+            fragment_nodes.iter().any(|file| file.ends_with(expected)),
+            "a fragment owns a file node: {fragment_nodes:?}"
+        );
+    }
+}
+
+#[test]
+fn verify_hashes_a_design_roots_fragments_and_emits_one_artifact() {
+    let dir = scratch_dir();
+    let out = dir.join("app.receipt.json");
+    let status = pherolang()
+        .args([
+            "verify",
+            "tests/conformance/ddd/app/app.ddd",
+            "-o",
+            out.to_str().expect("utf-8"),
+        ])
+        .current_dir(workspace_root())
+        .status()
+        .expect("run verify");
+    assert!(status.success(), "verify must succeed");
+    let receipt: serde_json::Value =
+        serde_json::from_str(&std::fs::read_to_string(&out).expect("read receipt"))
+            .expect("receipt JSON");
+    let sources: Vec<&str> = receipt["sources"]
+        .as_array()
+        .expect("sources")
+        .iter()
+        .map(|source| source["path"].as_str().expect("a path"))
+        .collect();
+    for expected in [
+        "tests/conformance/ddd/app/app.ddd",
+        "tests/conformance/ddd/app/sales.ddd",
+        "tests/conformance/ddd/app/billing.ddd",
+        "tests/conformance/ddd/app/app.mox",
+    ] {
+        assert!(
+            sources.contains(&expected),
+            "the closure hashes every fragment source: {sources:?}"
+        );
+    }
+    let artifacts: Vec<&str> = receipt["artifacts"]
+        .as_array()
+        .expect("artifacts")
+        .iter()
+        .filter_map(|artifact| artifact["path"].as_str())
+        .collect();
+    assert_eq!(
+        receipt["artifacts"].as_array().expect("artifacts").len(),
+        1,
+        "one application, one artifact"
+    );
+    assert!(
+        !artifacts
+            .iter()
+            .any(|path| path.contains("sales.ddd") || path.contains("billing.ddd")),
+        "a fragment emits no artifact: {artifacts:?}"
+    );
+}
+
+#[test]
+fn a_design_import_cycle_is_a_spanned_error_with_its_code() {
+    let dir = ddd_app_dir("cycle");
+    write_app(
+        &dir,
+        "app.ddd",
+        concat!(
+            "import \"a.ddd\"\n",
+            "application Shop {\n",
+            "    module core { service CoreService { boolean touch(String id); } }\n",
+            "}\n",
+        ),
+    );
+    write_app(
+        &dir,
+        "a.ddd",
+        "import \"b.ddd\"\n\nmodule a { service AService { boolean a(String id); } }\n",
+    );
+    write_app(
+        &dir,
+        "b.ddd",
+        "import \"a.ddd\"\n\nmodule b { service BService { boolean b(String id); } }\n",
+    );
+    let output = pherolang()
+        .args(["check", dir.to_str().expect("utf-8")])
+        .output()
+        .expect("run check");
+    assert!(!output.status.success());
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(
+        stderr.contains("E0393") && stderr.contains("design import cycle"),
+        "stderr: {stderr}"
+    );
+    assert!(
+        stderr.contains("b.ddd"),
+        "the span anchors at the import that closes the cycle: {stderr}"
+    );
+}
+
+#[test]
+fn importing_a_design_application_root_as_a_fragment_is_refused() {
+    let dir = ddd_app_dir("root-as-fragment");
+    write_app(
+        &dir,
+        "app.ddd",
+        concat!(
+            "import \"other.ddd\"\n",
+            "application Shop {\n",
+            "    module core { service CoreService { boolean touch(String id); } }\n",
+            "}\n",
+        ),
+    );
+    write_app(
+        &dir,
+        "other.ddd",
+        "application Other { module m { service MService { boolean m(String id); } } }\n",
+    );
+    let output = pherolang()
+        .args(["check", dir.to_str().expect("utf-8")])
+        .output()
+        .expect("run check");
+    assert!(!output.status.success());
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(
+        stderr.contains("E0394") && stderr.contains("cannot be imported as a fragment"),
+        "stderr: {stderr}"
+    );
+}
+
+#[test]
+fn an_orphan_fragment_anchors_at_its_first_module() {
+    let dir = ddd_app_dir("orphan-span");
+    write_app(
+        &dir,
+        "sales.ddd",
+        "module sales { service SalesService { boolean sell(String orderNo); } }\n",
+    );
+    let output = pherolang()
+        .args(["check", dir.to_str().expect("utf-8")])
+        .output()
+        .expect("run check");
+    assert!(!output.status.success());
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(
+        stderr.contains("E0390") && stderr.contains("has no root"),
+        "stderr: {stderr}"
+    );
+    assert!(
+        stderr.contains("module sales"),
+        "the diagnostic underlines the fragment's first module: {stderr}"
+    );
+}
+
+/// DD9 (issue pherolang#306): the shipped `examples/shop` finders lower the
+/// typed query block the example golden carries — the behavioural assertion
+/// the `.ddd` example harness can support (compile + artifact + golden).
+#[test]
+fn the_shop_example_emits_typed_finders() {
+    let path = workspace_root().join("examples/shop/orders.ddd");
+    let output = pherolang()
+        .args(["ir", path.to_str().expect("utf-8")])
+        .output()
+        .expect("run pherolang ir");
+    assert!(
+        output.status.success(),
+        "stderr: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let model = phero_ir::ddd::DddModel::from_json(&String::from_utf8_lossy(&output.stdout))
+        .expect("the design artifact reads");
+    let repository = model
+        .modules
+        .iter()
+        .flat_map(|module| module.designs.iter())
+        .find_map(|design| design.repository.as_ref())
+        .expect("the shop example designs a repository");
+    let finder = repository
+        .operations
+        .iter()
+        .find(|operation| operation.name == "inCurrency")
+        .expect("the finder is declared");
+    let query = finder.query.as_ref().expect("the finder lowers a query");
+    assert_eq!(query.predicate, "self.currency == code");
+    assert!(query.read_only);
+    let pagination = query.pagination.as_ref().expect("pagination");
+    assert_eq!((pagination.limit, pagination.max), (Some(20), Some(100)));
+    assert_eq!(query.sort[0].field, "orderNo");
+    assert_eq!(
+        finder
+            .capabilities
+            .iter()
+            .map(|capability| capability.name.as_str())
+            .collect::<Vec<_>>(),
+        ["ReadOrders"]
+    );
+}

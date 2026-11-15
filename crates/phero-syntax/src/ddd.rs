@@ -28,7 +28,7 @@
 //! [`SERVICE`], [`SEARCH`], [`EXTEND`], [`ABSTRACT`], [`REPOSITORY`],
 //! [`INJECT`], [`DECISION`], [`EMITS`], [`INVOKES`], [`TRANSITION`],
 //! [`THROWS`], [`FROM`], [`BOOST`], [`ANALYZER`], [`LIMIT`], [`MAX`],
-//! [`CURSOR`]) are
+//! [`CURSOR`], [`WHERE`], [`SORT`], [`PAGE`], [`ASC`], [`DESC`]) are
 //! matched on both sides at fixed grammar positions; they carry no canonical
 //! order. [`FROM`] names an existing lexer keyword rather than a contextual
 //! word (see its doc).
@@ -152,12 +152,43 @@ pub(crate) const BOOST: &str = "boost";
 /// The `analyzer "<...>"` keyword, both as a search member and as a `text`
 /// field clause.
 pub(crate) const ANALYZER: &str = "analyzer";
-/// The `limit <int>` member of a `pagination` block.
+/// The `limit <int>` member of a `pagination` block, reused by a repository
+/// query's `page` clause (DD9): `page limit <int> max <int> cursor?`.
 pub(crate) const LIMIT: &str = "limit";
-/// The `max <int>` member of a `pagination` block.
+/// The `max <int>` member of a `pagination` block, reused by a repository
+/// query's `page` clause (DD9).
 pub(crate) const MAX: &str = "max";
-/// The `cursor` member of a `pagination` block.
+/// The `cursor` member of a `pagination` block, reused by a repository
+/// query's `page` clause (DD9).
 pub(crate) const CURSOR: &str = "cursor";
+/// The `where (<raw predicate>)` clause of a repository query operation
+/// (DD9): the read-only predicate, captured as a `raw_parens` span exactly
+/// like the `when` guard (the parentheses are included and the expression
+/// inside is deliberately unparsed). A contextual word like the rest —
+/// special only in the query-clause position directly after a declared
+/// repository operation's signature and `throws` clause, an ordinary
+/// identifier everywhere else (`^where` escapes, and a repository operation
+/// may be named `where`).
+pub(crate) const WHERE: &str = "where";
+/// The `sort <key> ("asc" | "desc")? (, <key> ...)*` clause of a repository
+/// query operation (DD9): the ordered keys of the read-only projection,
+/// written between the `where` predicate and the `page` window. The same
+/// contextual word the search `sort` member uses — special only in the
+/// clause position, an ordinary identifier everywhere else.
+pub(crate) const SORT: &str = "sort";
+/// The `page (limit <int>)? (max <int>)? cursor?` clause of a repository
+/// query operation (DD9): the query's page window, written after `sort` and
+/// before `capability`. A contextual word like the rest.
+pub(crate) const PAGE: &str = "page";
+/// The `asc` sort direction of a repository query's `sort` key (DD9). It is
+/// the **default** direction: the parser records it, and the formatter omits
+/// it in canonical output (`sort createdDate desc, id asc` formats to
+/// `sort createdDate desc, id`). A contextual word like the rest.
+pub(crate) const ASC: &str = "asc";
+/// The `desc` sort direction of a repository query's `sort` key (DD9): the
+/// non-default direction, re-emitted by the formatter. A contextual word like
+/// the rest.
+pub(crate) const DESC: &str = "desc";
 /// The `from <source>` word of a DTO projection (issue pherolang#300):
 /// `dto BookSummary from Book { ... }` names the designed class the
 /// projection reads. Unlike the other words here, `from` is **already a
@@ -251,7 +282,7 @@ pub(crate) const SEARCH_MEMBERS: [(SearchMemberKind, Option<&str>); 9] = [
     (SearchMemberKind::Entity, Some("entity")),
     (SearchMemberKind::Text, Some("text")),
     (SearchMemberKind::Filters, Some("filters")),
-    (SearchMemberKind::Sort, Some("sort")),
+    (SearchMemberKind::Sort, Some(SORT)),
     (SearchMemberKind::Document, Some("document")),
     (SearchMemberKind::Ranking, Some("ranking")),
     (SearchMemberKind::Analyzer, Some(ANALYZER)),

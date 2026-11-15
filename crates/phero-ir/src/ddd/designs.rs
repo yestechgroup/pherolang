@@ -2,7 +2,7 @@ use std::collections::BTreeMap;
 
 use serde::{Deserialize, Serialize};
 
-use crate::ddd::{DddParam, DddTypeRef, ErrorRef, ServiceOperation};
+use crate::ddd::{CapabilityRef, DddParam, DddTypeRef, ErrorRef, ServiceOperation};
 use crate::wire::is_false;
 use crate::{Multiplicity, TypeRef};
 
@@ -596,6 +596,169 @@ impl Transition {
     }
 }
 
+/// The direction one [`QuerySortKey`] orders by (DD9).
+///
+/// Serializes as the bare lowercase string: `"asc"`, `"desc"`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum SortDirection {
+    /// Ascending order.
+    Asc,
+    /// Descending order.
+    Desc,
+}
+
+/// One sort key of a [`QuerySpec`] (DD9): the order-by field, its resolved
+/// domain type, and the direction.
+///
+/// The sort key is deliberately **typed** — [`QuerySortKey::field_type`] is
+/// the resolved [`TypeRef`] of the field the driver typed the key against —
+/// so a consumer can build the ordering without re-resolving the name.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct QuerySortKey {
+    /// The order-by field name.
+    pub field: String,
+    /// The resolved type of [`QuerySortKey::field`].
+    pub field_type: TypeRef,
+    /// The ordering direction.
+    pub direction: SortDirection,
+}
+
+impl QuerySortKey {
+    /// Creates one typed sort key.
+    pub fn new(field: impl Into<String>, field_type: TypeRef, direction: SortDirection) -> Self {
+        Self {
+            field: field.into(),
+            field_type,
+            direction,
+        }
+    }
+}
+
+/// The pagination window of a [`QuerySpec`] (DD9): the requested page size
+/// (`limit`), the caller-visible ceiling (`max`), and whether the query is
+/// cursor-paged.
+///
+/// Every member is additive — an absent `limit`/`max` is omitted entirely —
+/// except [`QueryPagination::cursor`], which is serialized whenever the
+/// block itself is present (`"cursor": false` included), so a reader never
+/// has to infer the paging style from an absent key.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct QueryPagination {
+    /// The requested page size. Omitted when the query declares none.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub limit: Option<u32>,
+    /// The maximum page size a caller may request. Omitted when the query
+    /// declares none.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub max: Option<u32>,
+    /// Whether the query is cursor-paged. Serialized whenever the block is
+    /// present — `"cursor": false` included — so a reader never has to infer
+    /// the paging style from an absent key.
+    #[serde(default)]
+    pub cursor: bool,
+}
+
+impl QueryPagination {
+    /// Creates an unlimited, offset-paged window.
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    /// Chainable setter for the requested page size.
+    pub fn with_limit(mut self, limit: Option<u32>) -> Self {
+        self.limit = limit;
+        self
+    }
+
+    /// Chainable setter for the maximum page size.
+    pub fn with_max(mut self, max: Option<u32>) -> Self {
+        self.max = max;
+        self
+    }
+
+    /// Chainable setter for cursor paging.
+    pub fn with_cursor(mut self, cursor: bool) -> Self {
+        self.cursor = cursor;
+        self
+    }
+}
+
+/// The read-only query shape of a [`RepositoryOperation`] (DD9): a typed
+/// predicate over the repository's aggregate with optional ordering and
+/// pagination.
+///
+/// A query is **always** a read: [`QuerySpec::read_only`] is serialized
+/// under the `readOnly` key on every query (never skipped) and the compiler
+/// sets it `true`. The artifact contract refuses a query that is not
+/// read-only, and refuses a query carrying an executable body, a `when`
+/// condition, or a `throws` clause.
+///
+/// Serialized shape:
+///
+/// ```json
+/// {"predicate":"customer == self.customer and self.status == state",
+///  "sort":[{"field":"createdDate",
+///           "fieldType":{"type":"primitive","value":"date"},
+///           "direction":"desc"}],
+///  "pagination":{"limit":20,"max":100,"cursor":false},
+///  "readOnly":true}
+/// ```
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct QuerySpec {
+    /// The typed predicate source text, verbatim — the same
+    /// "verbatim expression text" rule as an operation `condition`; typing
+    /// is a driver concern. Always present and never empty.
+    pub predicate: String,
+    /// The order-by keys, in declaration order. Additive; omitted when the
+    /// query declares no ordering.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub sort: Vec<QuerySortKey>,
+    /// The pagination window. Additive; omitted when the query declares
+    /// none.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub pagination: Option<QueryPagination>,
+    /// Whether the query is read-only. Always serialized (never skipped);
+    /// the compiler sets `true` — a query is a read. An artifact written
+    /// without the key reads as `false`, which the contract refuses.
+    #[serde(default)]
+    pub read_only: bool,
+}
+
+impl QuerySpec {
+    /// Creates a read-only query with no ordering and no pagination — a
+    /// query is a read, so [`QuerySpec::read_only`] starts `true`.
+    pub fn new(predicate: impl Into<String>) -> Self {
+        Self {
+            predicate: predicate.into(),
+            sort: Vec::new(),
+            pagination: None,
+            read_only: true,
+        }
+    }
+
+    /// Chainable setter for the order-by keys.
+    pub fn with_sort(mut self, sort: Vec<QuerySortKey>) -> Self {
+        self.sort = sort;
+        self
+    }
+
+    /// Chainable setter for the pagination window.
+    pub fn with_pagination(mut self, pagination: Option<QueryPagination>) -> Self {
+        self.pagination = pagination;
+        self
+    }
+
+    /// Chainable setter for the read-only flag.
+    pub fn with_read_only(mut self, read_only: bool) -> Self {
+        self.read_only = read_only;
+        self
+    }
+}
+
 /// An operation of a [`Repository`]: either a built-in (whose signature the
 /// consumer knows) or a declared operation with an explicit signature.
 ///
@@ -605,6 +768,11 @@ impl Transition {
 /// deserialize (consistent with the other artifacts); use the
 /// [`RepositoryOperation::builtin`] / [`RepositoryOperation::declared`]
 /// constructors.
+///
+/// A declared operation may additionally carry a read-only
+/// [`QuerySpec`] (DD9): `query` and its guarding `capabilities` are
+/// additive and omitted entirely on every non-query operation, so existing
+/// artifacts stay byte-identical.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct RepositoryOperation {
@@ -649,6 +817,15 @@ pub struct RepositoryOperation {
     /// operation's own repository design, so no receiver is recorded.
     #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
     pub bodies: BTreeMap<String, String>,
+    /// The read-only query shape (DD9), present on a query operation and
+    /// absent on every other operation. Additive; omitted when absent.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub query: Option<QuerySpec>,
+    /// The resolved actor-capability references guarding the query (DD9),
+    /// aligned index-for-index with the authored capability names. Legal
+    /// only on a query operation. Additive; omitted when empty.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub capabilities: Vec<CapabilityRef>,
 }
 
 impl RepositoryOperation {
@@ -664,6 +841,8 @@ impl RepositoryOperation {
             condition: None,
             throws: Vec::new(),
             bodies: BTreeMap::new(),
+            query: None,
+            capabilities: Vec::new(),
         }
     }
 
@@ -684,6 +863,8 @@ impl RepositoryOperation {
             condition: None,
             throws: Vec::new(),
             bodies: BTreeMap::new(),
+            query: None,
+            capabilities: Vec::new(),
         }
     }
 
@@ -716,6 +897,18 @@ impl RepositoryOperation {
     /// pherolang#178).
     pub fn with_bodies(mut self, bodies: BTreeMap<String, String>) -> Self {
         self.bodies = bodies;
+        self
+    }
+
+    /// Chainable setter for the read-only query shape (DD9).
+    pub fn with_query(mut self, query: Option<QuerySpec>) -> Self {
+        self.query = query;
+        self
+    }
+
+    /// Chainable setter for the query's resolved capabilities (DD9).
+    pub fn with_capabilities(mut self, capabilities: Vec<CapabilityRef>) -> Self {
+        self.capabilities = capabilities;
         self
     }
 }

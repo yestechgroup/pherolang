@@ -1870,3 +1870,251 @@ fn definition_matrix_names_the_tests_that_cover_it() {
         );
     }
 }
+
+// --- DD8: fragment navigation through the merged root ------------------------
+
+/// A minimal design directory for the fragment cases: a root, one fragment,
+/// and the domain they share. Unlike [`Fixture`] this copies no conformance
+/// tree — the DD8 matrix needs only these three files.
+struct FragmentScratch {
+    dir: PathBuf,
+}
+
+impl FragmentScratch {
+    fn new(tag: &str) -> Self {
+        let dir = std::env::temp_dir().join(format!(
+            "phero-lsp-fragment-{tag}-{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .expect("a clock")
+                .as_nanos()
+        ));
+        std::fs::create_dir_all(&dir).expect("create the fragment directory");
+        FragmentScratch { dir }
+    }
+
+    fn write(&self, name: &str, text: &str) {
+        std::fs::write(self.dir.join(name), text).expect("write a fragment fixture");
+    }
+
+    fn uri(&self, name: &str) -> Uri {
+        Uri::from_file_path(self.dir.join(name)).expect("a file uri")
+    }
+
+    fn text(&self, name: &str) -> String {
+        std::fs::read_to_string(self.dir.join(name)).expect("read a fragment fixture")
+    }
+}
+
+impl Drop for FragmentScratch {
+    fn drop(&mut self) {
+        let _ = std::fs::remove_dir_all(&self.dir);
+    }
+}
+
+/// DD8 (issue pherolang#305): a reference written in the **root** to a
+/// declaration that lives in a **fragment** resolves to the fragment's span.
+///
+/// The merged artifact attributes every node to the root file, so this
+/// exercises all three halves of the wiring at once: the fragment's span
+/// index is built with the root application name (an empty index would lose
+/// the declaration), the fragment is a participating snapshot file, and the
+/// location search falls back from the node's attributed file to the file
+/// that spells the declaration.
+#[tokio::test]
+async fn a_root_reference_to_a_fragment_declaration_lands_in_the_fragment() {
+    let scratch = FragmentScratch::new("root-to-fragment");
+    scratch.write(
+        "demo.mox",
+        "package demo\n\nclass Order { String orderNo }\n",
+    );
+    scratch.write(
+        "app.ddd",
+        concat!(
+            "import \"demo.mox\"\n",
+            "import \"sales.ddd\"\n",
+            "application Shop {\n",
+            "    base demo\n",
+            "    module core {\n",
+            "        entity Order repository OrderRepository { findById; save; }\n",
+            "        service CoreService {\n",
+            "            inject OrderRepository;\n",
+            "            sell => SalesService.sell;\n",
+            "        }\n",
+            "    }\n",
+            "}\n",
+        ),
+    );
+    scratch.write(
+        "sales.ddd",
+        concat!(
+            "module sales {\n",
+            "    service SalesService {\n",
+            "        boolean sell(String orderNo);\n",
+            "    }\n",
+            "}\n",
+        ),
+    );
+
+    let (mut service, mut socket) = initialized_service().await;
+    for name in ["app.ddd", "sales.ddd"] {
+        let uri = scratch.uri(name);
+        let text = scratch.text(name);
+        let open = open_at(&mut service, &uri, &text);
+        let drain = drain_socket(&mut socket);
+        tokio::join!(open, drain);
+        drain_socket(&mut socket).await;
+    }
+
+    let root_text = scratch.text("app.ddd");
+    let at = position(&root_text, "SalesService.sell", 0, 0);
+    let found = definition(&mut service, &scratch.uri("app.ddd"), at).await;
+    let fragment_text = scratch.text("sales.ddd");
+    // The delegation resolves to the fragment's declared operation; the
+    // claim under test is that the location is in the **fragment**, which
+    // only the fragment's span table can supply.
+    let expected = location(
+        &fragment_text,
+        &scratch.uri("sales.ddd"),
+        "boolean sell",
+        0,
+        8,
+        4,
+    );
+    assert_eq!(
+        found,
+        Some(expected),
+        "the declaration lives in the fragment, not the root"
+    );
+}
+
+/// DD8: a reference **inside** a fragment resolves through the merged root —
+/// the fragment's own span table is populated with the root's application
+/// name, so `inject OrderRepository` in a fragment lands on the root's
+/// repository declaration.
+#[tokio::test]
+async fn a_fragment_reference_resolves_to_a_root_declaration() {
+    let scratch = FragmentScratch::new("fragment-to-root");
+    scratch.write(
+        "demo.mox",
+        "package demo\n\nclass Order { String orderNo }\n",
+    );
+    scratch.write(
+        "app.ddd",
+        concat!(
+            "import \"demo.mox\"\n",
+            "import \"sales.ddd\"\n",
+            "application Shop {\n",
+            "    base demo\n",
+            "    module core {\n",
+            "        entity Order repository OrderRepository { findById; save; }\n",
+            "        service OrderService {\n",
+            "            inject OrderRepository;\n",
+            "            save => OrderRepository.save;\n",
+            "        }\n",
+            "    }\n",
+            "}\n",
+        ),
+    );
+    scratch.write(
+        "sales.ddd",
+        concat!(
+            "module sales {\n",
+            "    service SalesService {\n",
+            "        inject OrderService;\n",
+            "        save => OrderService.save;\n",
+            "    }\n",
+            "}\n",
+        ),
+    );
+
+    let (mut service, mut socket) = initialized_service().await;
+    for name in ["app.ddd", "sales.ddd"] {
+        let uri = scratch.uri(name);
+        let text = scratch.text(name);
+        let open = open_at(&mut service, &uri, &text);
+        let drain = drain_socket(&mut socket);
+        tokio::join!(open, drain);
+        drain_socket(&mut socket).await;
+    }
+
+    let fragment_text = scratch.text("sales.ddd");
+    let at = position(&fragment_text, "save => OrderService.save", 0, 8);
+    let found = definition(&mut service, &scratch.uri("sales.ddd"), at).await;
+    let root_text = scratch.text("app.ddd");
+    // The delegation resolves to the root service's operation; the claim
+    // under test is that a reference written in the fragment navigates to a
+    // declaration that only the root's file spells.
+    let expected = location(
+        &root_text,
+        &scratch.uri("app.ddd"),
+        "save => OrderRepository.save",
+        0,
+        0,
+        4,
+    );
+    assert_eq!(
+        found,
+        Some(expected),
+        "a fragment's reference resolves through the merged root"
+    );
+}
+
+/// DD8: the editor's graph snapshot supplies the same fragment file inputs
+/// the CLI's `graph build` does — the fragment is a file node and an
+/// `applications[].files` member (its declarations are already merged into
+/// the root artifact).
+#[tokio::test]
+async fn the_editor_snapshot_lists_a_roots_fragments_as_application_files() {
+    let scratch = FragmentScratch::new("snapshot-files");
+    scratch.write(
+        "demo.mox",
+        "package demo\n\nclass Order { String orderNo }\n",
+    );
+    scratch.write(
+        "app.ddd",
+        concat!(
+            "import \"demo.mox\"\n",
+            "import \"sales.ddd\"\n",
+            "application Shop {\n",
+            "    base demo\n",
+            "    module core {\n",
+            "        entity Order repository OrderRepository { findById; }\n",
+            "    }\n",
+            "}\n",
+        ),
+    );
+    scratch.write(
+        "sales.ddd",
+        "module sales {\n    service SalesService {\n        boolean sell(String orderNo);\n    }\n}\n",
+    );
+
+    let (service, _socket) = initialized_service().await;
+    let snapshot = service
+        .inner()
+        .graph_snapshot(&scratch.uri("app.ddd"))
+        .expect("the directory builds a snapshot");
+    let application = snapshot
+        .model
+        .applications
+        .iter()
+        .find(|application| application.id == "Shop")
+        .expect("the authored application id");
+    assert!(
+        application
+            .files
+            .iter()
+            .any(|file| file.ends_with("sales.ddd")),
+        "the fragment is an application file: {:?}",
+        application.files
+    );
+    assert!(
+        snapshot
+            .model
+            .nodes
+            .iter()
+            .any(|node| node.kind == "file" && node.file.ends_with("sales.ddd")),
+        "the fragment owns a file node"
+    );
+}

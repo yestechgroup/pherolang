@@ -1,0 +1,34 @@
+// DD9 typed repository queries (issue pherolang#306): a many-valued finder
+// with a predicate, explicit sort, and bounded pagination; a single-result
+// `[0..1]` finder; a DTO-projection return; a capability-gated finder; and a
+// cursor-paginated one. Parameters never shadow a designed feature (a
+// colliding name is a compile error), so the predicate reads each feature
+// through `self.`.
+import "queries.mox";
+
+application Queries {
+    base demo.queries
+    module ordering {
+        entity Order repository OrderRepository {
+            findById;
+            save;
+            /// The open orders above a total, newest first.
+            Order[] openFor(OrderStatus targetState, int minimumTotal) where (self.status == targetState && self.total >= minimumTotal) sort createdDate desc, orderNo page limit 20 max 100 capability ReadOrders;
+            /// The most recent orders above a total, one page.
+            Order[] recentFor(int minimumTotal) where (self.total >= minimumTotal) sort createdDate desc page limit 10 max 50;
+            /// A single-result finder: `0..1` is the optional contract.
+            Order[0..1] byNumber(String number) where (self.orderNo == number);
+            /// The read side of a projection: the boundary is the DTO.
+            OrderSummary[] summaries(int minimumTotal) where (self.total >= minimumTotal) sort createdDate desc;
+            /// Key-set pagination: no offset is required of the consumer.
+            Order[] shipped(OrderStatus targetState) where (self.status == targetState) page cursor;
+        }
+        /// The projection the finder returns; `total` and `status` are wire
+        /// fields, not derived members.
+        dto OrderSummary from Order {
+            orderNo;
+            total;
+            status;
+        }
+    }
+}

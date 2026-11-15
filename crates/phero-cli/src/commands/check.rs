@@ -27,8 +27,12 @@ pub(crate) fn run(files: Vec<PathBuf>, deny_warnings: bool) -> anyhow::Result<Ex
         let expanded = expand_check_inputs(&files)?;
         let mut project = Project::gather(&expanded);
         let mut failed = 0usize;
-        for error in project.ddd_tree_errors() {
-            eprintln!("Error: {error}");
+        for (path, diagnostic) in project.ddd_tree_errors() {
+            let source = project.source_of(&path).unwrap_or_default();
+            eprint!(
+                "{}",
+                phero_driver::render(&path, source, std::slice::from_ref(&diagnostic))
+            );
             failed += 1;
         }
         let mut checked_clean: std::collections::BTreeSet<String> = Default::default();

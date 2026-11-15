@@ -1,4 +1,4 @@
-//! The `driver.ddd` band: `E0350`–`E0399`, the phero-driver `.ddd` lifecycle
+//! The `driver.ddd` band: `E0350`–`E0449`, the phero-driver `.ddd` lifecycle
 //! and aggregate-operation checks (issues pherolang#176, pherolang#179, and
 //! pherolang#180 — the service-operation transition bindings, the
 //! child-scoped `extend` operations, and the `when`-condition scoping over
@@ -15,7 +15,13 @@
 //! constructs on a DTO); E0373–E0378 are the declared error-vocabulary and
 //! `throws` checks (DD7, issue pherolang#304: unknown throws name,
 //! duplicate/shadowed error, module-private visibility, entity payload
-//! field, narrowed delegation throws, and duplicate error field).
+//! field, narrowed delegation throws, and duplicate error field);
+//! E0390–E0395 are the multi-file application tree checks (DD8, issue
+//! pherolang#305: orphan fragment, fragment under two roots, duplicate
+//! application name, import cycle, root imported as a fragment, and a
+//! missing fragment); E0396–E0399 are the typed repository-query checks
+//! (DD9, issue pherolang#306: read-only shape, predicate typing, sort keys,
+//! and pagination).
 //! Claim a new code by adding a documented constant plus an `Entry` to
 //! `ENTRIES`.
 
@@ -193,6 +199,44 @@ pub const E_INVALID_INVARIANT: &str = "E0388";
 /// `design '<design>' is a dto; a transport shape carries no invariants` —
 /// invariants are entity/value semantics (DD5).
 pub const E_DTO_INVARIANT: &str = "E0389";
+/// `design fragment '<path>' has no root: no .ddd application imports it` —
+/// a file of top-level `module` blocks is legal only as an imported fragment
+/// of exactly one design root (DD8, issue pherolang#305).
+pub const E_DESIGN_FRAGMENT_ORPHAN: &str = "E0390";
+/// `design fragment '<path>' is imported by more than one root: <roots>` — a
+/// design file belongs to exactly one application (DD8).
+pub const E_DESIGN_FRAGMENT_MULTI_ROOT: &str = "E0391";
+/// `duplicate design application name '<name>' in <roots>` — the authored
+/// `application <Name>` is the graph's application id, so two roots in one
+/// checked tree may not share it (DD8).
+pub const E_DESIGN_APPLICATION_NAME_DUPLICATE: &str = "E0392";
+/// `design import cycle through <path>` — `.ddd` imports form a cycle, so no
+/// root can merge the fragments (DD8).
+pub const E_DESIGN_IMPORT_CYCLE: &str = "E0393";
+/// `a design application root cannot be imported as a fragment; remove its
+/// application declaration or import its root instead` — a `.ddd` file with
+/// an `application` declaration is a root by definition (DD8).
+pub const E_DESIGN_ROOT_AS_FRAGMENT: &str = "E0394";
+/// `imported design fragment '<path>' was not provided` — a declared `.ddd`
+/// import the host could not read (DD8).
+pub const E_DESIGN_FRAGMENT_MISSING: &str = "E0395";
+/// `query operation '<op>' of repository '<repo>' …` — a repository query is
+/// read-only by construction: no statement body, no `when` guard (the
+/// predicate is `where`), no `throws` (DD9, issue pherolang#306).
+pub const E_QUERY_READ_ONLY: &str = "E0396";
+/// `invalid query predicate in operation '<op>' of repository '<repo>': …` —
+/// the `where` predicate does not parse, does not type-check, is not
+/// boolean, or a parameter collides with a feature of the designed class
+/// (DD9).
+pub const E_QUERY_PREDICATE: &str = "E0397";
+/// `invalid sort key '<field>' in operation '<op>' of repository '<repo>':
+/// …` — a sort key must be a direct stored scalar feature; a class
+/// reference, a collection, and a derived feature are each refused with the
+/// reason (DD9).
+pub const E_QUERY_SORT: &str = "E0398";
+/// `invalid pagination in operation '<op>' of repository '<repo>': …` —
+/// `limit`/`max` must be positive and `limit` may not exceed `max` (DD9).
+pub const E_QUERY_PAGE: &str = "E0399";
 
 pub(crate) const ENTRIES: &[Entry] = &[
     Entry {
@@ -514,5 +558,85 @@ pub(crate) const ENTRIES: &[Entry] = &[
         title: "Invariant on a DTO",
         meaning: "`design '<design>' is a dto; a transport shape carries no invariants` — invariants are consistency rules on a value or an aggregate, not on a transfer boundary.",
         fix: "Remove the invariant, or design the class that owns the state as an `entity`/`value`.",
+    },
+    Entry {
+        code: E_DESIGN_FRAGMENT_ORPHAN,
+        band: DDD_BAND,
+        severity: Severity::Error,
+        title: "Design fragment without a root",
+        meaning: "`design fragment '<path>' has no root: no .ddd application imports it` — a `.ddd` file of top-level `module` blocks is a fragment, legal only when imported (directly or transitively) by exactly one `application` root.",
+        fix: "Import the fragment from a root's `import \"<path>.ddd\";`, or give it its own `application` declaration to make it a root.",
+    },
+    Entry {
+        code: E_DESIGN_FRAGMENT_MULTI_ROOT,
+        band: DDD_BAND,
+        severity: Severity::Error,
+        title: "Design fragment under two roots",
+        meaning: "`design fragment '<path>' is imported by more than one root: <roots>` — a design file belongs to exactly one application; sharing it would merge its modules into two artifacts.",
+        fix: "Remove one root's import, or split the shared members into a fragment only one root imports.",
+    },
+    Entry {
+        code: E_DESIGN_APPLICATION_NAME_DUPLICATE,
+        band: DDD_BAND,
+        severity: Severity::Error,
+        title: "Duplicate design application name",
+        meaning: "`duplicate design application name '<name>' in <roots>` — `application <Name>` is the graph's application id for a design application, so two roots in one checked tree may not share it.",
+        fix: "Rename one of the applications; the authored name, not the file path, identifies the application.",
+    },
+    Entry {
+        code: E_DESIGN_IMPORT_CYCLE,
+        band: DDD_BAND,
+        severity: Severity::Error,
+        title: "Design import cycle",
+        meaning: "`design import cycle through <path>` — `.ddd` imports form a cycle, so no root can merge the fragments into one application.",
+        fix: "Break the cycle: a fragment may import only fragments that do not (transitively) import it.",
+    },
+    Entry {
+        code: E_DESIGN_ROOT_AS_FRAGMENT,
+        band: DDD_BAND,
+        severity: Severity::Error,
+        title: "Application root imported as a fragment",
+        meaning: "`a design application root cannot be imported as a fragment; remove its application declaration or import its root instead` — a `.ddd` file with an `application` declaration is a root by definition, and roots do not compose.",
+        fix: "Remove the imported file's `application` block (making it a fragment), or import the root's own entry file.",
+    },
+    Entry {
+        code: E_DESIGN_FRAGMENT_MISSING,
+        band: DDD_BAND,
+        severity: Severity::Error,
+        title: "Imported design fragment not provided",
+        meaning: "`imported design fragment '<path>' was not provided` — a declared `.ddd` import the host could not read at the resolved path.",
+        fix: "Fix the import path (it resolves relative to the importing file) or add the missing fragment file.",
+    },
+    Entry {
+        code: E_QUERY_READ_ONLY,
+        band: DDD_BAND,
+        severity: Severity::Error,
+        title: "Query operation is not read-only",
+        meaning: "`query operation '<op>' of repository '<repo>' …` — a repository query carries a statement body, a `when` guard, or a `throws` clause. A query is a read surface: its predicate is `where`, it never raises a declared error, and it has no body to execute.",
+        fix: "Remove the body/`when`/`throws`; express the selection in `where`, and use a declared repository operation (with a body) for a write.",
+    },
+    Entry {
+        code: E_QUERY_PREDICATE,
+        band: DDD_BAND,
+        severity: Severity::Error,
+        title: "Invalid query predicate",
+        meaning: "`invalid query predicate in operation '<op>' of repository '<repo>': <detail>` — the `where` predicate does not parse, does not type-check as boolean over the designed class and the operation's parameters, or a parameter name collides with a feature of the designed class.",
+        fix: "Write a boolean expression over the designed class's features (bare or `self.<feature>`) and the operation's parameters; rename a colliding parameter or read the feature as `self.<name>`.",
+    },
+    Entry {
+        code: E_QUERY_SORT,
+        band: DDD_BAND,
+        severity: Severity::Error,
+        title: "Invalid query sort key",
+        meaning: "`invalid sort key '<field>' in operation '<op>' of repository '<repo>': <reason>` — a sort key must be a direct stored scalar feature (primitive, enum, datatype, vocabulary). A class reference would need a join, a collection has no stored scalar order, and a derived feature is not stored so it cannot be indexed.",
+        fix: "Sort on a stored scalar feature of the designed class; project the referenced class's field into a DTO instead.",
+    },
+    Entry {
+        code: E_QUERY_PAGE,
+        band: DDD_BAND,
+        severity: Severity::Error,
+        title: "Invalid query pagination",
+        meaning: "`invalid pagination in operation '<op>' of repository '<repo>': <detail>` — `limit` and `max` must be positive page sizes, and a `limit` above the declared `max` cap is refused.",
+        fix: "Declare a positive `limit` no greater than the `max` cap (or drop `max` to let `limit` stand alone).",
     },
 ];

@@ -1,0 +1,24 @@
+package demo.queries
+
+enum OrderStatus {
+    Open as "open" = 0
+    Shipped as "shipped" = 1
+    Closed as "closed" = 2
+}
+
+class Customer {
+    id readonly String customerNo
+    String name
+}
+
+class Order {
+    id readonly String orderNo
+    int total
+    date createdDate
+    OrderStatus status
+    refers Customer customer
+
+    derived boolean big {
+        expr { total > 1000 }
+    }
+}

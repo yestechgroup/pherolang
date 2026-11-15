@@ -273,7 +273,13 @@
 //! repository_op     := "protected"? (repository_builtin ";"
 //!                    | body_signature throws_clause? guard_clause?
 //!                      statement_body
-//!                    | signature throws_clause? guard_clause? ";")
+//!                    | signature throws_clause? guard_clause? ";"
+//!                    | signature throws_clause? query_clause+
+//!                      capability_clause? ";")
+//! query_clause      := "where" raw_parens
+//!                    | "sort" sort_key ("," sort_key)*
+//!                    | "page" ("limit" int)? ("max" int)? "cursor"?
+//! sort_key          := name ("asc" | "desc")?
 //! repository_builtin := "findById" | "findAll" | "findByExample"
 //!                    | "findByKeys" | "save" | "delete"
 //! statement_body    := "{" statement* "}"
@@ -328,9 +334,11 @@
 //!   last segment (a bare name recovers with an error).
 //! * Declared repository operations take no `capability`, `invokes`, or
 //!   `emits` clause (the wire artifact carries none, so accepting one
-//!   would silently drop data); a delegated op may be named `save` etc. —
-//!   contextual words. A service operation's clauses are fixed in the
-//!   canonical order `capability? invokes? emits? transition? throws? when?`:
+//!   would silently drop data) — except the **query** form below, whose
+//!   `capability` clause is part of the query contract; a delegated op may
+//!   be named `save` etc. — contextual words. A service operation's clauses
+//!   are fixed in the canonical order
+//!   `capability? invokes? emits? transition? throws? when?`:
 //!   `invokes` names
 //!   the decision services the operation invokes (the `.dmn` dimension,
 //!   loosely coupled to the decision surface), `emits` names the events
@@ -344,6 +352,21 @@
 //!   are field-named, so a machine-name qualifier does not exist as
 //!   authored). A clause order violation is a syntax error, not a
 //!   formatting opportunity.
+//! * A declared repository operation may be a **read-only query** (DD9,
+//!   typed repository queries): `signature throws? where sort? page?
+//!   capability? ";"`. The `where (<predicate>)` clause is what makes the
+//!   operation a query — it is required, its predicate is a `raw_parens`
+//!   span exactly like a `when` guard (parens included, expression inside
+//!   unparsed until the driver slices and types it), and the `sort` /
+//!   `page` / `capability` clauses are optional. The canonical clause order
+//!   is `throws? where? sort? page? capability?`; the formatter re-emits a
+//!   query in it whatever the source order. `sort` keys are `field
+//!   ("asc" | "desc")?` — `asc` is the default and the formatter omits it —
+//!   and the `page` members are all optional and order-independent. A query
+//!   takes **no** `when` guard: a `when` after the query clauses is a named
+//!   parse error (a query's predicate is its `where`). A signature followed
+//!   by only a `capability` clause and no query clause is not a query and
+//!   keeps the repository-operation rejection above.
 //! * A `version_pin` (pherolang#154) is the reference's declared
 //!   compatibility contract, optional per `invokes` entry and on the
 //!   `inject decision` line: `version compatible` or
@@ -394,7 +417,8 @@
 //!   position). The `throws_clause` on a service or repository operation
 //!   names that vocabulary; it is a bare-name list and sits between the
 //!   service operation's `transition` binding and its `when` guard (a
-//!   repository operation's: directly after the signature). A builtin
+//!   repository operation's: directly after the signature, or before a
+//!   query's `where` clause). A builtin
 //!   repository operation takes no clause (a named parse error — its
 //!   failures are structural).
 //! * `document_entry`'s `raw_expr` spans balanced `()`/`[]`/`{}` nesting up
