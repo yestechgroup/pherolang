@@ -270,6 +270,22 @@ impl ClassKind {
     }
 }
 
+/// The collection kind of a many-valued [`Feature`] (DD6, issue #303).
+///
+/// List is the default and is **not** representable as a variant: an absent
+/// [`Feature::collection`] means an ordered list (insertion/declaration
+/// order, duplicates subject to [`FeatureConstraints::unique`]). The one
+/// explicit kind is `set`: unordered, duplicate-free, which is why a set also
+/// carries `constraints.unique = true`.
+///
+/// Serializes as the bare tag string `"set"`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub enum CollectionKind {
+    /// An unordered collection whose elements are pairwise distinct.
+    Set,
+}
+
 /// A class definition with its supertypes and features.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -386,6 +402,15 @@ pub struct Feature {
     /// Allowed cardinality of this feature.
     #[serde(default)]
     pub multiplicity: Multiplicity,
+    /// The collection kind of a many-valued feature: `Some(CollectionKind::Set)`
+    /// for an unordered, duplicate-free collection; `None` — the default — is
+    /// an ordered list (duplicates allowed unless [`FeatureConstraints::unique`]
+    /// is set). Only meaningful on many-valued features, and a set always
+    /// carries `unique: true` (the driver lowers both; `pherolang artifact
+    /// check` refuses a divergence). Additive and sparse; omitted when `None`,
+    /// so list-only models stay byte-identical (DD6, issue #303).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub collection: Option<CollectionKind>,
     /// The opposite end of a bidirectional relation (present on both ends).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub opposite: Option<OppositeRef>,
@@ -434,6 +459,7 @@ impl Feature {
             kind,
             type_,
             multiplicity,
+            collection: None,
             opposite: None,
             default: None,
             is_derived: false,
@@ -463,6 +489,14 @@ impl Feature {
     /// Chainable setter for the feature's default value.
     pub fn with_default(mut self, default: DefaultValue) -> Self {
         self.default = Some(default);
+        self
+    }
+
+    /// Chainable setter for the feature's collection kind (DD6). A set is
+    /// unordered and duplicate-free; callers lowering a `set` constraint also
+    /// set `constraints.unique = true`, so the two cannot diverge.
+    pub fn with_collection(mut self, collection: CollectionKind) -> Self {
+        self.collection = Some(collection);
         self
     }
 
