@@ -1,0 +1,10 @@
+# docs.pherolang.com
+#
+# The documentation is a projection of the repository's `docs/` directory and is
+# meant to be indexed in full. There is no internal or draft section here: the
+# pages that are not public simply are not ingested.
+
+User-agent: *
+Allow: /
+
+Sitemap: https://docs.pherolang.com/sitemap-index.xml

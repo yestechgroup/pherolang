@@ -1,0 +1,2610 @@
+{
+  "formatVersion": 1,
+  "application": "support/cli.ifml",
+  "meta": {
+    "application": "support/cli.ifml",
+    "files": [
+      "support/cli.ifml",
+      "support/support.actor",
+      "support/support.cmmn",
+      "support/support.ddd",
+      "support/support.deploy",
+      "support/support.dmn",
+      "support/support.evt",
+      "support/support.ifml",
+      "support/support.mox",
+      "support/support.uc"
+    ],
+    "source": "site/data/graph.json",
+    "generator": "site/scripts/render-graph.mjs",
+    "graph": {
+      "nodes": 305,
+      "edges": 463,
+      "applications": 8
+    },
+    "excludedKinds": [
+      "file"
+    ],
+    "excludedNodes": 10,
+    "layout": {
+      "margin": 20,
+      "columnGap": 40,
+      "subColumnGap": 12,
+      "rowGap": 12,
+      "nodeWidth": 176,
+      "nodeHeight": 46,
+      "groupHeader": 34,
+      "maxSubColumns": 2
+    },
+    "perspectives": {
+      "domain": {
+        "nodes": 20,
+        "edges": 23,
+        "groups": 4
+      },
+      "decisions": {
+        "nodes": 10,
+        "edges": 10,
+        "groups": 1
+      },
+      "events": {
+        "nodes": 8,
+        "edges": 9,
+        "groups": 1
+      },
+      "workflows": {
+        "nodes": 28,
+        "edges": 29,
+        "groups": 4
+      },
+      "authorisation": {
+        "nodes": 9,
+        "edges": 13,
+        "groups": 1
+      },
+      "experience": {
+        "nodes": 25,
+        "edges": 23,
+        "groups": 5
+      },
+      "deployment": {
+        "nodes": 10,
+        "edges": 11,
+        "groups": 1
+      },
+      "cases": {
+        "nodes": 20,
+        "edges": 17,
+        "groups": 2
+      }
+    }
+  },
+  "perspectives": [
+    {
+      "id": "domain",
+      "label": "Domain",
+      "surface": "mox",
+      "viewport": {
+        "width": 1616,
+        "height": 352
+      },
+      "groups": [
+        {
+          "key": "nz.example.support",
+          "label": "nz.example.support",
+          "x": 20,
+          "y": 20,
+          "w": 364,
+          "h": 138,
+          "count": 4
+        },
+        {
+          "key": "nz.example.support.RefundDecision",
+          "label": "nz.example.support.RefundDecision",
+          "x": 424,
+          "y": 20,
+          "w": 364,
+          "h": 138,
+          "count": 3
+        },
+        {
+          "key": "nz.example.support.Ticket",
+          "label": "nz.example.support.Ticket",
+          "x": 828,
+          "y": 20,
+          "w": 364,
+          "h": 312,
+          "count": 9
+        },
+        {
+          "key": "nz.example.support.User",
+          "label": "nz.example.support.User",
+          "x": 1232,
+          "y": 20,
+          "w": 364,
+          "h": 138,
+          "count": 4
+        }
+      ],
+      "nodes": [
+        {
+          "id": "class:support/support.mox#nz.example.support.RefundDecision",
+          "kind": "class",
+          "label": "RefundDecision",
+          "group": "nz.example.support",
+          "x": 20,
+          "y": 54,
+          "w": 176,
+          "h": 46,
+          "detail": "RefundDecision is a class declared in support/support.mox, with 3 connections shown in this view.",
+          "provenance": "support/support.mox"
+        },
+        {
+          "id": "class:support/support.mox#nz.example.support.Ticket",
+          "kind": "class",
+          "label": "Ticket",
+          "group": "nz.example.support",
+          "x": 208,
+          "y": 54,
+          "w": 176,
+          "h": 46,
+          "detail": "Ticket is a class declared in support/support.mox, with 12 connections shown in this view.",
+          "provenance": "support/support.mox"
+        },
+        {
+          "id": "class:support/support.mox#nz.example.support.User",
+          "kind": "class",
+          "label": "User",
+          "group": "nz.example.support",
+          "x": 20,
+          "y": 112,
+          "w": 176,
+          "h": 46,
+          "detail": "User is a class declared in support/support.mox, with 7 connections shown in this view.",
+          "provenance": "support/support.mox"
+        },
+        {
+          "id": "enum:support/support.mox#nz.example.support.TicketState",
+          "kind": "enum",
+          "label": "TicketState",
+          "group": "nz.example.support",
+          "x": 208,
+          "y": 112,
+          "w": 176,
+          "h": 46,
+          "detail": "TicketState is an enum declared in support/support.mox, with one connection shown in this view.",
+          "provenance": "support/support.mox"
+        },
+        {
+          "id": "feature:support/support.mox#nz.example.support.RefundDecision.approved",
+          "kind": "feature",
+          "label": "approved",
+          "group": "nz.example.support.RefundDecision",
+          "x": 424,
+          "y": 54,
+          "w": 176,
+          "h": 46,
+          "detail": "approved is a feature declared in support/support.mox, with one connection shown in this view.",
+          "provenance": "support/support.mox"
+        },
+        {
+          "id": "feature:support/support.mox#nz.example.support.RefundDecision.cents",
+          "kind": "feature",
+          "label": "cents",
+          "group": "nz.example.support.RefundDecision",
+          "x": 612,
+          "y": 54,
+          "w": 176,
+          "h": 46,
+          "detail": "cents is a feature declared in support/support.mox, with one connection shown in this view.",
+          "provenance": "support/support.mox"
+        },
+        {
+          "id": "feature:support/support.mox#nz.example.support.RefundDecision.decisionId",
+          "kind": "feature",
+          "label": "decisionId",
+          "group": "nz.example.support.RefundDecision",
+          "x": 424,
+          "y": 112,
+          "w": 176,
+          "h": 46,
+          "detail": "decisionId is a feature declared in support/support.mox, with one connection shown in this view.",
+          "provenance": "support/support.mox"
+        },
+        {
+          "id": "feature:support/support.mox#nz.example.support.Ticket.assignee",
+          "kind": "feature",
+          "label": "assignee",
+          "group": "nz.example.support.Ticket",
+          "x": 828,
+          "y": 54,
+          "w": 176,
+          "h": 46,
+          "detail": "assignee is a feature declared in support/support.mox, with 4 connections shown in this view.",
+          "provenance": "support/support.mox"
+        },
+        {
+          "id": "feature:support/support.mox#nz.example.support.Ticket.internal",
+          "kind": "feature",
+          "label": "internal",
+          "group": "nz.example.support.Ticket",
+          "x": 1016,
+          "y": 54,
+          "w": 176,
+          "h": 46,
+          "detail": "internal is a feature declared in support/support.mox, with one connection shown in this view.",
+          "provenance": "support/support.mox"
+        },
+        {
+          "id": "feature:support/support.mox#nz.example.support.Ticket.needsRefund",
+          "kind": "feature",
+          "label": "needsRefund",
+          "group": "nz.example.support.Ticket",
+          "x": 828,
+          "y": 112,
+          "w": 176,
+          "h": 46,
+          "detail": "needsRefund is a feature declared in support/support.mox, with one connection shown in this view.",
+          "provenance": "support/support.mox"
+        },
+        {
+          "id": "feature:support/support.mox#nz.example.support.Ticket.refundCents",
+          "kind": "feature",
+          "label": "refundCents",
+          "group": "nz.example.support.Ticket",
+          "x": 1016,
+          "y": 112,
+          "w": 176,
+          "h": 46,
+          "detail": "refundCents is a feature declared in support/support.mox, with one connection shown in this view.",
+          "provenance": "support/support.mox"
+        },
+        {
+          "id": "feature:support/support.mox#nz.example.support.Ticket.state",
+          "kind": "feature",
+          "label": "state",
+          "group": "nz.example.support.Ticket",
+          "x": 828,
+          "y": 170,
+          "w": 176,
+          "h": 46,
+          "detail": "state is a feature declared in support/support.mox, with 2 connections shown in this view.",
+          "provenance": "support/support.mox"
+        },
+        {
+          "id": "feature:support/support.mox#nz.example.support.Ticket.ticketNo",
+          "kind": "feature",
+          "label": "ticketNo",
+          "group": "nz.example.support.Ticket",
+          "x": 1016,
+          "y": 170,
+          "w": 176,
+          "h": 46,
+          "detail": "ticketNo is a feature declared in support/support.mox, with one connection shown in this view.",
+          "provenance": "support/support.mox"
+        },
+        {
+          "id": "feature:support/support.mox#nz.example.support.Ticket.title",
+          "kind": "feature",
+          "label": "title",
+          "group": "nz.example.support.Ticket",
+          "x": 828,
+          "y": 228,
+          "w": 176,
+          "h": 46,
+          "detail": "title is a feature declared in support/support.mox, with one connection shown in this view.",
+          "provenance": "support/support.mox"
+        },
+        {
+          "id": "operation:support/support.mox#nz.example.support.Ticket.approveRefund",
+          "kind": "operation",
+          "label": "approveRefund",
+          "group": "nz.example.support.Ticket",
+          "x": 1016,
+          "y": 228,
+          "w": 176,
+          "h": 46,
+          "detail": "approveRefund is an operation declared in support/support.mox, with one connection shown in this view.",
+          "provenance": "support/support.mox"
+        },
+        {
+          "id": "operation:support/support.mox#nz.example.support.Ticket.raiseRefund",
+          "kind": "operation",
+          "label": "raiseRefund",
+          "group": "nz.example.support.Ticket",
+          "x": 828,
+          "y": 286,
+          "w": 176,
+          "h": 46,
+          "detail": "raiseRefund is an operation declared in support/support.mox, with one connection shown in this view.",
+          "provenance": "support/support.mox"
+        },
+        {
+          "id": "feature:support/support.mox#nz.example.support.User.active",
+          "kind": "feature",
+          "label": "active",
+          "group": "nz.example.support.User",
+          "x": 1232,
+          "y": 54,
+          "w": 176,
+          "h": 46,
+          "detail": "active is a feature declared in support/support.mox, with one connection shown in this view.",
+          "provenance": "support/support.mox"
+        },
+        {
+          "id": "feature:support/support.mox#nz.example.support.User.assignedTickets",
+          "kind": "feature",
+          "label": "assignedTickets",
+          "group": "nz.example.support.User",
+          "x": 1420,
+          "y": 54,
+          "w": 176,
+          "h": 46,
+          "detail": "assignedTickets is a feature declared in support/support.mox, with 4 connections shown in this view.",
+          "provenance": "support/support.mox"
+        },
+        {
+          "id": "feature:support/support.mox#nz.example.support.User.name",
+          "kind": "feature",
+          "label": "name",
+          "group": "nz.example.support.User",
+          "x": 1232,
+          "y": 112,
+          "w": 176,
+          "h": 46,
+          "detail": "name is a feature declared in support/support.mox, with one connection shown in this view.",
+          "provenance": "support/support.mox"
+        },
+        {
+          "id": "feature:support/support.mox#nz.example.support.User.userId",
+          "kind": "feature",
+          "label": "userId",
+          "group": "nz.example.support.User",
+          "x": 1420,
+          "y": 112,
+          "w": 176,
+          "h": 46,
+          "detail": "userId is a feature declared in support/support.mox, with one connection shown in this view.",
+          "provenance": "support/support.mox"
+        }
+      ],
+      "edges": [
+        {
+          "from": "class:support/support.mox#nz.example.support.Ticket",
+          "to": "class:support/support.mox#nz.example.support.User",
+          "kind": "refers"
+        },
+        {
+          "from": "class:support/support.mox#nz.example.support.User",
+          "to": "class:support/support.mox#nz.example.support.Ticket",
+          "kind": "refers"
+        },
+        {
+          "from": "feature:support/support.mox#nz.example.support.RefundDecision.approved",
+          "to": "class:support/support.mox#nz.example.support.RefundDecision",
+          "kind": "memberOf"
+        },
+        {
+          "from": "feature:support/support.mox#nz.example.support.RefundDecision.cents",
+          "to": "class:support/support.mox#nz.example.support.RefundDecision",
+          "kind": "memberOf"
+        },
+        {
+          "from": "feature:support/support.mox#nz.example.support.RefundDecision.decisionId",
+          "to": "class:support/support.mox#nz.example.support.RefundDecision",
+          "kind": "memberOf"
+        },
+        {
+          "from": "feature:support/support.mox#nz.example.support.Ticket.assignee",
+          "to": "class:support/support.mox#nz.example.support.Ticket",
+          "kind": "memberOf"
+        },
+        {
+          "from": "feature:support/support.mox#nz.example.support.Ticket.assignee",
+          "to": "class:support/support.mox#nz.example.support.User",
+          "kind": "typeOf"
+        },
+        {
+          "from": "feature:support/support.mox#nz.example.support.Ticket.assignee",
+          "to": "feature:support/support.mox#nz.example.support.User.assignedTickets",
+          "kind": "opposite"
+        },
+        {
+          "from": "feature:support/support.mox#nz.example.support.Ticket.internal",
+          "to": "class:support/support.mox#nz.example.support.Ticket",
+          "kind": "memberOf"
+        },
+        {
+          "from": "feature:support/support.mox#nz.example.support.Ticket.needsRefund",
+          "to": "class:support/support.mox#nz.example.support.Ticket",
+          "kind": "memberOf"
+        },
+        {
+          "from": "feature:support/support.mox#nz.example.support.Ticket.refundCents",
+          "to": "class:support/support.mox#nz.example.support.Ticket",
+          "kind": "memberOf"
+        },
+        {
+          "from": "feature:support/support.mox#nz.example.support.Ticket.state",
+          "to": "class:support/support.mox#nz.example.support.Ticket",
+          "kind": "memberOf"
+        },
+        {
+          "from": "feature:support/support.mox#nz.example.support.Ticket.state",
+          "to": "enum:support/support.mox#nz.example.support.TicketState",
+          "kind": "typeOf"
+        },
+        {
+          "from": "feature:support/support.mox#nz.example.support.Ticket.ticketNo",
+          "to": "class:support/support.mox#nz.example.support.Ticket",
+          "kind": "memberOf"
+        },
+        {
+          "from": "feature:support/support.mox#nz.example.support.Ticket.title",
+          "to": "class:support/support.mox#nz.example.support.Ticket",
+          "kind": "memberOf"
+        },
+        {
+          "from": "feature:support/support.mox#nz.example.support.User.active",
+          "to": "class:support/support.mox#nz.example.support.User",
+          "kind": "memberOf"
+        },
+        {
+          "from": "feature:support/support.mox#nz.example.support.User.assignedTickets",
+          "to": "class:support/support.mox#nz.example.support.Ticket",
+          "kind": "typeOf"
+        },
+        {
+          "from": "feature:support/support.mox#nz.example.support.User.assignedTickets",
+          "to": "class:support/support.mox#nz.example.support.User",
+          "kind": "memberOf"
+        },
+        {
+          "from": "feature:support/support.mox#nz.example.support.User.assignedTickets",
+          "to": "feature:support/support.mox#nz.example.support.Ticket.assignee",
+          "kind": "opposite"
+        },
+        {
+          "from": "feature:support/support.mox#nz.example.support.User.name",
+          "to": "class:support/support.mox#nz.example.support.User",
+          "kind": "memberOf"
+        },
+        {
+          "from": "feature:support/support.mox#nz.example.support.User.userId",
+          "to": "class:support/support.mox#nz.example.support.User",
+          "kind": "memberOf"
+        },
+        {
+          "from": "operation:support/support.mox#nz.example.support.Ticket.approveRefund",
+          "to": "class:support/support.mox#nz.example.support.Ticket",
+          "kind": "memberOf"
+        },
+        {
+          "from": "operation:support/support.mox#nz.example.support.Ticket.raiseRefund",
+          "to": "class:support/support.mox#nz.example.support.Ticket",
+          "kind": "memberOf"
+        }
+      ]
+    },
+    {
+      "id": "decisions",
+      "label": "Decisions",
+      "surface": "dmn",
+      "viewport": {
+        "width": 404,
+        "height": 352
+      },
+      "groups": [
+        {
+          "key": "RefundDecisions",
+          "label": "RefundDecisions",
+          "x": 20,
+          "y": 20,
+          "w": 364,
+          "h": 312,
+          "count": 10
+        }
+      ],
+      "nodes": [
+        {
+          "id": "decisionModel:support/support.dmn#RefundDecisions",
+          "kind": "decisionModel",
+          "label": "RefundDecisions",
+          "group": "RefundDecisions",
+          "x": 20,
+          "y": 54,
+          "w": 176,
+          "h": 46,
+          "detail": "RefundDecisions is a decision model declared in support/support.dmn, with 9 connections shown in this view.",
+          "provenance": "support/support.dmn"
+        },
+        {
+          "id": "decision:support/support.dmn#RefundDecisions.RefundAssessment",
+          "kind": "decision",
+          "label": "RefundAssessment",
+          "group": "RefundDecisions",
+          "x": 208,
+          "y": 54,
+          "w": 176,
+          "h": 46,
+          "detail": "RefundAssessment is a decision declared in support/support.dmn, with 2 connections shown in this view.",
+          "provenance": "support/support.dmn"
+        },
+        {
+          "id": "decision:support/support.dmn#RefundDecisions.RefundAuthority",
+          "kind": "decision",
+          "label": "RefundAuthority",
+          "group": "RefundDecisions",
+          "x": 20,
+          "y": 112,
+          "w": 176,
+          "h": 46,
+          "detail": "RefundAuthority is a decision declared in support/support.dmn, with one connection shown in this view.",
+          "provenance": "support/support.dmn"
+        },
+        {
+          "id": "decision:support/support.dmn#RefundDecisions.RefundEligibility",
+          "kind": "decision",
+          "label": "RefundEligibility",
+          "group": "RefundDecisions",
+          "x": 208,
+          "y": 112,
+          "w": 176,
+          "h": 46,
+          "detail": "RefundEligibility is a decision declared in support/support.dmn, with one connection shown in this view.",
+          "provenance": "support/support.dmn"
+        },
+        {
+          "id": "decisionService:support/support.dmn#RefundDecisions.AssessRefund",
+          "kind": "decisionService",
+          "label": "AssessRefund",
+          "group": "RefundDecisions",
+          "x": 20,
+          "y": 170,
+          "w": 176,
+          "h": 46,
+          "detail": "AssessRefund is a decision service declared in support/support.dmn, with 2 connections shown in this view.",
+          "provenance": "support/support.dmn"
+        },
+        {
+          "id": "bkm:support/support.dmn#RefundDecisions.assess_refund",
+          "kind": "bkm",
+          "label": "assess_refund",
+          "group": "RefundDecisions",
+          "x": 208,
+          "y": 170,
+          "w": 176,
+          "h": 46,
+          "detail": "assess_refund is a business knowledge model declared in support/support.dmn, with one connection shown in this view.",
+          "provenance": "support/support.dmn"
+        },
+        {
+          "id": "knowledgeSource:support/support.dmn#RefundDecisions.ConsumerGuaranteesAct",
+          "kind": "knowledgeSource",
+          "label": "ConsumerGuaranteesAct",
+          "group": "RefundDecisions",
+          "x": 20,
+          "y": 228,
+          "w": 176,
+          "h": 46,
+          "detail": "ConsumerGuaranteesAct is a knowledge source declared in support/support.dmn, with one connection shown in this view.",
+          "provenance": "support/support.dmn"
+        },
+        {
+          "id": "inputData:support/support.dmn#RefundDecisions.helper",
+          "kind": "inputData",
+          "label": "helper",
+          "group": "RefundDecisions",
+          "x": 208,
+          "y": 228,
+          "w": 176,
+          "h": 46,
+          "detail": "helper is an input data node declared in support/support.dmn, with one connection shown in this view.",
+          "provenance": "support/support.dmn"
+        },
+        {
+          "id": "inputData:support/support.dmn#RefundDecisions.requested_cents",
+          "kind": "inputData",
+          "label": "requested_cents",
+          "group": "RefundDecisions",
+          "x": 20,
+          "y": 286,
+          "w": 176,
+          "h": 46,
+          "detail": "requested_cents is an input data node declared in support/support.dmn, with one connection shown in this view.",
+          "provenance": "support/support.dmn"
+        },
+        {
+          "id": "inputData:support/support.dmn#RefundDecisions.ticket",
+          "kind": "inputData",
+          "label": "ticket",
+          "group": "RefundDecisions",
+          "x": 208,
+          "y": 286,
+          "w": 176,
+          "h": 46,
+          "detail": "ticket is an input data node declared in support/support.dmn, with one connection shown in this view.",
+          "provenance": "support/support.dmn"
+        }
+      ],
+      "edges": [
+        {
+          "from": "bkm:support/support.dmn#RefundDecisions.assess_refund",
+          "to": "decisionModel:support/support.dmn#RefundDecisions",
+          "kind": "memberOf"
+        },
+        {
+          "from": "decision:support/support.dmn#RefundDecisions.RefundAssessment",
+          "to": "decisionModel:support/support.dmn#RefundDecisions",
+          "kind": "memberOf"
+        },
+        {
+          "from": "decision:support/support.dmn#RefundDecisions.RefundAuthority",
+          "to": "decisionModel:support/support.dmn#RefundDecisions",
+          "kind": "memberOf"
+        },
+        {
+          "from": "decision:support/support.dmn#RefundDecisions.RefundEligibility",
+          "to": "decisionModel:support/support.dmn#RefundDecisions",
+          "kind": "memberOf"
+        },
+        {
+          "from": "decisionService:support/support.dmn#RefundDecisions.AssessRefund",
+          "to": "decision:support/support.dmn#RefundDecisions.RefundAssessment",
+          "kind": "provides"
+        },
+        {
+          "from": "decisionService:support/support.dmn#RefundDecisions.AssessRefund",
+          "to": "decisionModel:support/support.dmn#RefundDecisions",
+          "kind": "memberOf"
+        },
+        {
+          "from": "inputData:support/support.dmn#RefundDecisions.helper",
+          "to": "decisionModel:support/support.dmn#RefundDecisions",
+          "kind": "memberOf"
+        },
+        {
+          "from": "inputData:support/support.dmn#RefundDecisions.requested_cents",
+          "to": "decisionModel:support/support.dmn#RefundDecisions",
+          "kind": "memberOf"
+        },
+        {
+          "from": "inputData:support/support.dmn#RefundDecisions.ticket",
+          "to": "decisionModel:support/support.dmn#RefundDecisions",
+          "kind": "memberOf"
+        },
+        {
+          "from": "knowledgeSource:support/support.dmn#RefundDecisions.ConsumerGuaranteesAct",
+          "to": "decisionModel:support/support.dmn#RefundDecisions",
+          "kind": "memberOf"
+        }
+      ]
+    },
+    {
+      "id": "events",
+      "label": "Events",
+      "surface": "evt",
+      "viewport": {
+        "width": 404,
+        "height": 294
+      },
+      "groups": [
+        {
+          "key": "support",
+          "label": "support",
+          "x": 20,
+          "y": 20,
+          "w": 364,
+          "h": 254,
+          "count": 8
+        }
+      ],
+      "nodes": [
+        {
+          "id": "event:support/support.evt#support.RefundApproved",
+          "kind": "event",
+          "label": "RefundApproved",
+          "group": "support",
+          "x": 20,
+          "y": 54,
+          "w": 176,
+          "h": 46,
+          "detail": "RefundApproved is an event declared in support/support.evt, with 2 connections shown in this view.",
+          "provenance": "support/support.evt"
+        },
+        {
+          "id": "event:support/support.evt#support.RefundRequested",
+          "kind": "event",
+          "label": "RefundRequested",
+          "group": "support",
+          "x": 208,
+          "y": 54,
+          "w": 176,
+          "h": 46,
+          "detail": "RefundRequested is an event declared in support/support.evt, with 3 connections shown in this view.",
+          "provenance": "support/support.evt"
+        },
+        {
+          "id": "event:support/support.evt#support.TicketRaised",
+          "kind": "event",
+          "label": "TicketRaised",
+          "group": "support",
+          "x": 20,
+          "y": 112,
+          "w": 176,
+          "h": 46,
+          "detail": "TicketRaised is an event declared in support/support.evt, with 2 connections shown in this view.",
+          "provenance": "support/support.evt"
+        },
+        {
+          "id": "event:support/support.evt#support.TicketResolved",
+          "kind": "event",
+          "label": "TicketResolved",
+          "group": "support",
+          "x": 208,
+          "y": 112,
+          "w": 176,
+          "h": 46,
+          "detail": "TicketResolved is an event declared in support/support.evt, with 2 connections shown in this view.",
+          "provenance": "support/support.evt"
+        },
+        {
+          "id": "channel:support/support.evt#support.refunds",
+          "kind": "channel",
+          "label": "refunds",
+          "group": "support",
+          "x": 20,
+          "y": 170,
+          "w": 176,
+          "h": 46,
+          "detail": "refunds is a channel declared in support/support.evt, with 2 connections shown in this view.",
+          "provenance": "support/support.evt"
+        },
+        {
+          "id": "channel:support/support.evt#support.tickets",
+          "kind": "channel",
+          "label": "tickets",
+          "group": "support",
+          "x": 208,
+          "y": 170,
+          "w": 176,
+          "h": 46,
+          "detail": "tickets is a channel declared in support/support.evt, with 2 connections shown in this view.",
+          "provenance": "support/support.evt"
+        },
+        {
+          "id": "subscription:support/support.evt#support.analytics",
+          "kind": "subscription",
+          "label": "analytics",
+          "group": "support",
+          "x": 20,
+          "y": 228,
+          "w": 176,
+          "h": 46,
+          "detail": "analytics is a subscription declared in support/support.evt, with 3 connections shown in this view.",
+          "provenance": "support/support.evt"
+        },
+        {
+          "id": "subscription:support/support.evt#support.refundDesk",
+          "kind": "subscription",
+          "label": "refundDesk",
+          "group": "support",
+          "x": 208,
+          "y": 228,
+          "w": 176,
+          "h": 46,
+          "detail": "refundDesk is a subscription declared in support/support.evt, with 2 connections shown in this view.",
+          "provenance": "support/support.evt"
+        }
+      ],
+      "edges": [
+        {
+          "from": "channel:support/support.evt#support.refunds",
+          "to": "event:support/support.evt#support.RefundApproved",
+          "kind": "publishes"
+        },
+        {
+          "from": "channel:support/support.evt#support.refunds",
+          "to": "event:support/support.evt#support.RefundRequested",
+          "kind": "publishes"
+        },
+        {
+          "from": "channel:support/support.evt#support.tickets",
+          "to": "event:support/support.evt#support.TicketRaised",
+          "kind": "publishes"
+        },
+        {
+          "from": "channel:support/support.evt#support.tickets",
+          "to": "event:support/support.evt#support.TicketResolved",
+          "kind": "publishes"
+        },
+        {
+          "from": "subscription:support/support.evt#support.analytics",
+          "to": "event:support/support.evt#support.RefundRequested",
+          "kind": "subscribes"
+        },
+        {
+          "from": "subscription:support/support.evt#support.analytics",
+          "to": "event:support/support.evt#support.TicketRaised",
+          "kind": "subscribes"
+        },
+        {
+          "from": "subscription:support/support.evt#support.analytics",
+          "to": "event:support/support.evt#support.TicketResolved",
+          "kind": "subscribes"
+        },
+        {
+          "from": "subscription:support/support.evt#support.refundDesk",
+          "to": "event:support/support.evt#support.RefundApproved",
+          "kind": "subscribes"
+        },
+        {
+          "from": "subscription:support/support.evt#support.refundDesk",
+          "to": "event:support/support.evt#support.RefundRequested",
+          "kind": "subscribes"
+        }
+      ]
+    },
+    {
+      "id": "workflows",
+      "label": "Workflows",
+      "surface": "ddd",
+      "viewport": {
+        "width": 1616,
+        "height": 526
+      },
+      "groups": [
+        {
+          "key": "SupportDesk",
+          "label": "SupportDesk",
+          "x": 20,
+          "y": 20,
+          "w": 364,
+          "h": 138,
+          "count": 3
+        },
+        {
+          "key": "SupportDesk.desk",
+          "label": "SupportDesk.desk",
+          "x": 424,
+          "y": 20,
+          "w": 364,
+          "h": 138,
+          "count": 3
+        },
+        {
+          "key": "SupportDesk.desk.TicketRepository",
+          "label": "SupportDesk.desk.TicketRepository",
+          "x": 828,
+          "y": 20,
+          "w": 364,
+          "h": 254,
+          "count": 7
+        },
+        {
+          "key": "SupportDesk.desk.TicketService",
+          "label": "SupportDesk.desk.TicketService",
+          "x": 1232,
+          "y": 20,
+          "w": 364,
+          "h": 486,
+          "count": 15
+        }
+      ],
+      "nodes": [
+        {
+          "id": "module:support/support.ddd#SupportDesk.desk",
+          "kind": "module",
+          "label": "desk",
+          "group": "SupportDesk",
+          "x": 20,
+          "y": 54,
+          "w": 176,
+          "h": 46,
+          "detail": "desk is a module declared in support/support.ddd, with 4 connections shown in this view.",
+          "provenance": "support/support.ddd"
+        },
+        {
+          "id": "module:support/support.ddd#SupportDesk.people",
+          "kind": "module",
+          "label": "people",
+          "group": "SupportDesk",
+          "x": 208,
+          "y": 54,
+          "w": 176,
+          "h": 46,
+          "detail": "people is a module declared in support/support.ddd, with one connection shown in this view.",
+          "provenance": "support/support.ddd"
+        },
+        {
+          "id": "designApplication:support/support.ddd#SupportDesk",
+          "kind": "designApplication",
+          "label": "SupportDesk",
+          "group": "SupportDesk",
+          "x": 20,
+          "y": 112,
+          "w": 176,
+          "h": 46,
+          "detail": "SupportDesk is a design application declared in support/support.ddd, with 2 connections shown in this view.",
+          "provenance": "support/support.ddd"
+        },
+        {
+          "id": "service:support/support.ddd#SupportDesk.desk.TicketService",
+          "kind": "service",
+          "label": "TicketService",
+          "group": "SupportDesk.desk",
+          "x": 424,
+          "y": 54,
+          "w": 176,
+          "h": 46,
+          "detail": "TicketService is a service declared in support/support.ddd, with 17 connections shown in this view.",
+          "provenance": "support/support.ddd"
+        },
+        {
+          "id": "repository:support/support.ddd#SupportDesk.desk.TicketRepository",
+          "kind": "repository",
+          "label": "TicketRepository",
+          "group": "SupportDesk.desk",
+          "x": 612,
+          "y": 54,
+          "w": 176,
+          "h": 46,
+          "detail": "TicketRepository is a repository declared in support/support.ddd, with 9 connections shown in this view.",
+          "provenance": "support/support.ddd"
+        },
+        {
+          "id": "search:support/support.ddd#SupportDesk.desk.TicketSearch",
+          "kind": "search",
+          "label": "TicketSearch",
+          "group": "SupportDesk.desk",
+          "x": 424,
+          "y": 112,
+          "w": 176,
+          "h": 46,
+          "detail": "TicketSearch is a search declared in support/support.ddd, with one connection shown in this view.",
+          "provenance": "support/support.ddd"
+        },
+        {
+          "id": "repositoryOperation:support/support.ddd#SupportDesk.desk.TicketRepository.delete",
+          "kind": "repositoryOperation",
+          "label": "delete",
+          "group": "SupportDesk.desk.TicketRepository",
+          "x": 828,
+          "y": 54,
+          "w": 176,
+          "h": 46,
+          "detail": "delete is a repository operation declared in support/support.ddd, with 2 connections shown in this view.",
+          "provenance": "support/support.ddd"
+        },
+        {
+          "id": "repositoryOperation:support/support.ddd#SupportDesk.desk.TicketRepository.findAll",
+          "kind": "repositoryOperation",
+          "label": "findAll",
+          "group": "SupportDesk.desk.TicketRepository",
+          "x": 1016,
+          "y": 54,
+          "w": 176,
+          "h": 46,
+          "detail": "findAll is a repository operation declared in support/support.ddd, with one connection shown in this view.",
+          "provenance": "support/support.ddd"
+        },
+        {
+          "id": "repositoryOperation:support/support.ddd#SupportDesk.desk.TicketRepository.findByExample",
+          "kind": "repositoryOperation",
+          "label": "findByExample",
+          "group": "SupportDesk.desk.TicketRepository",
+          "x": 828,
+          "y": 112,
+          "w": 176,
+          "h": 46,
+          "detail": "findByExample is a repository operation declared in support/support.ddd, with one connection shown in this view.",
+          "provenance": "support/support.ddd"
+        },
+        {
+          "id": "repositoryOperation:support/support.ddd#SupportDesk.desk.TicketRepository.findById",
+          "kind": "repositoryOperation",
+          "label": "findById",
+          "group": "SupportDesk.desk.TicketRepository",
+          "x": 1016,
+          "y": 112,
+          "w": 176,
+          "h": 46,
+          "detail": "findById is a repository operation declared in support/support.ddd, with one connection shown in this view.",
+          "provenance": "support/support.ddd"
+        },
+        {
+          "id": "repositoryOperation:support/support.ddd#SupportDesk.desk.TicketRepository.findByKeys",
+          "kind": "repositoryOperation",
+          "label": "findByKeys",
+          "group": "SupportDesk.desk.TicketRepository",
+          "x": 828,
+          "y": 170,
+          "w": 176,
+          "h": 46,
+          "detail": "findByKeys is a repository operation declared in support/support.ddd, with one connection shown in this view.",
+          "provenance": "support/support.ddd"
+        },
+        {
+          "id": "repositoryOperation:support/support.ddd#SupportDesk.desk.TicketRepository.findByTitle",
+          "kind": "repositoryOperation",
+          "label": "findByTitle",
+          "group": "SupportDesk.desk.TicketRepository",
+          "x": 1016,
+          "y": 170,
+          "w": 176,
+          "h": 46,
+          "detail": "findByTitle is a repository operation declared in support/support.ddd, with one connection shown in this view.",
+          "provenance": "support/support.ddd"
+        },
+        {
+          "id": "repositoryOperation:support/support.ddd#SupportDesk.desk.TicketRepository.save",
+          "kind": "repositoryOperation",
+          "label": "save",
+          "group": "SupportDesk.desk.TicketRepository",
+          "x": 828,
+          "y": 228,
+          "w": 176,
+          "h": 46,
+          "detail": "save is a repository operation declared in support/support.ddd, with one connection shown in this view.",
+          "provenance": "support/support.ddd"
+        },
+        {
+          "id": "serviceOperation:support/support.ddd#SupportDesk.desk.TicketService.approve",
+          "kind": "serviceOperation",
+          "label": "approve",
+          "group": "SupportDesk.desk.TicketService",
+          "x": 1232,
+          "y": 54,
+          "w": 176,
+          "h": 46,
+          "detail": "approve is a service operation declared in support/support.ddd, with one connection shown in this view.",
+          "provenance": "support/support.ddd"
+        },
+        {
+          "id": "serviceOperation:support/support.ddd#SupportDesk.desk.TicketService.approveRefund",
+          "kind": "serviceOperation",
+          "label": "approveRefund",
+          "group": "SupportDesk.desk.TicketService",
+          "x": 1420,
+          "y": 54,
+          "w": 176,
+          "h": 46,
+          "detail": "approveRefund is a service operation declared in support/support.ddd, with one connection shown in this view.",
+          "provenance": "support/support.ddd"
+        },
+        {
+          "id": "serviceOperation:support/support.ddd#SupportDesk.desk.TicketService.assign",
+          "kind": "serviceOperation",
+          "label": "assign",
+          "group": "SupportDesk.desk.TicketService",
+          "x": 1232,
+          "y": 112,
+          "w": 176,
+          "h": 46,
+          "detail": "assign is a service operation declared in support/support.ddd, with one connection shown in this view.",
+          "provenance": "support/support.ddd"
+        },
+        {
+          "id": "serviceOperation:support/support.ddd#SupportDesk.desk.TicketService.claimTicket",
+          "kind": "serviceOperation",
+          "label": "claimTicket",
+          "group": "SupportDesk.desk.TicketService",
+          "x": 1420,
+          "y": 112,
+          "w": 176,
+          "h": 46,
+          "detail": "claimTicket is a service operation declared in support/support.ddd, with one connection shown in this view.",
+          "provenance": "support/support.ddd"
+        },
+        {
+          "id": "serviceOperation:support/support.ddd#SupportDesk.desk.TicketService.close",
+          "kind": "serviceOperation",
+          "label": "close",
+          "group": "SupportDesk.desk.TicketService",
+          "x": 1232,
+          "y": 170,
+          "w": 176,
+          "h": 46,
+          "detail": "close is a service operation declared in support/support.ddd, with 2 connections shown in this view.",
+          "provenance": "support/support.ddd"
+        },
+        {
+          "id": "serviceOperation:support/support.ddd#SupportDesk.desk.TicketService.findTickets",
+          "kind": "serviceOperation",
+          "label": "findTickets",
+          "group": "SupportDesk.desk.TicketService",
+          "x": 1420,
+          "y": 170,
+          "w": 176,
+          "h": 46,
+          "detail": "findTickets is a service operation declared in support/support.ddd, with one connection shown in this view.",
+          "provenance": "support/support.ddd"
+        },
+        {
+          "id": "serviceOperation:support/support.ddd#SupportDesk.desk.TicketService.getTicket",
+          "kind": "serviceOperation",
+          "label": "getTicket",
+          "group": "SupportDesk.desk.TicketService",
+          "x": 1232,
+          "y": 228,
+          "w": 176,
+          "h": 46,
+          "detail": "getTicket is a service operation declared in support/support.ddd, with one connection shown in this view.",
+          "provenance": "support/support.ddd"
+        },
+        {
+          "id": "serviceOperation:support/support.ddd#SupportDesk.desk.TicketService.listTickets",
+          "kind": "serviceOperation",
+          "label": "listTickets",
+          "group": "SupportDesk.desk.TicketService",
+          "x": 1420,
+          "y": 228,
+          "w": 176,
+          "h": 46,
+          "detail": "listTickets is a service operation declared in support/support.ddd, with one connection shown in this view.",
+          "provenance": "support/support.ddd"
+        },
+        {
+          "id": "serviceOperation:support/support.ddd#SupportDesk.desk.TicketService.markRead",
+          "kind": "serviceOperation",
+          "label": "markRead",
+          "group": "SupportDesk.desk.TicketService",
+          "x": 1232,
+          "y": 286,
+          "w": 176,
+          "h": 46,
+          "detail": "markRead is a service operation declared in support/support.ddd, with one connection shown in this view.",
+          "provenance": "support/support.ddd"
+        },
+        {
+          "id": "serviceOperation:support/support.ddd#SupportDesk.desk.TicketService.raise",
+          "kind": "serviceOperation",
+          "label": "raise",
+          "group": "SupportDesk.desk.TicketService",
+          "x": 1420,
+          "y": 286,
+          "w": 176,
+          "h": 46,
+          "detail": "raise is a service operation declared in support/support.ddd, with one connection shown in this view.",
+          "provenance": "support/support.ddd"
+        },
+        {
+          "id": "serviceOperation:support/support.ddd#SupportDesk.desk.TicketService.raiseRefund",
+          "kind": "serviceOperation",
+          "label": "raiseRefund",
+          "group": "SupportDesk.desk.TicketService",
+          "x": 1232,
+          "y": 344,
+          "w": 176,
+          "h": 46,
+          "detail": "raiseRefund is a service operation declared in support/support.ddd, with one connection shown in this view.",
+          "provenance": "support/support.ddd"
+        },
+        {
+          "id": "serviceOperation:support/support.ddd#SupportDesk.desk.TicketService.refundTicket",
+          "kind": "serviceOperation",
+          "label": "refundTicket",
+          "group": "SupportDesk.desk.TicketService",
+          "x": 1420,
+          "y": 344,
+          "w": 176,
+          "h": 46,
+          "detail": "refundTicket is a service operation declared in support/support.ddd, with one connection shown in this view.",
+          "provenance": "support/support.ddd"
+        },
+        {
+          "id": "serviceOperation:support/support.ddd#SupportDesk.desk.TicketService.reject",
+          "kind": "serviceOperation",
+          "label": "reject",
+          "group": "SupportDesk.desk.TicketService",
+          "x": 1232,
+          "y": 402,
+          "w": 176,
+          "h": 46,
+          "detail": "reject is a service operation declared in support/support.ddd, with one connection shown in this view.",
+          "provenance": "support/support.ddd"
+        },
+        {
+          "id": "serviceOperation:support/support.ddd#SupportDesk.desk.TicketService.resolveTicket",
+          "kind": "serviceOperation",
+          "label": "resolveTicket",
+          "group": "SupportDesk.desk.TicketService",
+          "x": 1420,
+          "y": 402,
+          "w": 176,
+          "h": 46,
+          "detail": "resolveTicket is a service operation declared in support/support.ddd, with one connection shown in this view.",
+          "provenance": "support/support.ddd"
+        },
+        {
+          "id": "serviceOperation:support/support.ddd#SupportDesk.desk.TicketService.updateTicket",
+          "kind": "serviceOperation",
+          "label": "updateTicket",
+          "group": "SupportDesk.desk.TicketService",
+          "x": 1232,
+          "y": 460,
+          "w": 176,
+          "h": 46,
+          "detail": "updateTicket is a service operation declared in support/support.ddd, with one connection shown in this view.",
+          "provenance": "support/support.ddd"
+        }
+      ],
+      "edges": [
+        {
+          "from": "module:support/support.ddd#SupportDesk.desk",
+          "to": "designApplication:support/support.ddd#SupportDesk",
+          "kind": "memberOf"
+        },
+        {
+          "from": "module:support/support.ddd#SupportDesk.people",
+          "to": "designApplication:support/support.ddd#SupportDesk",
+          "kind": "memberOf"
+        },
+        {
+          "from": "repository:support/support.ddd#SupportDesk.desk.TicketRepository",
+          "to": "module:support/support.ddd#SupportDesk.desk",
+          "kind": "memberOf"
+        },
+        {
+          "from": "repositoryOperation:support/support.ddd#SupportDesk.desk.TicketRepository.delete",
+          "to": "repository:support/support.ddd#SupportDesk.desk.TicketRepository",
+          "kind": "memberOf"
+        },
+        {
+          "from": "repositoryOperation:support/support.ddd#SupportDesk.desk.TicketRepository.findAll",
+          "to": "repository:support/support.ddd#SupportDesk.desk.TicketRepository",
+          "kind": "memberOf"
+        },
+        {
+          "from": "repositoryOperation:support/support.ddd#SupportDesk.desk.TicketRepository.findByExample",
+          "to": "repository:support/support.ddd#SupportDesk.desk.TicketRepository",
+          "kind": "memberOf"
+        },
+        {
+          "from": "repositoryOperation:support/support.ddd#SupportDesk.desk.TicketRepository.findById",
+          "to": "repository:support/support.ddd#SupportDesk.desk.TicketRepository",
+          "kind": "memberOf"
+        },
+        {
+          "from": "repositoryOperation:support/support.ddd#SupportDesk.desk.TicketRepository.findByKeys",
+          "to": "repository:support/support.ddd#SupportDesk.desk.TicketRepository",
+          "kind": "memberOf"
+        },
+        {
+          "from": "repositoryOperation:support/support.ddd#SupportDesk.desk.TicketRepository.findByTitle",
+          "to": "repository:support/support.ddd#SupportDesk.desk.TicketRepository",
+          "kind": "memberOf"
+        },
+        {
+          "from": "repositoryOperation:support/support.ddd#SupportDesk.desk.TicketRepository.save",
+          "to": "repository:support/support.ddd#SupportDesk.desk.TicketRepository",
+          "kind": "memberOf"
+        },
+        {
+          "from": "search:support/support.ddd#SupportDesk.desk.TicketSearch",
+          "to": "module:support/support.ddd#SupportDesk.desk",
+          "kind": "memberOf"
+        },
+        {
+          "from": "service:support/support.ddd#SupportDesk.desk.TicketService",
+          "to": "module:support/support.ddd#SupportDesk.desk",
+          "kind": "memberOf"
+        },
+        {
+          "from": "service:support/support.ddd#SupportDesk.desk.TicketService",
+          "to": "repository:support/support.ddd#SupportDesk.desk.TicketRepository",
+          "kind": "injects"
+        },
+        {
+          "from": "serviceOperation:support/support.ddd#SupportDesk.desk.TicketService.approve",
+          "to": "service:support/support.ddd#SupportDesk.desk.TicketService",
+          "kind": "memberOf"
+        },
+        {
+          "from": "serviceOperation:support/support.ddd#SupportDesk.desk.TicketService.approveRefund",
+          "to": "service:support/support.ddd#SupportDesk.desk.TicketService",
+          "kind": "memberOf"
+        },
+        {
+          "from": "serviceOperation:support/support.ddd#SupportDesk.desk.TicketService.assign",
+          "to": "service:support/support.ddd#SupportDesk.desk.TicketService",
+          "kind": "memberOf"
+        },
+        {
+          "from": "serviceOperation:support/support.ddd#SupportDesk.desk.TicketService.claimTicket",
+          "to": "service:support/support.ddd#SupportDesk.desk.TicketService",
+          "kind": "memberOf"
+        },
+        {
+          "from": "serviceOperation:support/support.ddd#SupportDesk.desk.TicketService.close",
+          "to": "repositoryOperation:support/support.ddd#SupportDesk.desk.TicketRepository.delete",
+          "kind": "forwardsTo"
+        },
+        {
+          "from": "serviceOperation:support/support.ddd#SupportDesk.desk.TicketService.close",
+          "to": "service:support/support.ddd#SupportDesk.desk.TicketService",
+          "kind": "memberOf"
+        },
+        {
+          "from": "serviceOperation:support/support.ddd#SupportDesk.desk.TicketService.findTickets",
+          "to": "service:support/support.ddd#SupportDesk.desk.TicketService",
+          "kind": "memberOf"
+        },
+        {
+          "from": "serviceOperation:support/support.ddd#SupportDesk.desk.TicketService.getTicket",
+          "to": "service:support/support.ddd#SupportDesk.desk.TicketService",
+          "kind": "memberOf"
+        },
+        {
+          "from": "serviceOperation:support/support.ddd#SupportDesk.desk.TicketService.listTickets",
+          "to": "service:support/support.ddd#SupportDesk.desk.TicketService",
+          "kind": "memberOf"
+        },
+        {
+          "from": "serviceOperation:support/support.ddd#SupportDesk.desk.TicketService.markRead",
+          "to": "service:support/support.ddd#SupportDesk.desk.TicketService",
+          "kind": "memberOf"
+        },
+        {
+          "from": "serviceOperation:support/support.ddd#SupportDesk.desk.TicketService.raise",
+          "to": "service:support/support.ddd#SupportDesk.desk.TicketService",
+          "kind": "memberOf"
+        },
+        {
+          "from": "serviceOperation:support/support.ddd#SupportDesk.desk.TicketService.raiseRefund",
+          "to": "service:support/support.ddd#SupportDesk.desk.TicketService",
+          "kind": "memberOf"
+        },
+        {
+          "from": "serviceOperation:support/support.ddd#SupportDesk.desk.TicketService.refundTicket",
+          "to": "service:support/support.ddd#SupportDesk.desk.TicketService",
+          "kind": "memberOf"
+        },
+        {
+          "from": "serviceOperation:support/support.ddd#SupportDesk.desk.TicketService.reject",
+          "to": "service:support/support.ddd#SupportDesk.desk.TicketService",
+          "kind": "memberOf"
+        },
+        {
+          "from": "serviceOperation:support/support.ddd#SupportDesk.desk.TicketService.resolveTicket",
+          "to": "service:support/support.ddd#SupportDesk.desk.TicketService",
+          "kind": "memberOf"
+        },
+        {
+          "from": "serviceOperation:support/support.ddd#SupportDesk.desk.TicketService.updateTicket",
+          "to": "service:support/support.ddd#SupportDesk.desk.TicketService",
+          "kind": "memberOf"
+        }
+      ]
+    },
+    {
+      "id": "authorisation",
+      "label": "Authorisation",
+      "surface": "actor",
+      "viewport": {
+        "width": 404,
+        "height": 352
+      },
+      "groups": [
+        {
+          "key": "Support",
+          "label": "Support",
+          "x": 20,
+          "y": 20,
+          "w": 364,
+          "h": 312,
+          "count": 9
+        }
+      ],
+      "nodes": [
+        {
+          "id": "actor:support/support.actor#Support.Agent",
+          "kind": "actor",
+          "label": "Agent",
+          "group": "Support",
+          "x": 20,
+          "y": 54,
+          "w": 176,
+          "h": 46,
+          "detail": "Agent is an actor declared in support/support.actor, with 5 connections shown in this view.",
+          "provenance": "support/support.actor"
+        },
+        {
+          "id": "actor:support/support.actor#Support.Customer",
+          "kind": "actor",
+          "label": "Customer",
+          "group": "Support",
+          "x": 208,
+          "y": 54,
+          "w": 176,
+          "h": 46,
+          "detail": "Customer is an actor declared in support/support.actor, with 2 connections shown in this view.",
+          "provenance": "support/support.actor"
+        },
+        {
+          "id": "actor:support/support.actor#Support.Finance",
+          "kind": "actor",
+          "label": "Finance",
+          "group": "Support",
+          "x": 20,
+          "y": 112,
+          "w": 176,
+          "h": 46,
+          "detail": "Finance is an actor declared in support/support.actor, with 2 connections shown in this view.",
+          "provenance": "support/support.actor"
+        },
+        {
+          "id": "actor:support/support.actor#Support.Manager",
+          "kind": "actor",
+          "label": "Manager",
+          "group": "Support",
+          "x": 208,
+          "y": 112,
+          "w": 176,
+          "h": 46,
+          "detail": "Manager is an actor declared in support/support.actor, with 4 connections shown in this view.",
+          "provenance": "support/support.actor"
+        },
+        {
+          "id": "capability:support/support.actor#Support.ApproveRefund",
+          "kind": "capability",
+          "label": "ApproveRefund",
+          "group": "Support",
+          "x": 20,
+          "y": 170,
+          "w": 176,
+          "h": 46,
+          "detail": "ApproveRefund is a capability declared in support/support.actor, with 3 connections shown in this view.",
+          "provenance": "support/support.actor"
+        },
+        {
+          "id": "capability:support/support.actor#Support.RaiseRefund",
+          "kind": "capability",
+          "label": "RaiseRefund",
+          "group": "Support",
+          "x": 208,
+          "y": 170,
+          "w": 176,
+          "h": 46,
+          "detail": "RaiseRefund is a capability declared in support/support.actor, with 3 connections shown in this view.",
+          "provenance": "support/support.actor"
+        },
+        {
+          "id": "capability:support/support.actor#Support.ReadTicket",
+          "kind": "capability",
+          "label": "ReadTicket",
+          "group": "Support",
+          "x": 20,
+          "y": 228,
+          "w": 176,
+          "h": 46,
+          "detail": "ReadTicket is a capability declared in support/support.actor, with 3 connections shown in this view.",
+          "provenance": "support/support.actor"
+        },
+        {
+          "id": "capability:support/support.actor#Support.ResolveTicket",
+          "kind": "capability",
+          "label": "ResolveTicket",
+          "group": "Support",
+          "x": 208,
+          "y": 228,
+          "w": 176,
+          "h": 46,
+          "detail": "ResolveTicket is a capability declared in support/support.actor, with 2 connections shown in this view.",
+          "provenance": "support/support.actor"
+        },
+        {
+          "id": "capability:support/support.actor#Support.UpdateTicket",
+          "kind": "capability",
+          "label": "UpdateTicket",
+          "group": "Support",
+          "x": 20,
+          "y": 286,
+          "w": 176,
+          "h": 46,
+          "detail": "UpdateTicket is a capability declared in support/support.actor, with 2 connections shown in this view.",
+          "provenance": "support/support.actor"
+        }
+      ],
+      "edges": [
+        {
+          "from": "actor:support/support.actor#Support.Agent",
+          "to": "actor:support/support.actor#Support.Customer",
+          "kind": "extends"
+        },
+        {
+          "from": "actor:support/support.actor#Support.Agent",
+          "to": "capability:support/support.actor#Support.RaiseRefund",
+          "kind": "permits"
+        },
+        {
+          "from": "actor:support/support.actor#Support.Agent",
+          "to": "capability:support/support.actor#Support.ReadTicket",
+          "kind": "permits"
+        },
+        {
+          "from": "actor:support/support.actor#Support.Agent",
+          "to": "capability:support/support.actor#Support.UpdateTicket",
+          "kind": "permits"
+        },
+        {
+          "from": "actor:support/support.actor#Support.Customer",
+          "to": "capability:support/support.actor#Support.ReadTicket",
+          "kind": "permits"
+        },
+        {
+          "from": "actor:support/support.actor#Support.Finance",
+          "to": "capability:support/support.actor#Support.ApproveRefund",
+          "kind": "permits"
+        },
+        {
+          "from": "actor:support/support.actor#Support.Finance",
+          "to": "capability:support/support.actor#Support.ResolveTicket",
+          "kind": "forbids"
+        },
+        {
+          "from": "actor:support/support.actor#Support.Manager",
+          "to": "actor:support/support.actor#Support.Agent",
+          "kind": "extends"
+        },
+        {
+          "from": "actor:support/support.actor#Support.Manager",
+          "to": "capability:support/support.actor#Support.ReadTicket",
+          "kind": "permits"
+        },
+        {
+          "from": "actor:support/support.actor#Support.Manager",
+          "to": "capability:support/support.actor#Support.ResolveTicket",
+          "kind": "permits"
+        },
+        {
+          "from": "actor:support/support.actor#Support.Manager",
+          "to": "capability:support/support.actor#Support.UpdateTicket",
+          "kind": "permits"
+        },
+        {
+          "from": "capability:support/support.actor#Support.ApproveRefund",
+          "to": "capability:support/support.actor#Support.RaiseRefund",
+          "kind": "excludes"
+        },
+        {
+          "from": "capability:support/support.actor#Support.RaiseRefund",
+          "to": "capability:support/support.actor#Support.ApproveRefund",
+          "kind": "excludes"
+        }
+      ]
+    },
+    {
+      "id": "experience",
+      "label": "Experience",
+      "surface": "ifml",
+      "viewport": {
+        "width": 1832,
+        "height": 410
+      },
+      "groups": [
+        {
+          "key": "Inbox",
+          "label": "Inbox",
+          "x": 20,
+          "y": 20,
+          "w": 176,
+          "h": 80,
+          "count": 1
+        },
+        {
+          "key": "Queue",
+          "label": "Queue",
+          "x": 236,
+          "y": 20,
+          "w": 364,
+          "h": 138,
+          "count": 3
+        },
+        {
+          "key": "cli",
+          "label": "cli",
+          "x": 640,
+          "y": 20,
+          "w": 364,
+          "h": 196,
+          "count": 6
+        },
+        {
+          "key": "support",
+          "label": "support",
+          "x": 1044,
+          "y": 20,
+          "w": 364,
+          "h": 370,
+          "count": 12
+        },
+        {
+          "key": "tickets",
+          "label": "tickets",
+          "x": 1448,
+          "y": 20,
+          "w": 364,
+          "h": 138,
+          "count": 3
+        }
+      ],
+      "nodes": [
+        {
+          "id": "component:support/support.ifml#Inbox.escalations",
+          "kind": "component",
+          "label": "escalations",
+          "group": "Inbox",
+          "x": 20,
+          "y": 54,
+          "w": 176,
+          "h": 46,
+          "detail": "escalations is a component declared in support/support.ifml, with one connection shown in this view.",
+          "provenance": "support/support.ifml"
+        },
+        {
+          "id": "component:support/support.ifml#Queue.assessment",
+          "kind": "component",
+          "label": "assessment",
+          "group": "Queue",
+          "x": 236,
+          "y": 54,
+          "w": 176,
+          "h": 46,
+          "detail": "assessment is a component declared in support/support.ifml, with 0 connections shown in this view.",
+          "provenance": "support/support.ifml"
+        },
+        {
+          "id": "component:support/support.ifml#Queue.intake",
+          "kind": "component",
+          "label": "intake",
+          "group": "Queue",
+          "x": 424,
+          "y": 54,
+          "w": 176,
+          "h": 46,
+          "detail": "intake is a component declared in support/support.ifml, with one connection shown in this view.",
+          "provenance": "support/support.ifml"
+        },
+        {
+          "id": "component:support/support.ifml#Queue.refunds",
+          "kind": "component",
+          "label": "refunds",
+          "group": "Queue",
+          "x": 236,
+          "y": 112,
+          "w": 176,
+          "h": 46,
+          "detail": "refunds is a component declared in support/support.ifml, with one connection shown in this view.",
+          "provenance": "support/support.ifml"
+        },
+        {
+          "id": "flow:support/cli.ifml#cli",
+          "kind": "flow",
+          "label": "cli",
+          "group": "cli",
+          "x": 640,
+          "y": 54,
+          "w": 176,
+          "h": 46,
+          "detail": "cli is an interaction flow declared in support/cli.ifml, with 5 connections shown in this view.",
+          "provenance": "support/cli.ifml"
+        },
+        {
+          "id": "action:support/cli.ifml#ClaimTicket",
+          "kind": "action",
+          "label": "ClaimTicket",
+          "group": "cli",
+          "x": 828,
+          "y": 54,
+          "w": 176,
+          "h": 46,
+          "detail": "ClaimTicket is an action declared in support/cli.ifml, with 2 connections shown in this view.",
+          "provenance": "support/cli.ifml"
+        },
+        {
+          "id": "action:support/cli.ifml#GetTicket",
+          "kind": "action",
+          "label": "GetTicket",
+          "group": "cli",
+          "x": 640,
+          "y": 112,
+          "w": 176,
+          "h": 46,
+          "detail": "GetTicket is an action declared in support/cli.ifml, with 2 connections shown in this view.",
+          "provenance": "support/cli.ifml"
+        },
+        {
+          "id": "action:support/cli.ifml#ListTickets",
+          "kind": "action",
+          "label": "ListTickets",
+          "group": "cli",
+          "x": 828,
+          "y": 112,
+          "w": 176,
+          "h": 46,
+          "detail": "ListTickets is an action declared in support/cli.ifml, with 2 connections shown in this view.",
+          "provenance": "support/cli.ifml"
+        },
+        {
+          "id": "action:support/cli.ifml#RefundTicket",
+          "kind": "action",
+          "label": "RefundTicket",
+          "group": "cli",
+          "x": 640,
+          "y": 170,
+          "w": 176,
+          "h": 46,
+          "detail": "RefundTicket is an action declared in support/cli.ifml, with 2 connections shown in this view.",
+          "provenance": "support/cli.ifml"
+        },
+        {
+          "id": "command:support/cli.ifml#tickets",
+          "kind": "command",
+          "label": "tickets",
+          "group": "cli",
+          "x": 828,
+          "y": 170,
+          "w": 176,
+          "h": 46,
+          "detail": "tickets is a command declared in support/cli.ifml, with 2 connections shown in this view.",
+          "provenance": "support/cli.ifml"
+        },
+        {
+          "id": "flow:support/support.ifml#support",
+          "kind": "flow",
+          "label": "support",
+          "group": "support",
+          "x": 1044,
+          "y": 54,
+          "w": 176,
+          "h": 46,
+          "detail": "support is an interaction flow declared in support/support.ifml, with 11 connections shown in this view.",
+          "provenance": "support/support.ifml"
+        },
+        {
+          "id": "view:support/support.ifml#Folder",
+          "kind": "view",
+          "label": "Folder",
+          "group": "support",
+          "x": 1232,
+          "y": 54,
+          "w": 176,
+          "h": 46,
+          "detail": "Folder is a view declared in support/support.ifml, with one connection shown in this view.",
+          "provenance": "support/support.ifml"
+        },
+        {
+          "id": "view:support/support.ifml#Inbox",
+          "kind": "view",
+          "label": "Inbox",
+          "group": "support",
+          "x": 1044,
+          "y": 112,
+          "w": 176,
+          "h": 46,
+          "detail": "Inbox is a view declared in support/support.ifml, with one connection shown in this view.",
+          "provenance": "support/support.ifml"
+        },
+        {
+          "id": "view:support/support.ifml#ItemDetail",
+          "kind": "view",
+          "label": "ItemDetail",
+          "group": "support",
+          "x": 1232,
+          "y": 112,
+          "w": 176,
+          "h": 46,
+          "detail": "ItemDetail is a view declared in support/support.ifml, with one connection shown in this view.",
+          "provenance": "support/support.ifml"
+        },
+        {
+          "id": "view:support/support.ifml#Queue",
+          "kind": "view",
+          "label": "Queue",
+          "group": "support",
+          "x": 1044,
+          "y": 170,
+          "w": 176,
+          "h": 46,
+          "detail": "Queue is a view declared in support/support.ifml, with 2 connections shown in this view.",
+          "provenance": "support/support.ifml"
+        },
+        {
+          "id": "view:support/support.ifml#WorkItem",
+          "kind": "view",
+          "label": "WorkItem",
+          "group": "support",
+          "x": 1232,
+          "y": 170,
+          "w": 176,
+          "h": 46,
+          "detail": "WorkItem is a view declared in support/support.ifml, with one connection shown in this view.",
+          "provenance": "support/support.ifml"
+        },
+        {
+          "id": "action:support/support.ifml#Approve",
+          "kind": "action",
+          "label": "Approve",
+          "group": "support",
+          "x": 1044,
+          "y": 228,
+          "w": 176,
+          "h": 46,
+          "detail": "Approve is an action declared in support/support.ifml, with one connection shown in this view.",
+          "provenance": "support/support.ifml"
+        },
+        {
+          "id": "action:support/support.ifml#ApproveRefund",
+          "kind": "action",
+          "label": "ApproveRefund",
+          "group": "support",
+          "x": 1232,
+          "y": 228,
+          "w": 176,
+          "h": 46,
+          "detail": "ApproveRefund is an action declared in support/support.ifml, with 2 connections shown in this view.",
+          "provenance": "support/support.ifml"
+        },
+        {
+          "id": "action:support/support.ifml#Assign",
+          "kind": "action",
+          "label": "Assign",
+          "group": "support",
+          "x": 1044,
+          "y": 286,
+          "w": 176,
+          "h": 46,
+          "detail": "Assign is an action declared in support/support.ifml, with one connection shown in this view.",
+          "provenance": "support/support.ifml"
+        },
+        {
+          "id": "action:support/support.ifml#MarkRead",
+          "kind": "action",
+          "label": "MarkRead",
+          "group": "support",
+          "x": 1232,
+          "y": 286,
+          "w": 176,
+          "h": 46,
+          "detail": "MarkRead is an action declared in support/support.ifml, with one connection shown in this view.",
+          "provenance": "support/support.ifml"
+        },
+        {
+          "id": "action:support/support.ifml#RaiseRefund",
+          "kind": "action",
+          "label": "RaiseRefund",
+          "group": "support",
+          "x": 1044,
+          "y": 344,
+          "w": 176,
+          "h": 46,
+          "detail": "RaiseRefund is an action declared in support/support.ifml, with 2 connections shown in this view.",
+          "provenance": "support/support.ifml"
+        },
+        {
+          "id": "action:support/support.ifml#Reject",
+          "kind": "action",
+          "label": "Reject",
+          "group": "support",
+          "x": 1232,
+          "y": 344,
+          "w": 176,
+          "h": 46,
+          "detail": "Reject is an action declared in support/support.ifml, with one connection shown in this view.",
+          "provenance": "support/support.ifml"
+        },
+        {
+          "id": "command:support/cli.ifml#tickets.claim",
+          "kind": "command",
+          "label": "claim",
+          "group": "tickets",
+          "x": 1448,
+          "y": 54,
+          "w": 176,
+          "h": 46,
+          "detail": "claim is a command declared in support/cli.ifml, with one connection shown in this view.",
+          "provenance": "support/cli.ifml"
+        },
+        {
+          "id": "command:support/cli.ifml#tickets.refund",
+          "kind": "command",
+          "label": "refund",
+          "group": "tickets",
+          "x": 1636,
+          "y": 54,
+          "w": 176,
+          "h": 46,
+          "detail": "refund is a command declared in support/cli.ifml, with one connection shown in this view.",
+          "provenance": "support/cli.ifml"
+        },
+        {
+          "id": "command:support/cli.ifml#tickets.show",
+          "kind": "command",
+          "label": "show",
+          "group": "tickets",
+          "x": 1448,
+          "y": 112,
+          "w": 176,
+          "h": 46,
+          "detail": "show is a command declared in support/cli.ifml, with one connection shown in this view.",
+          "provenance": "support/cli.ifml"
+        }
+      ],
+      "edges": [
+        {
+          "from": "action:support/cli.ifml#ClaimTicket",
+          "to": "flow:support/cli.ifml#cli",
+          "kind": "memberOf"
+        },
+        {
+          "from": "action:support/cli.ifml#GetTicket",
+          "to": "flow:support/cli.ifml#cli",
+          "kind": "memberOf"
+        },
+        {
+          "from": "action:support/cli.ifml#ListTickets",
+          "to": "flow:support/cli.ifml#cli",
+          "kind": "memberOf"
+        },
+        {
+          "from": "action:support/cli.ifml#RefundTicket",
+          "to": "flow:support/cli.ifml#cli",
+          "kind": "memberOf"
+        },
+        {
+          "from": "action:support/support.ifml#Approve",
+          "to": "flow:support/support.ifml#support",
+          "kind": "memberOf"
+        },
+        {
+          "from": "action:support/support.ifml#ApproveRefund",
+          "to": "flow:support/support.ifml#support",
+          "kind": "memberOf"
+        },
+        {
+          "from": "action:support/support.ifml#Assign",
+          "to": "flow:support/support.ifml#support",
+          "kind": "memberOf"
+        },
+        {
+          "from": "action:support/support.ifml#MarkRead",
+          "to": "flow:support/support.ifml#support",
+          "kind": "memberOf"
+        },
+        {
+          "from": "action:support/support.ifml#RaiseRefund",
+          "to": "flow:support/support.ifml#support",
+          "kind": "memberOf"
+        },
+        {
+          "from": "action:support/support.ifml#Reject",
+          "to": "flow:support/support.ifml#support",
+          "kind": "memberOf"
+        },
+        {
+          "from": "command:support/cli.ifml#tickets",
+          "to": "action:support/cli.ifml#ListTickets",
+          "kind": "invokesAction"
+        },
+        {
+          "from": "command:support/cli.ifml#tickets",
+          "to": "flow:support/cli.ifml#cli",
+          "kind": "memberOf"
+        },
+        {
+          "from": "command:support/cli.ifml#tickets.claim",
+          "to": "action:support/cli.ifml#ClaimTicket",
+          "kind": "invokesAction"
+        },
+        {
+          "from": "command:support/cli.ifml#tickets.refund",
+          "to": "action:support/cli.ifml#RefundTicket",
+          "kind": "invokesAction"
+        },
+        {
+          "from": "command:support/cli.ifml#tickets.show",
+          "to": "action:support/cli.ifml#GetTicket",
+          "kind": "invokesAction"
+        },
+        {
+          "from": "component:support/support.ifml#Inbox.escalations",
+          "to": "view:support/support.ifml#Queue",
+          "kind": "navigates"
+        },
+        {
+          "from": "component:support/support.ifml#Queue.intake",
+          "to": "action:support/support.ifml#RaiseRefund",
+          "kind": "invokesAction"
+        },
+        {
+          "from": "component:support/support.ifml#Queue.refunds",
+          "to": "action:support/support.ifml#ApproveRefund",
+          "kind": "invokesAction"
+        },
+        {
+          "from": "view:support/support.ifml#Folder",
+          "to": "flow:support/support.ifml#support",
+          "kind": "memberOf"
+        },
+        {
+          "from": "view:support/support.ifml#Inbox",
+          "to": "flow:support/support.ifml#support",
+          "kind": "memberOf"
+        },
+        {
+          "from": "view:support/support.ifml#ItemDetail",
+          "to": "flow:support/support.ifml#support",
+          "kind": "memberOf"
+        },
+        {
+          "from": "view:support/support.ifml#Queue",
+          "to": "flow:support/support.ifml#support",
+          "kind": "memberOf"
+        },
+        {
+          "from": "view:support/support.ifml#WorkItem",
+          "to": "flow:support/support.ifml#support",
+          "kind": "memberOf"
+        }
+      ]
+    },
+    {
+      "id": "deployment",
+      "label": "Deployment",
+      "surface": "deploy",
+      "viewport": {
+        "width": 404,
+        "height": 352
+      },
+      "groups": [
+        {
+          "key": "SupportDesk",
+          "label": "SupportDesk",
+          "x": 20,
+          "y": 20,
+          "w": 364,
+          "h": 312,
+          "count": 10
+        }
+      ],
+      "nodes": [
+        {
+          "id": "deployment:support/support.deploy#SupportDesk.edgeLive",
+          "kind": "deployment",
+          "label": "edgeLive",
+          "group": "SupportDesk",
+          "x": 20,
+          "y": 54,
+          "w": 176,
+          "h": 46,
+          "detail": "edgeLive is a deployment declared in support/support.deploy, with 2 connections shown in this view.",
+          "provenance": "support/support.deploy"
+        },
+        {
+          "id": "deployment:support/support.deploy#SupportDesk.production",
+          "kind": "deployment",
+          "label": "production",
+          "group": "SupportDesk",
+          "x": 208,
+          "y": 54,
+          "w": 176,
+          "h": 46,
+          "detail": "production is a deployment declared in support/support.deploy, with 2 connections shown in this view.",
+          "provenance": "support/support.deploy"
+        },
+        {
+          "id": "deployApplication:support/support.deploy#SupportDesk",
+          "kind": "deployApplication",
+          "label": "SupportDesk",
+          "group": "SupportDesk",
+          "x": 20,
+          "y": 112,
+          "w": 176,
+          "h": 46,
+          "detail": "SupportDesk is a deployment application declared in support/support.deploy, with 7 connections shown in this view.",
+          "provenance": "support/support.deploy"
+        },
+        {
+          "id": "deployComponent:support/support.deploy#SupportDesk.analytics_service",
+          "kind": "deployComponent",
+          "label": "analytics_service",
+          "group": "SupportDesk",
+          "x": 208,
+          "y": 112,
+          "w": 176,
+          "h": 46,
+          "detail": "analytics_service is a deployment component declared in support/support.deploy, with one connection shown in this view.",
+          "provenance": "support/support.deploy"
+        },
+        {
+          "id": "deployComponent:support/support.deploy#SupportDesk.api",
+          "kind": "deployComponent",
+          "label": "api",
+          "group": "SupportDesk",
+          "x": 20,
+          "y": 170,
+          "w": 176,
+          "h": 46,
+          "detail": "api is a deployment component declared in support/support.deploy, with 3 connections shown in this view.",
+          "provenance": "support/support.deploy"
+        },
+        {
+          "id": "deployComponent:support/support.deploy#SupportDesk.db",
+          "kind": "deployComponent",
+          "label": "db",
+          "group": "SupportDesk",
+          "x": 208,
+          "y": 170,
+          "w": 176,
+          "h": 46,
+          "detail": "db is a deployment component declared in support/support.deploy, with 2 connections shown in this view.",
+          "provenance": "support/support.deploy"
+        },
+        {
+          "id": "deployComponent:support/support.deploy#SupportDesk.refund_approval_service",
+          "kind": "deployComponent",
+          "label": "refund_approval_service",
+          "group": "SupportDesk",
+          "x": 20,
+          "y": 228,
+          "w": 176,
+          "h": 46,
+          "detail": "refund_approval_service is a deployment component declared in support/support.deploy, with one connection shown in this view.",
+          "provenance": "support/support.deploy"
+        },
+        {
+          "id": "deployComponent:support/support.deploy#SupportDesk.web",
+          "kind": "deployComponent",
+          "label": "web",
+          "group": "SupportDesk",
+          "x": 208,
+          "y": 228,
+          "w": 176,
+          "h": 46,
+          "detail": "web is a deployment component declared in support/support.deploy, with 2 connections shown in this view.",
+          "provenance": "support/support.deploy"
+        },
+        {
+          "id": "deployProfile:support/support.deploy#edge",
+          "kind": "deployProfile",
+          "label": "edge",
+          "group": "SupportDesk",
+          "x": 20,
+          "y": 286,
+          "w": 176,
+          "h": 46,
+          "detail": "edge is a deployment profile declared in support/support.deploy, with one connection shown in this view.",
+          "provenance": "support/support.deploy"
+        },
+        {
+          "id": "deployProfile:support/support.deploy#production_k8s",
+          "kind": "deployProfile",
+          "label": "production_k8s",
+          "group": "SupportDesk",
+          "x": 208,
+          "y": 286,
+          "w": 176,
+          "h": 46,
+          "detail": "production_k8s is a deployment profile declared in support/support.deploy, with one connection shown in this view.",
+          "provenance": "support/support.deploy"
+        }
+      ],
+      "edges": [
+        {
+          "from": "deployComponent:support/support.deploy#SupportDesk.analytics_service",
+          "to": "deployApplication:support/support.deploy#SupportDesk",
+          "kind": "memberOf"
+        },
+        {
+          "from": "deployComponent:support/support.deploy#SupportDesk.api",
+          "to": "deployApplication:support/support.deploy#SupportDesk",
+          "kind": "memberOf"
+        },
+        {
+          "from": "deployComponent:support/support.deploy#SupportDesk.api",
+          "to": "deployComponent:support/support.deploy#SupportDesk.db",
+          "kind": "connects"
+        },
+        {
+          "from": "deployComponent:support/support.deploy#SupportDesk.db",
+          "to": "deployApplication:support/support.deploy#SupportDesk",
+          "kind": "memberOf"
+        },
+        {
+          "from": "deployComponent:support/support.deploy#SupportDesk.refund_approval_service",
+          "to": "deployApplication:support/support.deploy#SupportDesk",
+          "kind": "memberOf"
+        },
+        {
+          "from": "deployComponent:support/support.deploy#SupportDesk.web",
+          "to": "deployApplication:support/support.deploy#SupportDesk",
+          "kind": "memberOf"
+        },
+        {
+          "from": "deployComponent:support/support.deploy#SupportDesk.web",
+          "to": "deployComponent:support/support.deploy#SupportDesk.api",
+          "kind": "connects"
+        },
+        {
+          "from": "deployment:support/support.deploy#SupportDesk.edgeLive",
+          "to": "deployApplication:support/support.deploy#SupportDesk",
+          "kind": "deploys"
+        },
+        {
+          "from": "deployment:support/support.deploy#SupportDesk.edgeLive",
+          "to": "deployProfile:support/support.deploy#edge",
+          "kind": "usesProfile"
+        },
+        {
+          "from": "deployment:support/support.deploy#SupportDesk.production",
+          "to": "deployApplication:support/support.deploy#SupportDesk",
+          "kind": "deploys"
+        },
+        {
+          "from": "deployment:support/support.deploy#SupportDesk.production",
+          "to": "deployProfile:support/support.deploy#production_k8s",
+          "kind": "usesProfile"
+        }
+      ]
+    },
+    {
+      "id": "cases",
+      "label": "Cases",
+      "surface": "cmmn",
+      "viewport": {
+        "width": 808,
+        "height": 468
+      },
+      "groups": [
+        {
+          "key": "RefundDesk",
+          "label": "RefundDesk",
+          "x": 20,
+          "y": 20,
+          "w": 364,
+          "h": 428,
+          "count": 14
+        },
+        {
+          "key": "support",
+          "label": "support",
+          "x": 424,
+          "y": 20,
+          "w": 364,
+          "h": 196,
+          "count": 6
+        }
+      ],
+      "nodes": [
+        {
+          "id": "case:support/support.cmmn#RefundDesk",
+          "kind": "case",
+          "label": "RefundDesk",
+          "group": "RefundDesk",
+          "x": 20,
+          "y": 54,
+          "w": 176,
+          "h": 46,
+          "detail": "RefundDesk is a case declared in support/support.cmmn, with 13 connections shown in this view.",
+          "provenance": "support/support.cmmn"
+        },
+        {
+          "id": "planItem:support/support.cmmn#RefundDesk.ApproveRefund",
+          "kind": "planItem",
+          "label": "ApproveRefund",
+          "group": "RefundDesk",
+          "x": 208,
+          "y": 54,
+          "w": 176,
+          "h": 46,
+          "detail": "ApproveRefund is a plan item declared in support/support.cmmn, with 2 connections shown in this view.",
+          "provenance": "support/support.cmmn"
+        },
+        {
+          "id": "planItem:support/support.cmmn#RefundDesk.AssessAuthority",
+          "kind": "planItem",
+          "label": "AssessAuthority",
+          "group": "RefundDesk",
+          "x": 20,
+          "y": 112,
+          "w": 176,
+          "h": 46,
+          "detail": "AssessAuthority is a plan item declared in support/support.cmmn, with one connection shown in this view.",
+          "provenance": "support/support.cmmn"
+        },
+        {
+          "id": "planItem:support/support.cmmn#RefundDesk.AssessRefund",
+          "kind": "planItem",
+          "label": "AssessRefund",
+          "group": "RefundDesk",
+          "x": 208,
+          "y": 112,
+          "w": 176,
+          "h": 46,
+          "detail": "AssessRefund is a plan item declared in support/support.cmmn, with one connection shown in this view.",
+          "provenance": "support/support.cmmn"
+        },
+        {
+          "id": "planItem:support/support.cmmn#RefundDesk.Assessment",
+          "kind": "planItem",
+          "label": "Assessment",
+          "group": "RefundDesk",
+          "x": 20,
+          "y": 170,
+          "w": 176,
+          "h": 46,
+          "detail": "Assessment is a plan item declared in support/support.cmmn, with one connection shown in this view.",
+          "provenance": "support/support.cmmn"
+        },
+        {
+          "id": "planItem:support/support.cmmn#RefundDesk.CloseTicket",
+          "kind": "planItem",
+          "label": "CloseTicket",
+          "group": "RefundDesk",
+          "x": 208,
+          "y": 170,
+          "w": 176,
+          "h": 46,
+          "detail": "CloseTicket is a plan item declared in support/support.cmmn, with 2 connections shown in this view.",
+          "provenance": "support/support.cmmn"
+        },
+        {
+          "id": "planItem:support/support.cmmn#RefundDesk.Escalate",
+          "kind": "planItem",
+          "label": "Escalate",
+          "group": "RefundDesk",
+          "x": 20,
+          "y": 228,
+          "w": 176,
+          "h": 46,
+          "detail": "Escalate is a plan item declared in support/support.cmmn, with 2 connections shown in this view.",
+          "provenance": "support/support.cmmn"
+        },
+        {
+          "id": "planItem:support/support.cmmn#RefundDesk.RefundSettled",
+          "kind": "planItem",
+          "label": "RefundSettled",
+          "group": "RefundDesk",
+          "x": 208,
+          "y": 228,
+          "w": 176,
+          "h": 46,
+          "detail": "RefundSettled is a plan item declared in support/support.cmmn, with one connection shown in this view.",
+          "provenance": "support/support.cmmn"
+        },
+        {
+          "id": "planItem:support/support.cmmn#RefundDesk.ReviewTicket",
+          "kind": "planItem",
+          "label": "ReviewTicket",
+          "group": "RefundDesk",
+          "x": 20,
+          "y": 286,
+          "w": 176,
+          "h": 46,
+          "detail": "ReviewTicket is a plan item declared in support/support.cmmn, with 2 connections shown in this view.",
+          "provenance": "support/support.cmmn"
+        },
+        {
+          "id": "caseFileItem:support/support.cmmn#RefundDesk.decision",
+          "kind": "caseFileItem",
+          "label": "decision",
+          "group": "RefundDesk",
+          "x": 208,
+          "y": 286,
+          "w": 176,
+          "h": 46,
+          "detail": "decision is a case-file item declared in support/support.cmmn, with one connection shown in this view.",
+          "provenance": "support/support.cmmn"
+        },
+        {
+          "id": "caseFileItem:support/support.cmmn#RefundDesk.ticket",
+          "kind": "caseFileItem",
+          "label": "ticket",
+          "group": "RefundDesk",
+          "x": 20,
+          "y": 344,
+          "w": 176,
+          "h": 46,
+          "detail": "ticket is a case-file item declared in support/support.cmmn, with one connection shown in this view.",
+          "provenance": "support/support.cmmn"
+        },
+        {
+          "id": "caseRole:support/support.cmmn#RefundDesk.escalation",
+          "kind": "caseRole",
+          "label": "escalation",
+          "group": "RefundDesk",
+          "x": 208,
+          "y": 344,
+          "w": 176,
+          "h": 46,
+          "detail": "escalation is a case role declared in support/support.cmmn, with 2 connections shown in this view.",
+          "provenance": "support/support.cmmn"
+        },
+        {
+          "id": "caseRole:support/support.cmmn#RefundDesk.finance",
+          "kind": "caseRole",
+          "label": "finance",
+          "group": "RefundDesk",
+          "x": 20,
+          "y": 402,
+          "w": 176,
+          "h": 46,
+          "detail": "finance is a case role declared in support/support.cmmn, with 2 connections shown in this view.",
+          "provenance": "support/support.cmmn"
+        },
+        {
+          "id": "caseRole:support/support.cmmn#RefundDesk.triage",
+          "kind": "caseRole",
+          "label": "triage",
+          "group": "RefundDesk",
+          "x": 208,
+          "y": 402,
+          "w": 176,
+          "h": 46,
+          "detail": "triage is a case role declared in support/support.cmmn, with 3 connections shown in this view.",
+          "provenance": "support/support.cmmn"
+        },
+        {
+          "id": "useCase:support/support.uc#ApproveRefund",
+          "kind": "useCase",
+          "label": "ApproveRefund",
+          "group": "support",
+          "x": 424,
+          "y": 54,
+          "w": 176,
+          "h": 46,
+          "detail": "ApproveRefund is a use case declared in support/support.uc, with 0 connections shown in this view.",
+          "provenance": "support/support.uc"
+        },
+        {
+          "id": "useCase:support/support.uc#ClarifyTicket",
+          "kind": "useCase",
+          "label": "ClarifyTicket",
+          "group": "support",
+          "x": 612,
+          "y": 54,
+          "w": 176,
+          "h": 46,
+          "detail": "ClarifyTicket is a use case declared in support/support.uc, with 0 connections shown in this view.",
+          "provenance": "support/support.uc"
+        },
+        {
+          "id": "useCase:support/support.uc#EscalateInternal",
+          "kind": "useCase",
+          "label": "EscalateInternal",
+          "group": "support",
+          "x": 424,
+          "y": 112,
+          "w": 176,
+          "h": 46,
+          "detail": "EscalateInternal is a use case declared in support/support.uc, with 0 connections shown in this view.",
+          "provenance": "support/support.uc"
+        },
+        {
+          "id": "useCase:support/support.uc#MonitorQueue",
+          "kind": "useCase",
+          "label": "MonitorQueue",
+          "group": "support",
+          "x": 612,
+          "y": 112,
+          "w": 176,
+          "h": 46,
+          "detail": "MonitorQueue is a use case declared in support/support.uc, with 0 connections shown in this view.",
+          "provenance": "support/support.uc"
+        },
+        {
+          "id": "useCase:support/support.uc#RaiseRefund",
+          "kind": "useCase",
+          "label": "RaiseRefund",
+          "group": "support",
+          "x": 424,
+          "y": 170,
+          "w": 176,
+          "h": 46,
+          "detail": "RaiseRefund is a use case declared in support/support.uc, with 0 connections shown in this view.",
+          "provenance": "support/support.uc"
+        },
+        {
+          "id": "useCase:support/support.uc#TrackRefund",
+          "kind": "useCase",
+          "label": "TrackRefund",
+          "group": "support",
+          "x": 612,
+          "y": 170,
+          "w": 176,
+          "h": 46,
+          "detail": "TrackRefund is a use case declared in support/support.uc, with 0 connections shown in this view.",
+          "provenance": "support/support.uc"
+        }
+      ],
+      "edges": [
+        {
+          "from": "caseFileItem:support/support.cmmn#RefundDesk.decision",
+          "to": "case:support/support.cmmn#RefundDesk",
+          "kind": "memberOf"
+        },
+        {
+          "from": "caseFileItem:support/support.cmmn#RefundDesk.ticket",
+          "to": "case:support/support.cmmn#RefundDesk",
+          "kind": "memberOf"
+        },
+        {
+          "from": "caseRole:support/support.cmmn#RefundDesk.escalation",
+          "to": "case:support/support.cmmn#RefundDesk",
+          "kind": "memberOf"
+        },
+        {
+          "from": "caseRole:support/support.cmmn#RefundDesk.finance",
+          "to": "case:support/support.cmmn#RefundDesk",
+          "kind": "memberOf"
+        },
+        {
+          "from": "caseRole:support/support.cmmn#RefundDesk.triage",
+          "to": "case:support/support.cmmn#RefundDesk",
+          "kind": "memberOf"
+        },
+        {
+          "from": "planItem:support/support.cmmn#RefundDesk.ApproveRefund",
+          "to": "case:support/support.cmmn#RefundDesk",
+          "kind": "memberOf"
+        },
+        {
+          "from": "planItem:support/support.cmmn#RefundDesk.ApproveRefund",
+          "to": "caseRole:support/support.cmmn#RefundDesk.finance",
+          "kind": "assignedTo"
+        },
+        {
+          "from": "planItem:support/support.cmmn#RefundDesk.AssessAuthority",
+          "to": "case:support/support.cmmn#RefundDesk",
+          "kind": "memberOf"
+        },
+        {
+          "from": "planItem:support/support.cmmn#RefundDesk.AssessRefund",
+          "to": "case:support/support.cmmn#RefundDesk",
+          "kind": "memberOf"
+        },
+        {
+          "from": "planItem:support/support.cmmn#RefundDesk.Assessment",
+          "to": "case:support/support.cmmn#RefundDesk",
+          "kind": "memberOf"
+        },
+        {
+          "from": "planItem:support/support.cmmn#RefundDesk.CloseTicket",
+          "to": "case:support/support.cmmn#RefundDesk",
+          "kind": "memberOf"
+        },
+        {
+          "from": "planItem:support/support.cmmn#RefundDesk.CloseTicket",
+          "to": "caseRole:support/support.cmmn#RefundDesk.triage",
+          "kind": "assignedTo"
+        },
+        {
+          "from": "planItem:support/support.cmmn#RefundDesk.Escalate",
+          "to": "case:support/support.cmmn#RefundDesk",
+          "kind": "memberOf"
+        },
+        {
+          "from": "planItem:support/support.cmmn#RefundDesk.Escalate",
+          "to": "caseRole:support/support.cmmn#RefundDesk.escalation",
+          "kind": "assignedTo"
+        },
+        {
+          "from": "planItem:support/support.cmmn#RefundDesk.RefundSettled",
+          "to": "case:support/support.cmmn#RefundDesk",
+          "kind": "memberOf"
+        },
+        {
+          "from": "planItem:support/support.cmmn#RefundDesk.ReviewTicket",
+          "to": "case:support/support.cmmn#RefundDesk",
+          "kind": "memberOf"
+        },
+        {
+          "from": "planItem:support/support.cmmn#RefundDesk.ReviewTicket",
+          "to": "caseRole:support/support.cmmn#RefundDesk.triage",
+          "kind": "assignedTo"
+        }
+      ]
+    }
+  ]
+}

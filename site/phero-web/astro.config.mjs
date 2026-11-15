@@ -30,7 +30,7 @@ export default defineConfig({
   session: false,
   trailingSlash: 'ignore',
   build: { inlineStylesheets: 'auto' },
-  adapter: cloudflare({ imageService: 'compile' }),
+  adapter: cloudflare({ imageService: 'compile', prerenderEnvironment: 'node' }),
   integrations: [mdx(), sitemap()],
   vite: {
     plugins: [tailwindcss()],

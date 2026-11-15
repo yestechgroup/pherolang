@@ -1,0 +1,197 @@
+{
+  "formatVersion": 1,
+  "note": "Single source of truth for the shell commands printed on /install and /getting-started. Both pages render their code blocks from this file, and site/scripts/check-commands.mjs executes every entry here. `network: true` marks a step that needs a download (the release archive, SHA256SUMS, the git checkout for `cargo install`, or the archive those steps produced); the gate skips it. `cleanup` names paths the gate removes after the run so the walkthrough does not litter the repository root.",
+  "commands": [
+    {
+      "id": "version",
+      "label": "Confirm the compiler is on your PATH",
+      "run": "pherolang --version",
+      "expectExit": 0,
+      "expectStdout": "pherolang 0.3.0"
+    },
+    {
+      "id": "check",
+      "label": "Check one model file",
+      "run": "pherolang check examples/support/support.mox",
+      "expectExit": 0,
+      "expectStdout": "OK examples/support/support.mox"
+    },
+    {
+      "id": "ir",
+      "label": "Compile the model to its Core IR artifact",
+      "run": "pherolang ir examples/support/support.mox -o support.phero.json",
+      "expectExit": 0,
+      "cleanup": ["support.phero.json"]
+    },
+    {
+      "id": "artifact-check",
+      "label": "Validate the artifact without the compiler",
+      "run": "pherolang artifact check support.phero.json",
+      "expectExit": 0,
+      "expectStdout": "OK support.phero.json",
+      "cleanup": ["support.phero.json"]
+    },
+    {
+      "id": "gen-rust",
+      "label": "Generate Rust model code from the same source",
+      "run": "pherolang gen rust examples/support/support.mox -o support-gen",
+      "expectExit": 0,
+      "expectStdout": "generated Rust model code into support-gen",
+      "cleanup": ["support-gen"]
+    },
+    {
+      "id": "gen-json-schema",
+      "label": "Generate JSON Schema from the same source",
+      "run": "pherolang gen json-schema examples/support/support.mox --profile wire -o support-schema",
+      "expectExit": 0,
+      "expectStdout": "generated JSON Schema into support-schema",
+      "cleanup": ["support-schema"]
+    },
+    {
+      "id": "check-examples",
+      "label": "Check every surface in the example tree",
+      "run": "pherolang check examples/",
+      "expectExit": 0,
+      "expectStdout": "OK examples/support/support.cmmn"
+    },
+    {
+      "id": "graph-build",
+      "label": "Build the semantic graph across every surface",
+      "run": "pherolang graph build examples -o examples.graph.json",
+      "expectExit": 0,
+      "cleanup": ["examples.graph.json"]
+    },
+    {
+      "id": "explain",
+      "label": "Look up a diagnostic code",
+      "run": "pherolang explain E0104",
+      "expectExit": 0,
+      "expectStdout": "Unknown action reference"
+    },
+    {
+      "id": "lsp",
+      "label": "Start the language server (it exits when stdin closes)",
+      "run": "pherolang lsp",
+      "expectExit": 0
+    },
+    {
+      "id": "install-linux-cd",
+      "label": "Download step: work in a temporary directory",
+      "run": "cd \"$(mktemp -d)\"",
+      "expectExit": 0,
+      "network": true
+    },
+    {
+      "id": "install-linux-curl-asset",
+      "label": "Download step: fetch the x86_64 Linux archive",
+      "run": "curl -LO https://github.com/yestechgroup/pherolang/releases/download/v0.3.0/pherolang-0.3.0-x86_64-unknown-linux-gnu.tar.gz",
+      "expectExit": 0,
+      "network": true
+    },
+    {
+      "id": "install-linux-curl-sums",
+      "label": "Download step: fetch the release checksum manifest",
+      "run": "curl -LO https://github.com/yestechgroup/pherolang/releases/download/v0.3.0/SHA256SUMS",
+      "expectExit": 0,
+      "network": true
+    },
+    {
+      "id": "install-linux-sha",
+      "label": "Download step: verify the archive against SHA256SUMS",
+      "run": "sha256sum -c --ignore-missing SHA256SUMS",
+      "expectExit": 0,
+      "network": true
+    },
+    {
+      "id": "install-linux-tar",
+      "label": "Download step: extract the binary",
+      "run": "tar -xzf pherolang-0.3.0-x86_64-unknown-linux-gnu.tar.gz",
+      "expectExit": 0,
+      "network": true
+    },
+    {
+      "id": "install-linux-install",
+      "label": "Download step: put the binary on PATH",
+      "run": "sudo install -m 0755 pherolang /usr/local/bin/pherolang",
+      "expectExit": 0,
+      "network": true
+    },
+    {
+      "id": "install-linux-install-local",
+      "label": "Download step: put the binary in your home directory instead",
+      "run": "install -m 0755 pherolang \"$HOME/.local/bin/pherolang\"",
+      "expectExit": 0,
+      "network": true
+    },
+    {
+      "id": "install-cargo",
+      "label": "Fallback: build and install from the git tag",
+      "run": "cargo install --git https://github.com/yestechgroup/pherolang --tag v0.3.0 --locked phero-cli",
+      "expectExit": 0,
+      "network": true
+    },
+    {
+      "id": "install-windows-setup",
+      "label": "Download step (PowerShell): name the release asset",
+      "run": "$Version = '0.3.0'",
+      "expectExit": 0,
+      "network": true
+    },
+    {
+      "id": "install-windows-asset",
+      "label": "Download step (PowerShell): derive the archive and base URL",
+      "run": "$Asset = \"pherolang-$Version-x86_64-pc-windows-msvc.zip\"",
+      "expectExit": 0,
+      "network": true
+    },
+    {
+      "id": "install-windows-base",
+      "label": "Download step (PowerShell): derive the release URL",
+      "run": "$Base = \"https://github.com/yestechgroup/pherolang/releases/download/v$Version\"",
+      "expectExit": 0,
+      "network": true
+    },
+    {
+      "id": "install-windows-fetch-asset",
+      "label": "Download step (PowerShell): fetch the archive",
+      "run": "Invoke-WebRequest \"$Base/$Asset\" -OutFile $Asset",
+      "expectExit": 0,
+      "network": true
+    },
+    {
+      "id": "install-windows-fetch-sums",
+      "label": "Download step (PowerShell): fetch the checksum manifest",
+      "run": "Invoke-WebRequest \"$Base/SHA256SUMS\" -OutFile SHA256SUMS",
+      "expectExit": 0,
+      "network": true
+    },
+    {
+      "id": "install-windows-expected",
+      "label": "Download step (PowerShell): read the expected hash",
+      "run": "$Expected = (Select-String -Path SHA256SUMS -SimpleMatch $Asset).Line.Split()[0]",
+      "expectExit": 0,
+      "network": true
+    },
+    {
+      "id": "install-windows-verify",
+      "label": "Download step (PowerShell): compare the hashes",
+      "run": "if ((Get-FileHash $Asset -Algorithm SHA256).Hash -ne $Expected) { throw \"checksum mismatch: $Asset\" }",
+      "expectExit": 0,
+      "network": true
+    },
+    {
+      "id": "install-windows-extract",
+      "label": "Download step (PowerShell): extract the binary",
+      "run": "Expand-Archive $Asset -DestinationPath \"$env:USERPROFILE\\.pherolang\" -Force",
+      "expectExit": 0,
+      "network": true
+    },
+    {
+      "id": "install-windows-path",
+      "label": "Download step (PowerShell): add the directory to your user PATH",
+      "run": "[Environment]::SetEnvironmentVariable('Path', \"$env:USERPROFILE\\.pherolang;\" + [Environment]::GetEnvironmentVariable('Path', 'User'), 'User')",
+      "expectExit": 0,
+      "network": true
+    }
+  ]
+}

@@ -2,130 +2,165 @@
   "formatVersion": 1,
   "generated": [
     {
-      "source": "docs/BACKENDS.md",
-      "slug": "backends",
-      "title": "Writing a backend for Phero Lang",
-      "target": "reference/backends.md"
-    },
-    {
-      "source": "docs/CMMN.md",
-      "slug": "cmmn",
-      "title": "Case management (.cmmn)",
-      "target": "reference/cmmn.md"
-    },
-    {
-      "source": "docs/DDD.md",
-      "slug": "ddd",
-      "title": "DDD design DSL (.ddd)",
-      "target": "reference/ddd.md"
-    },
-    {
-      "source": "docs/DEPLOY.md",
-      "slug": "deploy",
-      "title": "Deployment models (.deploy)",
-      "target": "reference/deploy.md"
-    },
-    {
-      "source": "docs/DIAGNOSTICS.md",
-      "slug": "diagnostics",
-      "title": "Diagnostic codes",
-      "target": "reference/diagnostics.md"
-    },
-    {
-      "source": "docs/DMN.md",
-      "slug": "dmn",
-      "title": "DMN decision model DSL (.dmn)",
-      "target": "reference/dmn.md"
-    },
-    {
-      "source": "docs/EVENTS.md",
-      "slug": "events",
-      "title": "Event contracts (.evt)",
-      "target": "reference/events.md"
+      "source": "docs/LANGUAGE.md",
+      "slug": "language",
+      "collection": "reference",
+      "target": "reference/language.md",
+      "url": "/reference/language/"
     },
     {
       "source": "docs/EXPRESSIONS.md",
       "slug": "expressions",
-      "title": "The Phero Lang expression language (Tier 2)",
-      "target": "reference/expressions.md"
+      "collection": "reference",
+      "target": "reference/expressions.md",
+      "url": "/reference/expressions/"
     },
     {
-      "source": "docs/GRAPH.md",
-      "slug": "graph",
-      "title": "The unified semantic graph",
-      "target": "reference/graph.md"
+      "source": "docs/DDD.md",
+      "slug": "ddd",
+      "collection": "reference",
+      "target": "reference/ddd.md",
+      "url": "/reference/ddd/"
     },
     {
-      "source": "docs/IFML.md",
-      "slug": "ifml",
-      "title": "IFML DSL",
-      "target": "reference/ifml.md"
+      "source": "docs/EVENTS.md",
+      "slug": "events",
+      "collection": "reference",
+      "target": "reference/events.md",
+      "url": "/reference/events/"
     },
     {
-      "source": "docs/LANGUAGE.md",
-      "slug": "language",
-      "title": "The .mox language reference",
-      "target": "reference/language.md"
-    },
-    {
-      "source": "docs/NAMING.md",
-      "slug": "naming",
-      "title": "Naming",
-      "target": "reference/naming.md"
-    },
-    {
-      "source": "docs/README.md",
-      "slug": "index",
-      "title": "Phero Lang documentation",
-      "target": "index.md"
-    },
-    {
-      "source": "docs/REBRAND.md",
-      "slug": "rebrand",
-      "title": "Rebranding: rexlang → Phero Lang",
-      "target": "reference/rebrand.md"
-    },
-    {
-      "source": "docs/RECEIPTS.md",
-      "slug": "receipts",
-      "title": "Verification receipts",
-      "target": "reference/receipts.md"
-    },
-    {
-      "source": "docs/RELEASE-0.3.0.md",
-      "slug": "release-0.3.0",
-      "title": "Release runbook: v0.3.0 (Phero Lang)",
-      "target": "reference/release-0.3.0.md"
-    },
-    {
-      "source": "docs/RUNE-BODIES.md",
-      "slug": "rune-bodies",
-      "title": "Rune body translation — design (RFC)",
-      "target": "reference/rune-bodies.md"
-    },
-    {
-      "source": "docs/SEMANTICS.md",
-      "slug": "semantics",
-      "title": "Semantics: the claim ladder",
-      "target": "reference/semantics.md"
+      "source": "docs/DEPLOY.md",
+      "slug": "deploy",
+      "collection": "reference",
+      "target": "reference/deploy.md",
+      "url": "/reference/deploy/"
     },
     {
       "source": "docs/USECASES.md",
       "slug": "usecases",
-      "title": "Use case patterns (.uc)",
-      "target": "reference/usecases.md"
+      "collection": "reference",
+      "target": "reference/usecases.md",
+      "url": "/reference/usecases/"
     },
     {
-      "source": "docs/VERIFICATION.md",
-      "slug": "verification",
-      "title": "Verification (proof-obligation register)",
-      "target": "reference/verification.md"
+      "source": "docs/CMMN.md",
+      "slug": "cmmn",
+      "collection": "reference",
+      "target": "reference/cmmn.md",
+      "url": "/reference/cmmn/"
+    },
+    {
+      "source": "docs/DMN.md",
+      "slug": "dmn",
+      "collection": "reference",
+      "target": "reference/dmn.md",
+      "url": "/reference/dmn/"
+    },
+    {
+      "source": "docs/IFML.md",
+      "slug": "ifml",
+      "collection": "reference",
+      "target": "reference/ifml.md",
+      "url": "/reference/ifml/"
+    },
+    {
+      "source": "docs/GRAPH.md",
+      "slug": "graph",
+      "collection": "reference",
+      "target": "reference/graph.md",
+      "url": "/reference/graph/"
+    },
+    {
+      "source": "docs/DIAGNOSTICS.md",
+      "slug": "diagnostics",
+      "collection": "reference",
+      "target": "reference/diagnostics.md",
+      "url": "/reference/diagnostics/"
+    },
+    {
+      "source": "docs/BACKENDS.md",
+      "slug": "backends",
+      "collection": "reference",
+      "target": "reference/backends.md",
+      "url": "/reference/backends/"
     },
     {
       "source": "docs/VERSIONING.md",
       "slug": "versioning",
-      "title": "Versioning and release policy",
-      "target": "reference/versioning.md"
+      "collection": "reference",
+      "target": "reference/versioning.md",
+      "url": "/reference/versioning/"
+    },
+    {
+      "source": "docs/NAMING.md",
+      "slug": "naming",
+      "collection": "reference",
+      "target": "reference/naming.md",
+      "url": "/reference/naming/"
+    },
+    {
+      "source": "docs/README.md",
+      "slug": "index",
+      "collection": "reference",
+      "target": "index.md",
+      "url": "/"
+    },
+    {
+      "source": "docs/SEMANTICS.md",
+      "slug": "semantics",
+      "collection": "engineering",
+      "target": "engineering/semantics.md",
+      "url": "/engineering/semantics/"
+    },
+    {
+      "source": "docs/VERIFICATION.md",
+      "slug": "verification",
+      "collection": "engineering",
+      "target": "engineering/verification.md",
+      "url": "/engineering/verification/"
+    },
+    {
+      "source": "docs/RECEIPTS.md",
+      "slug": "receipts",
+      "collection": "engineering",
+      "target": "engineering/receipts.md",
+      "url": "/engineering/receipts/"
+    },
+    {
+      "source": "docs/RUNE-BODIES.md",
+      "slug": "rune-bodies",
+      "collection": "engineering",
+      "target": "engineering/rune-bodies.md",
+      "url": "/engineering/rune-bodies/"
+    },
+    {
+      "source": "docs/REBRAND.md",
+      "slug": "rebrand",
+      "collection": "migration",
+      "target": "migration/rebrand.md",
+      "url": "/migration/rebrand/"
+    },
+    {
+      "source": "docs/RELEASE-0.3.0.md",
+      "slug": "release-0.3.0",
+      "collection": "migration",
+      "target": "migration/release-0.3.0.md",
+      "url": "/migration/release-0.3.0/"
+    },
+    {
+      "source": "docs/adr/README.md",
+      "slug": "adr",
+      "collection": "adr",
+      "target": "adr/index.md",
+      "url": "/adr/"
+    },
+    {
+      "source": "docs/adr/0001-rebrand-to-phero-lang.md",
+      "slug": "0001-rebrand-to-phero-lang",
+      "collection": "adr",
+      "target": "adr/0001-rebrand-to-phero-lang.md",
+      "url": "/adr/0001-rebrand-to-phero-lang/"
     }
   ]
 }

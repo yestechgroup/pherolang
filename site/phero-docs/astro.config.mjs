@@ -6,15 +6,31 @@ import cloudflare from '@astrojs/cloudflare';
  * docs.pherolang.com — Starlight over the repository's own `docs/`.
  *
  * The pages are NOT committed here: `scripts/ingest-docs.mjs` copies
- * `<repo>/docs/*.md` into `src/content/docs/reference/` before the build and
- * rewrites their relative links, so the reference cannot drift from the
- * repository. See `site/data/CONTRACT.md`.
+ * `<repo>/docs/**` into `src/content/docs/{reference,engineering,migration,adr}/`
+ * before every `dev`/`build`/`check` and rewrites their relative links, so the
+ * reference cannot drift from the repository. See `site/data/CONTRACT.md`.
  *
  * `session: false` and `imageService: 'compile'` keep the deploy assets-only —
  * no KV namespace, no Images binding.
  *
- * Lane 1 owns this file's `sidebar` (it knows the ingested tree); the shape
- * below is the seeded minimum that builds before ingestion lands.
+ * The sidebar below is the whole of the docs information architecture:
+ *
+ *   Overview     the docs home, generated from `docs/README.md`
+ *   Reference    the language manual, one page per surface
+ *   Engineering  what is claimed, how it is proved, what a release ships
+ *   Migration    moving a 0.2 consumer, then cutting 0.3.0
+ *   Decisions    the numbered, immutable records
+ *
+ * Every group autogenerates one directory the ingestion step owns, so a new
+ * `docs/*.md` appears without editing this file. Reading order is not sorted
+ * alphabetically: each page carries `sidebar.order` in the frontmatter
+ * synthesized by `ingest-docs.mjs` (Starlight's autogenerate sorts by it), and
+ * labels are each page's own frontmatter `title`.
+ *
+ * There is no `editLink` here on purpose: the generated copy is untracked, so a
+ * repository-relative edit link would point at a path that does not exist.
+ * Every page instead declares `editUrl` in its frontmatter, pointing at the
+ * `docs/` source it was generated from.
  */
 export default defineConfig({
   site: 'https://docs.pherolang.com',
@@ -35,15 +51,26 @@ export default defineConfig({
           href: 'https://github.com/yestechgroup/pherolang',
         },
       ],
-      editLink: {
-        baseUrl: 'https://github.com/yestechgroup/pherolang/edit/main/docs/',
-      },
       lastUpdated: true,
       pagefind: true,
+      pagination: true,
       sidebar: [
+        { label: 'Overview', slug: 'index' },
         {
-          label: 'Overview',
-          items: [{ label: 'Documentation', link: '/' }],
+          label: 'Reference',
+          items: [{ autogenerate: { directory: 'reference' } }],
+        },
+        {
+          label: 'Engineering',
+          items: [{ autogenerate: { directory: 'engineering' } }],
+        },
+        {
+          label: 'Migration',
+          items: [{ autogenerate: { directory: 'migration' } }],
+        },
+        {
+          label: 'Decisions',
+          items: [{ autogenerate: { directory: 'adr' } }],
         },
       ],
     }),

@@ -1,0 +1,45 @@
+# pherolang.com — response headers for the Cloudflare Worker's static assets.
+#
+# Cloudflare Workers reads this file from the directory it serves
+# (`dist/client`, per `wrangler.jsonc`) and applies the rules to asset
+# responses, in file order. Three properties of that format shape everything
+# below:
+#
+#   * a request matching several rules inherits the headers of EVERY matching
+#     rule, and a header set twice is joined with a comma — so `Cache-Control`
+#     must be set exactly once per response, which is why the `/_astro/*` rule
+#     detaches the broader value before setting its own;
+#   * `! Name` removes only what EARLIER rules added, so the narrower rule has
+#     to come after the broader one;
+#   * `_headers` applies to asset responses only. Both apps deploy as
+#     assets-only Workers (`wrangler deploy --dry-run` reports "No bindings
+#     found"), so every response a visitor sees passes through this file.
+#
+# The Content-Security-Policy is derived from the built HTML, not from theory.
+# `site/DEPLOY.md` records which directive is relaxed, the evidence for it, and
+# what to change before adding a script or an analytics beacon.
+
+/*
+  X-Content-Type-Options: nosniff
+  Referrer-Policy: strict-origin-when-cross-origin
+  X-Frame-Options: DENY
+  Permissions-Policy: geolocation=(), microphone=(), camera=()
+  Strict-Transport-Security: max-age=31536000; includeSubDomains
+  Content-Security-Policy: default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'self'; worker-src 'self'; manifest-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'; upgrade-insecure-requests
+  Cache-Control: public, max-age=0, must-revalidate
+
+# Hashed build output (`index.<hash>.css`, `<island>.<hash>.js`): the filename
+# changes when the bytes change, so it can be cached forever. The detach keeps
+# the `/*` rule from joining a second, contradictory max-age onto the value.
+/_astro/*
+  ! Cache-Control
+  Cache-Control: public, max-age=31536000, immutable
+
+# Version-preview and workers.dev hostnames are not canonical. The apex and
+# `www` hostnames are; anything served from `*.workers.dev` is a duplicate of a
+# page that already has a canonical URL, so keep it out of the index. Preview
+# URLs look like `<version>-<worker>.<account-subdomain>.workers.dev`, which is
+# the placeholder shape Cloudflare documents for this file (one splat per rule
+# is the limit, and a hostname wildcard plus a path wildcard is two).
+https://:version.:subdomain.workers.dev/*
+  X-Robots-Tag: noindex

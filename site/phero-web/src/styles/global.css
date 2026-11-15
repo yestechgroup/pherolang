@@ -2,6 +2,15 @@
 @import "../../../packages/tokens/src/tokens.css";
 
 /*
+ * Tailwind's automatic content detection only walks this app's `src/`. The
+ * shared primitives in `packages/ui` are aliased in (not a dependency), so
+ * their utilities must be declared here or every class used *only* there is
+ * dropped from the stylesheet — which renders the nav unstyled and leaves the
+ * buttons and status pills without their backgrounds.
+ */
+@source "../../../packages/ui/src/**/*.astro";
+
+/*
  * Base layer only. Components own their own classes; nothing here should
  * introduce a colour or a font — those live in packages/tokens.
  */

@@ -1,0 +1,572 @@
+---
+/**
+ * /architecture — the engineering-credibility page.
+ *
+ * Every number on this page is generated, and the page says so at the bottom:
+ * `pherolang graph build` writes `@data/graph.json` from `examples/`,
+ * `scripts/sync-model.mjs` derives `@data/evidence.json` and
+ * `@data/surfaces.json` from it, and `scripts/render-graph.mjs` bakes the
+ * figure's geometry into `@data/support-model.json`.
+ *
+ * The crate section is the one part read live: the dependency edges come from
+ * `crates/<name>/Cargo.toml` at build time, because a hand-copied dependency
+ * graph is a diagram of what someone remembered.
+ */
+import { existsSync, readFileSync } from 'node:fs';
+import { dirname, join } from 'node:path';
+
+import Base from '../layouts/Base.astro';
+import SectionHeader from '@ui/SectionHeader.astro';
+import Prose from '@ui/Prose.astro';
+import Callout from '@ui/Callout.astro';
+import Stat from '@ui/Stat.astro';
+import StatusPill from '@ui/StatusPill.astro';
+import CodeBlock from '@ui/CodeBlock.astro';
+import GraphFigure from '../components/GraphFigure.astro';
+
+import surfaces from '@data/surfaces.json';
+import evidence from '@data/evidence.json';
+import supportModel from '@data/support-model.json';
+
+const repo = 'https://github.com/yestechgroup/pherolang';
+
+// ---------------------------------------------------------------------------
+// The surfaces table, straight from the generated data. The status word is
+// validated here rather than cast: a status the pill does not know is a build
+// error, not a silently unstyled cell.
+// ---------------------------------------------------------------------------
+type SurfaceStatus = 'implemented' | 'validated';
+
+const surfaceRows = surfaces.surfaces.map((surface) => {
+  const status = surface.status;
+  if (status !== 'implemented' && status !== 'validated') {
+    throw new Error(`architecture: unknown status '${status}' for surface ${surface.id}`);
+  }
+  return { ...surface, status: status as SurfaceStatus };
+});
+
+/**
+ * The surface summaries are authored in markdown, so a word like `when` arrives
+ * wrapped in backticks. Split them into text and code runs instead of printing
+ * the markup or dropping the distinction.
+ */
+function inlineCode(text: string): Array<{ text: string; code: boolean }> {
+  return text
+    .split('`')
+    .map((part, index) => ({ text: part, code: index % 2 === 1 }))
+    .filter((run) => run.text.length > 0);
+}
+
+// ---------------------------------------------------------------------------
+// The crate graph: 22 crates, grouped by the role they play, joined by the
+// dependency edges their own manifests declare.
+//
+// The manifests are read while the page is *prerendered*: `astro build` runs
+// page frontmatter in Node, with the checkout on disk, so this is a build-time
+// read of the real files — no generated copy of the dependency graph exists to
+// drift. (One caveat, noted so nobody mistakes it for a bug: the Cloudflare
+// adapter's **dev** runtime is workerd, which has no filesystem. There the read
+// returns null and the page omits edges with a visible note instead of claiming
+// a crate has none. The deployed page is built in Node and gets the edges.)
+//
+// Only the `[dependencies]` table counts. A `dev-dependencies` entry is a
+// test-only edge; drawing it as an architecture relationship would overstate it.
+// ---------------------------------------------------------------------------
+/**
+ * The workspace root, found by walking up from the working directory (and, as
+ * a fallback, from this module) until a directory holds both `crates/` and the
+ * workspace `Cargo.toml`.
+ */
+function findWorkspaceRoot(start: string): string | null {
+  try {
+    let directory = start;
+    for (let depth = 0; depth < 6; depth += 1) {
+      if (existsSync(join(directory, 'crates')) && existsSync(join(directory, 'Cargo.toml'))) {
+        return directory;
+      }
+      const parent = dirname(directory);
+      if (parent === directory) break;
+      directory = parent;
+    }
+  } catch {
+    /* a runtime without a filesystem (workerd dev) — fall through */
+  }
+  return null;
+}
+
+// `process.cwd()` is the app directory for every supported invocation (`pnpm
+// -C phero-web build`, the CI workflow, `astro dev`). `import.meta.url` is not
+// usable here: the Cloudflare adapter's prerenderer rewrites it to a value
+// `new URL()` rejects.
+const workspaceRoot = findWorkspaceRoot(process.cwd());
+const CRATES_DIR = workspaceRoot ? join(workspaceRoot, 'crates') : null;
+const manifestsAvailable = CRATES_DIR !== null;
+
+const ROLE_ORDER = ['syntax', 'core', 'backends', 'tooling'] as const;
+type RoleId = (typeof ROLE_ORDER)[number];
+
+const ROLES: Record<RoleId, { title: string; lede: string }> = {
+  syntax: {
+    title: 'Syntax and expressions',
+    lede: 'Lexers, grammars, formatters, and the shared expression language every surface embeds.',
+  },
+  core: {
+    title: 'Driver, IR and evidence',
+    lede: 'Resolution, validation and lowering; the versioned artifact; the diagnostics registry and the evidence spine.',
+  },
+  backends: {
+    title: 'Backends',
+    lede: 'Artifact consumers. Each one is a pure function from the IR to generated output.',
+  },
+  tooling: {
+    title: 'Tooling',
+    lede: 'The binary, the editor server, the generated-code runtime, and the test kit.',
+  },
+};
+
+/**
+ * Role is a presentation fact, not a dependency fact: the name prefix decides
+ * it, so a new crate lands in a sensible column without an edit here.
+ */
+function roleOf(name: string): RoleId {
+  if (name.startsWith('phero-backend-')) return 'backends';
+  if (
+    ['phero-syntax', 'phero-parser', 'phero-ifml', 'phero-expr', 'phero-strings', 'phero-dates'].includes(
+      name,
+    )
+  ) {
+    return 'syntax';
+  }
+  if (
+    ['phero-driver', 'phero-ir', 'phero-diagnostics', 'phero-vocab', 'phero-verify', 'phero-evidence'].includes(
+      name,
+    )
+  ) {
+    return 'core';
+  }
+  return 'tooling';
+}
+
+/** Workspace dependencies of one crate, from its `[dependencies]` table. */
+function readDependencies(name: string, workspace: string[]): string[] | null {
+  if (!CRATES_DIR) return null;
+
+  let manifest: string;
+  try {
+    manifest = readFileSync(join(CRATES_DIR, name, 'Cargo.toml'), 'utf8');
+  } catch {
+    return null;
+  }
+
+  const depends = new Set<string>();
+  let section = '';
+
+  for (const raw of manifest.split(/\r?\n/)) {
+    const line = raw.trim();
+    if (!line || line.startsWith('#')) continue;
+
+    const header = /^\[(.+)\]$/.exec(line);
+    if (header) {
+      section = header[1] ?? '';
+      // `[dependencies.foo]` is the table form of the same edge.
+      const dotted = /^dependencies\.([A-Za-z0-9_-]+)$/.exec(section)?.[1];
+      if (dotted && workspace.includes(dotted)) depends.add(dotted);
+      continue;
+    }
+
+    if (section !== 'dependencies') continue;
+    const dependency = /^([A-Za-z0-9_-]+)\s*=/.exec(line)?.[1];
+    if (dependency && workspace.includes(dependency)) depends.add(dependency);
+  }
+
+  return [...depends].sort();
+}
+
+const crateNames: string[] = evidence.crates;
+const crates = crateNames.map((name) => ({
+  name,
+  role: roleOf(name),
+  depends: readDependencies(name, crateNames),
+}));
+
+const missingManifests = crates.filter((crate) => crate.depends === null).map((crate) => crate.name);
+const dependencyEdges = crates.flatMap((crate) =>
+  (crate.depends ?? []).map((dependency) => ({ from: crate.name, to: dependency })),
+);
+const roleGroups = ROLE_ORDER.map((role) => ({
+  id: role,
+  ...ROLES[role],
+  crates: crates
+    .filter((crate) => crate.role === role)
+    .sort((a, b) => (a.name < b.name ? -1 : a.name > b.name ? 1 : 0)),
+}));
+
+/**
+ * Who outside the backend family depends on a backend. Derived, so the claim
+ * below cannot drift from the manifests.
+ */
+const backendConsumers = crates
+  .filter(
+    (crate) =>
+      !crate.name.startsWith('phero-backend-') &&
+      (crate.depends ?? []).some((dependency) => dependency.startsWith('phero-backend-')),
+  )
+  .map((crate) => crate.name);
+
+// ---------------------------------------------------------------------------
+// The one perspective the page draws. Counts are read from the projection, so
+// the prose cannot disagree with the drawing.
+// ---------------------------------------------------------------------------
+const domain = supportModel.perspectives.find((perspective) => perspective.id === 'domain');
+if (!domain) throw new Error('architecture: support-model.json has no domain perspective');
+
+// ---------------------------------------------------------------------------
+// The pipeline. Authored structure, real crate names.
+// ---------------------------------------------------------------------------
+const backends = [...new Set(surfaceRows.flatMap((surface) => surface.backends))].sort();
+
+const pipeline = [
+  {
+    step: '01',
+    title: 'Sources',
+    crate: 'nine surfaces',
+    body: 'The models you write and review: structure, policy, decisions, events, design, use cases, cases, interaction flows, deployment.',
+    detail: '.mox .ddd .actor .dmn .evt .uc .cmmn .ifml .deploy',
+  },
+  {
+    step: '02',
+    title: 'Parse and format',
+    crate: 'phero-syntax · phero-ifml · phero-expr',
+    body: 'A logos lexer and a chumsky grammar per surface, plus the canonical formatter. The shared expression language is parsed and typed once by phero-expr; no surface grows its own.',
+    detail: 'spanned syntax tree',
+  },
+  {
+    step: '03',
+    title: 'Resolve, validate, lower',
+    crate: 'phero-driver',
+    body: 'Salsa-based. Imports resolve, references validate, diagnostics come from one registry, and lowering produces the IR. The semantic graph and the editor index are derived after checking.',
+    detail: 'diagnostics · graph · span tables',
+  },
+  {
+    step: '04',
+    title: 'Versioned artifact',
+    crate: 'phero-ir',
+    body: 'The wire contract: camelCase fields, adjacent tagging, a formatVersion gate, and additive-only growth. One Core IR Model, and one artifact per surface.',
+    detail: 'formatVersion · byte-stable goldens',
+  },
+  {
+    step: '05',
+    title: 'Consumers',
+    crate: `${backends.length} backend crates`,
+    body: 'Backends and tools read the artifact and nothing above it: generated Rust, JSON Schema, Cedar policy, the DMN engine model, the CMMN case definition.',
+    detail: backends.map((backend) => backend.replace('phero-backend-', '')).join(' · '),
+  },
+];
+
+const domainStats = `${domain.nodes.length} nodes and ${domain.edges.length} connections`;
+---
+
+<Base
+  title="Architecture — Phero Lang"
+  description="Nine surfaces, one versioned IR artifact, and backends that never read the grammar. The pipeline, the crate graph, and the generated data behind this site."
+>
+  <section class="pt-16 pb-12 sm:pt-20">
+    <p class="font-mono text-xs uppercase tracking-[0.2em] text-[var(--text-muted)]">
+      Engineering / architecture
+    </p>
+    <h1 class="mt-5 max-w-[26ch] font-display text-display-1 font-semibold text-balance">
+      One artifact, many consumers.
+    </h1>
+    <p class="mt-6 max-w-[62ch] text-lg leading-[1.6] text-[var(--text-muted)] text-pretty">
+      Phero Lang compiles nine modeling surfaces into versioned JSON artifacts. Everything
+      downstream — code generation, schemas, policy, the editor, the graph on this page — reads
+      those artifacts, never the source grammar.
+    </p>
+
+    <div class="mt-12 grid grid-cols-2 gap-6 border-t border-[var(--border)] pt-8 sm:grid-cols-4">
+      <Stat value={String(evidence.counts.surfaces)} label="Surfaces" />
+      <Stat value={String(evidence.counts.crates)} label="Crates" />
+      <Stat value={String(evidence.counts.nodes)} label="Graph nodes" />
+      <Stat value={String(evidence.counts.edges)} label="Graph edges" />
+    </div>
+  </section>
+
+  <section id="pipeline" class="border-t border-[var(--border)] py-16">
+    <SectionHeader
+      eyebrow="The pipeline"
+      title="From source text to a versioned artifact"
+      lede="Five stages, one job each. The boundary between the fourth and the fifth is the invariant the rest of the system rests on."
+    />
+
+    <ol class="mt-10 grid gap-4 md:grid-cols-2 xl:grid-cols-5">
+      {
+        pipeline.map((stage) => (
+          <li class="flex flex-col rounded-md border border-[var(--border)] bg-[var(--surface-raised)] p-5">
+            <span class="font-mono text-xs tracking-[0.12em] text-[var(--text-muted)]">{stage.step}</span>
+            <h3 class="mt-2 font-display text-lg font-semibold text-[var(--text)]">{stage.title}</h3>
+            <p class="mt-1 font-mono text-xs leading-5 text-[var(--text-muted)]">{stage.crate}</p>
+            <p class="mt-3 text-sm leading-[1.6] text-[var(--text)]">{stage.body}</p>
+            <p class="mt-auto pt-4 font-mono text-[0.6875rem] uppercase tracking-[0.1em] text-[var(--text-muted)]">
+              {stage.detail}
+            </p>
+          </li>
+        ))
+      }
+    </ol>
+
+    <div class="mt-10">
+      <Callout title="The invariant">
+        <p>
+          <strong>Backends consume only <code>phero_ir::Model</code> — never the AST.</strong> Lowering
+          happens once, in <code>phero-driver</code>; every backend is a pure function from artifact to
+          output. That is why <code>pherolang artifact check</code> can validate an artifact with no
+          compiler in the loop, and why a new backend never has to learn a grammar.
+        </p>
+      </Callout>
+    </div>
+  </section>
+
+  <section id="surfaces" class="border-t border-[var(--border)] py-16">
+    <SectionHeader
+      eyebrow="The nine surfaces"
+      title="Nine languages, one compiler discipline"
+      lede="Each row states what the surface models, where it stands, and which backends consume its artifact: implemented means an in-tree backend reads it today; validated means it compiles and checks with no backend yet."
+    />
+
+    <div
+      class="mt-10 overflow-x-auto rounded-md border border-[var(--border)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--focus)]"
+      role="region"
+      aria-labelledby="surfaces-caption"
+      tabindex="0"
+    >
+      <table class="w-full min-w-[64rem] border-collapse text-left text-[0.9375rem]">
+        <caption id="surfaces-caption" class="sr-only">
+          The nine Phero Lang surfaces: extension, name, what the surface models, its status, and
+          the backends that consume its artifact. Scroll sideways for the full table.
+        </caption>
+        <thead>
+          <tr class="border-b border-[var(--border-strong)]">
+            <th scope="col" class="px-4 py-3 font-mono text-xs font-medium uppercase tracking-[0.12em] text-[var(--text-muted)]">
+              Extension
+            </th>
+            <th scope="col" class="px-4 py-3 font-mono text-xs font-medium uppercase tracking-[0.12em] text-[var(--text-muted)]">
+              Surface
+            </th>
+            <th scope="col" class="px-4 py-3 font-mono text-xs font-medium uppercase tracking-[0.12em] text-[var(--text-muted)]">
+              What it models
+            </th>
+            <th scope="col" class="px-4 py-3 font-mono text-xs font-medium uppercase tracking-[0.12em] text-[var(--text-muted)]">
+              Status
+            </th>
+            <th scope="col" class="px-4 py-3 font-mono text-xs font-medium uppercase tracking-[0.12em] text-[var(--text-muted)]">
+              Backends
+            </th>
+          </tr>
+        </thead>
+        <tbody>
+          {
+            surfaceRows.map((surface) => (
+              <tr class="border-b border-[var(--border)] align-top last:border-b-0">
+                <td class="whitespace-nowrap px-4 py-4 font-mono text-[0.8125rem] text-[var(--text)]">
+                  {surface.extension}
+                </td>
+                <th scope="row" class="whitespace-nowrap px-4 py-4 text-left font-medium text-[var(--text)]">
+                  <a
+                    href={`/languages/${surface.id}`}
+                    class="rounded-xs text-[var(--text)] underline decoration-[color-mix(in_oklab,var(--link)_35%,transparent)] underline-offset-4 hover:decoration-[var(--link)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--focus)]"
+                  >
+                    {surface.name}
+                  </a>
+                </th>
+                <td class="px-4 py-4 leading-[1.6] text-[var(--text-muted)]">
+                  {inlineCode(surface.summary).map((run) =>
+                    run.code ? (
+                      <code class="rounded-xs bg-[color-mix(in_oklab,var(--border)_55%,transparent)] px-1.5 py-0.5 font-mono text-[0.8125em] text-[var(--text)]">
+                        {run.text}
+                      </code>
+                    ) : (
+                      run.text
+                    ),
+                  )}
+                </td>
+                <td class="px-4 py-4">
+                  <StatusPill status={surface.status} backends={surface.backends} />
+                </td>
+                <td class="px-4 py-4">
+                  {surface.backends.length ? (
+                    <ul class="flex flex-col gap-1">
+                      {surface.backends.map((backend) => (
+                        <li class="whitespace-nowrap font-mono text-xs text-[var(--text)]">{backend}</li>
+                      ))}
+                    </ul>
+                  ) : (
+                    <span class="text-sm text-[var(--text-muted)]">No in-tree backend</span>
+                  )}
+                </td>
+              </tr>
+            ))
+          }
+        </tbody>
+      </table>
+    </div>
+    <p class="mt-4 max-w-[70ch] text-sm leading-[1.6] text-[var(--text-muted)]">
+      What a surface compiles to is not a promise in a table: each row's artifact is generated by
+      the released binary and committed under <code class="font-mono text-[0.8125rem]">site/data/artifacts/</code>,
+      one per surface.
+    </p>
+  </section>
+
+  <section id="graph" class="border-t border-[var(--border)] py-16">
+    <SectionHeader
+      eyebrow="The semantic graph"
+      title="One graph across nine surfaces"
+      lede="pherolang graph build compiles every surface in a tree into one queryable artifact: import-connected applications, nodes and edges. It is derived post-compile — the builder never re-reads a source or re-compiles a file."
+    />
+
+    <div class="mt-10">
+      <GraphFigure perspective="domain" />
+    </div>
+
+    <div class="mt-6 max-w-[70ch]">
+      <Prose>
+        <p>
+          This is the domain perspective of the support application — the full-stack example that
+          exercises all nine surfaces. {domainStats} from the domain surface alone, with each node's
+          declaration file baked into its tooltip. The coordinates are part of the committed data:
+          the first paint is a finished SVG, and JavaScript only adds focus and filtering.
+        </p>
+        <p>
+          Node ids are the artifact's ids verbatim, so a node here is the same node
+          <code>pherolang graph query</code> answers for. Edges are kept per perspective and only
+          when both endpoints are in it: a connection into another view is not drawn as a phantom
+          box.
+        </p>
+      </Prose>
+    </div>
+  </section>
+
+  <section id="crates" class="border-t border-[var(--border)] py-16">
+    <SectionHeader
+      eyebrow="The crates"
+      title="The crate graph"
+      lede="Every workspace crate, read live from its manifest at build time and grouped by role. Each card lists the workspace crates it depends on; a test-only dev-dependency is omitted, so an edge here is a relationship the compiler actually has."
+    />
+
+    {
+      missingManifests.length > 0 ? (
+        <div class="mt-10">
+          <Callout tone="warning" title="Manifests unavailable">
+            {manifestsAvailable ? (
+              <p>
+                {missingManifests.length} of {crates.length} crate manifests are missing from this
+                build, so dependency edges are omitted rather than guessed: {missingManifests.join(', ')}.
+              </p>
+            ) : (
+              <p>
+                The workspace manifests could not be read by this build, so dependency edges are
+                omitted rather than guessed.
+              </p>
+            )}
+          </Callout>
+        </div>
+      ) : (
+        <p class="mt-8 font-mono text-xs uppercase tracking-[0.12em] text-[var(--text-muted)]">
+          {crates.length} crates · {dependencyEdges.length} workspace dependencies
+        </p>
+      )
+    }
+
+    <div class="mt-8 grid gap-6 sm:grid-cols-2 xl:grid-cols-4">
+      {
+        roleGroups.map((group) => (
+          <div class="flex flex-col">
+            <h3 class="font-display text-lg font-semibold text-[var(--text)]">{group.title}</h3>
+            <p class="mt-2 min-h-[4.5rem] text-sm leading-[1.6] text-[var(--text-muted)]">
+              {group.lede}
+            </p>
+            <ul class="mt-4 flex flex-col gap-3">
+              {group.crates.map((crate) => (
+                <li class="rounded-md border border-[var(--border)] bg-[var(--surface-raised)] p-4">
+                  <p class="break-words font-mono text-[0.8125rem] font-medium text-[var(--text)]">
+                    {crate.name}
+                  </p>
+                  {crate.depends === null ? (
+                    <p class="mt-2 font-mono text-[0.6875rem] text-[var(--text-muted)]">
+                      dependencies not read
+                    </p>
+                  ) : crate.depends.length > 0 ? (
+                    <p class="mt-2 flex flex-wrap items-baseline gap-x-1.5 gap-y-1">
+                      <span class="font-mono text-[0.625rem] uppercase tracking-[0.1em] text-[var(--text-muted)]">
+                        uses
+                      </span>
+                      {crate.depends.map((dependency) => (
+                        <code class="rounded-xs bg-[color-mix(in_oklab,var(--border)_55%,transparent)] px-1.5 py-0.5 font-mono text-[0.6875rem] text-[var(--text)]">
+                          {dependency}
+                        </code>
+                      ))}
+                    </p>
+                  ) : (
+                    <p class="mt-2 font-mono text-[0.6875rem] text-[var(--text-muted)]">
+                      no workspace dependencies
+                    </p>
+                  )}
+                </li>
+              ))}
+            </ul>
+          </div>
+        ))
+      }
+    </div>
+
+    <p class="mt-8 max-w-[70ch] text-sm leading-[1.6] text-[var(--text-muted)]">
+      Outside the backend family, {backendConsumers.join(' and ')} {backendConsumers.length === 1 ? 'carries' : 'carry'} a backend
+      dependency — so a backend is loaded by the binary, not by the compiler core. Edges run from a
+      crate to the crates it names, and nothing is drawn that a manifest does not declare.
+    </p>
+  </section>
+
+  <section id="generated" class="border-t border-[var(--border)] py-16">
+    <SectionHeader
+      eyebrow="Provenance"
+      title="Generated, not written"
+      lede="The counts on this page are a projection of the committed graph artifact, not a claim typed into prose. CI regenerates them with the released binary and fails on a one-byte difference."
+    />
+
+    <div class="mt-10 grid gap-6 lg:grid-cols-2">
+      <div>
+        <Prose>
+          <p>
+            <code>site/data/graph.json</code> is produced by the released
+            <code>pherolang</code> binary from <code>examples/</code>. The site then derives
+            <code>site/data/evidence.json</code> (counts, kinds, crates),
+            <code>site/data/surfaces.json</code> (the surface table above) and
+            <code>site/data/support-model.json</code> (the figure's baked geometry) from it.
+          </p>
+          <p>
+            The generator was <code>{evidence.generator.reported}</code>. It found
+            {evidence.counts.applications} import-connected applications,
+            {evidence.counts.nodes} nodes and {evidence.counts.edges} edges across the corpus, and the
+            figure on this page is derived from that artifact.
+          </p>
+          <p>
+            The full contract — node kinds, edge kinds, determinism rules, queries — is
+            <a href={`${repo}/blob/main/docs/GRAPH.md`} rel="noopener">docs/GRAPH.md</a> in the
+            repository.
+          </p>
+        </Prose>
+      </div>
+      <div>
+        <CodeBlock
+          filename="site/"
+          code={`node scripts/fetch-pherolang.mjs   # released binary, sha256-verified
+node scripts/sync-model.mjs          # graph, artifacts, evidence, figure
+git diff --exit-code data            # what CI checks`}
+        />
+        <p class="mt-4 text-sm leading-[1.6] text-[var(--text-muted)]">
+          The same script runs in the Site workflow with the released asset. A stale count is a build
+          failure, not a documentation bug.
+        </p>
+      </div>
+    </div>
+  </section>
+</Base>
