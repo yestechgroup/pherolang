@@ -806,6 +806,22 @@ pub(crate) fn validate_capability_coverage(
         })
         .flatten()
         .map(String::as_str)
+        .chain(
+            designs
+                .iter()
+                .flat_map(|design| {
+                    design.modules.iter().flat_map(move |module| {
+                        module.designs.iter().flat_map(move |design| {
+                            design
+                                .repository
+                                .iter()
+                                .flat_map(move |repository| &repository.operations)
+                                .flat_map(move |operation| operation.capabilities.iter())
+                        })
+                    })
+                })
+                .map(|capability| capability.name.as_str()),
+        )
         .collect();
     for record in records {
         // One diagnostic per capability: first reference wins the span.

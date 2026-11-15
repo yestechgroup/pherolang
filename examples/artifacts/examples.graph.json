@@ -479,6 +479,20 @@
       "application": "Orders"
     },
     {
+      "id": "repositoryOperation:shop/orders.ddd#Orders.ordering.OrderRepository.inCurrency",
+      "kind": "repositoryOperation",
+      "name": "Orders.ordering.OrderRepository.inCurrency",
+      "file": "shop/orders.ddd",
+      "application": "Orders"
+    },
+    {
+      "id": "repositoryOperation:shop/orders.ddd#Orders.ordering.OrderRepository.recent",
+      "kind": "repositoryOperation",
+      "name": "Orders.ordering.OrderRepository.recent",
+      "file": "shop/orders.ddd",
+      "application": "Orders"
+    },
+    {
       "id": "repositoryOperation:shop/orders.ddd#Orders.ordering.OrderRepository.save",
       "kind": "repositoryOperation",
       "name": "Orders.ordering.OrderRepository.save",
@@ -4337,6 +4351,32 @@
     },
     {
       "from": "repositoryOperation:shop/orders.ddd#Orders.ordering.OrderRepository.findByNumber",
+      "to": "class:shop/ecommerce.mox#nz.example.shop.Order",
+      "kind": "typeOf",
+      "attributes": {
+        "role": "return"
+      }
+    },
+    {
+      "from": "repositoryOperation:shop/orders.ddd#Orders.ordering.OrderRepository.inCurrency",
+      "to": "repository:shop/orders.ddd#Orders.ordering.OrderRepository",
+      "kind": "memberOf"
+    },
+    {
+      "from": "repositoryOperation:shop/orders.ddd#Orders.ordering.OrderRepository.inCurrency",
+      "to": "class:shop/ecommerce.mox#nz.example.shop.Order",
+      "kind": "typeOf",
+      "attributes": {
+        "role": "return"
+      }
+    },
+    {
+      "from": "repositoryOperation:shop/orders.ddd#Orders.ordering.OrderRepository.recent",
+      "to": "repository:shop/orders.ddd#Orders.ordering.OrderRepository",
+      "kind": "memberOf"
+    },
+    {
+      "from": "repositoryOperation:shop/orders.ddd#Orders.ordering.OrderRepository.recent",
       "to": "class:shop/ecommerce.mox#nz.example.shop.Order",
       "kind": "typeOf",
       "attributes": {

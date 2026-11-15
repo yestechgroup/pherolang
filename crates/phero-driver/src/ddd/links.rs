@@ -67,6 +67,21 @@ pub(crate) fn fill_resolved_links(
             for operation in &mut design.child_operations {
                 fill_operation(operation, &targets, &declared, decisions);
             }
+            // DD9: a repository query's `capability` clause is the read
+            // authorization; its companion resolves like a service op's.
+            if let Some(repository) = &mut design.repository {
+                for operation in &mut repository.operations {
+                    if operation.capabilities.is_empty() {
+                        continue;
+                    }
+                    let names: Vec<String> = operation
+                        .capabilities
+                        .iter()
+                        .map(|capability| capability.name.clone())
+                        .collect();
+                    operation.capabilities = capability_refs(&names, &declared);
+                }
+            }
         }
         for search in &mut module.searches {
             search.capability_refs = capability_refs(&search.capabilities, &declared);

@@ -2,6 +2,7 @@
 //! artifacts: a compiled design is contract-complete; every removed or
 //! lying resolved companion is reported at its JSON path.
 
+use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 
 use phero_backend_ddd::{canonical_json, canonical_json_string, check_contract, Violation};
@@ -9,9 +10,10 @@ use phero_driver::{
     compile_actors_str, compile_ddd_str, compile_ddd_str_with_actors, DomainImports, Severity,
 };
 use phero_ir::ddd::{
-    DddModel, DddTypeRef, Design, DtoDirection, DtoMember, DtoMemberKind, DtoShape, EqualityPolicy,
-    IdentityPolicy, StateMachine, Stereotype, TargetKind, TargetRef, ValueSemantics,
-    DDD_MODEL_FORMAT_VERSION,
+    BuiltinRepositoryOp, CapabilityRef, DddModel, DddTypeRef, Design, DtoDirection, DtoMember,
+    DtoMemberKind, DtoShape, EqualityPolicy, ErrorRef, IdentityPolicy, QueryPagination,
+    QuerySortKey, QuerySpec, RepositoryOperation, SortDirection, StateMachine, Stereotype,
+    TargetKind, TargetRef, ValueSemantics, DDD_MODEL_FORMAT_VERSION,
 };
 use phero_ir::{Multiplicity, PrimitiveType, TypeRef};
 
@@ -1250,6 +1252,265 @@ fn dto_invariants_and_empty_expressions_are_refused() {
         violations
             .iter()
             .any(|violation| violation.message.contains("must be non-empty")),
+        "{violations:?}"
+    );
+}
+
+// --- typed repository queries (DD9) -----------------------------------------
+
+/// The canonical read-only query: a typed sort key and a fully-bounded
+/// pagination window.
+fn sample_query() -> QuerySpec {
+    QuerySpec::new("customer == self.customer and self.status == state")
+        .with_sort(vec![QuerySortKey::new(
+            "createdDate",
+            TypeRef::Primitive(PrimitiveType::Date),
+            SortDirection::Desc,
+        )])
+        .with_pagination(Some(QueryPagination {
+            limit: Some(20),
+            max: Some(100),
+            cursor: false,
+        }))
+}
+
+/// A valid query operation: a declared signature returning the matching
+/// aggregates, the query block, and the capabilities guarding it.
+fn query_operation() -> RepositoryOperation {
+    RepositoryOperation::declared(
+        "findByCustomer",
+        Some(DddTypeRef::domain(library_class("Book"))),
+        Vec::new(),
+    )
+    .with_return_multiplicity(Some(Multiplicity::MANY))
+    .with_query(Some(sample_query()))
+    .with_capabilities(vec![CapabilityRef::new("SearchBooks")])
+}
+
+/// Installs the canonical query operation on the compiled library
+/// repository and returns the artifact plus the operation's JSON path.
+fn with_query_operation(mut model: DddModel) -> (DddModel, String) {
+    let repository = model.modules[0].designs[0]
+        .repository
+        .as_mut()
+        .expect("library.ddd designs a Book repository");
+    repository.operations.push(query_operation());
+    let index = repository.operations.len() - 1;
+    (
+        model,
+        format!("modules[0].designs[0].repository.operations[{index}]"),
+    )
+}
+
+fn query_operation_mut(model: &mut DddModel) -> &mut RepositoryOperation {
+    model.modules[0].designs[0]
+        .repository
+        .as_mut()
+        .expect("library.ddd designs a Book repository")
+        .operations
+        .last_mut()
+        .expect("the query operation")
+}
+
+#[test]
+fn a_clean_query_operation_is_contract_complete() {
+    let (model, _) = with_query_operation(compiled());
+    assert_eq!(check_contract(&model), Vec::new());
+}
+
+#[test]
+fn a_query_on_a_builtin_operation_is_reported() {
+    let (mut model, path) = with_query_operation(compiled());
+    {
+        let operation = query_operation_mut(&mut model);
+        operation.builtin = Some(BuiltinRepositoryOp::FindAll);
+        operation.return_type = None;
+        operation.return_multiplicity = None;
+    }
+    let violations = check_contract(&model);
+    assert!(
+        violations
+            .iter()
+            .any(|violation| violation.path == format!("{path}.query")
+                && violation.message.contains("builtin")),
+        "{violations:?}"
+    );
+}
+
+#[test]
+fn a_query_must_be_read_only() {
+    let (mut model, path) = with_query_operation(compiled());
+    query_operation_mut(&mut model)
+        .query
+        .as_mut()
+        .expect("the query operation carries a query")
+        .read_only = false;
+    let violations = check_contract(&model);
+    assert!(
+        has(&violations, &format!("{path}.query.readOnly")),
+        "{violations:?}"
+    );
+    assert!(
+        violations
+            .iter()
+            .any(|violation| violation.message.contains("read-only")),
+        "{violations:?}"
+    );
+}
+
+#[test]
+fn a_query_requires_a_non_empty_predicate() {
+    let (mut model, path) = with_query_operation(compiled());
+    query_operation_mut(&mut model)
+        .query
+        .as_mut()
+        .expect("the query operation carries a query")
+        .predicate = "   ".to_string();
+    let violations = check_contract(&model);
+    assert!(
+        has(&violations, &format!("{path}.query.predicate")),
+        "{violations:?}"
+    );
+    assert!(
+        violations
+            .iter()
+            .any(|violation| violation.message.contains("non-empty predicate")),
+        "{violations:?}"
+    );
+}
+
+#[test]
+fn a_query_cannot_carry_an_executable_body() {
+    let (mut model, path) = with_query_operation(compiled());
+    let mut bodies = BTreeMap::new();
+    bodies.insert("stmt".to_string(), r#"{"stmts":[]}"#.to_string());
+    query_operation_mut(&mut model).bodies = bodies;
+    let violations = check_contract(&model);
+    assert!(
+        has(&violations, &format!("{path}.bodies")),
+        "{violations:?}"
+    );
+    assert!(
+        violations
+            .iter()
+            .any(|violation| violation.message.contains("executable body")),
+        "{violations:?}"
+    );
+}
+
+#[test]
+fn a_query_cannot_carry_a_condition() {
+    let (mut model, path) = with_query_operation(compiled());
+    query_operation_mut(&mut model).condition = Some("self.status == state".to_string());
+    let violations = check_contract(&model);
+    assert!(
+        has(&violations, &format!("{path}.condition")),
+        "{violations:?}"
+    );
+    assert!(
+        violations
+            .iter()
+            .any(|violation| violation.message.contains("cannot carry a condition")),
+        "{violations:?}"
+    );
+}
+
+#[test]
+fn a_query_cannot_carry_a_throws_clause() {
+    let (mut model, path) = with_query_operation(compiled());
+    query_operation_mut(&mut model).throws = vec![ErrorRef::prelude("NotFound")];
+    let violations = check_contract(&model);
+    assert!(
+        has(&violations, &format!("{path}.throws")),
+        "{violations:?}"
+    );
+    assert!(
+        violations
+            .iter()
+            .any(|violation| violation.message.contains("`throws` clause")),
+        "{violations:?}"
+    );
+}
+
+#[test]
+fn a_query_pagination_window_must_be_positive_and_ordered() {
+    let (mut model, path) = with_query_operation(compiled());
+    query_operation_mut(&mut model)
+        .query
+        .as_mut()
+        .expect("the query operation carries a query")
+        .pagination = Some(QueryPagination {
+        limit: Some(200),
+        max: Some(100),
+        cursor: false,
+    });
+    let violations = check_contract(&model);
+    assert!(
+        violations.iter().any(|violation| violation.path
+            == format!("{path}.query.pagination.limit")
+            && violation.message.contains("must not exceed max")),
+        "{violations:?}"
+    );
+
+    let (mut model, path) = with_query_operation(compiled());
+    query_operation_mut(&mut model)
+        .query
+        .as_mut()
+        .expect("the query operation carries a query")
+        .pagination = Some(QueryPagination {
+        limit: Some(0),
+        max: Some(100),
+        cursor: false,
+    });
+    let violations = check_contract(&model);
+    assert!(
+        violations.iter().any(|violation| violation.path
+            == format!("{path}.query.pagination.limit")
+            && violation.message.contains("greater than zero")),
+        "{violations:?}"
+    );
+
+    let (mut model, path) = with_query_operation(compiled());
+    query_operation_mut(&mut model)
+        .query
+        .as_mut()
+        .expect("the query operation carries a query")
+        .pagination = Some(QueryPagination {
+        limit: Some(10),
+        max: Some(0),
+        cursor: false,
+    });
+    let violations = check_contract(&model);
+    assert!(
+        violations.iter().any(
+            |violation| violation.path == format!("{path}.query.pagination.max")
+                && violation.message.contains("greater than zero")
+        ),
+        "{violations:?}"
+    );
+}
+
+#[test]
+fn capabilities_require_a_query() {
+    let mut model = compiled();
+    model.modules[0].designs[0]
+        .repository
+        .as_mut()
+        .expect("library.ddd designs a Book repository")
+        .operations[0]
+        .capabilities = vec![CapabilityRef::new("SearchBooks")];
+    let violations = check_contract(&model);
+    assert!(
+        has(
+            &violations,
+            "modules[0].designs[0].repository.operations[0].capabilities"
+        ),
+        "{violations:?}"
+    );
+    assert!(
+        violations
+            .iter()
+            .any(|violation| violation.message.contains("only when it carries a query")),
         "{violations:?}"
     );
 }

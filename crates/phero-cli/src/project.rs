@@ -128,69 +128,197 @@ impl Project {
         self.sources.get(key).map(String::as_str)
     }
 
+    /// The snapshot's text for a resolved key (the tree-level diagnostic
+    /// renderer's source lookup), without touching disk.
+    pub(crate) fn source_of(&self, key: &str) -> Option<&str> {
+        self.sources.get(key).map(String::as_str)
+    }
+
     /// The tree-level `.ddd` problems a directory batch must report before
-    /// compiling: a fragment no root reaches, a fragment reached by two
-    /// roots, and two roots with one authored application name (DD8).
-    pub(crate) fn ddd_tree_errors(&mut self) -> Vec<String> {
+    /// compiling, as **spanned diagnostics** anchored at the offending file
+    /// (DD8, issue pherolang#305):
+    ///
+    /// - `E0390` — a fragment no root reaches;
+    /// - `E0391` — a fragment reached by more than one root;
+    /// - `E0392` — two roots with one authored application name;
+    /// - `E0393` — a `.ddd` import cycle;
+    /// - `E0394` — a root imported as a fragment;
+    /// - `E0395` — a declared fragment the snapshot does not contain.
+    ///
+    /// Each diagnostic is tagged with the file whose source anchors it, so
+    /// `check`/`build` render it through the ordinary ariadne reporter.
+    pub(crate) fn ddd_tree_errors(&mut self) -> Vec<(String, phero_driver::Diagnostic)> {
+        use phero_diagnostics::ddd::{
+            E_DESIGN_APPLICATION_NAME_DUPLICATE, E_DESIGN_FRAGMENT_MISSING,
+            E_DESIGN_FRAGMENT_MULTI_ROOT, E_DESIGN_FRAGMENT_ORPHAN, E_DESIGN_IMPORT_CYCLE,
+            E_DESIGN_ROOT_AS_FRAGMENT,
+        };
+
         let ddd_keys: Vec<String> = self
             .sources
             .keys()
             .filter(|key| SurfaceKind::of_path(Path::new(key)) == Some(SurfaceKind::Ddd))
             .cloned()
             .collect();
-        let mut roots: Vec<(String, String)> = Vec::new(); // (path, app name)
+        let mut roots: Vec<(String, String, phero_syntax::Span)> = Vec::new(); // path, app name, name span
         for key in &ddd_keys {
             let Some(source) = self.sources.get(key) else {
                 continue;
             };
-            if let Some(ast) = phero_syntax::parse_ddd(source).ast {
-                if let Some(application) = ast.application {
-                    roots.push((key.clone(), application.name.text));
-                }
+            if let Some(application) = phero_syntax::parse_ddd(source)
+                .ast
+                .and_then(|ast| ast.application)
+            {
+                roots.push((key.clone(), application.name.text, application.name.span));
             }
         }
-        let mut errors = Vec::new();
+        let mut errors: Vec<(String, phero_driver::Diagnostic)> = Vec::new();
         let mut owner: BTreeMap<String, Vec<String>> = BTreeMap::new();
-        for (root, _) in &roots {
+        let mut sites: BTreeMap<String, Vec<phero_driver::project::DddFragmentSite>> =
+            BTreeMap::new();
+        for (root, _, _) in &roots {
             let source = self.sources.get(root).cloned().unwrap_or_default();
             let mut fetch = |resolved: &str| self.fetch(resolved).ok();
-            let gathered = phero_driver::project::gather_ddd_fragments(root, &source, &mut fetch);
-            for (fragment, _) in gathered.fragments {
-                owner.entry(fragment).or_default().push(root.clone());
+            let gathered = phero_driver::project::gather_ddd_app_imports(root, &source, &mut fetch);
+            for (fragment, fragment_source) in &gathered.fragments {
+                owner
+                    .entry(fragment.clone())
+                    .or_default()
+                    .push(root.clone());
+                // A root imported as a fragment: the import site is the
+                // anchor, and the fragment's own `application` is the fact.
+                if phero_syntax::parse_ddd(fragment_source)
+                    .ast
+                    .is_some_and(|ast| ast.application.is_some())
+                {
+                    if let Some(site) = gathered
+                        .sites
+                        .iter()
+                        .find(|site| &site.resolved == fragment)
+                    {
+                        errors.push((
+                            site.importer.clone(),
+                            phero_driver::Diagnostic::error(
+                                format!(
+                                    "{E_DESIGN_ROOT_AS_FRAGMENT} a design application root \
+                                     cannot be imported as a fragment; remove its `application` \
+                                     declaration or import its root instead"
+                                ),
+                                Some(site.span),
+                            ),
+                        ));
+                    }
+                }
             }
-            for missing in gathered.missing {
-                errors.push(format!(
-                    "imported design fragment \"{missing}\" was not provided"
-                ));
+            for missing in &gathered.missing {
+                if let Some(site) = gathered.sites.iter().find(|site| &site.import == missing) {
+                    errors.push((
+                        site.importer.clone(),
+                        phero_driver::Diagnostic::error(
+                            format!(
+                                "{E_DESIGN_FRAGMENT_MISSING} imported design fragment \
+                                 \"{missing}\" was not provided"
+                            ),
+                            Some(site.span),
+                        ),
+                    ));
+                }
             }
-            for cycle in gathered.cycles {
-                errors.push(format!("design import cycle through {cycle}"));
+            for cycle in &gathered.cycles {
+                // The cycle is closed by the last import that names the
+                // revisited fragment — that is the site to point at.
+                if let Some(site) = gathered
+                    .sites
+                    .iter()
+                    .rev()
+                    .find(|site| &site.resolved == cycle)
+                {
+                    errors.push((
+                        site.importer.clone(),
+                        phero_driver::Diagnostic::error(
+                            format!("{E_DESIGN_IMPORT_CYCLE} design import cycle through {cycle}"),
+                            Some(site.span),
+                        ),
+                    ));
+                }
             }
+            sites.insert(root.clone(), gathered.sites);
         }
         for key in &ddd_keys {
-            if roots.iter().any(|(root, _)| root == key) {
+            if roots.iter().any(|(root, _, _)| root == key) {
                 continue;
             }
+            let source = self.sources.get(key).cloned().unwrap_or_default();
+            // A fragment's own first declaration is the most useful anchor;
+            // a file with nothing parseable anchors at its start.
+            let fallback = phero_syntax::parse_ddd(&source)
+                .ast
+                .and_then(|ast| ast.fragments.first().map(|module| module.span))
+                .unwrap_or_else(|| (0..0).into());
             match owner.get(key) {
-                None => errors.push(format!(
-                    "design fragment {key} has no root: no `.ddd` application imports it"
+                None => errors.push((
+                    key.clone(),
+                    phero_driver::Diagnostic::error(
+                        format!(
+                            "{E_DESIGN_FRAGMENT_ORPHAN} design fragment {key} has no root: \
+                             no `.ddd` application imports it"
+                        ),
+                        Some(fallback),
+                    ),
                 )),
-                Some(roots) if roots.len() > 1 => errors.push(format!(
-                    "design fragment {key} is imported by more than one root: {}",
-                    roots.join(", ")
-                )),
+                Some(owners) if owners.len() > 1 => {
+                    // Anchor at the import that makes the fragment shared —
+                    // the second (in path order) root's declaration.
+                    let mut sorted = owners.clone();
+                    sorted.sort();
+                    let second = &sorted[1];
+                    let span = sites
+                        .get(second)
+                        .and_then(|sites| {
+                            sites
+                                .iter()
+                                .find(|site| &site.resolved == key)
+                                .map(|site| site.span)
+                        })
+                        .unwrap_or(fallback);
+                    errors.push((
+                        second.clone(),
+                        phero_driver::Diagnostic::error(
+                            format!(
+                                "{E_DESIGN_FRAGMENT_MULTI_ROOT} design fragment {key} is \
+                                 imported by more than one root: {}",
+                                owners.join(", ")
+                            ),
+                            Some(span),
+                        ),
+                    ));
+                }
                 Some(_) => {}
             }
         }
-        let mut names: BTreeMap<&str, Vec<&str>> = BTreeMap::new();
-        for (root, name) in &roots {
-            names.entry(name).or_default().push(root);
+        let mut names: BTreeMap<&str, Vec<(&str, phero_syntax::Span)>> = BTreeMap::new();
+        for (root, name, span) in &roots {
+            names.entry(name).or_default().push((root.as_str(), *span));
         }
-        for (name, roots) in names {
-            if roots.len() > 1 {
-                errors.push(format!(
-                    "duplicate design application name '{name}' in {}",
-                    roots.join(", ")
+        for (name, named_roots) in names {
+            if named_roots.len() > 1 {
+                let mut sorted = named_roots.clone();
+                sorted.sort_by_key(|(path, _)| *path);
+                let (anchor, span) = sorted[1];
+                errors.push((
+                    anchor.to_string(),
+                    phero_driver::Diagnostic::error(
+                        format!(
+                            "{E_DESIGN_APPLICATION_NAME_DUPLICATE} duplicate design application \
+                             name '{name}' in {}",
+                            named_roots
+                                .iter()
+                                .map(|(path, _)| *path)
+                                .collect::<Vec<_>>()
+                                .join(", ")
+                        ),
+                        Some(span),
+                    ),
                 ));
             }
         }

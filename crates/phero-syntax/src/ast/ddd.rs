@@ -650,7 +650,9 @@ pub struct DddRepository {
 }
 
 /// One operation of a [`DddRepository`]: either a built-in (whose signature
-/// the consumer knows) or a declared operation with an explicit signature.
+/// the consumer knows), a declared operation with an explicit signature, or a
+/// declared **query** operation (DD9, typed repository queries) — a read-only
+/// `where`/`sort`/`page` projection over the designed class.
 #[derive(Debug, Clone, PartialEq)]
 pub struct DddRepositoryOp {
     /// The operation name; for built-ins this is the written keyword.
@@ -675,13 +677,90 @@ pub struct DddRepositoryOp {
     /// The `when ( ... )` guard condition of a declared operation: a
     /// `raw_parens` span (parens included, expression inside deliberately
     /// unparsed — slicing and type-checking it is the driver's job).
-    /// Built-ins take no condition.
+    /// Built-ins take no condition. A **query** operation takes no guard: its
+    /// predicate is [`DddRepositoryOp::query`]'s `where` clause.
     pub condition: Option<Span>,
     /// The executable statement body of a declared operation (issue
     /// pherolang#178): `Type? name(params) when (...)? { ... }`. Built-ins
     /// never carry one.
     pub body: Option<DddBody>,
+    /// The read-only query form of a declared operation (DD9, typed
+    /// repository queries), when written: the `where`/`sort`/`page` clause
+    /// sequence. `None` for built-ins, delegated/plain declared operations,
+    /// and body operations.
+    pub query: Option<DddQuery>,
+    /// Actor capability names from the `capability` clause, in source order.
+    /// Non-empty only for the query form: a query may be guarded by the same
+    /// `capability <name> (, <name>)*` list a service operation takes, while
+    /// a non-query repository operation takes no clause (the wire artifact's
+    /// repository operations carry none, so accepting one would silently drop
+    /// data).
+    pub capabilities: Vec<Name>,
     /// Span of the whole operation, `;` included (or the closing body `}`).
+    pub span: Span,
+}
+
+/// The read-only query form of a [`DddRepositoryOp`] (DD9, typed repository
+/// queries): a `where` predicate, an ordered `sort` key list, and an optional
+/// `page` window, canonicalized by the formatter into the fixed clause order
+/// `where? sort? page?`.
+///
+/// The predicate is a `raw_parens` span exactly like the `when` guard
+/// convention: the parentheses are included and the expression inside is
+/// deliberately unparsed — slicing and type-checking it (against the
+/// operation's parameters, with the designed class as `self`) is the driver's
+/// job.
+#[derive(Debug, Clone, PartialEq)]
+pub struct DddQuery {
+    /// The `where ( ... )` predicate: a `raw_parens` span (parens included,
+    /// expression inside deliberately unparsed).
+    pub predicate: Span,
+    /// The `sort` keys in written order; empty when the clause is absent.
+    pub sort: Vec<DddSortKey>,
+    /// The `page` window, when written.
+    pub page: Option<DddPage>,
+    /// Span of the clause sequence, from the `where` keyword through the
+    /// last query clause (the `capability` clause is the operation's, not the
+    /// query's).
+    pub span: Span,
+}
+
+/// The sort direction of a [`DddSortKey`] as authored.
+///
+/// `asc` is the default: the **formatter omits it** in canonical output
+/// (`sort createdDate desc, id asc` formats to `sort createdDate desc, id`).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum DddSortDirection {
+    /// `asc` — the default, re-emitted only as its absence.
+    Asc,
+    /// `desc`.
+    Desc,
+}
+
+/// One `field ("asc" | "desc")?` key of a [`DddQuery`]'s `sort` clause.
+#[derive(Debug, Clone, PartialEq)]
+pub struct DddSortKey {
+    /// The sorted feature name as written.
+    pub field: Name,
+    /// The authored direction; `None` when the key omitted one.
+    pub direction: Option<DddSortDirection>,
+    /// Span covering the key and its direction.
+    pub span: Span,
+}
+
+/// The `page` window of a [`DddQuery`]: `page (limit <int>)? (max <int>)?
+/// cursor?`. Every member is optional and defaults per the consumer's
+/// profile; the AST is order-independent (the members' written order is not
+/// preserved).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct DddPage {
+    /// The `limit <int>` page size.
+    pub limit: Option<i64>,
+    /// The `max <int>` page-size ceiling.
+    pub max: Option<i64>,
+    /// Whether `cursor` pagination was declared.
+    pub cursor: bool,
+    /// Span of the whole clause, the `page` keyword included.
     pub span: Span,
 }
 

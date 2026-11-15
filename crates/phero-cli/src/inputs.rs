@@ -651,47 +651,49 @@ pub(crate) fn read_ddd_design(
     let import_paths = |source: &str| -> Vec<String> {
         phero_syntax::parse_ddd(source)
             .ast
-            .map(|ast| {
-                ast.imports
-                    .into_iter()
-                    .map(|import| import.path)
-                    .filter(|import| !import.ends_with(".ddd") && !import.ends_with(".dmn"))
-                    .collect()
-            })
+            .map(|ast| ast.imports.into_iter().map(|import| import.path).collect())
             .unwrap_or_default()
     };
-    let domains = gather_domain_sources(&path, &source, import_paths, &mut fetch);
-    let fragment_gather = phero_driver::project::gather_ddd_fragments(&path, &source, &mut fetch);
+    let gathered = phero_driver::project::gather_ddd_app_imports(&path, &source, &mut fetch);
     if let Some(error) = read_error {
         return Err(error);
     }
-    if let Some(missing) = fragment_gather.missing.first() {
+    if let Some((resolved, importer)) = gathered.missing_domains.first() {
+        anyhow::bail!("cannot read imported file {resolved} (imported by {importer})");
+    }
+    if let Some(missing) = gathered.missing.first() {
         anyhow::bail!("imported design fragment \"{missing}\" was not provided");
     }
-    if let Some(cycle) = fragment_gather.cycles.first() {
+    if let Some(cycle) = gathered.cycles.first() {
         anyhow::bail!("design import cycle through {cycle}");
     }
+    let domains = gathered.domains;
     let schemas = collect_schema_imports(&domains)?;
     let sigil = collect_sigil_imports(&domains)?;
-    let import_strings = phero_syntax::parse_ddd(&source)
-        .ast
-        .map(|ast| {
-            ast.imports
-                .into_iter()
-                .map(|import| import.path)
-                .collect::<Vec<_>>()
-        })
-        .unwrap_or_default();
+    let mut import_keys = render_keys(file, &import_paths(&source), &domains);
+    // A fragment's `.mox` import renders under its own as-written string; the
+    // first spelling of a duplicate key wins (the map is for diagnostics).
+    for (fragment_path, fragment_source) in &gathered.fragments {
+        for (written, text) in render_keys(
+            Path::new(fragment_path),
+            &import_paths(fragment_source),
+            &domains,
+        ) {
+            if !import_keys.iter().any(|(existing, _)| *existing == written) {
+                import_keys.push((written, text));
+            }
+        }
+    }
     Ok(DddDesignPair {
         pair: DomainPair {
             path,
-            import_keys: render_keys(file, &import_strings, &domains),
+            import_keys,
             source,
             domains,
             schemas,
             sigil,
         },
-        fragments: fragment_gather.fragments,
+        fragments: gathered.fragments,
     })
 }
 

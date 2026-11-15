@@ -34,6 +34,7 @@ mod graph;
 mod invariants;
 mod links;
 mod machines;
+mod queries;
 mod searches;
 mod services;
 mod values;
@@ -246,19 +247,21 @@ struct Registries<'a> {
 ///
 /// See [`compile_ddd_str`](crate::compile_ddd_str) for the normative
 /// contract.
+#[allow(clippy::too_many_arguments)]
 pub(crate) fn compile_ddd_file(
     path: &str,
     design_source: &str,
     ast: Option<&dsl::DddFile>,
     parse_diagnostics: &[Diagnostic],
     domains: &[DomainUnit],
+    provided_imports: &[String],
     actors: Option<&[phero_ir::ActorModel]>,
     decisions: &[(String, phero_ir::dmn::DmnModel)],
 ) -> (Option<DddModel>, Vec<(String, Diagnostic)>) {
     // Stage 1 — the prologue: import-bucket checks feed the shared engine
     // diagnostic block (parse diagnostics, then import diagnostics, then
     // domain diagnostics, each under its own file path).
-    let import_diagnostics = check_design_imports(ast, path, domains, decisions);
+    let import_diagnostics = check_design_imports(ast, path, provided_imports, decisions);
     let diags = pipeline::engine_diags(path, parse_diagnostics, import_diagnostics, domains);
 
     let Some(ast) = ast else {
@@ -566,7 +569,7 @@ fn rule_10_validate_capabilities(
 fn check_design_imports(
     ast: Option<&dsl::DddFile>,
     origin_path: &str,
-    domains: &[DomainUnit],
+    provided_imports: &[String],
     decisions: &[(String, phero_ir::dmn::DmnModel)],
 ) -> Vec<Diagnostic> {
     let imports = ast.map(|file| file.imports.as_slice()).unwrap_or_default();
@@ -593,7 +596,7 @@ fn check_design_imports(
                     Some(import.span),
                 ));
             }
-        } else if !domains.iter().any(|unit| unit.path == import.path) {
+        } else if !provided_imports.iter().any(|path| path == &import.path) {
             import_diagnostics.push(Diagnostic::error(
                 format!("imported file \"{}\" was not provided", import.path),
                 Some(import.span),

@@ -371,6 +371,18 @@ fn module_edges(
                     &operation_id,
                     &operation.throws,
                 );
+                // DD9: a query's `capability` clause is the read
+                // authorization — the same `carries` edge a service
+                // operation's clause emits, so coverage and the read
+                // analytics see it.
+                for capability in &operation.capabilities {
+                    pooled(
+                        edges,
+                        &operation_id,
+                        kinds::CARRIES,
+                        symbols.by_last_segment(kinds::CAPABILITY, &capability.name, application),
+                    );
+                }
             }
         }
         // The designed class's local name: the node table's `<Class>` segment

@@ -36,7 +36,7 @@ use std::path::{Path, PathBuf};
 use std::sync::atomic::Ordering;
 use std::sync::Arc;
 
-use phero_driver::graph::{build, GraphFile, GraphIndex, GraphInputs};
+use phero_driver::graph::{build, GraphFile, GraphFragment, GraphIndex, GraphInputs};
 use phero_driver::navigation::{
     ifml_surface, mox_index, IndexedDefinition, IndexedReference, ReferenceContext, SurfaceIndex,
     SurfaceLookup,
@@ -67,6 +67,11 @@ pub(super) struct SnapshotFile {
     pub(super) uri: Uri,
     /// The text the index was built from (the open buffer when one exists).
     pub(super) text: String,
+    /// The root application name this file's declarations are keyed by
+    /// (`.ddd` fragments only; `None` everywhere else). A fragment carries
+    /// no `application` declaration of its own, so its span index and its
+    /// graph nodes need the root's name supplied (DD8).
+    pub(super) application: Option<String>,
     /// The file's spanned index.
     pub(super) index: SurfaceIndex,
 }
@@ -98,6 +103,9 @@ struct MemoEntry {
     /// non-compiling sibling contributes nothing, and is retried when its
     /// key moves).
     artifact: Option<SnapshotArtifact>,
+    /// The root application name a `.ddd` fragment's index and nodes are
+    /// keyed by (`None` for a root and every other surface).
+    application: Option<String>,
     /// The diagnostics this compile produced (own-file only, filtered
     /// exactly like the publish pipeline's), already in LSP shape — the
     /// publish source for the surfaces whose only compile is this one
@@ -150,17 +158,51 @@ impl GraphSnapshot {
 
     /// The definition location of one graph node: the declaring file's span
     /// for the node's `(kind, name)`.
+    ///
+    /// The node's `file` is the file whose **artifact** declared it, which is
+    /// not always the file that spells it: a `.ddd` fragment's declarations
+    /// are merged into its root's artifact and attributed to the root (DD8).
+    /// The snapshot therefore looks in the attributed file first and then in
+    /// every other participating file, in display order — declaration names
+    /// are application-wide unique, so the first match is the declaration.
+    /// A node the snapshot's span tables do not cover yields **no** location,
+    /// never a guess.
     pub(super) fn location(&self, node: &GraphNode) -> Option<Location> {
-        let file = self.file(&node.file)?;
-        let definition = file
-            .index
-            .definitions
+        let preferred = self.file(&node.file);
+        // Within one application, declaration names are unique; across
+        // applications they are not, so a file that belongs to the node's
+        // application outranks one that does not. Non-`.ddd` files carry no
+        // application name and fill the tail.
+        let in_application =
+            |file: &&SnapshotFile| file.application.as_deref() == Some(node.application.as_str());
+        let same_application = self
+            .files
             .iter()
-            .find(|definition| definition.kind == node.kind && definition.name == node.name)?;
-        Some(Location {
-            uri: file.uri.clone(),
-            range: PositionMap::new(&file.text).range_for(definition.name_span),
-        })
+            .filter(|file| file.display != node.file)
+            .filter(in_application);
+        let other_application = self
+            .files
+            .iter()
+            .filter(|file| file.display != node.file)
+            .filter(|file| !in_application(file));
+        for file in preferred
+            .into_iter()
+            .chain(same_application)
+            .chain(other_application)
+        {
+            let Some(definition) =
+                file.index.definitions.iter().find(|definition| {
+                    definition.kind == node.kind && definition.name == node.name
+                })
+            else {
+                continue;
+            };
+            return Some(Location {
+                uri: file.uri.clone(),
+                range: PositionMap::new(&file.text).range_for(definition.name_span),
+            });
+        }
+        None
     }
 
     /// The landing site of a `platformCapability` node: the closed
@@ -424,6 +466,9 @@ impl PheroBackend {
             // text (plus `.mox`'s own schema/sigil imports).
             let imports = resolved_imports(surface, &text, &path);
             let key = self.compile_key(surface, &path, &text, &imports);
+            // DD8: a `.ddd` fragment's declarations key by its root's
+            // authored application name, which only the snapshot can resolve.
+            let application = self.snapshot_application(surface, &uri, &text);
             // The text equality is a collision guard on top of the key: a
             // 64-bit hash is not a proof, and the own text is right here.
             let hit = memo
@@ -436,13 +481,14 @@ impl PheroBackend {
                 self.compile_count.fetch_add(1, Ordering::Relaxed);
                 let (artifact, diagnostics) =
                     self.compile_snapshot_file(surface, &path, &text, &uri);
-                let index = surface_index(surface, &text, &display);
+                let index = surface_index(surface, &text, &display, application.as_deref());
                 memo.entries.insert(
                     path.clone(),
                     MemoEntry {
                         key,
                         text: text.clone(),
                         artifact,
+                        application,
                         diagnostics,
                         index,
                     },
@@ -459,12 +505,22 @@ impl PheroBackend {
                     imports,
                     artifact.clone(),
                 );
+                // DD8: a design root's fragments are files in the same
+                // application — they own a file node and
+                // `applications[].files` membership (the root artifact
+                // already carries their declarations).
+                if matches!(artifact, SnapshotArtifact::Design(_)) {
+                    inputs
+                        .design_fragments
+                        .extend(self.snapshot_design_fragments(&uri, &text));
+                }
             }
             if let Some(index) = &entry.index {
                 files.push(SnapshotFile {
                     display,
                     uri,
                     text: entry.text.clone(),
+                    application: entry.application.clone(),
                     index: index.clone(),
                 });
             }
@@ -477,6 +533,46 @@ impl PheroBackend {
             model: build(&inputs),
             files,
         })
+    }
+
+    /// The root application name a document's declarations key by, when the
+    /// document is a `.ddd` file. A root carries its own `application`; a
+    /// fragment needs its root's (DD8) — `ddd_app_sources` resolves it
+    /// through the directory snapshot, and `None` means no root reaches it
+    /// (the fragment is then reported as unreachable, not guessed).
+    fn snapshot_application(&self, surface: Surface, uri: &Uri, text: &str) -> Option<String> {
+        if surface != Surface::Known(SurfaceKind::Ddd) {
+            return None;
+        }
+        let (_, root_text, _) = self.ddd_app_sources(uri, text)?;
+        phero_syntax::parse_ddd(&root_text)
+            .ast
+            .and_then(|ast| ast.application)
+            .map(|application| application.name.text)
+    }
+
+    /// The `.ddd` fragments of one design root, as graph input: a fragment
+    /// owns no artifact of its own, but it is a file in the application
+    /// (DD8), so the graph gets its file node and `applications[].files`
+    /// membership — the same inputs the CLI's `graph build` supplies.
+    fn snapshot_design_fragments(&self, uri: &Uri, text: &str) -> Vec<GraphFragment> {
+        let Some((_, _, fragments)) = self.ddd_app_sources(uri, text) else {
+            return Vec::new();
+        };
+        fragments
+            .into_iter()
+            .filter_map(|fragment| {
+                let path = Path::new(&fragment.path);
+                let display = display_path(path)?;
+                let imports =
+                    resolved_imports(Surface::Known(SurfaceKind::Ddd), &fragment.source, path);
+                Some(GraphFragment {
+                    display,
+                    path: fragment.path,
+                    imports,
+                })
+            })
+            .collect()
     }
 
     /// The invalidation key of one candidate (pherolang#254): its own text
@@ -508,6 +604,22 @@ impl PheroBackend {
             for import in mox_schema_imports(text, path) {
                 import.hash(&mut hasher);
                 hash_text(&mut hasher, std::fs::read_to_string(&import).ok());
+            }
+        }
+        // DD8: a `.ddd` document compiles as one application, so its key
+        // covers the root text and every fragment's text — an edit to the
+        // root (or a sibling fragment) must invalidate each participant's
+        // index and diagnostics.
+        if surface == Surface::Known(SurfaceKind::Ddd) {
+            if let Some(uri) = Uri::from_file_path(path) {
+                if let Some((root_path, root_text, fragments)) = self.ddd_app_sources(&uri, text) {
+                    root_path.hash(&mut hasher);
+                    root_text.hash(&mut hasher);
+                    for fragment in fragments {
+                        fragment.path.hash(&mut hasher);
+                        fragment.source.hash(&mut hasher);
+                    }
+                }
             }
         }
         hasher.finish()
@@ -575,34 +687,36 @@ impl PheroBackend {
                 let fragment = phero_syntax::parse_ddd(text)
                     .ast
                     .is_some_and(|ast| ast.application.is_none());
-                let domains = phero_driver::project::gather_domain_sources(
-                    &key,
-                    text,
-                    |source| {
-                        phero_syntax::parse_ddd(source)
-                            .ast
-                            .map(|ast| {
-                                ast.imports
-                                    .into_iter()
-                                    .map(|import| import.path)
-                                    .filter(|import| !import.ends_with(".ddd"))
-                                    .collect()
-                            })
-                            .unwrap_or_default()
-                    },
-                    &mut fetch,
-                );
                 // DD8: a fragment compiles through its root; only the root
-                // owns the merged artifact.
-                let (root_path, root_text, fragments) = self
-                    .ddd_app_sources(uri, text)
-                    .unwrap_or((key.clone(), text.to_string(), Vec::new()));
+                // owns the merged artifact. The import closure covers the
+                // root **and** every fragment, each resolved relative to its
+                // declaring file — a fragmented application compiles whole
+                // or not at all.
+                let (root_path, root_text, _) = self.ddd_app_sources(uri, text).unwrap_or((
+                    key.clone(),
+                    text.to_string(),
+                    Vec::new(),
+                ));
+                let mut fetch =
+                    |resolved: &str| -> Option<String> { self.fetch_open_or_disk(resolved) };
+                let gathered = phero_driver::project::gather_ddd_app_imports(
+                    &root_path, &root_text, &mut fetch,
+                );
+                let fragments: Vec<phero_driver::DddFragment> = gathered
+                    .fragments
+                    .iter()
+                    .map(|(path, source)| phero_driver::DddFragment {
+                        path: path.clone(),
+                        source: source.clone(),
+                    })
+                    .collect();
+                let imports = super::pipeline::domain_import_bundle(&gathered.domains);
                 let compilation = phero_driver::compile_ddd_app_str(
                     &root_path,
                     &root_text,
                     &fragments,
-                    &domains,
-                    &domain_imports(&domains),
+                    &gathered.domains,
+                    &imports,
                 );
                 (
                     (!fragment)
@@ -908,11 +1022,23 @@ fn display_path(path: &Path) -> Option<String> {
 /// a source that does not parse is `None` (the other surfaces' builders
 /// yield an empty index; `.mox`/`.ifml` project a parse, so absence is the
 /// equivalent answer).
-fn surface_index(surface: Surface, text: &str, display: &str) -> Option<SurfaceIndex> {
+///
+/// `application` is the root application name for a `.ddd` **fragment**
+/// (DD8): a fragment's declarations are keyed by their merged application's
+/// name, which its own source does not carry, so the snapshot supplies it.
+/// Every other surface ignores it.
+fn surface_index(
+    surface: Surface,
+    text: &str,
+    display: &str,
+    application: Option<&str>,
+) -> Option<SurfaceIndex> {
     Some(match surface {
         Surface::Known(SurfaceKind::Mox) => mox_index(text),
         Surface::Known(SurfaceKind::Actor) => phero_driver::navigation::actors_index(text),
-        Surface::Known(SurfaceKind::Ddd) => phero_driver::navigation::ddd_index(text),
+        Surface::Known(SurfaceKind::Ddd) => {
+            phero_driver::navigation::ddd_index_with_application(text, application)
+        }
         Surface::Known(SurfaceKind::Evt) => phero_driver::navigation::evt_index(text, display),
         Surface::Known(SurfaceKind::Deploy) => phero_driver::navigation::deploy_index(text),
         Surface::Known(SurfaceKind::Ifml) => {

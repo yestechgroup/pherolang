@@ -27,8 +27,8 @@ use super::*;
 /// deferred rules 6 and 11 read. Returns the lowered designs and the
 /// stage's diagnostics.
 #[allow(clippy::too_many_arguments)]
-pub(crate) fn lower_module_designs(
-    module: &dsl::DddModule,
+pub(crate) fn lower_module_designs<'a>(
+    module: &'a dsl::DddModule,
     design_source: &str,
     packages: &[DomainPackage],
     base: Option<&str>,
@@ -37,7 +37,7 @@ pub(crate) fn lower_module_designs(
     expr_context: Option<&phero_expr::TypeContext>,
     prep: &DesignPrep,
     error_table: &ErrorTable,
-    registries: &mut Registries<'_>,
+    registries: &mut Registries<'a>,
 ) -> (Vec<Design>, Vec<Diagnostic>) {
     let mut local: Vec<Diagnostic> = Vec::new();
     let mut designs_out = Vec::new();
@@ -261,6 +261,7 @@ pub(crate) fn lower_module_designs(
                 resolved.as_ref(),
                 packages,
                 base,
+                union,
                 machines,
                 expr_context,
                 design_source,
@@ -509,19 +510,20 @@ fn rule_14_scaffold_repository(design: &dsl::DddDesign) -> Option<Diagnostic> {
 /// entry the deferred rules 8 and 9 read. Returns the lowered repository
 /// and the stage's diagnostics.
 #[allow(clippy::too_many_arguments)]
-fn lower_design_repository(
-    design: &dsl::DddDesign,
-    repository: &dsl::DddRepository,
-    module: &dsl::DddModule,
+fn lower_design_repository<'a>(
+    design: &'a dsl::DddDesign,
+    repository: &'a dsl::DddRepository,
+    module: &'a dsl::DddModule,
     resolved: Option<&(String, String)>,
     packages: &[DomainPackage],
     base: Option<&str>,
+    union: Option<&phero_ir::Model>,
     machines: &MachineScopes,
     expr_context: Option<&phero_expr::TypeContext>,
     design_source: &str,
     prep: &DesignPrep,
     error_table: &ErrorTable,
-    registries: &mut Registries<'_>,
+    registries: &mut Registries<'a>,
 ) -> (Option<Repository>, Vec<Diagnostic>) {
     let mut local: Vec<Diagnostic> = Vec::new();
 
@@ -570,6 +572,7 @@ fn lower_design_repository(
         &mut local,
         design_source,
         resolved,
+        union,
         machines,
         expr_context,
         &prep.dto_names,
@@ -716,19 +719,20 @@ fn check_flags(design: &dsl::DddDesign, local: &mut Vec<Diagnostic>) {
 /// no signature; declared operations type-check their signature against the
 /// domain model. Rule 2 — operation names are unique within one repository.
 #[allow(clippy::too_many_arguments)]
-fn lower_repository_ops(
-    repository: &dsl::DddRepository,
-    module: &dsl::DddModule,
+fn lower_repository_ops<'a>(
+    repository: &'a dsl::DddRepository,
+    module: &'a dsl::DddModule,
     packages: &[DomainPackage],
     base: Option<&str>,
     local: &mut Vec<Diagnostic>,
     source: &str,
     self_class: Option<&(String, String)>,
+    union: Option<&phero_ir::Model>,
     machines: &MachineScopes,
     context: Option<&phero_expr::TypeContext>,
     dto_names: &[String],
     error_table: &ErrorTable,
-    registries: &mut Registries<'_>,
+    registries: &mut Registries<'a>,
 ) -> Vec<RepositoryOperation> {
     let mut ops: Vec<String> = Vec::new();
     let mut operations = Vec::new();
@@ -819,6 +823,31 @@ fn lower_repository_ops(
                     error_table.resolve_throw(name, &module.name.text, &op_context, local)
                 })
                 .collect();
+            // DD9: a query operation's `where`/`sort`/`page` clauses, typed
+            // against the designed class and the operation's parameters. A
+            // non-query operation gets `None` and the historical shape.
+            let query = super::queries::lower_query(
+                op,
+                super::queries::QueryCheck {
+                    label: op_context.clone(),
+                    source,
+                    design_class: self_class,
+                    union,
+                    context,
+                    params: &params,
+                },
+                local,
+            );
+            // A `capability` clause is legal only on the query form (a read
+            // authorization); the parser refuses it elsewhere.
+            let mut capabilities: Vec<String> = Vec::new();
+            for capability in &op.capabilities {
+                capabilities.push(capability.text.clone());
+                registries.capability_checks.push(CapabilityCheck {
+                    context: op_context.clone(),
+                    capability,
+                });
+            }
             operations.push(
                 RepositoryOperation::declared(op.name.text.clone(), return_type, params)
                     .with_return_multiplicity(return_multiplicity)
@@ -827,7 +856,14 @@ fn lower_repository_ops(
                         op.condition
                             .map(|span| crate::conditions::when_interior(source, span).to_string()),
                     )
-                    .with_throws(throws),
+                    .with_throws(throws)
+                    .with_capabilities(
+                        capabilities
+                            .iter()
+                            .map(|name| phero_ir::ddd::CapabilityRef::new(name.clone()))
+                            .collect(),
+                    )
+                    .with_query(query),
             );
             if let Some(condition) = op.condition {
                 check_condition(

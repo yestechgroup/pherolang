@@ -134,7 +134,6 @@ impl PheroBackend {
                     .to_file_path()
                     .map(|path| path.display().to_string())
                     .unwrap_or_else(|| uri.as_str().to_string());
-                let (domains, imports) = self.domain_sources_for_ddd(uri, &text);
                 // pherolang#128 (J3 at compile time): the capability clauses
                 // resolve against every `.actor` artifact of the open
                 // design's directory — the empty slice is the exact
@@ -144,12 +143,34 @@ impl PheroBackend {
                 let actors = self.sibling_actor_models(uri);
                 let decisions = self.sibling_decision_models(uri);
                 // DD8 (issue pherolang#305): a fragment compiles through
-                // its root; a root gathers its fragment closure.
+                // its root; a root gathers its fragment closure. The import
+                // closure spans the root **and** every fragment, each
+                // resolved relative to its declaring file.
                 let app = self.ddd_app_sources(uri, &text);
-                let (root_path, root_text, fragments) =
+                let (root_path, root_text, _) =
                     app.unwrap_or((driver_path.clone(), text.clone(), Vec::new()));
+                let mut fetch =
+                    |resolved: &str| -> Option<String> { self.fetch_open_or_disk(resolved) };
+                let gathered = phero_driver::project::gather_ddd_app_imports(
+                    &root_path, &root_text, &mut fetch,
+                );
+                let fragments: Vec<phero_driver::DddFragment> = gathered
+                    .fragments
+                    .iter()
+                    .map(|(path, source)| phero_driver::DddFragment {
+                        path: path.clone(),
+                        source: source.clone(),
+                    })
+                    .collect();
+                let imports = domain_import_bundle(&gathered.domains);
                 phero_driver::compile_ddd_app_str_with_decisions(
-                    &root_path, &root_text, &fragments, &domains, &imports, &actors, &decisions,
+                    &root_path,
+                    &root_text,
+                    &fragments,
+                    &gathered.domains,
+                    &imports,
+                    &actors,
+                    &decisions,
                 )
                 .diagnostics
                 .iter()
@@ -286,32 +307,6 @@ impl PheroBackend {
     /// imported domain refreshes the design without a save. A missing
     /// import file is skipped here: the driver reports the unprovided
     /// import as a diagnostic.
-    pub(super) fn domain_sources_for_ddd(
-        &self,
-        uri: &Uri,
-        text: &str,
-    ) -> (Vec<(String, String)>, phero_driver::DomainImports) {
-        let mut domains: Vec<(String, String)> = Vec::new();
-        if let Some(path) = uri.to_file_path() {
-            let path_key = path.display().to_string();
-            let mut fetch =
-                |resolved: &str| -> Option<String> { self.fetch_open_or_disk(resolved) };
-            domains = phero_driver::project::gather_domain_sources(
-                &path_key,
-                text,
-                |source| {
-                    phero_syntax::parse_ddd(source)
-                        .ast
-                        .map(|ast| ast.imports.into_iter().map(|import| import.path).collect())
-                        .unwrap_or_default()
-                },
-                &mut fetch,
-            );
-        }
-        let imports = domain_import_bundle(&domains);
-        (domains, imports)
-    }
-
     /// The root application and `.ddd` fragment closure of one open `.ddd`
     /// document (DD8): the document itself when it is a root, else the
     /// directory's root whose import closure reaches it. Open buffers win
@@ -617,25 +612,32 @@ impl PheroBackend {
         };
         let mut models = Vec::new();
         for (sibling, text) in self.siblings_in_application(&path, SurfaceKind::Ddd) {
+            // DD8: a fragment owns no artifact of its own — it is merged by
+            // its root's compile, and the root may be a different sibling.
+            if phero_syntax::parse_ddd(&text)
+                .ast
+                .is_none_or(|ast| ast.application.is_none())
+            {
+                continue;
+            }
             let key = sibling.display().to_string();
             let mut fetch =
                 |resolved: &str| -> Option<String> { self.fetch_open_or_disk(resolved) };
-            let domains = phero_driver::project::gather_domain_sources(
+            let gathered = phero_driver::project::gather_ddd_app_imports(&key, &text, &mut fetch);
+            let fragments: Vec<phero_driver::DddFragment> = gathered
+                .fragments
+                .iter()
+                .map(|(path, source)| phero_driver::DddFragment {
+                    path: path.clone(),
+                    source: source.clone(),
+                })
+                .collect();
+            let compilation = phero_driver::compile_ddd_app_str(
                 &key,
                 &text,
-                |source| {
-                    phero_syntax::parse_ddd(source)
-                        .ast
-                        .map(|ast| ast.imports.into_iter().map(|import| import.path).collect())
-                        .unwrap_or_default()
-                },
-                &mut fetch,
-            );
-            let compilation = phero_driver::compile_ddd_str(
-                &key,
-                &text,
-                &domains,
-                &domain_import_bundle(&domains),
+                &fragments,
+                &gathered.domains,
+                &domain_import_bundle(&gathered.domains),
             );
             if let Some(model) = compilation.model {
                 models.push(model);

@@ -43,7 +43,7 @@ Root shapes, as actually serialized:
 | --- | --- |
 | Domain IR (`Model`) | `{"formatVersion": N, "pheroVersion"?: "…", "packages": […]}` |
 | Actor policy (`ActorModel`) | `{"formatVersion": N, "blocks"?: […]}` — block-less serializes as exactly `{"formatVersion": N}` |
-| DDD design (`ddd::DddModel`) | `{"formatVersion": N, "pheroVersion"?: "…", "application"?: {…}, "errors"?: […], "modules"?: […]}` (the design keys omitted when empty; `pheroVersion` is provenance only; a `value` design nested inside carries the fixed `semantics` block, entity and dto designs omit it — strict value semantics, issue #299; a `dto` design carries `dtoShape`, and `class` is omitted for a standalone DTO — DD3, issue #300; `errors` carries the application-scoped error declarations, each module its private ones, and operations their resolved `throws` — DD7, issue #304; every entity design carries its effective `isAggregateRoot` (absent only when the verdict is undecided) and a non-root its `aggregate {root, origin}` — DD4, issue #301; entity/value designs carry the sparse ordered `invariants: [{expression}]` — DD5, issue #302; a multi-file application is one merged artifact for its root plus imported fragments, never one per fragment — DD8, issue #305 — and `formatVersion` stays 2) |
+| DDD design (`ddd::DddModel`) | `{"formatVersion": N, "pheroVersion"?: "…", "application"?: {…}, "errors"?: […], "modules"?: […]}` (the design keys omitted when empty; `pheroVersion` is provenance only; a `value` design nested inside carries the fixed `semantics` block, entity and dto designs omit it — strict value semantics, issue #299; a `dto` design carries `dtoShape`, and `class` is omitted for a standalone DTO — DD3, issue #300; `errors` carries the application-scoped error declarations, each module its private ones, and operations their resolved `throws` — DD7, issue #304; every entity design carries its effective `isAggregateRoot` (absent only when the verdict is undecided) and a non-root its `aggregate {root, origin}` — DD4, issue #301; entity/value designs carry the sparse ordered `invariants: [{expression}]` — DD5, issue #302; a multi-file application is one merged artifact for its root plus imported fragments, never one per fragment — DD8, issue #305 — and `formatVersion` stays 2; a declared repository operation may carry the sparse `query` block — DD9, issue #306) |
 | Event contract (`events::EventModel`) | `{"formatVersion": N, "events"?: […], "channels"?: […], "subscriptions"?: […]}` (all omitted when empty) |
 | Deployment (`deploy::DeployModel`) | `{"formatVersion": N, "applications"?: […], "profiles"?: […], "deployments"?: […]}` (all omitted when empty) |
 | Use case (`usecases::UseCaseModel`) | `{"formatVersion": N, "useCases"?: […]}` (omitted when empty) |
@@ -106,6 +106,38 @@ an actor artifact).
   `{"name": …, "scope": "application" | "module" | "prelude", "module"?: …}`
   references — `module` present exactly for the module scope. Both lists are
   sparse, so a vocabulary-less artifact is byte-identical.
+- **DDD repository queries (DD9, issue #306).** A declared repository
+  operation may carry a sparse `query` block:
+
+  ```json
+  "query": {
+    "predicate": "self.customer == customerId && self.status == state",
+    "sort": [
+      { "field": "createdDate", "fieldType": { "type": "primitive", "value": "date" }, "direction": "desc" },
+      { "field": "orderNo", "fieldType": { "type": "primitive", "value": "string" }, "direction": "asc" }
+    ],
+    "pagination": { "limit": 20, "max": 100, "cursor": false },
+    "readOnly": true
+  }
+  ```
+
+  `predicate` is the verbatim source between the `where` parentheses —
+  typing is proven at compile time, so a consumer re-parses it with the
+  shared expression semantics and never re-types it. `sort` entries carry
+  the **resolved** field type (`fieldType`) so ordering needs no domain
+  lookup; `direction` is `asc`/`desc` and canonical output omits `asc` in
+  source. `pagination` is optional (`limit` = default page size, `max` =
+  cap, `cursor` = key-set pagination); when present, all three keys are
+  emitted. `readOnly` is always `true` and always emitted — it is lowered,
+  not inferred from the presence of `query`. A query operation also carries
+  its resolved `capabilities` (the read authorization) in the same
+  `CapabilityRef` shape service operations use. The block and the
+  capability list are sparse: an artifact with no queries is
+  byte-identical, and `DDD_MODEL_FORMAT_VERSION` stays 2. `phero-backend-ddd`
+  refuses, from the artifact alone, a query with `readOnly` false, an empty
+  predicate, a body/`condition`/`throws`, a non-positive or `limit > max`
+  pagination, a built-in operation carrying a query, and `capabilities` on a
+  non-query operation.
 - **Version gate.** Readers accept exactly their own
   `FORMAT_VERSION` (domain artifacts) or `ACTOR_MODEL_FORMAT_VERSION`
   (actor artifacts) and reject anything else with an error naming the

@@ -9,6 +9,30 @@ policy in [docs/VERSIONING.md](docs/VERSIONING.md).
 
 ### Added
 
+- **Typed repository queries in the `.ddd` surface** (DD9, issue
+  [#306](https://github.com/yestechgroup/pherolang/issues/306), epic #297): a
+  declared repository operation may now be a **finder** — a `where`
+  predicate typed against the designed class plus the operation's
+  parameters (bare features and `self.<feature>` both resolve; a
+  parameter/feature collision is an error with the `self.` help), an
+  explicit `sort` over direct stored scalar features (a class reference, a
+  collection, and a derived feature are each refused with the reason), and
+  bounded `page` metadata (`limit`/`max`/`cursor`, `limit > max` refused).
+  A query is read-only by construction: no statement body, no `when` guard,
+  no `throws`; `capability` is the read authorization and resolves against
+  the application's `.actor` artifacts like a service operation's. The
+  artifact gains the sparse `query` block (`predicate` verbatim, `sort` with
+  resolved `fieldType` and `direction`, `pagination`, `readOnly: true`) and
+  the resolved `capabilities` list; `DDD_MODEL_FORMAT_VERSION` stays 2 and
+  query-less artifacts are byte-identical. `phero-backend-ddd` /
+  `pherolang artifact check` enforce the read-only invariants from the
+  artifact alone, and `E0396`–`E0399` are the new compile-time codes.
+  `docs/DDD.md` gains the query section, the `search` vs `query` decision
+  table, the Sculptor `findByQuery`/`findByCondition` mapping, and the
+  consumer contract (parameterized store query, no string interpolation,
+  `0..1` optional, no mutation or events, named generation-time
+  rejections); `docs/BACKENDS.md` carries the wire shape; `examples/shop`
+  gains real finders.
 - **Declared error vocabulary and a bounded executable-body contract in the
   `.ddd` surface** (DD7, issue #304, epic #297): an application or module
   now declares its domain errors with typed payloads
@@ -189,6 +213,28 @@ policy in [docs/VERSIONING.md](docs/VERSIONING.md).
   — the artifact keeps the authored spelling and adds the resolved companion,
   matching the shipped DD1 contract (issue
   [#298](https://github.com/yestechgroup/pherolang/issues/298)).
+- **Multi-file `.ddd` applications are correct end to end** (DD8 follow-up
+  audit, issue [#305](https://github.com/yestechgroup/pherolang/issues/305)).
+  An import now resolves relative to the file that **declares** it, so a
+  fragment's `import "domain.mox"` names the fragment's own directory; the
+  CLI, the LSP snapshot, the `.uc`/`.deploy`/`.cmmn` importers, and the
+  actor join's design pool all compile a fragmented root **whole** (root plus
+  every fragment plus every domain) instead of silently compiling the root
+  alone. The five tree-level failures — orphan fragment, fragment under two
+  roots, duplicate application name, import cycle, root imported as a
+  fragment, and a missing fragment — are now **spanned diagnostics** with
+  stable codes `E0390`–`E0395` anchored at the offending import (the
+  fragment's first module for an orphan) instead of plain `Error:` lines.
+  Editor navigation for fragments is wired through: a fragment's span index
+  is built with the root application name, a declaration search falls back
+  from the node's attributed file to the file that spells it, the fragment's
+  content key covers the root and every sibling fragment, and the editor
+  snapshot supplies the fragment file inputs the CLI's `graph build` already
+  did (file node and `applications[].files` membership). Capability-noun
+  classification now reads a design's effective aggregate boundary from the
+  artifact (`isAggregateRoot`/`aggregate`) and stays silent on an undecided
+  boundary, falling back to containment derivation only for a hand-built
+  artifact with no verdict.
 
 ## [0.3.0] — Phero Lang (2026-11-14)
 

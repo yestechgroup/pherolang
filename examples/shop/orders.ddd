@@ -28,6 +28,16 @@ application Orders {
             save;
             delete;
             protected Order findByNumber(String orderNo);
+            /// The order book for one currency, oldest first — a typed,
+            /// parameterized finder (DD9, issue pherolang#306). The
+            /// predicate is fully typed at compile time; the consumer
+            /// lowers it to the store's query language and never
+            /// string-interpolates the parameter. `code` never shadows the
+            /// `currency` feature, so the predicate reads `self.currency`.
+            Order[] inCurrency(Currency code) where (self.currency == code) sort orderNo page limit 20 max 100 capability ReadOrders;
+            /// A bounded page of the newest orders; `page limit 10 max 50`
+            /// is the default/cap, not a signature parameter.
+            Order[] recent() where (self.orderNo != "") sort orderNo desc page limit 10 max 50;
         }
         // Contained by Order (`contains lines`): a non-root aggregate
         // member, so it may declare no repository. Aggregate-internal

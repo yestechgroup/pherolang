@@ -3414,3 +3414,381 @@ fn padded_application_parses() {
     assert!(result.errors.is_empty(), "{:?}", result.errors);
     assert!(result.ast.expect("ast").application.is_some());
 }
+
+// --- DD9: typed repository queries -------------------------------------------
+
+/// A repository query written with every clause (DD9): the read-only
+/// projection `Order[] openFor(CustomerId, OrderStatus)` with its `where`
+/// predicate, two `sort` keys (one explicit default `asc`), a `page` window,
+/// and the guarding `capability` list.
+const QUERY: &str = r#"
+import "orders.mox"
+
+application Shop {
+    base nz.example.shop
+    module orders {
+        entity Order repository OrderRepository {
+            findById;
+            Order[] openFor(CustomerId customer, OrderStatus state) where (customer == self.customer and self.status == state) sort createdDate desc, id asc page limit 20 max 100 capability ReadOrders;
+        }
+    }
+}
+"#;
+
+#[test]
+fn repository_query_parses_every_clause() {
+    let result = parse_ddd(QUERY);
+    assert!(
+        result.errors.is_empty(),
+        "unexpected errors: {:?}",
+        result.errors
+    );
+    let file = result.ast.expect("expected an AST");
+    let repository = expect_module(&file, "orders").designs[0]
+        .repository
+        .as_ref()
+        .expect("repository");
+    assert_eq!(repository.operations.len(), 2);
+    assert_eq!(
+        repository.operations[0].builtin,
+        Some(DddBuiltinOp::FindById)
+    );
+
+    let op = &repository.operations[1];
+    assert_eq!(op.name.text, "openFor");
+    assert!(op.builtin.is_none());
+    assert!(op.body.is_none());
+    assert!(op.condition.is_none(), "a query takes no `when` guard");
+    assert!(op.throws.is_empty());
+    assert_eq!(
+        op.return_type
+            .as_ref()
+            .expect("return type")
+            .name
+            .full_name(),
+        "Order"
+    );
+    assert!(matches!(
+        op.multiplicity.as_ref().expect("multiplicity").kind,
+        MultiplicityKind::Unbounded
+    ));
+    assert_eq!(
+        op.params
+            .iter()
+            .map(|param| param.name.text.as_str())
+            .collect::<Vec<_>>(),
+        vec!["customer", "state"]
+    );
+
+    let query = op.query.as_ref().expect("the query clauses");
+    assert_eq!(
+        span_text(QUERY, query.predicate),
+        "(customer == self.customer and self.status == state)",
+        "the predicate keeps its parens and is sliced verbatim"
+    );
+    assert_eq!(
+        span_text(QUERY, query.span),
+        "where (customer == self.customer and self.status == state) \
+         sort createdDate desc, id asc page limit 20 max 100"
+    );
+
+    // Sort keys in written order with their authored directions (`asc` is
+    // recorded even though canonical output drops it).
+    assert_eq!(query.sort.len(), 2);
+    assert_eq!(query.sort[0].field.text, "createdDate");
+    assert_eq!(query.sort[0].direction, Some(DddSortDirection::Desc));
+    assert_eq!(span_text(QUERY, query.sort[0].span), "createdDate desc");
+    assert_eq!(query.sort[1].field.text, "id");
+    assert_eq!(query.sort[1].direction, Some(DddSortDirection::Asc));
+    assert_eq!(span_text(QUERY, query.sort[1].span), "id asc");
+
+    let page = query.page.as_ref().expect("the page window");
+    assert_eq!(page.limit, Some(20));
+    assert_eq!(page.max, Some(100));
+    assert!(!page.cursor);
+    assert_eq!(
+        span_text(QUERY, page.span),
+        "page limit 20 max 100",
+        "the page span covers the clause keyword and its members"
+    );
+
+    assert_eq!(
+        op.capabilities
+            .iter()
+            .map(|name| name.text.as_str())
+            .collect::<Vec<_>>(),
+        vec!["ReadOrders"]
+    );
+    assert_eq!(
+        span_text(QUERY, op.span),
+        "Order[] openFor(CustomerId customer, OrderStatus state) where \
+         (customer == self.customer and self.status == state) sort createdDate \
+         desc, id asc page limit 20 max 100 capability ReadOrders;"
+    );
+}
+
+/// `throws` stays grammatically legal before the query clauses (the driver
+/// rejects it later); the query parses whole either way.
+#[test]
+fn repository_query_keeps_throws_before_the_query_clauses() {
+    let source = r#"
+application Shop {
+    module orders {
+        entity Order repository OrderRepository {
+            Order[] openFor(CustomerId customer) throws NotFound where (customer == self.customer) capability ReadOrders;
+        }
+    }
+}
+"#;
+    let result = parse_ddd(source);
+    assert!(
+        result.errors.is_empty(),
+        "unexpected errors: {:?}",
+        result.errors
+    );
+    let file = result.ast.expect("expected an AST");
+    let op = &expect_module(&file, "orders").designs[0]
+        .repository
+        .as_ref()
+        .expect("repository")
+        .operations[0];
+    assert_eq!(
+        op.throws
+            .iter()
+            .map(|name| name.text.as_str())
+            .collect::<Vec<_>>(),
+        vec!["NotFound"]
+    );
+    assert_eq!(
+        span_text(source, op.query.as_ref().expect("query").predicate),
+        "(customer == self.customer)"
+    );
+    assert_eq!(op.query.as_ref().unwrap().sort.len(), 0);
+    assert!(op.query.as_ref().unwrap().page.is_none());
+}
+
+#[test]
+fn repository_query_formats_canonically_and_drops_the_default_asc() {
+    // The clauses are deliberately scrambled (the parser rejects that order,
+    // the token-based formatter canonicalizes it) and the default `asc` is
+    // written out; the canonical line is `where sort page capability` with
+    // `asc` omitted.
+    let source = concat!(
+        "application Shop {\n",
+        "module orders {\n",
+        "entity Order repository OrderRepository {\n",
+        "Order[] openFor(CustomerId customer, OrderStatus state) capability ReadOrders page limit 20 max 100 sort createdDate desc, id asc where (customer  ==  self.customer and self.status == state);\n",
+        "}\n",
+        "}\n",
+        "}\n",
+    );
+    let expected = concat!(
+        "application Shop {\n",
+        "    module orders {\n",
+        "        entity Order repository OrderRepository {\n",
+        "            Order[] openFor(CustomerId customer, OrderStatus state) where (customer  ==  self.customer and self.status == state) sort createdDate desc, id page limit 20 max 100 capability ReadOrders;\n",
+        "        }\n",
+        "    }\n",
+        "}\n",
+    );
+    let formatted = fmt_ddd(source);
+    assert_eq!(formatted, expected);
+    assert_eq!(fmt_ddd(&formatted), formatted, "formatting is a fixpoint");
+
+    // The canonical text parses, and the predicate's interior spacing came
+    // through untouched (it is a verbatim `raw_parens` slice, never
+    // token-respaced), while `asc` is gone.
+    assert!(!formatted.contains("id asc"));
+    let result = parse_ddd(&formatted);
+    assert!(
+        result.errors.is_empty(),
+        "the canonical query must parse: {:?}",
+        result.errors
+    );
+    let file = result.ast.expect("expected an AST");
+    let op = &expect_module(&file, "orders").designs[0]
+        .repository
+        .as_ref()
+        .expect("repository")
+        .operations[0];
+    let query = op.query.as_ref().expect("the query clauses");
+    assert_eq!(
+        span_text(&formatted, query.predicate),
+        "(customer  ==  self.customer and self.status == state)"
+    );
+    assert_eq!(query.sort.len(), 2);
+    assert_eq!(query.sort[0].direction, Some(DddSortDirection::Desc));
+    assert_eq!(query.sort[1].field.text, "id");
+    assert_eq!(
+        query.sort[1].direction, None,
+        "the omitted `asc` re-parses as the absent default"
+    );
+    let page = query.page.as_ref().expect("the page window");
+    assert_eq!(
+        (page.limit, page.max, page.cursor),
+        (Some(20), Some(100), false)
+    );
+    assert_eq!(
+        op.capabilities
+            .iter()
+            .map(|name| name.text.as_str())
+            .collect::<Vec<_>>(),
+        vec!["ReadOrders"]
+    );
+}
+
+#[test]
+fn repository_query_round_trips_through_parse_and_format() {
+    let formatted = fmt_ddd(QUERY);
+    let canonical = concat!(
+        "import \"orders.mox\";\n",
+        "\n",
+        "application Shop {\n",
+        "    base nz.example.shop\n",
+        "    module orders {\n",
+        "        entity Order repository OrderRepository {\n",
+        "            findById;\n",
+        "            Order[] openFor(CustomerId customer, OrderStatus state) where (customer == self.customer and self.status == state) sort createdDate desc, id page limit 20 max 100 capability ReadOrders;\n",
+        "        }\n",
+        "    }\n",
+        "}\n",
+    );
+    assert_eq!(formatted, canonical);
+    assert_eq!(fmt_ddd(canonical), canonical, "formatting is a fixpoint");
+    let before = parse_ddd(canonical).ast.expect("the first AST");
+    let after = parse_ddd(&formatted).ast.expect("the reparsed AST");
+    assert_eq!(before, after, "parse -> format -> parse is the identity");
+}
+
+/// A query takes `where`, never `when`: the mismatch is a named parse error
+/// (the operation itself survives with its query clauses).
+#[test]
+fn repository_query_with_when_is_a_named_error() {
+    let source = concat!(
+        "application A { module m {\n",
+        "    entity E repository R {\n",
+        "        E[] open() where (status == Open) when (owner == self.owner) capability Read;\n",
+        "    }\n",
+        "} }\n",
+    );
+    let result = parse_ddd(source);
+    assert!(
+        result.errors.iter().any(|error| error
+            .message
+            .contains("takes a `where` predicate, not a `when` guard")),
+        "expected the named `when`-on-a-query error, got: {:?}",
+        result.errors
+    );
+    let file = result.ast.expect("expected an AST");
+    let op = &expect_module(&file, "m").designs[0]
+        .repository
+        .as_ref()
+        .expect("repository")
+        .operations[0];
+    assert!(op.query.is_some(), "the query clauses survive the error");
+    assert!(op.condition.is_none(), "the stray `when` is not a guard");
+}
+
+/// A signature followed by a `capability` clause and no query clause is not a
+/// query: it keeps today's repository-operation rejection.
+#[test]
+fn repository_capability_without_query_clauses_is_still_rejected() {
+    let source = concat!(
+        "application A { module m {\n",
+        "    entity E repository R {\n",
+        "        findById;\n",
+        "        E[] all() capability Read;\n",
+        "    }\n",
+        "} }\n",
+    );
+    let result = parse_ddd(source);
+    assert!(
+        result
+            .errors
+            .iter()
+            .any(|error| error.message.contains("expected a repository operation")),
+        "expected the repository-operation rejection, got: {:?}",
+        result.errors
+    );
+    let file = result.ast.expect("expected an AST");
+    let repository = expect_module(&file, "m").designs[0]
+        .repository
+        .as_ref()
+        .expect("repository");
+    assert_eq!(
+        repository.operations.len(),
+        1,
+        "the capability-only operation is dropped, not narrowed into a query"
+    );
+    assert_eq!(
+        repository.operations[0].builtin,
+        Some(DddBuiltinOp::FindById)
+    );
+}
+
+/// The query words are contextual: `where`, `sort`, and `page` stay ordinary
+/// identifiers outside the clause positions (an operation name, a parameter
+/// name, a sort key), and `^page` escapes anywhere.
+#[test]
+fn query_clause_words_are_contextual_identifiers() {
+    let source = concat!(
+        "application A { module m {\n",
+        "    entity E repository R {\n",
+        "        boolean where(String x);\n",
+        "        boolean sort(String page);\n",
+        "        boolean ^page(String where);\n",
+        "        E[] bySort(String sort, int page) where (sort == \"asc\") sort sort desc, page capability Read;\n",
+        "    }\n",
+        "} }\n",
+    );
+    let result = parse_ddd(source);
+    assert!(
+        result.errors.is_empty(),
+        "unexpected errors: {:?}",
+        result.errors
+    );
+    let file = result.ast.expect("expected an AST");
+    let repository = expect_module(&file, "m").designs[0]
+        .repository
+        .as_ref()
+        .expect("repository");
+    assert_eq!(repository.operations.len(), 4);
+
+    // Operations (and a parameter) merely named after the clause words.
+    assert_eq!(repository.operations[0].name.text, "where");
+    assert!(repository.operations[0].query.is_none());
+    assert_eq!(repository.operations[1].name.text, "sort");
+    assert_eq!(repository.operations[1].params[0].name.text, "page");
+    assert!(repository.operations[1].query.is_none());
+    assert_eq!(repository.operations[2].name.text, "page");
+    assert_eq!(repository.operations[2].params[0].name.text, "where");
+    assert!(repository.operations[2].query.is_none());
+
+    let query_op = &repository.operations[3];
+    let query = query_op.query.as_ref().expect("the query clauses");
+    assert_eq!(span_text(source, query.predicate), "(sort == \"asc\")");
+    assert_eq!(
+        query
+            .sort
+            .iter()
+            .map(|key| (key.field.text.as_str(), key.direction))
+            .collect::<Vec<_>>(),
+        vec![("sort", Some(DddSortDirection::Desc)), ("page", None)]
+    );
+    assert_eq!(
+        query_op
+            .capabilities
+            .iter()
+            .map(|name| name.text.as_str())
+            .collect::<Vec<_>>(),
+        vec!["Read"]
+    );
+
+    // Formatting preserves those identifiers and stays a fixpoint.
+    let formatted = fmt_ddd(source);
+    assert!(
+        formatted.contains("sort sort desc, page capability Read;"),
+        "the sort keys named after clause words survive, got:\n{formatted}"
+    );
+    assert_eq!(fmt_ddd(&formatted), formatted);
+}

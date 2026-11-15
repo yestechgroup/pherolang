@@ -1539,13 +1539,99 @@ pub(crate) fn ddd_design_decl<'src>(
         })
 }
 
+/// The `where ( ... )` predicate clause of a repository query operation (DD9):
+/// the contextual [`ddd::WHERE`] word followed by a [`raw_parens`] span the
+/// driver slices and types (the `when`-guard convention). A query takes
+/// `where`, never `when`; the caller reports the `when` mismatch by name.
+pub(crate) fn ddd_query_where<'src>(
+) -> impl Parser<'src, Tokens<'src>, Span, MoxExtra<'src>> + Clone {
+    ddd_keyword(ddd::WHERE).ignore_then(raw_parens())
+}
+
+/// One `field ("asc" | "desc")?` key of a repository query's `sort` clause
+/// (DD9). Both direction words are contextual; `asc` is recorded faithfully
+/// and dropped by the formatter (the default), `desc` is re-emitted.
+pub(crate) fn ddd_sort_key<'src>(
+) -> impl Parser<'src, Tokens<'src>, DddSortKey, MoxExtra<'src>> + Clone {
+    name()
+        .then(
+            ddd_keyword(ddd::ASC)
+                .to(DddSortDirection::Asc)
+                .or(ddd_keyword(ddd::DESC).to(DddSortDirection::Desc))
+                .or_not(),
+        )
+        .map_with(|(field, direction), e| DddSortKey {
+            field,
+            direction,
+            span: e.span(),
+        })
+}
+
+/// The `sort <key> (, <key>)*` clause of a repository query operation (DD9):
+/// the ordered keys of the read-only projection. A missing key list fails the
+/// clause (there is no valid empty `sort`), which backtracks the operation
+/// into the repository's recovery path.
+pub(crate) fn ddd_query_sort<'src>(
+) -> impl Parser<'src, Tokens<'src>, Vec<DddSortKey>, MoxExtra<'src>> + Clone {
+    let key = ddd_sort_key();
+    ddd_keyword(ddd::SORT).ignore_then(
+        key.clone()
+            .then(
+                kw(Token::Comma)
+                    .ignore_then(key)
+                    .repeated()
+                    .collect::<Vec<_>>(),
+            )
+            .map(|(first, rest)| once(first).chain(rest).collect::<Vec<_>>()),
+    )
+}
+
+/// The `page (limit <int>)? (max <int>)? cursor?` clause of a repository
+/// query operation (DD9): the query's page window. Every member is optional
+/// (the consumer's profile supplies the defaults) and the members are
+/// order-independent.
+pub(crate) fn ddd_query_page<'src>(
+) -> impl Parser<'src, Tokens<'src>, DddPage, MoxExtra<'src>> + Clone {
+    ddd_keyword(ddd::PAGE)
+        .ignore_then(ddd_keyword(ddd::LIMIT).ignore_then(int_lit()).or_not())
+        .then(ddd_keyword(ddd::MAX).ignore_then(int_lit()).or_not())
+        .then(ddd_keyword(ddd::CURSOR).or_not())
+        .map_with(|((limit, max), cursor), e| DddPage {
+            limit,
+            max,
+            cursor: cursor.is_some(),
+            span: e.span(),
+        })
+}
+
+/// The query-clause sequence of a repository query operation (DD9), in the
+/// canonical order `where sort? page?`: the `where` predicate is **required**
+/// (a repository operation without one is not a query), and the `sort` and
+/// `page` clauses are optional. The `capability` clause belongs to the
+/// operation, not the query, so it is parsed by the caller.
+pub(crate) fn ddd_query_clauses<'src>(
+) -> impl Parser<'src, Tokens<'src>, DddQuery, MoxExtra<'src>> + Clone {
+    ddd_query_where()
+        .then(ddd_query_sort().or_not())
+        .then(ddd_query_page().or_not())
+        .map_with(|((predicate, sort), page), e| DddQuery {
+            predicate,
+            sort: sort.unwrap_or_default(),
+            page,
+            span: e.span(),
+        })
+}
+
 /// One operation of a `repository` body: an optional `protected` modifier,
 /// then a built-in (`findById`, `findAll`, `findByExample`, `findByKeys`,
 /// `save`, `delete` — recognized by their contextual keywords, no signature
-/// of their own) or a declared operation with an explicit signature. Both
-/// forms end in `;`. A declared repository operation takes no `capability`
-/// clause: the wire artifact's repository operations carry no capabilities,
-/// so accepting one would silently drop data.
+/// of their own), a declared operation with an explicit signature, or a
+/// declared **query** operation (DD9, typed repository queries):
+/// `signature throws? where sort? page? capability? ;`. All forms end in `;`.
+/// A non-query repository operation takes no `capability` clause: the wire
+/// artifact's repository operations carry none, so accepting one would
+/// silently drop data (a signature followed by only a `capability` clause is
+/// therefore still the generic "expected a repository operation" error).
 pub(crate) fn ddd_repository_op<'src>(
 ) -> impl Parser<'src, Tokens<'src>, Option<DddRepositoryOp>, MoxExtra<'src>> + Clone {
     let builtin_keyword = select! {
@@ -1586,6 +1672,8 @@ pub(crate) fn ddd_repository_op<'src>(
             throws: Vec::new(),
             condition: None,
             body: None,
+            query: None,
+            capabilities: Vec::new(),
             span: e.span(),
         },
     );
@@ -1628,8 +1716,69 @@ pub(crate) fn ddd_repository_op<'src>(
                 throws: throws.unwrap_or_default(),
                 condition,
                 body: Some(body),
+                query: None,
+                capabilities: Vec::new(),
                 span: e.span(),
             }
+        });
+    // The query form (DD9, typed repository queries): `signature throws?
+    // where sort? page? capability? ;`. The `where` clause is what makes an
+    // operation a query — a signature followed by only a `capability` clause
+    // is not one and keeps the generic rejection below. `throws` stays
+    // grammatically legal before the query clauses (the driver rejects it
+    // later). A `when` guard after the query clauses is consumed (in either
+    // order with the `capability` clause) so the mismatch is named rather
+    // than falling into the generic recovery.
+    let trailing = ddd_guard_clause()
+        .map(|span| (None, Some(span)))
+        .or(ddd_capabilities().map(|capabilities| (Some(capabilities), None)))
+        .repeated()
+        .collect::<Vec<_>>();
+    let query = ddd_signature()
+        .then(ddd_throws().or_not())
+        .then(ddd_query_clauses())
+        .then(trailing)
+        .then_ignore(kw(Token::Other(';')))
+        .map_with(
+            |((((type_ref, multiplicity, name, params), throws), query), trailing), e| {
+                let mut capabilities: Vec<Name> = Vec::new();
+                let mut guard: Option<Span> = None;
+                for (clause_capabilities, clause_guard) in trailing {
+                    if let Some(clause_capabilities) = clause_capabilities {
+                        capabilities.extend(clause_capabilities);
+                    }
+                    if guard.is_none() {
+                        guard = clause_guard;
+                    }
+                }
+                (
+                    DddRepositoryOp {
+                        name,
+                        builtin: None,
+                        return_type: Some(type_ref),
+                        multiplicity,
+                        params,
+                        is_protected: false,
+                        throws: throws.unwrap_or_default(),
+                        condition: None,
+                        body: None,
+                        query: Some(query),
+                        capabilities,
+                        span: e.span(),
+                    },
+                    guard,
+                )
+            },
+        )
+        .validate(|(op, guard), _e, emitter| {
+            if let Some(guard) = guard {
+                emitter.emit(Rich::custom(
+                    guard,
+                    "a repository query operation takes a `where` predicate, not a `when` \
+                     guard (write `where (<predicate>)` instead)",
+                ));
+            }
+            op
         });
     let declared = ddd_signature()
         .then(ddd_throws().or_not())
@@ -1646,6 +1795,8 @@ pub(crate) fn ddd_repository_op<'src>(
                 throws: throws.unwrap_or_default(),
                 condition,
                 body: None,
+                query: None,
+                capabilities: Vec::new(),
                 span: e.span(),
             },
         );
@@ -1657,6 +1808,7 @@ pub(crate) fn ddd_repository_op<'src>(
                 .or(builtin_throws_refusal.to(None))
                 .or(builtin.map(Some))
                 .or(body.map(Some))
+                .or(query.map(Some))
                 .or(declared.map(Some))
                 .or(junk_ddd_repository_op().to(None)),
         )

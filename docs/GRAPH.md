@@ -832,6 +832,18 @@ locations are the span tables'. A reference whose target the graph cannot
 resolve yields **no location** — never an error, never a guess: the
 artifact's "unresolved ⇒ no edge" discipline applied to the editor.
 
+**A declaration can live in a different file than its node.** A `.ddd`
+fragment's declarations are merged into its root's artifact, so the graph
+attributes those nodes to the **root** file (DD8). A definition search
+therefore looks in the node's file first, then every file of the node's own
+application, then the rest of the snapshot — declaration names are unique
+app-wide, so the first match is the declaration. A fragment's span index is
+built with the root's application name (`ddd_index_with_application`), and
+the snapshot supplies the same fragment file inputs the CLI's `graph build`
+does (file node + `applications[].files` membership), so a reference written
+in a fragment and a reference written in the root both land on the file that
+spells the target.
+
 **Snapshot scope.** One directory: the open document's own. Candidates are
 every supported surface file there (a formatter-golden `X.fmt.<ext>` is
 skipped) plus every **open** document that lives there. An open buffer wins

@@ -249,6 +249,15 @@ fn module_index(index: &mut SurfaceIndex, application: &str, module: &DddModule)
                         ReferenceContext::Throws,
                     );
                 }
+                // DD9: a query's read authorization is a capability mention.
+                for capability in &operation.capabilities {
+                    index.push_reference(
+                        &[kinds::CAPABILITY],
+                        capability.text.clone(),
+                        capability.span,
+                        ReferenceContext::Capability,
+                    );
+                }
             }
         }
         if let Some(machine) = &design.machine {

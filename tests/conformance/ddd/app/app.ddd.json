@@ -1,0 +1,165 @@
+{
+  "formatVersion": 2,
+  "pheroVersion": "0.3.0",
+  "application": {
+    "name": "Shop",
+    "base": "demo.app"
+  },
+  "modules": [
+    {
+      "name": "core",
+      "services": [
+        {
+          "name": "OrderService",
+          "description": "The order aggregate's root: it owns the repository and the\nconsistency boundary.",
+          "operations": [
+            {
+              "name": "save",
+              "delegation": {
+                "target": "OrderRepository",
+                "targetRef": {
+                  "kind": "repository",
+                  "qualifiedName": "Shop.core.OrderRepository",
+                  "module": "core"
+                },
+                "operation": "save"
+              }
+            }
+          ],
+          "dependencies": [
+            "OrderRepository"
+          ],
+          "dependencyRefs": [
+            {
+              "kind": "repository",
+              "qualifiedName": "Shop.core.OrderRepository",
+              "module": "core"
+            }
+          ]
+        }
+      ],
+      "designs": [
+        {
+          "class": "Order",
+          "typeRef": {
+            "type": "class",
+            "value": {
+              "package": "demo.app",
+              "name": "Order"
+            }
+          },
+          "stereotype": "entity",
+          "flags": {
+            "auditable": true,
+            "optimisticLocking": true
+          },
+          "isAggregateRoot": true,
+          "repository": {
+            "name": "OrderRepository",
+            "operations": [
+              {
+                "name": "findById",
+                "builtin": "findById"
+              },
+              {
+                "name": "save",
+                "builtin": "save"
+              }
+            ]
+          }
+        },
+        {
+          "class": "Invoice",
+          "typeRef": {
+            "type": "class",
+            "value": {
+              "package": "demo.app",
+              "name": "Invoice"
+            }
+          },
+          "stereotype": "entity",
+          "flags": {
+            "auditable": true,
+            "optimisticLocking": true
+          },
+          "isAggregateRoot": true,
+          "repository": {
+            "name": "InvoiceRepository",
+            "operations": [
+              {
+                "name": "findById",
+                "builtin": "findById"
+              },
+              {
+                "name": "findAll",
+                "builtin": "findAll"
+              }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "sales",
+      "services": [
+        {
+          "name": "LinePricing",
+          "description": "A declared (non-delegating) operation: the module-coupling rule\nforbids reaching another module's repository from here.",
+          "operations": [
+            {
+              "name": "price",
+              "returnType": {
+                "type": "primitive",
+                "value": "int"
+              },
+              "params": [
+                {
+                  "name": "quantity",
+                  "type": {
+                    "type": "primitive",
+                    "value": "int"
+                  }
+                },
+                {
+                  "name": "unitCents",
+                  "type": {
+                    "type": "primitive",
+                    "value": "int"
+                  }
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      "designs": [
+        {
+          "class": "OrderLine",
+          "typeRef": {
+            "type": "class",
+            "value": {
+              "package": "demo.app",
+              "name": "OrderLine"
+            }
+          },
+          "stereotype": "entity",
+          "flags": {
+            "auditable": true,
+            "optimisticLocking": true
+          },
+          "isAggregateRoot": false,
+          "aggregate": {
+            "root": {
+              "type": "class",
+              "value": {
+                "package": "demo.app",
+                "name": "Order"
+              }
+            },
+            "origin": "derived"
+          }
+        }
+      ]
+    }
+  ]
+}

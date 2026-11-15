@@ -1,0 +1,22 @@
+// The application root (DD8, issue pherolang#305): the authored application
+// name and `base` package live here, and the imported fragments contribute
+// their modules to this one artifact. `billing.ddd` reopens `core`.
+import "app.mox";
+import "sales.ddd";
+import "billing.ddd";
+
+application Shop {
+    base demo.app
+    module core {
+        /// The order aggregate's root: it owns the repository and the
+        /// consistency boundary.
+        service OrderService {
+            inject OrderRepository;
+            save => OrderRepository.save;
+        }
+        entity Order repository OrderRepository {
+            findById;
+            save;
+        }
+    }
+}

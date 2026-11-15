@@ -28,8 +28,12 @@ pub(crate) fn run(files: Vec<PathBuf>, out: PathBuf) -> anyhow::Result<ExitCode>
     let mut project = project_mode.then(|| Project::gather(&expanded));
     let mut failed = 0usize;
     if let Some(project) = project.as_mut() {
-        for error in project.ddd_tree_errors() {
-            eprintln!("Error: {error}");
+        for (path, diagnostic) in project.ddd_tree_errors() {
+            let source = project.source_of(&path).unwrap_or_default();
+            eprint!(
+                "{}",
+                phero_driver::render(&path, source, std::slice::from_ref(&diagnostic))
+            );
             failed += 1;
         }
     }

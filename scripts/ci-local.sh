@@ -86,6 +86,7 @@ FIXTURE_FORMAT_GLOBS=(
   tests/conformance/models/*.mox
   tests/conformance/models/*.actor
   tests/conformance/ddd/*.ddd
+  tests/conformance/ddd/app
   tests/conformance/usecases/*.uc
   tests/conformance/cmmn/*.cmmn
   tests/conformance/dmn/*.dmn
