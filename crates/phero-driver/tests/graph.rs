@@ -1679,7 +1679,7 @@ fn artifact_contains_no_absolute_paths() {
 /// `phero_ir::graph::kinds`.
 #[test]
 fn emitted_kinds_are_the_published_vocabulary() {
-    const NODE_KINDS: [&str; 42] = [
+    const NODE_KINDS: [&str; 43] = [
         kinds::FILE,
         kinds::CLASS,
         kinds::ENUM,
@@ -1695,6 +1695,7 @@ fn emitted_kinds_are_the_published_vocabulary() {
         kinds::REPOSITORY,
         kinds::REPOSITORY_OPERATION,
         kinds::SEARCH,
+        kinds::DTO,
         kinds::STATE_MACHINE,
         kinds::TRANSITION,
         kinds::DECISION_MODEL,
@@ -1813,6 +1814,7 @@ fn emitted_kinds_are_the_published_vocabulary() {
         kinds::REPOSITORY,
         kinds::REPOSITORY_OPERATION,
         kinds::SEARCH,
+        kinds::DTO,
         kinds::DECISION_MODEL,
         kinds::DECISION,
         kinds::DECISION_SERVICE,
@@ -2181,5 +2183,112 @@ fn affected_by_raise_refund_returns_the_support_desk_wiring() {
             .iter()
             .any(|node| node.id == class(MOX, "nz.example.support.Ticket")),
         "the capability's `on` class is a dependency, not a dependent"
+    );
+}
+
+// ---------------------------------------------------------------------------
+// DTO boundaries (DD3, issue pherolang#300)
+// ---------------------------------------------------------------------------
+
+#[test]
+fn a_projection_and_a_standalone_dto_are_graph_type_nodes() {
+    let design = concat!(
+        "import \"support.mox\";\n",
+        "\n",
+        "application Inline {\n",
+        "    base nz.example.support\n",
+        "    module desk {\n",
+        "        service TicketService {\n",
+        "            TicketSummary summarise(String ticketNo);\n",
+        "            boolean create(CreateTicketRequest request);\n",
+        "        }\n",
+        "        dto TicketSummary from Ticket { title; }\n",
+        "        dto CreateTicketRequest { String title; }\n",
+        "    }\n",
+        "}\n",
+    );
+    let display = "examples/inline-dto.ddd";
+    let mut inputs = GraphInputs::default();
+    inputs
+        .domains
+        .push(graph_file("examples/support/support.mox", support_mox()));
+    inputs.designs.push(inline_file(
+        display,
+        &["examples/support/support.mox"],
+        inline_ddd(display, design),
+    ));
+    let graph = build(&inputs);
+
+    // The projection boundary: a `dto`-kind boundary node that designs its
+    // source class.
+    let summary = format!("{}:{display}#Inline.desk.TicketSummary", kinds::DTO);
+    node(&graph, &summary);
+    assert_eq!(
+        edge(
+            &graph,
+            &summary,
+            kinds::DESIGNS,
+            &class(MOX, "nz.example.support.Ticket"),
+        )
+        .attributes
+        .get("via"),
+        Some(&"dto".to_string())
+    );
+
+    // The standalone boundary: a boundary node with no source class.
+    let request = format!("{}:{display}#Inline.desk.CreateTicketRequest", kinds::DTO);
+    node(&graph, &request);
+    assert!(
+        graph.edges.iter().all(|edge| !(edge.from == request
+            && (edge.kind == kinds::DESIGNS || edge.kind == kinds::TYPE_OF))),
+        "a standalone DTO designs nothing"
+    );
+
+    // The service operation's DTO return and parameter resolve to the
+    // boundary nodes.
+    let summarise = service_operation(display, "Inline.desk.TicketService.summarise");
+    let create = service_operation(display, "Inline.desk.TicketService.create");
+    assert_eq!(
+        edge(&graph, &summarise, kinds::TYPE_OF, &summary)
+            .attributes
+            .get("role"),
+        Some(&"return".to_string())
+    );
+    assert_eq!(
+        edge(&graph, &create, kinds::TYPE_OF, &request)
+            .attributes
+            .get("role"),
+        Some(&"param".to_string())
+    );
+}
+
+#[test]
+fn a_mirror_dto_emits_no_second_type_node() {
+    let display = "examples/inline-mirror.ddd";
+    let design = concat!(
+        "import \"support.mox\";\n",
+        "\n",
+        "application Inline {\n",
+        "    base nz.example.support\n",
+        "    module people { dto User nonPersistent }\n",
+        "}\n",
+    );
+    let mut inputs = GraphInputs::default();
+    inputs
+        .domains
+        .push(graph_file("examples/support/support.mox", support_mox()));
+    inputs.designs.push(inline_file(
+        display,
+        &["examples/support/support.mox"],
+        inline_ddd(display, design),
+    ));
+    let graph = build(&inputs);
+    assert!(
+        graph
+            .nodes
+            .iter()
+            .all(|node| node.file != display
+                || (node.kind != kinds::CLASS && node.kind != kinds::DTO)),
+        "a mirror DTO's boundary name is the source class's node"
     );
 }

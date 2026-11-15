@@ -114,7 +114,7 @@ fn ir_ddd_file_emits_the_machine_and_its_derivations() {
         .expect("stdout is DDD design JSON");
     let design = &emitted.modules[0].designs[0];
     let machine = design.machine.as_ref().expect("the machine lowers");
-    assert_eq!(design.class, "PayRun");
+    assert_eq!(design.class.as_deref(), Some("PayRun"));
     assert_eq!(machine.field, "status");
     assert_eq!(machine.initial, "Draft");
     assert_eq!(machine.terminals, ["Reversed", "Posted"]);
@@ -199,6 +199,41 @@ fn artifact_check_passes_on_the_ddd_golden_artifact() {
     assert_eq!(
         String::from_utf8_lossy(&output.stdout),
         format!("OK {}\n", path.display())
+    );
+}
+
+#[test]
+fn artifact_check_reports_a_value_design_without_the_semantics_block() {
+    // The golden value artifact, hand-edited to drop one design's fixed
+    // semantics block: the contract checker must name the JSON path.
+    let path = workspace_root().join("tests/conformance/ddd/values.ddd.json");
+    let golden = std::fs::read_to_string(&path).expect("read the value golden artifact");
+    let mut artifact: serde_json::Value =
+        serde_json::from_str(&golden).expect("the golden artifact is JSON");
+    let design = artifact["modules"][0]["designs"][0]
+        .as_object_mut()
+        .expect("the value design is an object");
+    assert!(
+        design.remove("semantics").is_some(),
+        "the golden value design carries the semantics block"
+    );
+    let edited = write_source(
+        "no-semantics.ddd.json",
+        &serde_json::to_string_pretty(&artifact).expect("re-serialize the artifact"),
+    );
+    let output = pherolang()
+        .args(["artifact", "check", edited.to_str().unwrap()])
+        .output()
+        .expect("run pherolang artifact check");
+    assert_eq!(output.status.code(), Some(1), "the artifact is refused");
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(
+        stderr.contains("modules[0].designs[0].semantics"),
+        "stderr names the violation path, was: {stderr}"
+    );
+    assert!(
+        stderr.contains("value design"),
+        "stderr names the missing value semantics, was: {stderr}"
     );
 }
 

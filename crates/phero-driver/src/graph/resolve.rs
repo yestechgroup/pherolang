@@ -230,6 +230,31 @@ impl Symbols {
         self.one(kind, &super::ids::qualify(&[package, name]), application)
     }
 
+    /// Resolves a DDD signature type slot (DD3, pherolang#300): a domain
+    /// type through [`Symbols::type_target`], or a DTO boundary by its name.
+    /// A DTO reference always names a projection or standalone boundary (a
+    /// mirror resolves as its source class), so it resolves to the `.ddd`
+    /// emitter's `dto`-kind node. A name several nodes carry is unresolved,
+    /// never invented.
+    pub(crate) fn ddd_type_target(
+        &self,
+        type_ref: &phero_ir::ddd::DddTypeRef,
+        application: &str,
+    ) -> Option<&Symbol> {
+        match type_ref {
+            phero_ir::ddd::DddTypeRef::Domain(type_ref) => self.type_target(type_ref, application),
+            phero_ir::ddd::DddTypeRef::Dto { dto } => {
+                match self
+                    .by_last_segment(kinds::DTO, dto, application)
+                    .as_slice()
+                {
+                    [symbol] => Some(symbol),
+                    _ => None,
+                }
+            }
+        }
+    }
+
     /// Every symbol of `kind` in one application — the pooled universe every
     /// resolver starts from. The items borrow `self` only, so a caller may
     /// filter by a local spelling without tying the result to it.

@@ -1111,26 +1111,230 @@ pub(crate) fn ddd_flags<'src>() -> impl Parser<'src, Tokens<'src>, DddFlags, Mox
         })
 }
 
-/// A design declaration: `("abstract")? stereotype name flag*
+/// One parsed DTO suffix of a design declaration (issue pherolang#300): the
+/// projection source of a `dto Name from Source { ... }`, or the standalone
+/// `dto Name { ... }` member block. [`DddDtoSuffix::members`] is `None` only
+/// for the recovered `from <source>` form written without a block (a parse
+/// error naming the missing block); the other forms always carry members.
+pub(crate) struct DddDtoSuffix {
+    /// The `from <source>` class, when written.
+    pub source: Option<QualifiedName>,
+    /// The `{ ... }` members, when written.
+    pub members: Option<DddDtoMembers>,
+    /// Whether the `from` word was written (to name the right refusal on a
+    /// non-DTO design).
+    pub from_written: bool,
+    /// Span of the whole suffix.
+    pub span: Span,
+}
+
+/// Consumes one token that cannot start or continue a projection member,
+/// stopping before the block's closing `}` and before identifiers (which
+/// could begin the next member).
+pub(crate) fn junk_ddd_projection_member<'src>(
+) -> impl Parser<'src, Tokens<'src>, (), MoxExtra<'src>> + Clone {
+    let first = select! { t if !matches!(t, Token::RBrace) => () };
+    let rest = select! {
+        t if !matches!(t, Token::RBrace | Token::Ident(_) | Token::IdentEscaped(_)) => ()
+    };
+    first
+        .ignore_then(rest.repeated().ignored())
+        .validate(|(), e, emitter| {
+            emitter.emit(Rich::custom(
+                e.span(),
+                "expected a projection member (`name;` or `name = <expression>;`); a \
+                 declared `type name;` member belongs in a standalone `dto Name { ... }` \
+                 block",
+            ));
+        })
+}
+
+/// One member of a DTO projection block (issue pherolang#300):
+/// `name ";"` (select) or `name "=" raw_expr ";"` (assign). The expression
+/// is the same raw capture the search `document` clause uses. Junk recovery
+/// names the projection shape, so a declared `Type name;` member is a
+/// reported error rather than a silent drop.
+pub(crate) fn ddd_projection_member<'src>(
+) -> impl Parser<'src, Tokens<'src>, Option<DddProjectionMember>, MoxExtra<'src>> + Clone {
+    let assign = name()
+        .then_ignore(kw(Token::Eq))
+        .then(ddd_raw_expr())
+        .map_with(|(name, expr), e| DddProjectionMember::Assign {
+            name,
+            expr,
+            span: e.span(),
+        });
+    let select = name()
+        .then_ignore(kw(Token::Other(';')))
+        .map_with(|name, e| DddProjectionMember::Select {
+            name,
+            span: e.span(),
+        });
+    choice((assign, select))
+        .map(Some)
+        .or(junk_ddd_projection_member().to(None))
+}
+
+/// The `{ (name ";" | name "=" raw_expr ";")* }` block of a `from` DTO
+/// projection (issue pherolang#300).
+pub(crate) fn ddd_projection_block<'src>(
+) -> impl Parser<'src, Tokens<'src>, DddDtoMembers, MoxExtra<'src>> + Clone {
+    kw(Token::LBrace)
+        .ignore_then(ddd_projection_member().repeated().collect::<Vec<_>>())
+        .then_ignore(kw(Token::RBrace))
+        .map(|members| DddDtoMembers::Projection(members.into_iter().flatten().collect()))
+}
+
+/// Consumes one token that cannot start or continue a declared DTO member,
+/// stopping before the block's closing `}` and before identifiers (which
+/// could begin the next member).
+pub(crate) fn junk_ddd_declared_member<'src>(
+) -> impl Parser<'src, Tokens<'src>, (), MoxExtra<'src>> + Clone {
+    let first = select! { t if !matches!(t, Token::RBrace) => () };
+    let rest = select! {
+        t if !matches!(t, Token::RBrace | Token::Ident(_) | Token::IdentEscaped(_)) => ()
+    };
+    first
+        .ignore_then(rest.repeated().ignored())
+        .validate(|(), e, emitter| {
+            emitter.emit(Rich::custom(
+                e.span(),
+                "expected a declared member (`type name;`); the `name;` and \
+                 `name = <expression>;` shorthand belongs in a projection \
+                 (`dto Name from Source { ... }`)",
+            ));
+        })
+}
+
+/// One `type_ref multiplicity? name ";"` member of a standalone DTO block
+/// (issue pherolang#300), sharing the operation-parameter productions.
+pub(crate) fn ddd_declared_member<'src>(
+) -> impl Parser<'src, Tokens<'src>, Option<DddDeclaredMember>, MoxExtra<'src>> + Clone {
+    let member = tref()
+        .then(multiplicity().or_not())
+        .then(name())
+        .then_ignore(kw(Token::Other(';')))
+        .map_with(|((type_ref, multiplicity), name), e| DddDeclaredMember {
+            type_ref,
+            multiplicity,
+            name,
+            span: e.span(),
+        });
+    member.map(Some).or(junk_ddd_declared_member().to(None))
+}
+
+/// The `{ (type_ref multiplicity? name ";")* }` block of a standalone DTO
+/// (issue pherolang#300).
+pub(crate) fn ddd_standalone_block<'src>(
+) -> impl Parser<'src, Tokens<'src>, DddDtoMembers, MoxExtra<'src>> + Clone {
+    kw(Token::LBrace)
+        .ignore_then(ddd_declared_member().repeated().collect::<Vec<_>>())
+        .then_ignore(kw(Token::RBrace))
+        .map(|members| DddDtoMembers::Declared(members.into_iter().flatten().collect()))
+}
+
+/// The optional DTO suffix of a design declaration (issue pherolang#300):
+/// `from qualified_name projection_block` or `standalone_block`. The suffix
+/// is only legal after a `dto` stereotype; the design parser reports it as a
+/// named error on any other stereotype. `from` is matched as the existing
+/// lexer keyword token ([`Token::From`]) — the [`ddd::FROM`] constant names
+/// its text.
+pub(crate) fn ddd_dto_suffix<'src>(
+) -> impl Parser<'src, Tokens<'src>, DddDtoSuffix, MoxExtra<'src>> + Clone {
+    let projection = kw(Token::From)
+        .ignore_then(qname())
+        .then(ddd_projection_block().or_not())
+        .map_with(|(source, members), e| DddDtoSuffix {
+            source: Some(source),
+            members,
+            from_written: true,
+            span: e.span(),
+        });
+    let standalone = ddd_standalone_block().map_with(|members, e| DddDtoSuffix {
+        source: None,
+        members: Some(members),
+        from_written: false,
+        span: e.span(),
+    });
+    projection.or(standalone)
+}
+
+/// A design declaration: `("abstract")? stereotype name flag* dto_suffix?
 /// ("repository" ...)? ("machine" ...)?`.
 pub(crate) fn ddd_design_decl<'src>(
 ) -> impl Parser<'src, Tokens<'src>, DddDesign, MoxExtra<'src>> + Clone {
     ddd_design_head()
         .then(name())
         .then(ddd_flags())
+        .then(ddd_dto_suffix().or_not())
         .then(ddd_repository_decl().or_not())
         .then(ddd_machine_decl().or_not())
         .map_with(
-            |(((((abstract_span, stereotype), class), flags), repository), machine), e| DddDesign {
-                is_abstract: abstract_span.is_some(),
-                stereotype,
-                class,
-                flags,
-                repository,
-                machine,
-                span: e.span(),
+            |((((((abstract_span, stereotype), class), flags), suffix), repository), machine),
+             e| {
+                let mut problems = Vec::new();
+                let mut dto_source = None;
+                let mut dto_members = None;
+                if let Some(DddDtoSuffix {
+                    source,
+                    members,
+                    from_written,
+                    span,
+                }) = suffix
+                {
+                    if stereotype == DddStereotype::Dto {
+                        dto_source = source;
+                        match members {
+                            Some(members) => dto_members = Some(members),
+                            None => {
+                                problems.push((
+                                    span,
+                                    "expected a projection block `{ ... }` after \
+                                     `from <source>`"
+                                        .to_string(),
+                                ));
+                                // Recover as an empty projection so the
+                                // source is not silently promoted to a
+                                // standalone DTO.
+                                dto_members = Some(DddDtoMembers::Projection(Vec::new()));
+                            }
+                        }
+                    } else if from_written {
+                        problems.push((
+                            span,
+                            format!("`{} <source>` is only allowed on a `dto` design", ddd::FROM),
+                        ));
+                    } else {
+                        problems.push((
+                            span,
+                            "a DTO member block is only allowed on a `dto` design \
+                             (`dto Name { ... }` or `dto Name from Source { ... }`)"
+                                .to_string(),
+                        ));
+                    }
+                }
+                (
+                    DddDesign {
+                        is_abstract: abstract_span.is_some(),
+                        stereotype,
+                        class,
+                        flags,
+                        dto_source,
+                        dto_members,
+                        repository,
+                        machine,
+                        span: e.span(),
+                    },
+                    problems,
+                )
             },
         )
+        .validate(|(design, problems), _, emitter| {
+            for (span, message) in problems {
+                emitter.emit(Rich::custom(span, message));
+            }
+            design
+        })
 }
 
 /// One operation of a `repository` body: an optional `protected` modifier,
@@ -1409,13 +1613,44 @@ pub(crate) fn ddd_raw_expr<'src>() -> impl Parser<'src, Tokens<'src>, Span, MoxE
         .then_ignore(kw(Token::Other(';')))
 }
 
-/// One `name = <expr>;` entry of a `document { ... }` clause.
+/// One `name = <expr>;` entry of a `document { ... }` clause. The entry is
+/// the shared [`DddProjectionMember::Assign`] AST (issue pherolang#300): the
+/// expression is captured raw — its span slices the expression source
+/// strictly between the `=` and the terminating `;` — exactly like the
+/// `.mox` op bodies; parsing it is the driver's job. Search syntax is the
+/// assignment form only; the `name;` selection shorthand is a DTO
+/// projection form, refused here by [`junk_ddd_document_entry`].
 pub(crate) fn ddd_document_entry<'src>(
-) -> impl Parser<'src, Tokens<'src>, DddDocumentEntry, MoxExtra<'src>> + Clone {
+) -> impl Parser<'src, Tokens<'src>, DddProjectionMember, MoxExtra<'src>> + Clone {
     name()
         .then_ignore(kw(Token::Eq))
         .then(ddd_raw_expr())
-        .map(|(name, expr)| DddDocumentEntry { name, expr })
+        .map_with(|(name, expr), e| DddProjectionMember::Assign {
+            name,
+            expr,
+            span: e.span(),
+        })
+}
+
+/// Consumes one token that cannot start or continue a `document` entry,
+/// stopping before the clause's closing `}` and before identifiers. The
+/// refusal names the document-entry shape, so the projection-only `name;`
+/// shorthand is reported rather than silently dropped.
+pub(crate) fn junk_ddd_document_entry<'src>(
+) -> impl Parser<'src, Tokens<'src>, (), MoxExtra<'src>> + Clone {
+    let first = select! { t if !matches!(t, Token::RBrace) => () };
+    let rest = select! {
+        t if !matches!(t, Token::RBrace | Token::Ident(_) | Token::IdentEscaped(_)) => ()
+    };
+    first
+        .ignore_then(rest.repeated().ignored())
+        .validate(|(), e, emitter| {
+            emitter.emit(Rich::custom(
+                e.span(),
+                "expected a document entry (`name = <expression>;`); the `name;` \
+                 selection shorthand belongs in a DTO projection",
+            ));
+        })
 }
 
 /// One `text { ... }` field: `<property> (boost <int>)? (analyzer "<...>")?`.
@@ -1481,7 +1716,7 @@ pub(crate) enum DddSearchMember {
     Text(DddSearchField),
     Filter(QualifiedName),
     Sort(QualifiedName),
-    Document(DddDocumentEntry),
+    Document(DddProjectionMember),
     Ranking(DddRanking),
     Analyzer(String),
     Pagination(DddPagination),
@@ -1559,7 +1794,7 @@ pub(crate) fn ddd_search_member<'src>(
                     .ignore_then(
                         ddd_document_entry()
                             .map(Some)
-                            .or(junk_ddd_search_member().to(None))
+                            .or(junk_ddd_document_entry().to(None))
                             .repeated()
                             .collect::<Vec<_>>(),
                     )
@@ -1761,7 +1996,7 @@ pub(crate) fn ddd_extend_decl<'src>(
 #[derive(Clone)]
 pub(crate) enum DddModuleMember {
     Service(DddService),
-    Design(DddDesign),
+    Design(Box<DddDesign>),
     Search(DddSearch),
     Extend(DddExtend),
 }
@@ -1787,7 +2022,7 @@ pub(crate) fn ddd_module_member<'src>(
 ) -> impl Parser<'src, Tokens<'src>, Option<DddModuleMember>, MoxExtra<'src>> + Clone {
     choice((
         ddd_service_decl().map(DddModuleMember::Service),
-        ddd_design_decl().map(DddModuleMember::Design),
+        ddd_design_decl().map(|design| DddModuleMember::Design(Box::new(design))),
         ddd_search_decl().map(DddModuleMember::Search),
         ddd_extend_decl().map(DddModuleMember::Extend),
     ))
@@ -1811,7 +2046,7 @@ pub(crate) fn ddd_module_decl<'src>(
             for member in members {
                 match member {
                     Some(DddModuleMember::Service(service)) => services.push(service),
-                    Some(DddModuleMember::Design(design)) => designs.push(design),
+                    Some(DddModuleMember::Design(design)) => designs.push(*design),
                     Some(DddModuleMember::Search(search)) => searches.push(search),
                     Some(DddModuleMember::Extend(extend)) => extends.push(extend),
                     None => {}

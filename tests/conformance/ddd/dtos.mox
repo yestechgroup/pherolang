@@ -1,0 +1,41 @@
+package nz.example.dtos
+
+enum Currency {
+    Nzd as "NZD" = 0
+    Aud as "AUD" = 1
+}
+
+type Isbn wraps opaque {
+    rust "std::string::String"
+    csharp "string"
+    java "String"
+}
+
+class Author {
+    String name
+    String handle
+}
+
+class Money {
+    readonly int cents
+    readonly Currency currency
+}
+
+class PriceRange {
+    readonly contains Money min
+    readonly contains Money max
+}
+
+class Book {
+    id readonly String isbn
+    String title
+    int priceCents
+    Currency currency
+    Isbn code
+    readonly contains Money listPrice
+    readonly contains PriceRange quote
+    refers Author author
+    derived boolean pricey {
+        expr { priceCents > 5000 }
+    }
+}

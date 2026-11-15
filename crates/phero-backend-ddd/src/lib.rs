@@ -6,9 +6,13 @@
 //!
 //! * [`check_contract`] validates the artifact against the contract the
 //!   compiler is required to satisfy: resolved companions for every
-//!   reference, effective design decisions, aligned parallel lists, and
-//!   search member types. A hand-edited or truncated artifact fails with
-//!   a [`Violation`] naming the JSON path.
+//!   reference, effective design decisions, aligned parallel lists, search
+//!   member types, the strict value-semantics block (present and fixed on
+//!   every `value` design, absent on every `entity`/`dto`), and the DTO
+//!   boundary (a `dto` design's `dtoShape`, its `class`/`typeRef` agreement
+//!   with the shape source, member payloads, and every `DddTypeRef::Dto`
+//!   resolving to a declared boundary). A hand-edited or truncated artifact
+//!   fails with a [`Violation`] naming the JSON path.
 //! * [`canonical_json`] / [`canonical_json_string`] serialize the artifact
 //!   with a canonical (alphabetical) key order through
 //!   [`phero_backend_common::canonical_key_order`], so hashes and diffs

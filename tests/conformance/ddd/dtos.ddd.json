@@ -1,0 +1,383 @@
+{
+  "formatVersion": 2,
+  "pheroVersion": "0.3.0",
+  "application": {
+    "name": "Catalogue",
+    "base": "nz.example.dtos"
+  },
+  "modules": [
+    {
+      "name": "catalogue",
+      "services": [
+        {
+          "name": "BookService",
+          "operations": [
+            {
+              "name": "draft",
+              "returnType": {
+                "dto": "BookDraft"
+              },
+              "params": [
+                {
+                  "name": "title",
+                  "type": {
+                    "type": "primitive",
+                    "value": "string"
+                  }
+                }
+              ]
+            },
+            {
+              "name": "summarize",
+              "returnType": {
+                "dto": "BookSummary"
+              },
+              "params": [
+                {
+                  "name": "isbn",
+                  "type": {
+                    "type": "primitive",
+                    "value": "string"
+                  }
+                }
+              ]
+            },
+            {
+              "name": "submit",
+              "returnType": {
+                "type": "primitive",
+                "value": "boolean"
+              },
+              "params": [
+                {
+                  "name": "request",
+                  "type": {
+                    "dto": "OrderRequest"
+                  }
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      "designs": [
+        {
+          "class": "Book",
+          "typeRef": {
+            "type": "class",
+            "value": {
+              "package": "nz.example.dtos",
+              "name": "Book"
+            }
+          },
+          "stereotype": "entity",
+          "flags": {
+            "auditable": true,
+            "optimisticLocking": true
+          }
+        },
+        {
+          "class": "Money",
+          "typeRef": {
+            "type": "class",
+            "value": {
+              "package": "nz.example.dtos",
+              "name": "Money"
+            }
+          },
+          "stereotype": "value",
+          "semantics": {
+            "identity": "none",
+            "immutable": true,
+            "deepImmutable": true,
+            "equality": "structural"
+          }
+        },
+        {
+          "class": "PriceRange",
+          "typeRef": {
+            "type": "class",
+            "value": {
+              "package": "nz.example.dtos",
+              "name": "PriceRange"
+            }
+          },
+          "stereotype": "value",
+          "semantics": {
+            "identity": "none",
+            "immutable": true,
+            "deepImmutable": true,
+            "equality": "structural"
+          }
+        },
+        {
+          "class": "Author",
+          "typeRef": {
+            "type": "class",
+            "value": {
+              "package": "nz.example.dtos",
+              "name": "Author"
+            }
+          },
+          "stereotype": "dto",
+          "flags": {
+            "nonPersistent": true
+          },
+          "dtoShape": {
+            "name": "Author",
+            "source": {
+              "type": "class",
+              "value": {
+                "package": "nz.example.dtos",
+                "name": "Author"
+              }
+            },
+            "direction": "input",
+            "members": [
+              {
+                "name": "name",
+                "kind": "select",
+                "type": {
+                  "type": "primitive",
+                  "value": "string"
+                },
+                "multiplicity": {
+                  "lower": 1,
+                  "upper": {
+                    "finite": 1
+                  }
+                },
+                "path": [
+                  "name"
+                ]
+              },
+              {
+                "name": "handle",
+                "kind": "select",
+                "type": {
+                  "type": "primitive",
+                  "value": "string"
+                },
+                "multiplicity": {
+                  "lower": 1,
+                  "upper": {
+                    "finite": 1
+                  }
+                },
+                "path": [
+                  "handle"
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "class": "Book",
+          "typeRef": {
+            "type": "class",
+            "value": {
+              "package": "nz.example.dtos",
+              "name": "Book"
+            }
+          },
+          "stereotype": "dto",
+          "dtoShape": {
+            "name": "BookSummary",
+            "source": {
+              "type": "class",
+              "value": {
+                "package": "nz.example.dtos",
+                "name": "Book"
+              }
+            },
+            "direction": "output",
+            "members": [
+              {
+                "name": "isbn",
+                "kind": "select",
+                "type": {
+                  "type": "primitive",
+                  "value": "string"
+                },
+                "multiplicity": {
+                  "lower": 1,
+                  "upper": {
+                    "finite": 1
+                  }
+                },
+                "path": [
+                  "isbn"
+                ]
+              },
+              {
+                "name": "title",
+                "kind": "select",
+                "type": {
+                  "type": "primitive",
+                  "value": "string"
+                },
+                "multiplicity": {
+                  "lower": 1,
+                  "upper": {
+                    "finite": 1
+                  }
+                },
+                "path": [
+                  "title"
+                ]
+              },
+              {
+                "name": "currency",
+                "kind": "select",
+                "type": {
+                  "type": "enum",
+                  "value": {
+                    "package": "nz.example.dtos",
+                    "name": "Currency"
+                  }
+                },
+                "multiplicity": {
+                  "lower": 1,
+                  "upper": {
+                    "finite": 1
+                  }
+                },
+                "path": [
+                  "currency"
+                ]
+              },
+              {
+                "name": "code",
+                "kind": "select",
+                "type": {
+                  "type": "datatype",
+                  "value": {
+                    "package": "nz.example.dtos",
+                    "name": "Isbn"
+                  }
+                },
+                "multiplicity": {
+                  "lower": 1,
+                  "upper": {
+                    "finite": 1
+                  }
+                },
+                "path": [
+                  "code"
+                ]
+              },
+              {
+                "name": "pricey",
+                "kind": "derive",
+                "type": {
+                  "type": "primitive",
+                  "value": "boolean"
+                },
+                "expression": "priceCents > 5000"
+              },
+              {
+                "name": "authorName",
+                "kind": "select",
+                "type": {
+                  "type": "primitive",
+                  "value": "string"
+                },
+                "multiplicity": {
+                  "lower": 1,
+                  "upper": {
+                    "finite": 1
+                  }
+                },
+                "path": [
+                  "author",
+                  "name"
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "stereotype": "dto",
+          "dtoShape": {
+            "name": "BookDraft",
+            "direction": "input",
+            "members": [
+              {
+                "name": "code",
+                "kind": "declared",
+                "type": {
+                  "type": "datatype",
+                  "value": {
+                    "package": "nz.example.dtos",
+                    "name": "Isbn"
+                  }
+                }
+              },
+              {
+                "name": "title",
+                "kind": "declared",
+                "type": {
+                  "type": "primitive",
+                  "value": "string"
+                }
+              },
+              {
+                "name": "listPrice",
+                "kind": "declared",
+                "type": {
+                  "type": "class",
+                  "value": {
+                    "package": "nz.example.dtos",
+                    "name": "Money"
+                  }
+                }
+              }
+            ]
+          }
+        },
+        {
+          "stereotype": "dto",
+          "dtoShape": {
+            "name": "OrderRequest",
+            "direction": "input",
+            "members": [
+              {
+                "name": "book",
+                "kind": "declared",
+                "type": {
+                  "dto": "BookDraft"
+                }
+              },
+              {
+                "name": "currency",
+                "kind": "declared",
+                "type": {
+                  "type": "enum",
+                  "value": {
+                    "package": "nz.example.dtos",
+                    "name": "Currency"
+                  }
+                }
+              },
+              {
+                "name": "codes",
+                "kind": "declared",
+                "type": {
+                  "type": "datatype",
+                  "value": {
+                    "package": "nz.example.dtos",
+                    "name": "Isbn"
+                  }
+                },
+                "multiplicity": {
+                  "lower": 0,
+                  "upper": "unbounded"
+                }
+              }
+            ]
+          }
+        }
+      ]
+    }
+  ]
+}

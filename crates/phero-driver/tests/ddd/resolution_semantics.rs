@@ -40,7 +40,7 @@ fn base_package_disambiguates_bare_names() {
     assert_clean(&compilation);
     // Resolution is validation-only: the name stays authored.
     let model = compilation.model.expect("artifact lowered");
-    assert_eq!(model.modules[0].designs[0].class, "Money");
+    assert_eq!(model.modules[0].designs[0].class.as_deref(), Some("Money"));
 }
 
 #[test]
@@ -62,9 +62,9 @@ fn qualified_names_resolve_across_packages() {
     let operation = &model.modules[0].services[0].operations[0];
     assert_eq!(
         operation.return_type,
-        Some(TypeRef::Class {
+        Some(phero_ir::ddd::DddTypeRef::domain(TypeRef::Class {
             package: "b".to_string(),
             name: "Money".to_string()
-        })
+        }))
     );
 }

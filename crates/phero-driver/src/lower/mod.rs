@@ -29,7 +29,9 @@ pub(crate) use compile::{
     compile, compile_actor_file, compile_multi, compile_union_per_file, MultiFile,
 };
 pub(crate) use imports::collect_schema_imports;
-pub(crate) use resolve::{resolve_ddd_class, resolve_ddd_type, resolve_preferred};
+pub(crate) use resolve::{
+    resolve_ddd_class, resolve_ddd_type, resolve_ddd_type_ref, resolve_preferred,
+};
 
 use std::collections::{HashMap, HashSet};
 

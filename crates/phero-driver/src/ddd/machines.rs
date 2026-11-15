@@ -30,6 +30,11 @@ pub(crate) fn collect_machine_scopes(
     let mut fields: Vec<MachineField> = Vec::new();
     let mut ambiguous_states: Vec<String> = Vec::new();
     for design in &module.designs {
+        // A DTO carries no lifecycle (the design stage reports the dto-machine
+        // error); collecting a scope for one would invent a machine.
+        if dto_form(design).is_some() {
+            continue;
+        }
         let Some(machine) = &design.machine else {
             continue;
         };

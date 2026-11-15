@@ -930,16 +930,31 @@ fn search_decl_parses_with_all_members() {
         vec!["title"]
     );
     assert_eq!(search.document.len(), 3);
-    assert_eq!(search.document[0].name.text, "headline");
-    assert_eq!(span_text(SEARCH, search.document[0].expr), "title");
-    assert_eq!(search.document[1].name.text, "blurb");
+    let DddProjectionMember::Assign { name, expr, .. } = &search.document[0] else {
+        panic!(
+            "expected an assign document entry, got {:?}",
+            search.document[0]
+        );
+    };
+    assert_eq!(name.text, "headline");
+    assert_eq!(span_text(SEARCH, *expr), "title");
+    let DddProjectionMember::Assign { name, expr, .. } = &search.document[1] else {
+        panic!(
+            "expected an assign document entry, got {:?}",
+            search.document[1]
+        );
+    };
+    assert_eq!(name.text, "blurb");
+    assert_eq!(span_text(SEARCH, *expr), r#"title + " - " + synopsis"#);
+    let DddProjectionMember::Assign { name, expr, .. } = &search.document[2] else {
+        panic!(
+            "expected an assign document entry, got {:?}",
+            search.document[2]
+        );
+    };
+    assert_eq!(name.text, "teaser");
     assert_eq!(
-        span_text(SEARCH, search.document[1].expr),
-        r#"title + " - " + synopsis"#
-    );
-    assert_eq!(search.document[2].name.text, "teaser");
-    assert_eq!(
-        span_text(SEARCH, search.document[2].expr),
+        span_text(SEARCH, *expr),
         r#"if (runtimeMinutes > 100) { title + " (long)" } else { "a; b" }"#
     );
     assert_eq!(search.ranking, Some(DddRanking::Bm25));
@@ -2519,4 +2534,400 @@ application A {
         "expected the receiver refusal, got: {:?}",
         result.errors
     );
+}
+
+// --- DTO projections and standalone declarations (DD3, issue #300) -----------
+
+/// The three DTO forms: a projection DTO (`from <source>`), a standalone DTO
+/// (declared members), and a mirror DTO (flags only, no members).
+const DTOS: &str = r#"
+import "library.mox"
+
+application Library {
+    module catalogue {
+        entity Book
+        dto BookSummary from Book {
+            title;
+            isbn;
+            rating = playLength / 60;
+        }
+        dto CreateBookRequest {
+            String title;
+            String isbn;
+            int[] tags;
+            Book[] shelves;
+        }
+        dto User nonPersistent
+    }
+}
+"#;
+
+fn expect_design<'a>(module: &'a DddModule, name: &str) -> &'a DddDesign {
+    module
+        .designs
+        .iter()
+        .find(|design| design.class.text == name)
+        .unwrap_or_else(|| panic!("expected design `{name}`"))
+}
+
+#[test]
+fn dto_projection_parses() {
+    let result = parse_ddd(DTOS);
+    assert!(
+        result.errors.is_empty(),
+        "unexpected errors: {:?}",
+        result.errors
+    );
+    let file = result.ast.expect("expected an AST");
+    let catalogue = expect_module(&file, "catalogue");
+
+    let summary = expect_design(catalogue, "BookSummary");
+    assert_eq!(summary.stereotype, DddStereotype::Dto);
+    assert_eq!(
+        summary
+            .dto_source
+            .as_ref()
+            .expect("from source")
+            .full_name(),
+        "Book"
+    );
+    let members = match summary.dto_members.as_ref().expect("members") {
+        DddDtoMembers::Projection(members) => members,
+        other => panic!("expected projection members, got {other:?}"),
+    };
+    assert_eq!(members.len(), 3);
+    match &members[0] {
+        DddProjectionMember::Select { name, span } => {
+            assert_eq!(name.text, "title");
+            assert_eq!(span_text(DTOS, *span), "title;");
+        }
+        other => panic!("expected a select member, got {other:?}"),
+    }
+    match &members[1] {
+        DddProjectionMember::Select { name, .. } => assert_eq!(name.text, "isbn"),
+        other => panic!("expected a select member, got {other:?}"),
+    }
+    match &members[2] {
+        DddProjectionMember::Assign { name, expr, span } => {
+            assert_eq!(name.text, "rating");
+            assert_eq!(span_text(DTOS, *expr), "playLength / 60");
+            assert_eq!(span_text(DTOS, *span), "rating = playLength / 60;");
+        }
+        other => panic!("expected an assign member, got {other:?}"),
+    }
+}
+
+#[test]
+fn dto_standalone_declares_typed_members() {
+    let result = parse_ddd(DTOS);
+    assert!(
+        result.errors.is_empty(),
+        "unexpected errors: {:?}",
+        result.errors
+    );
+    let file = result.ast.expect("expected an AST");
+    let catalogue = expect_module(&file, "catalogue");
+
+    let request = expect_design(catalogue, "CreateBookRequest");
+    assert_eq!(request.stereotype, DddStereotype::Dto);
+    assert!(request.dto_source.is_none());
+    let members = match request.dto_members.as_ref().expect("members") {
+        DddDtoMembers::Declared(members) => members,
+        other => panic!("expected declared members, got {other:?}"),
+    };
+    assert_eq!(members.len(), 4);
+    assert_eq!(members[0].type_ref.name.full_name(), "String");
+    assert!(members[0].multiplicity.is_none());
+    assert_eq!(members[0].name.text, "title");
+    assert_eq!(span_text(DTOS, members[0].span), "String title;");
+    assert_eq!(members[2].type_ref.name.full_name(), "int");
+    assert!(matches!(
+        members[2].multiplicity.as_ref().unwrap().kind,
+        MultiplicityKind::Unbounded
+    ));
+    assert_eq!(members[2].name.text, "tags");
+    assert_eq!(
+        span_text(DTOS, members[3].multiplicity.as_ref().unwrap().span),
+        "[]"
+    );
+}
+
+#[test]
+fn dto_mirror_has_no_source_or_members() {
+    let result = parse_ddd(DTOS);
+    assert!(
+        result.errors.is_empty(),
+        "unexpected errors: {:?}",
+        result.errors
+    );
+    let file = result.ast.expect("expected an AST");
+    let user = expect_design(expect_module(&file, "catalogue"), "User");
+    assert_eq!(user.stereotype, DddStereotype::Dto);
+    assert!(user.dto_source.is_none());
+    assert!(user.dto_members.is_none());
+    assert!(user.flags.non_persistent.is_some());
+}
+
+#[test]
+fn entity_has_no_dto_suffix_fields() {
+    let result = parse_ddd(DTOS);
+    assert!(
+        result.errors.is_empty(),
+        "unexpected errors: {:?}",
+        result.errors
+    );
+    let file = result.ast.expect("expected an AST");
+    let book = expect_design(expect_module(&file, "catalogue"), "Book");
+    assert!(book.dto_source.is_none());
+    assert!(book.dto_members.is_none());
+}
+
+#[test]
+fn dto_duplicate_member_names_are_allowed_at_parse_time() {
+    let source = concat!(
+        "application A { module m {\n",
+        "    dto Summary from Book { title; title; }\n",
+        "    dto Request { String title; String title; }\n",
+        "} }\n",
+    );
+    let result = parse_ddd(source);
+    assert!(
+        result.errors.is_empty(),
+        "duplicates are a driver concern, not a syntax error: {:?}",
+        result.errors
+    );
+    let module = &result.ast.unwrap().application.unwrap().modules[0];
+    let summary = expect_design(module, "Summary");
+    let DddDtoMembers::Projection(members) = summary.dto_members.as_ref().unwrap() else {
+        panic!("expected projection members");
+    };
+    assert_eq!(members.len(), 2);
+    let request = expect_design(module, "Request");
+    let DddDtoMembers::Declared(members) = request.dto_members.as_ref().unwrap() else {
+        panic!("expected declared members");
+    };
+    assert_eq!(members.len(), 2);
+}
+
+#[test]
+fn dto_from_on_a_non_dto_design_is_an_error() {
+    for source in [
+        "application A { module m { entity Book from Other { title; } } }",
+        "application A { module m { value Money from Other { amount; } } }",
+    ] {
+        let result = parse_ddd(source);
+        assert!(
+            result
+                .errors
+                .iter()
+                .any(|error| error.message.contains("only allowed on a `dto` design")),
+            "expected the dto-only refusal for {source:?}, got {:?}",
+            result.errors
+        );
+    }
+}
+
+#[test]
+fn dto_member_block_on_a_non_dto_design_is_an_error() {
+    let result = parse_ddd("application A { module m { entity Book { String title; } } }");
+    assert!(
+        result
+            .errors
+            .iter()
+            .any(|error| error.message.contains("only allowed on a `dto` design")),
+        "expected the dto-only refusal, got {:?}",
+        result.errors
+    );
+}
+
+#[test]
+fn dto_projection_rejects_declared_members() {
+    let result =
+        parse_ddd("application A { module m { dto Request from Book { String title; } } }");
+    assert!(
+        result
+            .errors
+            .iter()
+            .any(|error| error.message.contains("projection member")),
+        "expected the projection-member refusal, got {:?}",
+        result.errors
+    );
+}
+
+#[test]
+fn dto_standalone_rejects_projection_shorthand() {
+    for source in [
+        "application A { module m { dto Request { title; } } }",
+        "application A { module m { dto Request { rating = playLength / 60; } } }",
+    ] {
+        let result = parse_ddd(source);
+        assert!(
+            result
+                .errors
+                .iter()
+                .any(|error| error.message.contains("declared member")),
+            "expected the declared-member refusal for {source:?}, got {:?}",
+            result.errors
+        );
+    }
+}
+
+#[test]
+fn dto_from_without_a_projection_block_is_an_error() {
+    let result = parse_ddd("application A { module m { dto Summary from Book } }");
+    assert!(
+        result
+            .errors
+            .iter()
+            .any(|error| error.message.contains("projection block")),
+        "expected the missing-block error, got {:?}",
+        result.errors
+    );
+}
+
+#[test]
+fn search_document_rejects_the_select_shorthand() {
+    let result = parse_ddd("application A { module m { search S { document { title; } } } }");
+    assert!(
+        result
+            .errors
+            .iter()
+            .any(|error| error.message.contains("document entry")),
+        "expected the search-document refusal, got {:?}",
+        result.errors
+    );
+}
+
+#[test]
+fn dto_forms_format_canonically_and_round_trip() {
+    let formatted = fmt_ddd(DTOS);
+    assert_eq!(
+        formatted,
+        concat!(
+            "import \"library.mox\";\n",
+            "\n",
+            "application Library {\n",
+            "    module catalogue {\n",
+            "        entity Book\n",
+            "        dto BookSummary from Book {\n",
+            "            title;\n",
+            "            isbn;\n",
+            "            rating = playLength / 60;\n",
+            "        }\n",
+            "\n",
+            "        dto CreateBookRequest {\n",
+            "            String title;\n",
+            "            String isbn;\n",
+            "            int[] tags;\n",
+            "            Book[] shelves;\n",
+            "        }\n",
+            "\n",
+            "        dto User nonPersistent\n",
+            "    }\n",
+            "}\n",
+        ),
+        "canonical DTO layout, got:\n{formatted}"
+    );
+    assert_eq!(
+        fmt_ddd(&formatted),
+        formatted,
+        "formatting must be idempotent"
+    );
+    let once = parse_ddd(&formatted);
+    assert!(
+        once.errors.is_empty(),
+        "formatted output must parse cleanly, got {:?}",
+        once.errors
+    );
+    let twice = parse_ddd(&fmt_ddd(&formatted));
+    assert_eq!(once.ast, twice.ast, "formatted output must round-trip");
+}
+
+#[test]
+fn dto_member_comments_are_preserved() {
+    let source = concat!(
+        "application A { module m {\n",
+        "    dto Summary from Book {\n",
+        "        // selected\n",
+        "        title; // the title\n",
+        "        rating = playLength / 60; // derived\n",
+        "    }\n",
+        "    dto Request {\n",
+        "        // declared\n",
+        "        String title;\n",
+        "    }\n",
+        "} }\n",
+    );
+    let expected = concat!(
+        "application A {\n",
+        "    module m {\n",
+        "        dto Summary from Book {\n",
+        "            // selected\n",
+        "            title; // the title\n",
+        "            rating = playLength / 60; // derived\n",
+        "        }\n",
+        "\n",
+        "        dto Request {\n",
+        "            // declared\n",
+        "            String title;\n",
+        "        }\n",
+        "    }\n",
+        "}\n",
+    );
+    assert_eq!(fmt_ddd(source), expected);
+    assert_eq!(fmt_ddd(expected), expected, "formatting must be idempotent");
+}
+
+#[test]
+fn from_word_stays_usable_as_an_escaped_name() {
+    // `from` is a real lexer keyword; the escaped form remains an ordinary
+    // name in every design position, including directly ahead of the DTO
+    // projection's `from` word.
+    let source = concat!(
+        "application A { module m {\n",
+        "    entity ^from\n",
+        "    dto ^from nonPersistent\n",
+        "    dto ^from from Book { title; }\n",
+        "} }\n",
+    );
+    let result = parse_ddd(source);
+    assert!(
+        result.errors.is_empty(),
+        "unexpected errors: {:?}",
+        result.errors
+    );
+    let module = &result.ast.unwrap().application.unwrap().modules[0];
+    assert_eq!(module.designs[0].class.text, "from");
+    assert!(module.designs[0].class.escaped);
+    assert_eq!(module.designs[1].class.text, "from");
+    assert!(module.designs[1].dto_members.is_none());
+    let projection = &module.designs[2];
+    assert_eq!(projection.class.text, "from");
+    assert_eq!(
+        projection
+            .dto_source
+            .as_ref()
+            .expect("from source")
+            .full_name(),
+        "Book"
+    );
+}
+
+#[test]
+fn adversarial_dto_inputs_do_not_panic() {
+    for source in [
+        "dto",
+        "dto Summary from",
+        "dto Summary from Book {",
+        "dto Summary from Book { = ; }",
+        "dto Summary from Book { title title }",
+        "dto Request { String }",
+        "dto Request { ; }",
+        "dto Request from Book from Other { }",
+        "application A { module m { dto Summary from Book { title; } } }",
+        "application A { module m { dto Summary from Book { title; } dto Other { int x; } } }",
+    ] {
+        let _ = parse_ddd(source);
+        let _ = format_ddd(source);
+    }
 }

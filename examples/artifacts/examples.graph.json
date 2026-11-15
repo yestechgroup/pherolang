@@ -1494,6 +1494,20 @@
       "application": "support/cli.ifml"
     },
     {
+      "id": "dto:support/support.ddd#SupportDesk.desk.NewTicket",
+      "kind": "dto",
+      "name": "SupportDesk.desk.NewTicket",
+      "file": "support/support.ddd",
+      "application": "support/cli.ifml"
+    },
+    {
+      "id": "dto:support/support.ddd#SupportDesk.desk.TicketSummary",
+      "kind": "dto",
+      "name": "SupportDesk.desk.TicketSummary",
+      "file": "support/support.ddd",
+      "application": "support/cli.ifml"
+    },
+    {
       "id": "file:support/support.ddd#support/support.ddd",
       "kind": "file",
       "name": "support/support.ddd",
@@ -1679,6 +1693,13 @@
       "id": "serviceOperation:support/support.ddd#SupportDesk.desk.TicketService.resolveTicket",
       "kind": "serviceOperation",
       "name": "SupportDesk.desk.TicketService.resolveTicket",
+      "file": "support/support.ddd",
+      "application": "support/cli.ifml"
+    },
+    {
+      "id": "serviceOperation:support/support.ddd#SupportDesk.desk.TicketService.summarizeTicket",
+      "kind": "serviceOperation",
+      "name": "SupportDesk.desk.TicketService.summarizeTicket",
       "file": "support/support.ddd",
       "application": "support/cli.ifml"
     },
@@ -3114,6 +3135,24 @@
       "from": "deployment:support/support.deploy#SupportDesk.production",
       "to": "deployProfile:support/support.deploy#production_k8s",
       "kind": "usesProfile"
+    },
+    {
+      "from": "dto:support/support.ddd#SupportDesk.desk.NewTicket",
+      "to": "module:support/support.ddd#SupportDesk.desk",
+      "kind": "memberOf"
+    },
+    {
+      "from": "dto:support/support.ddd#SupportDesk.desk.TicketSummary",
+      "to": "class:support/support.mox#nz.example.support.Ticket",
+      "kind": "designs",
+      "attributes": {
+        "via": "dto"
+      }
+    },
+    {
+      "from": "dto:support/support.ddd#SupportDesk.desk.TicketSummary",
+      "to": "module:support/support.ddd#SupportDesk.desk",
+      "kind": "memberOf"
     },
     {
       "from": "event:support/support.evt#support.TicketRaised",
@@ -4778,6 +4817,15 @@
       }
     },
     {
+      "from": "serviceOperation:support/support.ddd#SupportDesk.desk.TicketService.raise",
+      "to": "dto:support/support.ddd#SupportDesk.desk.NewTicket",
+      "kind": "typeOf",
+      "attributes": {
+        "field": "draft",
+        "role": "param"
+      }
+    },
+    {
       "from": "serviceOperation:support/support.ddd#SupportDesk.desk.TicketService.raiseRefund",
       "to": "capability:support/support.actor#Support.RaiseRefund",
       "kind": "carries"
@@ -4821,6 +4869,19 @@
       "from": "serviceOperation:support/support.ddd#SupportDesk.desk.TicketService.resolveTicket",
       "to": "service:support/support.ddd#SupportDesk.desk.TicketService",
       "kind": "memberOf"
+    },
+    {
+      "from": "serviceOperation:support/support.ddd#SupportDesk.desk.TicketService.summarizeTicket",
+      "to": "service:support/support.ddd#SupportDesk.desk.TicketService",
+      "kind": "memberOf"
+    },
+    {
+      "from": "serviceOperation:support/support.ddd#SupportDesk.desk.TicketService.summarizeTicket",
+      "to": "dto:support/support.ddd#SupportDesk.desk.TicketSummary",
+      "kind": "typeOf",
+      "attributes": {
+        "role": "return"
+      }
     },
     {
       "from": "serviceOperation:support/support.ddd#SupportDesk.desk.TicketService.updateTicket",

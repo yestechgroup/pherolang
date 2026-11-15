@@ -8,8 +8,12 @@ use phero_backend_ddd::{canonical_json, canonical_json_string, check_contract, V
 use phero_driver::{
     compile_actors_str, compile_ddd_str, compile_ddd_str_with_actors, DomainImports, Severity,
 };
-use phero_ir::ddd::{DddModel, Stereotype, TargetKind, TargetRef, DDD_MODEL_FORMAT_VERSION};
-use phero_ir::Multiplicity;
+use phero_ir::ddd::{
+    DddModel, DddTypeRef, Design, DtoDirection, DtoMember, DtoMemberKind, DtoShape, EqualityPolicy,
+    IdentityPolicy, StateMachine, Stereotype, TargetKind, TargetRef, ValueSemantics,
+    DDD_MODEL_FORMAT_VERSION,
+};
+use phero_ir::{Multiplicity, PrimitiveType, TypeRef};
 
 fn workspace_root() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR"))
@@ -102,6 +106,34 @@ application Library {
         .expect("the focused design lowers under actor validation")
 }
 
+/// The strict value-semantics block every `value` design carries (DD2,
+/// pherolang#299).
+fn fixed_semantics() -> ValueSemantics {
+    ValueSemantics {
+        identity: IdentityPolicy::None,
+        immutable: true,
+        deep_immutable: true,
+        equality: EqualityPolicy::Structural,
+    }
+}
+
+/// The canonical value fixture: three value designs — enum/datatype
+/// fields, a nested value, and a non-persistent one.
+fn compiled_values() -> DddModel {
+    let (design_path, design) = fixture("values.ddd");
+    let (domain_path, domain) = fixture("values.mox");
+    let compilation = compile_ddd_str(
+        &design_path,
+        &design,
+        &[(domain_path, domain)],
+        &DomainImports::default(),
+    );
+    assert_clean(&compilation.diagnostics);
+    compilation
+        .model
+        .expect("values.ddd lowers to a design artifact")
+}
+
 fn assert_clean(diagnostics: &[(String, phero_driver::Diagnostic)]) {
     assert!(
         diagnostics
@@ -125,6 +157,105 @@ fn has(violations: &[Violation], path: &str) -> bool {
 #[test]
 fn a_compiled_design_is_contract_complete() {
     assert_eq!(check_contract(&compiled()), Vec::new());
+}
+
+// --- value semantics (DD2, pherolang#299) ------------------------------------
+
+#[test]
+fn a_compiled_value_design_is_contract_complete() {
+    let model = compiled_values();
+    assert_eq!(check_contract(&model), Vec::new());
+    for design in &model.modules[0].designs {
+        assert_eq!(
+            design.semantics,
+            Some(fixed_semantics()),
+            "value design '{}' carries the fixed block",
+            design.class.as_deref().unwrap_or_default()
+        );
+    }
+}
+
+#[test]
+fn a_value_design_without_the_semantics_block_is_reported() {
+    let mut model = compiled_values();
+    model.modules[0].designs[0].semantics = None;
+    let violations = check_contract(&model);
+    assert!(
+        has(&violations, "modules[0].designs[0].semantics"),
+        "{violations:?}"
+    );
+    assert_eq!(
+        violations.len(),
+        1,
+        "one violation per design: {violations:?}"
+    );
+    let violation = &violations[0];
+    assert!(
+        violation.message.contains("value design") && violation.message.contains("semantics"),
+        "the message names the missing block: {}",
+        violation.message
+    );
+}
+
+#[test]
+fn a_value_design_with_a_wrong_semantics_field_is_reported() {
+    for (field, mutate) in [
+        (
+            "immutable",
+            (|semantics: &mut ValueSemantics| semantics.immutable = false)
+                as fn(&mut ValueSemantics),
+        ),
+        ("deepImmutable", |semantics: &mut ValueSemantics| {
+            semantics.deep_immutable = false;
+        }),
+    ] {
+        let mut model = compiled_values();
+        let semantics = model.modules[0].designs[0]
+            .semantics
+            .as_mut()
+            .expect("the compiled value design carries the block");
+        mutate(semantics);
+        let violations = check_contract(&model);
+        assert!(
+            has(&violations, "modules[0].designs[0].semantics"),
+            "{field}: {violations:?}"
+        );
+        assert!(
+            violations
+                .iter()
+                .any(|violation| violation.message.contains(field)),
+            "{field}: the message names the offending field: {violations:?}"
+        );
+    }
+}
+
+#[test]
+fn entity_and_dto_designs_may_not_carry_semantics() {
+    for stereotype in [Stereotype::Entity, Stereotype::Dto] {
+        let mut model = compiled_values();
+        let mut design = Design::new("Summary", stereotype);
+        design.type_ref = Some(phero_ir::TypeRef::Class {
+            package: "nz.example.values".to_string(),
+            name: "Summary".to_string(),
+        });
+        design.semantics = Some(fixed_semantics());
+        model.modules[0].designs.push(design);
+        let index = model.modules[0].designs.len() - 1;
+        let violations = check_contract(&model);
+        assert!(
+            has(
+                &violations,
+                &format!("modules[0].designs[{index}].semantics")
+            ),
+            "{stereotype:?}: {violations:?}"
+        );
+        assert!(
+            violations
+                .iter()
+                .any(|violation| violation.message.contains("only a value design")),
+            "{stereotype:?}: the message names the rule: {violations:?}"
+        );
+    }
 }
 
 #[test]
@@ -251,8 +382,8 @@ fn a_repository_operation_cannot_be_both_builtin_and_declared() {
         .as_mut()
         .expect("Library has a repository")
         .operations[0]
-        .return_type = Some(phero_ir::TypeRef::Primitive(
-        phero_ir::PrimitiveType::String,
+        .return_type = Some(phero_ir::ddd::DddTypeRef::Domain(
+        phero_ir::TypeRef::Primitive(phero_ir::PrimitiveType::String),
     ));
     let violations = check_contract(&model);
     assert!(
@@ -369,4 +500,431 @@ fn canonical_json_is_sorted_and_round_trips() {
 
     let text = canonical_json_string(&model).expect("canonical JSON string");
     serde_json::from_str::<DddModel>(&text).expect("canonical string reloads");
+}
+
+// --- DTO boundaries (DD3, pherolang#300) ------------------------------------
+
+fn library_class(name: &str) -> TypeRef {
+    TypeRef::Class {
+        package: "nz.example.library".to_string(),
+        name: name.to_string(),
+    }
+}
+
+fn payroll_class(name: &str) -> TypeRef {
+    TypeRef::Class {
+        package: "nz.example.payroll".to_string(),
+        name: name.to_string(),
+    }
+}
+
+fn string_type() -> DddTypeRef {
+    DddTypeRef::domain(TypeRef::Primitive(PrimitiveType::String))
+}
+
+fn selected(name: &str) -> DtoMember {
+    DtoMember::new(name, DtoMemberKind::Select, string_type()).with_path(vec![name.to_string()])
+}
+
+fn derived(name: &str, expression: &str) -> DtoMember {
+    DtoMember::new(name, DtoMemberKind::Derive, string_type())
+        .with_expression(Some(expression.to_string()))
+}
+
+fn declared(name: &str) -> DtoMember {
+    DtoMember::new(name, DtoMemberKind::Declared, string_type())
+}
+
+/// A projection DTO over the (entity-designed) `Book`:
+/// `dto BookSummary from Book { title; label = title; }` — output-only
+/// because it carries a derived member.
+fn book_summary() -> DtoShape {
+    DtoShape::new("BookSummary", DtoDirection::Output)
+        .with_source(Some(library_class("Book")))
+        .with_members(vec![selected("title"), derived("label", "title")])
+}
+
+/// An input-capable standalone DTO: no source class, declared members only.
+fn create_book_request() -> DtoShape {
+    DtoShape::new("CreateBookRequest", DtoDirection::Input).with_members(vec![declared("title")])
+}
+
+fn source_class_name(type_ref: &TypeRef) -> &str {
+    match type_ref {
+        TypeRef::Class { name, .. } => name,
+        _ => "",
+    }
+}
+
+/// Installs `shape` as a dto design in the first module (a mirror-shaped
+/// design targets its source class; a standalone one has no class), and
+/// returns the artifact plus the new design's index.
+fn with_dto(mut model: DddModel, shape: DtoShape) -> (DddModel, usize) {
+    let mut design = match &shape.source {
+        Some(source) => {
+            let mut design = Design::new(source_class_name(source).to_string(), Stereotype::Dto);
+            design.type_ref = Some(source.clone());
+            design
+        }
+        None => Design::standalone_dto(shape.name.clone()),
+    };
+    design.dto_shape = Some(shape);
+    model.modules[0].designs.push(design);
+    let index = model.modules[0].designs.len() - 1;
+    (model, index)
+}
+
+fn dto_path(index: usize, suffix: &str) -> String {
+    format!("modules[0].designs[{index}].{suffix}")
+}
+
+fn childops() -> DddModel {
+    let (design_path, design) = fixture("childops.ddd");
+    let (domain_path, domain) = fixture("childops.mox");
+    let compilation = compile_ddd_str(
+        &design_path,
+        &design,
+        &[(domain_path, domain)],
+        &DomainImports::default(),
+    );
+    assert_clean(&compilation.diagnostics);
+    compilation
+        .model
+        .expect("childops.ddd lowers to a design artifact")
+}
+
+#[test]
+fn a_compiled_dto_design_is_contract_complete() {
+    let model = childops();
+    assert_eq!(check_contract(&model), Vec::new());
+    let shape = model.modules[0]
+        .designs
+        .iter()
+        .find_map(|design| design.dto_shape.as_ref())
+        .expect("the mirror dto lowers a boundary shape");
+    assert_eq!(shape.name, "PayRunLineDraft");
+    assert_eq!(shape.direction, DtoDirection::Input);
+    assert_eq!(shape.source, Some(payroll_class("PayRunLineDraft")));
+}
+
+#[test]
+fn a_projection_dto_on_a_designed_source_class_is_contract_complete() {
+    let (model, _) = with_dto(compiled(), book_summary());
+    assert_eq!(check_contract(&model), Vec::new());
+}
+
+#[test]
+fn a_standalone_input_dto_may_fill_a_parameter() {
+    let (mut model, index) = with_dto(compiled(), create_book_request());
+    model.modules[0].designs[index].flags.non_persistent = true;
+    let operation = model.modules[0].services[0]
+        .operations
+        .iter_mut()
+        .find(|operation| operation.name == "borrow")
+        .expect("borrow lowers");
+    operation.params[1].type_ = DddTypeRef::dto("CreateBookRequest");
+    assert_eq!(check_contract(&model), Vec::new());
+}
+
+#[test]
+fn a_mirror_dto_name_is_exempt_from_its_own_source_collision() {
+    let mirror = DtoShape::new("Chapter", DtoDirection::Input)
+        .with_source(Some(library_class("Chapter")))
+        .with_members(vec![selected("title")]);
+    let (model, index) = with_dto(compiled(), mirror);
+    let violations = check_contract(&model);
+    assert!(
+        !has(&violations, &dto_path(index, "dtoShape.name")),
+        "{violations:?}"
+    );
+}
+
+#[test]
+fn a_dto_design_without_a_shape_is_reported() {
+    let (mut model, index) = with_dto(compiled(), book_summary());
+    model.modules[0].designs[index].dto_shape = None;
+    let violations = check_contract(&model);
+    assert!(
+        has(&violations, &dto_path(index, "dtoShape")),
+        "{violations:?}"
+    );
+}
+
+#[test]
+fn a_non_dto_design_carrying_a_shape_is_reported() {
+    let (mut model, index) = with_dto(compiled(), book_summary());
+    model.modules[0].designs[index].stereotype = Stereotype::Entity;
+    let violations = check_contract(&model);
+    assert!(
+        has(&violations, &dto_path(index, "dtoShape")),
+        "{violations:?}"
+    );
+}
+
+#[test]
+fn a_standalone_dto_must_not_carry_a_class_or_type_ref() {
+    let (mut model, index) = with_dto(compiled(), create_book_request());
+    model.modules[0].designs[index].class = Some("Book".to_string());
+    model.modules[0].designs[index].type_ref = Some(library_class("Book"));
+    let violations = check_contract(&model);
+    assert!(
+        has(&violations, &dto_path(index, "class")),
+        "{violations:?}"
+    );
+    assert!(
+        has(&violations, &dto_path(index, "typeRef")),
+        "{violations:?}"
+    );
+}
+
+#[test]
+fn a_projection_dto_must_agree_with_its_source() {
+    let (mut model, index) = with_dto(compiled(), book_summary());
+    model.modules[0].designs[index].class = Some("Movie".to_string());
+    let violations = check_contract(&model);
+    assert!(
+        has(&violations, &dto_path(index, "class")),
+        "the authored class must match the source: {violations:?}"
+    );
+
+    model.modules[0].designs[index].class = Some("Book".to_string());
+    model.modules[0].designs[index].type_ref = Some(library_class("Movie"));
+    let violations = check_contract(&model);
+    assert!(
+        has(&violations, &dto_path(index, "typeRef")),
+        "the resolved reference must match the source: {violations:?}"
+    );
+
+    model.modules[0].designs[index].type_ref = None;
+    let violations = check_contract(&model);
+    assert!(
+        has(&violations, &dto_path(index, "typeRef")),
+        "a sourced dto requires a typeRef: {violations:?}"
+    );
+}
+
+#[test]
+fn a_non_dto_design_requires_a_class() {
+    let mut model = compiled();
+    model.modules[0].designs[1].class = None;
+    let violations = check_contract(&model);
+    assert!(
+        has(&violations, "modules[0].designs[1].class"),
+        "{violations:?}"
+    );
+}
+
+#[test]
+fn dto_shape_names_are_required_and_unique() {
+    let (mut model, index) = with_dto(compiled(), create_book_request());
+    model.modules[0].designs[index]
+        .dto_shape
+        .as_mut()
+        .expect("the dto carries a shape")
+        .name
+        .clear();
+    let violations = check_contract(&model);
+    assert!(
+        has(&violations, &dto_path(index, "dtoShape.name")),
+        "{violations:?}"
+    );
+
+    let (model, first) = with_dto(compiled(), create_book_request());
+    let (model, second) = with_dto(model, create_book_request());
+    let violations = check_contract(&model);
+    assert!(
+        has(&violations, &dto_path(second, "dtoShape.name")),
+        "the second boundary's name must be reported: {violations:?}"
+    );
+    assert!(
+        !has(&violations, &dto_path(first, "dtoShape.name")),
+        "the first declaration is the registered one: {violations:?}"
+    );
+}
+
+#[test]
+fn a_dto_name_must_not_shadow_a_designed_class() {
+    let shadow = DtoShape::new("Book", DtoDirection::Input).with_members(vec![declared("title")]);
+    let (model, index) = with_dto(compiled(), shadow);
+    let violations = check_contract(&model);
+    assert!(
+        has(&violations, &dto_path(index, "dtoShape.name")),
+        "{violations:?}"
+    );
+}
+
+#[test]
+fn dto_member_names_are_required_and_unique() {
+    let shape = DtoShape::new("BookSummary", DtoDirection::Input)
+        .with_source(Some(library_class("Book")))
+        .with_members(vec![selected(""), selected("title"), selected("title")]);
+    let (model, index) = with_dto(compiled(), shape);
+    let violations = check_contract(&model);
+    assert!(
+        has(&violations, &dto_path(index, "dtoShape.members[0].name")),
+        "{violations:?}"
+    );
+    assert!(
+        has(&violations, &dto_path(index, "dtoShape.members[2].name")),
+        "{violations:?}"
+    );
+}
+
+#[test]
+fn dto_member_payloads_must_match_their_kind() {
+    let shape = DtoShape::new("BookSummary", DtoDirection::Input)
+        .with_source(Some(library_class("Book")))
+        .with_members(vec![
+            DtoMember::new("emptySelect", DtoMemberKind::Select, string_type())
+                .with_expression(Some("title".to_string())),
+            DtoMember::new("pathlessDerive", DtoMemberKind::Derive, string_type())
+                .with_path(vec!["title".to_string()]),
+            DtoMember::new("carryingDeclared", DtoMemberKind::Declared, string_type())
+                .with_path(vec!["title".to_string()])
+                .with_expression(Some("title".to_string())),
+        ]);
+    let (model, index) = with_dto(compiled(), shape);
+    let violations = check_contract(&model);
+    for member in 0..3 {
+        assert!(
+            has(
+                &violations,
+                &dto_path(index, &format!("dtoShape.members[{member}].path"))
+            ),
+            "member {member}: {violations:?}"
+        );
+        assert!(
+            has(
+                &violations,
+                &dto_path(index, &format!("dtoShape.members[{member}].expression"))
+            ),
+            "member {member}: {violations:?}"
+        );
+    }
+}
+
+#[test]
+fn dto_direction_is_derived_from_the_members() {
+    let input_with_derive = DtoShape::new("BookSummary", DtoDirection::Input)
+        .with_source(Some(library_class("Book")))
+        .with_members(vec![selected("title"), derived("label", "title")]);
+    let (model, index) = with_dto(compiled(), input_with_derive);
+    let violations = check_contract(&model);
+    assert!(
+        has(&violations, &dto_path(index, "dtoShape.direction")),
+        "a derive member makes the boundary output-only: {violations:?}"
+    );
+
+    let output_without_derive = DtoShape::new("BookSummary", DtoDirection::Output)
+        .with_source(Some(library_class("Book")))
+        .with_members(vec![selected("title")]);
+    let (model, index) = with_dto(compiled(), output_without_derive);
+    let violations = check_contract(&model);
+    assert!(
+        has(&violations, &dto_path(index, "dtoShape.direction")),
+        "an all-select boundary is input-capable: {violations:?}"
+    );
+}
+
+#[test]
+fn every_dto_reference_must_resolve() {
+    let (mut model, index) = with_dto(compiled(), create_book_request());
+    model.modules[0].designs[index]
+        .dto_shape
+        .as_mut()
+        .expect("the dto carries a shape")
+        .members[0]
+        .type_ = DddTypeRef::dto("GhostMember");
+    let operation = model.modules[0].services[0]
+        .operations
+        .iter_mut()
+        .find(|operation| operation.name == "borrow")
+        .expect("borrow lowers");
+    operation.return_type = Some(DddTypeRef::dto("GhostReturn"));
+    operation.params[0].type_ = DddTypeRef::dto("GhostParam");
+    let repository_operation = model.modules[0].designs[0]
+        .repository
+        .as_mut()
+        .expect("Library has a repository")
+        .operations
+        .iter_mut()
+        .find(|operation| operation.name == "renameLibrary")
+        .expect("renameLibrary is declared");
+    repository_operation.return_type = Some(DddTypeRef::dto("GhostRepoReturn"));
+
+    let violations = check_contract(&model);
+    assert!(
+        has(&violations, &dto_path(index, "dtoShape.members[0].type")),
+        "{violations:?}"
+    );
+    assert!(
+        has(
+            &violations,
+            "modules[0].services[0].operations[0].returnType"
+        ),
+        "{violations:?}"
+    );
+    assert!(
+        has(
+            &violations,
+            "modules[0].services[0].operations[0].params[0].type"
+        ),
+        "{violations:?}"
+    );
+    assert!(
+        has(
+            &violations,
+            "modules[0].designs[0].repository.operations[4].returnType"
+        ),
+        "{violations:?}"
+    );
+}
+
+#[test]
+fn an_output_dto_cannot_fill_a_parameter() {
+    let (mut model, _) = with_dto(compiled(), book_summary());
+    let operation = model.modules[0].services[0]
+        .operations
+        .iter_mut()
+        .find(|operation| operation.name == "borrow")
+        .expect("borrow lowers");
+    operation.params[1].type_ = DddTypeRef::dto("BookSummary");
+    let violations = check_contract(&model);
+    let path = "modules[0].services[0].operations[0].params[1].type";
+    assert!(has(&violations, path), "{violations:?}");
+    assert!(
+        violations
+            .iter()
+            .any(|violation| violation.path == path && violation.message.contains("label")),
+        "the message names the derived member a caller cannot supply: {violations:?}"
+    );
+}
+
+#[test]
+fn a_dto_cannot_carry_entity_only_state() {
+    let (mut model, index) = with_dto(compiled(), book_summary());
+    let design = &mut model.modules[0].designs[index];
+    design.machine = Some(StateMachine::new(
+        "state",
+        TypeRef::Enum {
+            package: "nz.example.library".to_string(),
+            name: "MediaStatus".to_string(),
+        },
+        "available",
+    ));
+    design.flags.scaffold = true;
+    design.flags.auditable = true;
+    design.flags.optimistic_locking = true;
+    let violations = check_contract(&model);
+    for suffix in [
+        "machine",
+        "flags.scaffold",
+        "flags.auditable",
+        "flags.optimisticLocking",
+    ] {
+        assert!(
+            has(&violations, &dto_path(index, suffix)),
+            "{suffix}: {violations:?}"
+        );
+    }
 }

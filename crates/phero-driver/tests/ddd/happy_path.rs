@@ -51,17 +51,17 @@ application Library {
     assert_eq!(borrow.name, "borrow");
     assert_eq!(
         borrow.return_type,
-        Some(phero_ir::TypeRef::Primitive(
-            phero_ir::PrimitiveType::Boolean
+        Some(phero_ir::ddd::DddTypeRef::domain(
+            phero_ir::TypeRef::Primitive(phero_ir::PrimitiveType::Boolean)
         ))
     );
     assert_eq!(borrow.params.len(), 1);
     assert_eq!(
         borrow.params[0].type_,
-        TypeRef::Class {
+        phero_ir::ddd::DddTypeRef::domain(TypeRef::Class {
             package: "nz.example.library".to_string(),
             name: "Book".to_string()
-        }
+        })
     );
     assert_eq!(borrow.capabilities, ["BorrowBooks"]);
     assert!(borrow.delegation.is_none());
@@ -77,7 +77,7 @@ application Library {
 
     assert_eq!(module.designs.len(), 3);
     let library = &module.designs[0];
-    assert_eq!(library.class, "Library");
+    assert_eq!(library.class.as_deref(), Some("Library"));
     assert!(library.is_abstract);
     assert!(library.flags.scaffold && library.flags.cache);
     let repository = library.repository.as_ref().expect("repository");
@@ -95,7 +95,7 @@ application Library {
     assert_eq!(declared.params[0].name, "title");
 
     let book = &module.designs[1];
-    assert_eq!(book.class, "Book");
+    assert_eq!(book.class.as_deref(), Some("Book"));
     assert!(!book.is_abstract);
     assert!(book.repository.is_none());
 

@@ -28,11 +28,13 @@ mod bodies;
 mod child_ops;
 mod conditions;
 mod designs;
+mod dtos;
 mod graph;
 mod links;
 mod machines;
 mod searches;
 mod services;
+mod values;
 
 use crate::conditions::{
     check_condition as pipeline_check_condition, when_interior, ConditionSpanning, ConditionTriage,
@@ -42,6 +44,10 @@ use bodies::lower_module_bodies;
 use child_ops::lower_module_child_operations;
 use conditions::{resolve_condition_paths, PathScan};
 use designs::lower_module_designs;
+use dtos::{
+    check_dto_parameters, collect_design_prep, dto_form, lower_dto_shape, qualified_type_ref,
+    record_dto_param, DesignPrep,
+};
 use graph::{rule_13_aggregate_references, rule_6_aggregate_boundary};
 use links::fill_resolved_links;
 use machines::{collect_machine_scopes, lower_design_machine, MachineScopes};
@@ -50,6 +56,7 @@ use services::{
     lower_module_services, rule_17_validate_decision_links, rule_8_resolve_delegations,
     rule_9_resolve_injects,
 };
+use values::{check_value_semantics, value_semantics};
 
 // The shared decision-service resolver (pherolang#154) and its outcome: the
 // `.cmmn` decision-task check resolves through the same core rule 17 runs,
@@ -91,6 +98,18 @@ struct EntityDesign {
     package: String,
     class: String,
     module: String,
+}
+/// One `value` design awaiting the deferred strict value-semantics pass
+/// (DD2, pherolang#299 — R-V1/R-V2/R-V3 and the `abstract value`
+/// rejection). `resolved` is the class key (absent when rule 3 already
+/// failed), `module`/`authored`/`span` are the diagnostic context, and
+/// `is_abstract` feeds the concrete-only rule.
+struct ValueDesign {
+    resolved: Option<(String, String)>,
+    module: String,
+    authored: String,
+    span: Span,
+    is_abstract: bool,
 }
 /// A declared search projection awaiting the completed registries.
 struct SearchEntry {
@@ -141,6 +160,23 @@ struct DecisionCheck<'a> {
     name: &'a dsl::QualifiedName,
     pin: Option<&'a dsl::DddVersionPin>,
 }
+/// One DTO-typed parameter awaiting the completed DTO shapes (DD3,
+/// pherolang#300): a boundary with derived members is output-only, so it
+/// cannot fill a parameter slot. The check is deferred because services
+/// lower before designs, while the shapes exist only after the design
+/// stage.
+pub(crate) struct DtoParamCheck {
+    /// The signature context the message embeds (`operation 'x' of service
+    /// 'Y'`, `operation 'x' of repository 'R'`, `child operation 'x' of
+    /// extend 'C'`).
+    pub(crate) context: String,
+    /// The parameter name.
+    pub(crate) param: String,
+    /// The DTO boundary name the parameter's type names.
+    pub(crate) dto: String,
+    /// The DTO type name's span.
+    pub(crate) span: Span,
+}
 /// The application-wide registries, accumulated in declaration order while
 /// the modules lower. First declaration wins: a duplicate errors, and the
 /// original keeps resolving. The deferred check queues fill alongside;
@@ -153,12 +189,14 @@ struct Registries<'a> {
     searches: Vec<(String, SearchEntry)>,
     design_keys: Vec<(String, String)>,
     entity_designs: Vec<EntityDesign>,
+    value_designs: Vec<ValueDesign>,
     root_candidates: Vec<RootCandidate>,
     delegation_checks: Vec<DelegationCheck<'a>>,
     search_bindings: Vec<SearchBindingCheck<'a>>,
     inject_checks: Vec<InjectCheck<'a>>,
     capability_checks: Vec<CapabilityCheck<'a>>,
     decision_checks: Vec<DecisionCheck<'a>>,
+    dto_param_checks: Vec<DtoParamCheck>,
 }
 /// Lowers and validates one parsed `.ddd` file against its imported domain
 /// models. Returns the design artifact (or `None` when any error-severity
@@ -177,9 +215,10 @@ struct Registries<'a> {
 /// validations ([`rule_11_bind_searches`], [`rule_6_aggregate_boundary`],
 /// [`rule_13_aggregate_references`], [`rule_9_resolve_injects`],
 /// [`rule_8_resolve_delegations`], [`rule_10_validate_capabilities`],
-/// [`rule_17_validate_decision_links`]) — the emission order of those
-/// stages is the diagnostics contract, pinned by the `ddd_diagnostic_order`
-/// characterization suite.
+/// [`rule_17_validate_decision_links`], and the strict value-semantics pass
+/// (R-V1/R-V2/R-V3 and the `abstract value` rejection, issue
+/// pherolang#299)) — the emission order of those stages is the diagnostics
+/// contract, pinned by the `ddd_diagnostic_order` characterization suite.
 ///
 /// See [`compile_ddd_str`](crate::compile_ddd_str) for the normative
 /// contract.
@@ -230,13 +269,21 @@ pub(crate) fn compile_ddd_file(
         searches: Vec::new(),
         design_keys: Vec::new(),
         entity_designs: Vec::new(),
+        value_designs: Vec::new(),
         root_candidates: Vec::new(),
         delegation_checks: Vec::new(),
         search_bindings: Vec::new(),
         inject_checks: Vec::new(),
         capability_checks: Vec::new(),
         decision_checks: Vec::new(),
+        dto_param_checks: Vec::new(),
     };
+
+    // The design pre-pass (DD3, pherolang#300): services lower before
+    // designs, so the application-wide DTO names (and the entity-designed
+    // classes a DTO member may not carry) must be known up front. The
+    // pre-pass also emits the DTO-name collision diagnostics.
+    let design_prep = collect_design_prep(application, &packages, base.as_deref(), &mut local);
 
     // The shared expression context: conditions (machine edge guards, service
     // and repository operation guards) type-check against the union model
@@ -245,6 +292,9 @@ pub(crate) fn compile_ddd_file(
     // block the artifact).
     let expr_context = union.as_ref().map(phero_expr::TypeContext::from_model);
 
+    // The application name is the diagnostics context of the deferred
+    // value-semantics pass (DD2), so keep it before the header moves.
+    let application_name = application_out.name.clone();
     let mut model = DddModel::new().application(application_out);
 
     for module in &application.modules {
@@ -287,6 +337,7 @@ pub(crate) fn compile_ddd_file(
             &repository_scopes,
             union.as_ref(),
             expr_context.as_ref(),
+            &design_prep,
             &mut registries,
         );
         local.extend(stage_diags);
@@ -301,6 +352,7 @@ pub(crate) fn compile_ddd_file(
             union.as_ref(),
             &machines,
             expr_context.as_ref(),
+            &design_prep,
             &mut registries,
         );
         local.extend(stage_diags);
@@ -317,6 +369,7 @@ pub(crate) fn compile_ddd_file(
             base.as_deref(),
             union.as_ref(),
             expr_context.as_ref(),
+            &design_prep,
             &mut module_out.services,
             &mut module_out.designs,
         ));
@@ -336,8 +389,15 @@ pub(crate) fn compile_ddd_file(
         model.modules.push(module_out);
     }
 
+    // Stage 6.5 — the DTO input-capability check (DD3): a DTO with derived
+    // members is output-only, so it cannot fill a signature's parameter
+    // slot. Deferred until every design lowered (services lower first, and
+    // a DTO may be declared after the operation that uses it).
+    local.extend(check_dto_parameters(&registries.dto_param_checks, &model));
+
     // Stage 7 — the deferred validations, in emission order: rules
-    // 11-binding, 6, 13, 9, 8, 10, 17. Each reads the completed registries.
+    // 11-binding, 6, 13, 9, 8, 10, 17, then the strict value-semantics pass
+    // (DD2, pherolang#299). Each reads the completed registries.
     local.extend(rule_11_bind_searches(
         &registries.search_bindings,
         &registries.entity_designs,
@@ -367,6 +427,15 @@ pub(crate) fn compile_ddd_file(
     local.extend(rule_17_validate_decision_links(
         &registries.decision_checks,
         decisions,
+    ));
+    // The strict value-semantics pass (DD2, pherolang#299) reads the
+    // completed registries — a value design may precede the entity design it
+    // is judged against — and emits after every other deferred rule.
+    local.extend(check_value_semantics(
+        &registries.value_designs,
+        &registries.entity_designs,
+        union.as_ref(),
+        &application_name,
     ));
 
     // Stage 8 — the resolved-identity companions (DD1, pherolang#298): every
@@ -600,6 +669,11 @@ fn collect_repository_scopes(
 ) -> Vec<RepositoryScope> {
     let mut scopes: Vec<RepositoryScope> = Vec::new();
     for design in &module.designs {
+        // A DTO has no repository (the design stage reports the error); it
+        // contributes no condition scope.
+        if dto_form(design).is_some() {
+            continue;
+        }
         let Some(repository) = &design.repository else {
             continue;
         };
@@ -680,20 +754,23 @@ fn module_coupling_diagnostic(
     ))
 }
 /// Lowers one signature type reference (a return type or a parameter type)
-/// against the domain model. Multiplicity annotations are rejected: the
-/// design artifact v1 carries plain types only, so accepting one would
-/// silently drop data.
-/// The lowered shape of one signature slot: the resolved type plus its
-/// declared cardinality (`None` is single-valued).
+/// against the domain model or the application's DTO boundaries (DD3). A
+/// multiplicity annotation lowers into the slot's cardinality (`None` is
+/// single-valued).
+///
+/// The lowered shape of one signature slot: the resolved type reference (a
+/// domain [`phero_ir::TypeRef`] or a DTO boundary) plus its declared
+/// cardinality.
 fn signature_type(
     type_ref: &dsl::TypeRef,
     multiplicity: Option<&dsl::Multiplicity>,
     packages: &[DomainPackage],
     base: Option<&str>,
+    dto_names: &[String],
     local: &mut Vec<Diagnostic>,
-) -> (phero_ir::TypeRef, Option<phero_ir::Multiplicity>) {
+) -> (phero_ir::ddd::DddTypeRef, Option<phero_ir::Multiplicity>) {
     (
-        lower::resolve_ddd_type(type_ref, packages, base, local),
+        lower::resolve_ddd_type_ref(type_ref, packages, base, dto_names, local),
         multiplicity.map(lower_multiplicity),
     )
 }
@@ -734,8 +811,10 @@ pub(crate) struct ConditionCheck<'a> {
     /// The operation's declared parameters, bound in the guard's scope so a
     /// child operation's `when` can read `line.quantity` (issue
     /// pherolang#179). Service and repository operations pass an empty slice,
-    /// which keeps their condition typing byte-identical.
-    pub(crate) params: &'a [phero_ir::OperationParam],
+    /// which keeps their condition typing byte-identical. A DTO-typed
+    /// parameter binds its synthetic `<dto>.<Name>` class (a DTO is opaque to
+    /// expressions, so field access is an unknown-feature error).
+    pub(crate) params: &'a [phero_ir::ddd::DddParam],
 }
 /// Type-checks one sliced condition and resolves its field paths. The
 /// machine states of the module bind as enum-typed names (acceptance:
@@ -838,7 +917,7 @@ fn check_condition(
         // same-named features of the `self` class. Empty for service and
         // repository operations, whose typing is unchanged.
         for param in check.params {
-            let mut ty = phero_expr::Ty::from_type_ref(&param.type_);
+            let mut ty = dtos::expr_ty(&param.type_);
             if param.multiplicity.as_ref().is_some_and(|m| m.is_many()) {
                 ty = ty.list();
             }

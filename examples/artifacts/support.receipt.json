@@ -16,7 +16,7 @@
       "formatVersion": 2,
       "kind": "dddDesign",
       "path": "support.ddd.json",
-      "sha256": "50d7e686be1c145587af15ff806534b0ce78bc8d1963192c602d5576feaeac42"
+      "sha256": "e8fee8dab097595e7912dd07d3700666167cf1fa15322917edff14896ffbb873"
     },
     {
       "formatVersion": 2,
@@ -46,7 +46,7 @@
       "formatVersion": 2,
       "kind": "irModel",
       "path": null,
-      "sha256": "204a4d0adb20c3838672c9fadc392f0a99d6a3b892243f0049b43a9011f32c0e"
+      "sha256": "43211678630cdf954b65f28dba62749d901e392b4bd23935cbb96b217cc8ce8c"
     },
     {
       "formatVersion": 2,
@@ -507,7 +507,7 @@
     },
     {
       "path": "examples/support/support.ddd",
-      "sha256": "d4f7643e6733f3439361bb7e82075f8f48a45072bef61c7fa981455e0d9908a0"
+      "sha256": "79a140864837b751cfe4a28bee3717c49822d4f72c3de2982106b9708803b641"
     },
     {
       "path": "examples/support/support.deploy",
@@ -527,7 +527,7 @@
     },
     {
       "path": "examples/support/support.mox",
-      "sha256": "9eb97b8933b1e6bf5bfdf77a930af12fcb0e0ea8a726c233cc97d6698c28f446"
+      "sha256": "b86c0e76ea73115148d3f0fec913031b999739b1a4ec58dafa44d1db3b134dbe"
     },
     {
       "path": "examples/support/support.uc",

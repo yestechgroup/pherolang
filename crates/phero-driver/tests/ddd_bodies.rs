@@ -212,7 +212,7 @@ fn repository_op<'a>(model: &'a DddModel, class: &str, name: &str) -> &'a Reposi
     model.modules[0]
         .designs
         .iter()
-        .find(|design| design.class == class)
+        .find(|design| design.class.as_deref() == Some(class))
         .and_then(|design| design.repository.as_ref())
         .and_then(|repository| {
             repository

@@ -3,6 +3,7 @@
 
 mod support;
 
+mod dto_semantics;
 mod happy_path;
 mod repository_breadth;
 mod resolution_semantics;
@@ -22,3 +23,4 @@ mod rule_7_signature_typecheck;
 mod rule_8_delegations;
 mod rule_9_inject;
 mod syntax_errors;
+mod value_semantics;

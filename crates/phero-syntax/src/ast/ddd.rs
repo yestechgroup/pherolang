@@ -414,10 +414,22 @@ impl DddFlags {
 
 /// A design declaration of a [`DddModule`]: the DDD decisions for one
 /// referenced `.mox` class — `("abstract")? stereotype name flag*
-/// ("repository" ...)?`.
+/// dto_suffix? ("repository" ...)? ("machine" ...)?` (the members are
+/// ordered by the grammar: the DTO suffix first, then the repository, then
+/// the machine).
+///
+/// [`DddDesign::class`] is the **declaration name**. For an entity, value,
+/// or mirror (`dto` with neither `from` nor a member block) it is the
+/// designed `.mox` class. For a DTO with members it is the DTO's own name —
+/// `BookSummary` in `dto BookSummary from Book { ... }`, `CreateBookRequest`
+/// in `dto CreateBookRequest { String title; }` — while the design's
+/// projection source lives in [`DddDesign::dto_source`] and its members in
+/// [`DddDesign::dto_members`].
 #[derive(Debug, Clone, PartialEq)]
 pub struct DddDesign {
-    /// The referenced `.mox` class name.
+    /// The declaration name: the designed `.mox` class for entity/value/
+    /// mirror designs, or the DTO's own name for a projection/standalone
+    /// `dto`.
     pub class: Name,
     /// The DDD stereotype.
     pub stereotype: DddStereotype,
@@ -425,11 +437,72 @@ pub struct DddDesign {
     pub is_abstract: bool,
     /// The design flags, in canonical field order regardless of source order.
     pub flags: DddFlags,
+    /// The `from <source>` class of a **projection** DTO — the designed
+    /// class the projection reads — or `None` for a standalone DTO, a
+    /// mirror DTO, and every non-DTO design.
+    pub dto_source: Option<QualifiedName>,
+    /// The DTO's `{ ... }` member block, when written: a projection (only
+    /// for a `from` DTO) or a standalone declaration. `None` for a mirror
+    /// DTO and every non-DTO design.
+    pub dto_members: Option<DddDtoMembers>,
     /// The class's repository, when designed.
     pub repository: Option<DddRepository>,
     /// The class's lifecycle state machine, when designed.
     pub machine: Option<DddMachine>,
     /// Span of the whole declaration (`abstract` included, when present).
+    pub span: Span,
+}
+
+/// The `{ ... }` member block of a DTO design (issue pherolang#300): either
+/// a projection over a `from <source>` class or a standalone declaration of
+/// typed members. The block's shape follows the DTO suffix form — a `from`
+/// DTO always carries projection members, a standalone DTO always carries
+/// declared members.
+#[derive(Debug, Clone, PartialEq)]
+pub enum DddDtoMembers {
+    /// The members of a `dto Name from Source { ... }` projection.
+    Projection(Vec<DddProjectionMember>),
+    /// The members of a standalone `dto Name { ... }` declaration.
+    Declared(Vec<DddDeclaredMember>),
+}
+
+/// One member of a DTO projection block (or of a search's `document`
+/// clause — both share this AST): a selected source property or an assigned
+/// expression producing a DTO field.
+#[derive(Debug, Clone, PartialEq)]
+pub enum DddProjectionMember {
+    /// `name;` — select the source class's `name` property unchanged.
+    Select {
+        /// The selected (and produced) field name.
+        name: Name,
+        /// Span covering the whole member, `;` included.
+        span: Span,
+    },
+    /// `name = <expression>;` — produce `name` from the raw expression; the
+    /// expression is captured as a span (the `raw_expr` convention) and
+    /// parsed/typed by the driver.
+    Assign {
+        /// The produced field name.
+        name: Name,
+        /// Span of the raw expression source (the `;` excluded).
+        expr: Span,
+        /// Span covering the whole member, `;` included.
+        span: Span,
+    },
+}
+
+/// One `type_ref multiplicity? name;` member of a standalone DTO block
+/// (issue pherolang#300): a field the DTO declares on its own, shaped like a
+/// `.mox` feature.
+#[derive(Debug, Clone, PartialEq)]
+pub struct DddDeclaredMember {
+    /// The declared member's type.
+    pub type_ref: TypeRef,
+    /// Multiplicity annotation on the type, if any.
+    pub multiplicity: Option<Multiplicity>,
+    /// The declared member name.
+    pub name: Name,
+    /// Span covering the whole member, `;` included.
     pub span: Span,
 }
 
@@ -578,8 +651,10 @@ pub struct DddSearch {
     pub filters: Vec<QualifiedName>,
     /// Sort facet names in source order.
     pub sort: Vec<QualifiedName>,
-    /// Document projection entries in source order.
-    pub document: Vec<DddDocumentEntry>,
+    /// Document projection entries in source order. The entries share the
+    /// DTO projection AST ([`DddProjectionMember`]); search syntax is the
+    /// assignment form only (`name = <expression>;`).
+    pub document: Vec<DddProjectionMember>,
     /// The declared ranking strategy, when present.
     pub ranking: Option<DddRanking>,
     /// The search-wide default analyzer, when present.
@@ -604,18 +679,6 @@ pub struct DddSearchField {
     pub analyzer: Option<String>,
     /// Span covering the whole field.
     pub span: Span,
-}
-
-/// One `name = <expr>;` entry of a search's `document { ... }` clause. The
-/// expression is captured raw — its span slices the expression source
-/// strictly between the `=` and the terminating `;` — exactly like the
-/// `.mox` op bodies; parsing it is the driver's job.
-#[derive(Debug, Clone, PartialEq)]
-pub struct DddDocumentEntry {
-    /// The document field name.
-    pub name: Name,
-    /// Span of the raw expression source (the `;` excluded).
-    pub expr: Span,
 }
 
 /// The `ranking <strategy>` line of a [`DddSearch`].

@@ -247,10 +247,14 @@
 //! emits_clause      := "emits" name ("," name)*
 //! transition_clause := "transition" name ("." name)?
 //! design_decl       := "abstract"? stereotype name design_flag*
-//!                      repository_decl? machine_decl?
+//!                      dto_suffix? repository_decl? machine_decl?
 //! stereotype        := "entity" | "value" | "dto"
 //! design_flag       := "!"? ("scaffold" | "auditable" | "optimisticLocking"
 //!                               | "nonPersistent" | "cache")
+//! dto_suffix        := "from" qualified_name dto_projection_block
+//!                    | dto_standalone_block
+//! dto_projection_block := "{" (name ";" | name "=" raw_expr ";")* "}"
+//! dto_standalone_block := "{" (type_ref multiplicity? name ";")* "}"
 //! repository_decl   := "repository" name "{" repository_op* "}"
 //! repository_op     := "protected"? (repository_builtin ";"
 //!                    | body_signature guard_clause? statement_body
@@ -328,6 +332,21 @@
 //!   word, an ordinary identifier everywhere else (a service may be named
 //!   `compatible`). Resolution against the decision models' `version`
 //!   metadata is a driver concern (rule 17), never a wire concern.
+//! * A `dto_suffix` (issue pherolang#300) is the `dto` stereotype's member
+//!   block, written after the design flags: `dto Name from Source { ... }`
+//!   is a **projection** over the `Source` class (its members are `name;`
+//!   selections or `name = <raw_expr>;` assignments, the search
+//!   `document_entry` expression convention), while `dto Name { ... }` is a
+//!   **standalone** declaration whose members are `type_ref multiplicity?
+//!   name;` fields. A `dto` with neither is a mirror DTO. `from` is the
+//!   existing lexer keyword token ([`Token::From`], the text named by the
+//!   `crate::ddd::FROM` constant) rather than a new keyword; the suffix is
+//!   legal only on the `dto` stereotype — a `from` or a member block on any
+//!   other design is a parse error naming the construct. The two block shapes
+//!   are not interchangeable (`type name;` inside a projection block and the
+//!   `name;`/`name = ...` shorthand inside a standalone block are named
+//!   errors). Duplicate member names parse cleanly; the driver validates
+//!   them.
 //! * `design_flag`s and the single-member search lines (`entity`, `ranking`,
 //!   `analyzer`, `pagination`) are idempotent on repeat — the first
 //!   declaration wins; repeated `text`/`filters`/`sort`/`document`/
@@ -339,7 +358,10 @@
 //!   `base` is an error.
 //! * `document_entry`'s `raw_expr` spans balanced `()`/`[]`/`{}` nesting up
 //!   to the terminating `;` (string literals are single tokens), and is
-//!   stored verbatim; parsing/typing it is the driver's job.
+//!   stored verbatim; parsing/typing it is the driver's job. The entry is
+//!   the [`crate::ast::DddProjectionMember::Assign`] AST shared with DTO
+//!   projections; search syntax takes the assignment form only (the `name;`
+//!   selection shorthand belongs to projections).
 //! * A design may carry at most one `machine` block, after the optional
 //!   `repository` block (the formatter's canonical order). `machine`,
 //!   `initial`, `terminal`, and `via` are contextual words like the rest.

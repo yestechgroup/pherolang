@@ -5,7 +5,8 @@
 //! rules 2/3/4/5/12/14/15 and the `extend` child-operation blocks of
 //! pherolang#179, searches with rule 11), and the deferred validations
 //! (rules 11-binding, 6, 13, 9, 8, 10) — with the exact sequence of
-//! severities and messages pinned.
+//! severities and messages pinned. The strict value-semantics pass (DD2,
+//! pherolang#299) is the last deferred stage and is pinned last.
 //!
 //! The stage decomposition of `compile_ddd_file` must keep this sequence
 //! byte-identical: the goldens pin artifacts, this pins the interleaving.
@@ -56,6 +57,10 @@ class Report {
     op String render() {
         expr { title }
     }
+}
+
+class Badge {
+    id readonly String badgeId
 }
 "#;
 
@@ -109,6 +114,8 @@ application Order {
             terminal Held;
         }
         entity Money
+
+        value Badge
 
         extend Item {
             boolean addWidget(String id) => widgets.add;
@@ -265,6 +272,11 @@ fn the_diagnostic_emission_order_is_stable() {
                     (Severity::Error, "unknown dependency 'UnknownThing'".to_string()),
                     (Severity::Error, "service 'Checkout' has no operation 'nope'".to_string()),
                     (Severity::Error, "unknown delegation target 'GhostService'".to_string()),
+                    // The strict value-semantics pass (DD2, pherolang#299)
+                    // runs after every other application-wide rule: `Badge`
+                    // carries an `id` feature, so R-V1 fires here — after
+                    // rule 10 (below) and the rest of stage 7.
+                    (Severity::Error, "E0361 value design 'Badge' in module 'alpha' of application 'Order': feature 'badgeId' carries the 'id' modifier; a value object has no identity".to_string()),
     ];
     assert_eq!(
         actual,
@@ -279,19 +291,29 @@ fn the_diagnostic_emission_order_is_stable() {
 }
 
 #[test]
-fn rule_10_runs_last_and_only_with_actors() {
+fn rule_10_emits_only_with_actors() {
     let plain = compile();
     let with_actors = compile_with_actors(&actors_with(&["KnownCapability"]));
 
     // Without an actor model the capability names are recorded unvalidated:
-    // the plain sequence is the actors sequence minus the final capability
-    // diagnostics.
+    // the plain sequence is the actors sequence minus the rule-10
+    // diagnostics. They sit before the deferred value-semantics pass, which
+    // therefore rides last in both runs.
     let mut expected = sequence(&with_actors);
-    let tail = expected.split_off(expected.len() - 1);
+    let capability_index = expected
+        .iter()
+        .position(|(_, message)| message.contains("unknown capability"))
+        .expect("the with-actors run carries the rule-10 diagnostic");
+    let capability = expected.remove(capability_index);
+    assert!(
+        capability.1.contains("UnknownCapability"),
+        "the split-off diagnostic is the rule-10 one: {capability:?}"
+    );
     assert_eq!(sequence(&plain), expected);
     assert!(
-        tail.iter()
-            .all(|(_, message)| message.contains("unknown capability")),
-        "the split-off tail must be the rule-10 diagnostics: {tail:?}"
+        expected
+            .last()
+            .is_some_and(|(_, message)| message.starts_with("E0361")),
+        "the value-semantics pass emits after rule 10: {expected:?}"
     );
 }

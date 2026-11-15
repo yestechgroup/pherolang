@@ -94,7 +94,7 @@ fn child_operations(design: &str) -> Vec<ServiceOperation> {
     model.modules[0]
         .designs
         .iter()
-        .find(|design| design.class == "PayRun")
+        .find(|design| design.class.as_deref() == Some("PayRun"))
         .expect("the PayRun design")
         .child_operations
         .clone()
@@ -165,18 +165,18 @@ fn extend_lowers_child_scope_signatures_and_condition() {
     );
     assert_eq!(
         add.return_type,
-        Some(phero_ir::TypeRef::Primitive(
-            phero_ir::PrimitiveType::Boolean
+        Some(phero_ir::ddd::DddTypeRef::domain(
+            phero_ir::TypeRef::Primitive(phero_ir::PrimitiveType::Boolean)
         )),
     );
     assert_eq!(add.params.len(), 1);
     assert_eq!(add.params[0].name, "line");
     assert_eq!(
         add.params[0].type_,
-        phero_ir::TypeRef::Class {
+        phero_ir::ddd::DddTypeRef::domain(phero_ir::TypeRef::Class {
             package: "nz.example.payroll".to_string(),
             name: "PayRunLineDraft".to_string(),
-        },
+        }),
     );
     assert_eq!(add.delegation, None);
     assert!(add.condition.is_none());

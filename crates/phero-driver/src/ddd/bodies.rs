@@ -33,7 +33,7 @@ use phero_diagnostics::ddd::{E_INVALID_OPERATION_BODY, E_UNKNOWN_BODY_RECEIVER};
 use phero_expr::body::BodyOutput;
 use phero_expr::stmt::{check_stmt_body, BodyRaise, Stmt, StmtBody, StmtReceiver};
 use phero_expr::DomainTypes;
-use phero_ir::ddd::{Design, Repository, ServiceOperation};
+use phero_ir::ddd::{DddParam, DddTypeRef, Design, Repository, ServiceOperation};
 use phero_ir::{Multiplicity, Operation, OperationParam, PrimitiveType, TypeRef};
 use phero_syntax::ast as dsl;
 use phero_syntax::Span;
@@ -41,6 +41,7 @@ use phero_syntax::Span;
 use crate::diagnostic::Diagnostic;
 use crate::lower::{self, DomainPackage};
 
+use super::dtos::{self, DesignPrep};
 use super::{class_features, class_type_ref};
 
 /// The synthetic package key every injected-repository class registers
@@ -80,6 +81,7 @@ pub(crate) fn lower_module_bodies(
     base: Option<&str>,
     union: Option<&phero_ir::Model>,
     expr_context: Option<&phero_expr::TypeContext>,
+    prep: &DesignPrep,
     services: &mut [phero_ir::ddd::Service],
     designs: &mut [Design],
 ) -> Vec<Diagnostic> {
@@ -97,7 +99,10 @@ pub(crate) fn lower_module_bodies(
     }
 
     // The synthetic repository classes register into a clone of the shared
-    // union context; the union itself is never mutated.
+    // union context; the union itself is never mutated. DTO boundaries
+    // register member-less so a DTO-typed parameter/return is a known class
+    // (passing and returning works; field access is the clear
+    // unknown-feature error rather than an unknown-class one).
     let mut context = expr_context.clone();
     for repository in &repositories {
         context.insert_class(
@@ -106,6 +111,15 @@ pub(crate) fn lower_module_bodies(
             Vec::new(),
             Vec::new(),
             repository.operations.clone(),
+        );
+    }
+    for dto in &prep.dto_names {
+        context.insert_class(
+            dtos::DTO_BINDING_PACKAGE,
+            dto,
+            Vec::new(),
+            Vec::new(),
+            Vec::new(),
         );
     }
 
@@ -339,8 +353,8 @@ fn synthetic_operations(
         if let Some(return_type) = &operation.return_type {
             let mut lowered = Operation::new(
                 operation.name.clone(),
-                return_type.clone(),
-                operation.params.clone(),
+                dtos::body_type_ref(return_type),
+                dtos::body_params(&operation.params),
             );
             lowered.return_multiplicity = operation.return_multiplicity;
             operations.push(lowered);
@@ -431,18 +445,14 @@ fn attach_body(
         return;
     }
 
-    let output = operation.return_type().map(|type_| BodyOutput {
+    let output_type = operation.return_type().map(dtos::body_type_ref);
+    let output = output_type.as_ref().map(|type_| BodyOutput {
         name: "return",
         type_,
         multiplicity: operation.return_multiplicity(),
     });
-    if let Err(errors) = check_stmt_body(
-        context,
-        operation.params(),
-        output,
-        receivers,
-        &lowered.body,
-    ) {
+    let params = dtos::body_params(operation.params());
+    if let Err(errors) = check_stmt_body(context, &params, output, receivers, &lowered.body) {
         for error in errors {
             let span = lowered
                 .slots
@@ -471,9 +481,9 @@ fn attach_body(
 /// parameters, and the body receiver (only services set one).
 trait BodyOperation {
     fn name(&self) -> &str;
-    fn return_type(&self) -> Option<&TypeRef>;
+    fn return_type(&self) -> Option<&DddTypeRef>;
     fn return_multiplicity(&self) -> Option<&Multiplicity>;
-    fn params(&self) -> &[OperationParam];
+    fn params(&self) -> &[DddParam];
     fn bodies_mut(&mut self) -> &mut BTreeMap<String, String>;
     fn set_body_receiver(&mut self, receiver: Option<String>);
 }
@@ -482,13 +492,13 @@ impl BodyOperation for ServiceOperation {
     fn name(&self) -> &str {
         &self.name
     }
-    fn return_type(&self) -> Option<&TypeRef> {
+    fn return_type(&self) -> Option<&DddTypeRef> {
         self.return_type.as_ref()
     }
     fn return_multiplicity(&self) -> Option<&Multiplicity> {
         self.return_multiplicity.as_ref()
     }
-    fn params(&self) -> &[OperationParam] {
+    fn params(&self) -> &[DddParam] {
         &self.params
     }
     fn bodies_mut(&mut self) -> &mut BTreeMap<String, String> {
@@ -503,13 +513,13 @@ impl BodyOperation for phero_ir::ddd::RepositoryOperation {
     fn name(&self) -> &str {
         &self.name
     }
-    fn return_type(&self) -> Option<&TypeRef> {
+    fn return_type(&self) -> Option<&DddTypeRef> {
         self.return_type.as_ref()
     }
     fn return_multiplicity(&self) -> Option<&Multiplicity> {
         self.return_multiplicity.as_ref()
     }
-    fn params(&self) -> &[OperationParam] {
+    fn params(&self) -> &[DddParam] {
         &self.params
     }
     fn bodies_mut(&mut self) -> &mut BTreeMap<String, String> {

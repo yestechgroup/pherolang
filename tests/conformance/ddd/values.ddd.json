@@ -1,0 +1,69 @@
+{
+  "formatVersion": 2,
+  "pheroVersion": "0.3.0",
+  "application": {
+    "name": "Values",
+    "base": "nz.example.values"
+  },
+  "modules": [
+    {
+      "name": "pricing",
+      "designs": [
+        {
+          "class": "Money",
+          "typeRef": {
+            "type": "class",
+            "value": {
+              "package": "nz.example.values",
+              "name": "Money"
+            }
+          },
+          "stereotype": "value",
+          "semantics": {
+            "identity": "none",
+            "immutable": true,
+            "deepImmutable": true,
+            "equality": "structural"
+          }
+        },
+        {
+          "class": "PriceRange",
+          "typeRef": {
+            "type": "class",
+            "value": {
+              "package": "nz.example.values",
+              "name": "PriceRange"
+            }
+          },
+          "stereotype": "value",
+          "semantics": {
+            "identity": "none",
+            "immutable": true,
+            "deepImmutable": true,
+            "equality": "structural"
+          }
+        },
+        {
+          "class": "Snapshot",
+          "typeRef": {
+            "type": "class",
+            "value": {
+              "package": "nz.example.values",
+              "name": "Snapshot"
+            }
+          },
+          "stereotype": "value",
+          "flags": {
+            "nonPersistent": true
+          },
+          "semantics": {
+            "identity": "none",
+            "immutable": true,
+            "deepImmutable": true,
+            "equality": "structural"
+          }
+        }
+      ]
+    }
+  ]
+}

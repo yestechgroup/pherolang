@@ -1,0 +1,27 @@
+package nz.example.values
+
+enum Currency {
+    Nzd as "NZD" = 0
+    Aud as "AUD" = 1
+}
+
+type Code wraps opaque {
+    rust "std::string::String"
+    csharp "string"
+    java "String"
+}
+
+class Money {
+    readonly int cents
+    readonly Currency currency
+    readonly Code code
+}
+
+class PriceRange {
+    readonly contains Money min
+    readonly contains Money max
+}
+
+class Snapshot {
+    readonly String label
+}

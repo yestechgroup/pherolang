@@ -51,10 +51,31 @@ docs):
   strings: stereotypes lowercase (`"entity" | "value" | "dto"`), built-in
   repository operations camelCase (`"findById"`, `"findAll"`,
   `"findByExample"`, `"findByKeys"`, `"save"`, `"delete"`).
-- Signatures reuse the domain IR's `TypeRef` (adjacent tagging:
-  `{"type": "class", "value": {...}}`) and `OperationParam`
-  (`{"name": ..., "type": ...}`) — there are no parallel wire-level
-  signature types.
+- **Signature types** (DD3, issue
+  [#300](https://github.com/yestechgroup/pherolang/issues/300)): an
+  operation signature slot carries `DddTypeRef`, **untagged** on the wire.
+  A domain type is exactly the domain IR's `TypeRef` object (adjacent
+  tagging: `{"type": "class", "value": {...}}`) — the pre-DD3 bytes for
+  every domain-only signature — while a DTO boundary is
+  `{"dto": "BookSummary"}`. Parameters are `DddParam`
+  (`{"name": ..., "type": ..., "multiplicity"?}`), the DDD twin of the
+  domain's `OperationParam`; the domain IR's own types stay unchanged. The
+  artifact gate stays `formatVersion` 2.
+- **DTO boundaries** (DD3, issue
+  [#300](https://github.com/yestechgroup/pherolang/issues/300)): a `dto`
+  design carries `dtoShape` — `name` (the boundary name a `DddTypeRef`
+  DTO reference spells), `source` (the resolved source class `TypeRef`,
+  omitted for a standalone DTO), `direction` (`"input" | "output"`), and
+  the ordered `members`. A member is
+  `{name, kind, type, multiplicity?, path?, expression?}`: `kind` is
+  `"select" | "derive" | "declared"`, `path` is the source feature path on
+  a select, `expression` the verbatim derivation source on a derive (the
+  `condition` rule), and neither on a declared member; `type` is a
+  `DddTypeRef`. `Design.class`/`typeRef` are **optional**: a projection's
+  `class` is its `from` source (its boundary name rides in `dtoShape.name`)
+  and a standalone DTO has neither. The field is sparse — entity and value
+  designs omit it — so an artifact without DTOs stays byte-identical apart
+  from the provenance line, and `formatVersion` stays 2.
 - Unknown fields are ignored on deserialize; every field added after v1
   must keep the `#[serde(default)]` + skip discipline. The pherolang#176/#180
   additions ride that rule: an operation's `transition` binding
@@ -71,7 +92,8 @@ docs):
 - **Resolved identities** (issue
   [#298](https://github.com/yestechgroup/pherolang/issues/298)): every
   reference a consumer acts on carries a resolved companion alongside the
-  authored spelling — `Design.typeRef`, `Delegation.targetRef`,
+  authored spelling — `Design.typeRef` (absent for a standalone DTO),
+  `Delegation.targetRef`,
   `Service.dependencyRefs`/`decisionDependencyRefs`,
   `ServiceOperation.capabilityRefs`/`emittedRefs`/`decisionRefs`,
   `SearchDef.entityRef`, and each search member's `typeRef`. The list
@@ -85,6 +107,17 @@ docs):
   that authors none of them stays byte-identical apart from the provenance
   line. See [Resolution semantics](#resolution-semantics) and the
   [consumer contract](#consumer-contract).
+- **Value semantics** (issue
+  [#299](https://github.com/yestechgroup/pherolang/issues/299)): a value
+  design carries `semantics`, the fixed four-property block
+  `{"identity":"none","immutable":true,"deepImmutable":true,"equality":"structural"}`
+  — every member always present, `identity` and `equality` closed
+  vocabularies (`"none"`, `"structural"`). The field is **sparse**: entity
+  and dto designs omit it, so an artifact without value designs stays
+  byte-identical apart from the provenance line and `formatVersion` stays 2.
+  A consumer reads the block; it never infers the four properties from
+  `"stereotype": "value"`. `pherolang artifact check` requires the block on
+  every value design and refuses it on an entity or dto.
 - Executable operation bodies (issue [#178](https://github.com/yestechgroup/pherolang/issues/178))
   ride the same additive fields: a service or repository operation's
   `bodies` map holds the checked body under the `"stmt"` target — the
@@ -309,7 +342,7 @@ the bare / `base`-preferred / unique-across-packages rules above.
 
 | Authored field | Resolved companion | Carries |
 |---|---|---|
-| `Design.class` | `typeRef` | the resolved design class (`TypeRef`) |
+| `Design.class` | `typeRef` | the resolved design class (`TypeRef`); absent for a standalone DTO |
 | `Delegation.target` | `targetRef` | the delegated service, repository, or search |
 | `Service.dependencies[]` | `dependencyRefs[]` | one target identity per injected dependency |
 | `Service.decisionDependencies[]` | `decisionDependencyRefs[]` | one decision-service identity per injection |
@@ -327,6 +360,9 @@ The companion shapes are fixed:
   search members may be any feature type, primitives and enums included.
   The field is optional on the wire so older and hand-built artifacts keep
   loading; a successful compile carries it for every reference it resolved.
+  A standalone DTO has no `typeRef` (it has no class), and a signature's
+  DTO form is not a `TypeRef` at all: `{"dto":"BookSummary"}`, joined to
+  the design whose `dtoShape.name` matches.
 - `targetRef` and each `dependencyRefs[]` entry are
   `{kind, qualifiedName, module}`. `kind` is the bare
   `"service" | "repository" | "search"` tag, `qualifiedName` is the target
@@ -389,6 +425,30 @@ ignore it for compatibility.
 - **Capabilities, events, decisions** — `capabilityRefs`, `emittedRefs`,
   `decisionRefs`, and `decisionDependencyRefs` are index-aligned with
   their authored name lists; read the companion at the same index.
+- **Values** — a design carrying `semantics` is a strictly immutable value
+  object: no identity, immutable, deep-immutable, structural equality. The
+  block is the contract; never infer it from `stereotype`. Emit a
+  constructor-only type whose inputs are exactly the stored features in
+  declaration order — private or immutable fields, no public setters, no
+  `Default`-then-mutate path, and no mutable view of nested values or
+  collections escaping the constructor (expose immutable collection
+  views). Implement equality and hash over the stored features in
+  declaration order; derived features are computed on read, never
+  construction inputs, never equality members, never persisted. A
+  persistence surrogate id is the consumer's internal detail at most:
+  never on the type's public surface, never equality-bearing.
+- **DTOs** — a `dtoShape` is a transport type: emit exactly the declared
+  members, in order, under the names as written (the left-hand side of a
+  projection is the wire name). A `select` copies the source feature at
+  `path` (joined by `.`); a `derive` evaluates `expression` against the
+  source instance (the source class is `self`, and the expression text is
+  verbatim, typed by the compiler); a `declared` member has no source
+  counterpart. A DTO is not persisted, is not an aggregate member, and
+  carries no invariants. `direction: "output"` marks a boundary no caller
+  can supply — never accept one in a parameter position; a return value
+  may be output. Join a `DddTypeRef` domain form to the domain `Model` by
+  `(package, name)`, and its `{"dto": name}` form to the design whose
+  `dtoShape.name` matches.
 - **Flags** — `Design.flags` already carries the effective value (`auditable`
   and `optimisticLocking` are on for a plain entity design), so never
   re-apply the source defaults.
@@ -402,13 +462,22 @@ artifact; one that does not may ignore it.
 
 **What `pherolang artifact check` guarantees.** From the serialized artifact
 alone, with no sources or models present, it checks the version gate and the
-DDD contract: every authored reference carries its resolved companion, the
-parallel lists are index-aligned, the search references are complete,
-stereotype/flag combinations are legal, and `pheroVersion` is present and
-well-formed. A hand-edited or truncated artifact that drops a companion or
-invents an illegal combination fails with a diagnostic naming the design or
-reference. It does not re-typecheck against the domain — that needs the
-paired `Model`.
+DDD contract: every authored reference carries its resolved companion (a
+standalone DTO is the exception — it has no class), the parallel lists are
+index-aligned, the search references are complete, stereotype/flag
+combinations are legal, every value design carries its `semantics` block
+(and no entity or dto design does), every `dto` design carries a `dtoShape`
+(and no other design does) with its member order preserved and well-formed
+kinds — `select` carries a `path`, `derive` an `expression`, `declared`
+neither, and output names are unique — every DTO reference resolves to a
+`dtoShape` name in the
+artifact, no output DTO fills a parameter slot, and `pheroVersion` is
+present and well-formed. A hand-edited or truncated artifact that drops a
+companion, a `semantics` block, or a `dtoShape`, or invents an illegal
+combination fails with a diagnostic naming the design or reference. It does
+not re-typecheck against the domain — that needs the paired `Model` — and it
+cannot re-check the value rules (R-V1 to R-V3), which read the `.mox`
+classes, nor the DTO member typing, which reads the source class.
 
 ---
 
@@ -418,9 +487,16 @@ paired `Model`.
 2. **Uniqueness** (application-wide unless noted) — module names; service
    names; design class references (one design per class per application,
    keyed by the resolved class); repository names; operation names within
-   one service; operation names within one repository.
+   one service; operation names within one repository; DTO boundary names
+   (`E0371`; a mirror DTO's name is its source class and is exempt from the
+   shadow half of the rule).
 3. **Stereotype targets** — every design's `class` must resolve to a class
-   in the domain model (entity, value, and dto designs all target classes).
+   in the domain model, with the DTO exceptions: a **standalone** DTO
+   (`dto Name { ... }`) has no source class at all, a **projection**
+   (`dto Name from Source { ... }`) resolves its `from` source, and a
+   **mirror** resolves its own name. A projection may coexist with its
+   source's entity design — the boundary is not a second design of the
+   class.
 4. **Flag/stereotype compatibility** — `scaffold`, `auditable`, and
    `optimisticLocking` are entity-only; `nonPersistent` is value/dto-only;
    `cache` is legal on any design. `auditable` and `optimisticLocking`
@@ -432,11 +508,20 @@ paired `Model`.
 6. **Aggregate boundary** — see the derivation rule below; an entity design
    derived as a non-root may not declare a repository.
 7. **Signature type-check** — declared service and repository operation
-   signatures type-check against the domain model: the `phero-syntax`
-   primitives resolve everywhere, every other reference resolves through
-   the bare/qualified rules above (any declared kind — class, enum,
-   datatype, interface, vocabulary). A multiplicity annotation on a return
-   type or parameter lowers into the artifact's cardinality slots.
+   signatures type-check against the domain model or the application's DTO
+   boundaries: the `phero-syntax` primitives resolve everywhere, every
+   other reference resolves through the bare/qualified rules above (any
+   declared kind — class, enum, datatype, interface, vocabulary), and a
+   single-segment name that resolves to no domain type but matches a
+   projection or standalone DTO boundary is that DTO. The slot lowers to
+   `DddTypeRef`: the resolved domain `TypeRef`, or `{"dto":"Name"}`. Domain
+   resolution wins deterministically when a name matches both — a
+   projection/standalone name shadowing a domain type is the `E0371`
+   collision error, while a mirror DTO deliberately resolves as its source
+   class. A DTO in a **parameter** slot must be input-capable: an output
+   DTO (one with a derived member) is refused (`E0370`); a return type may
+   be output. A multiplicity annotation on a return type or parameter
+   lowers into the artifact's cardinality slots.
 8. **Delegations** — the target must resolve to a service, a repository,
    or a search declared anywhere in the application, and the operation must
    name an operation on it (repository built-ins included; a search exposes
@@ -466,11 +551,37 @@ paired `Model`.
     type-checked with the entity as `self` (any value type is legal; the
     consumer decides the rendered form). Pagination bounds satisfy
     `1 ≤ limit ≤ max`.
-12. **Value contract** — a `value` design is an immutable value object
-    (Sculptor's ValueObject default, with no opt-out): every stored feature
-    of the resolved class (own and inherited, derived features excluded)
-    must carry the domain model's `readonly` modifier. A changeable class
-    designs as `entity` or `dto` instead.
+12. **Value contract** — a `value` design is a strictly immutable value
+    object (Sculptor's ValueObject with no `!immutable` opt-out, issue
+    [#299](https://github.com/yestechgroup/pherolang/issues/299)): no
+    identity, immutable, deep-immutable (nested values and collections),
+    and structural equality over the stored features (derived excluded) —
+    the four properties in [Value objects](#value-objects), carried in the
+    artifact as `semantics`. Every stored feature of the resolved class
+    (own and inherited, derived features excluded) must carry the domain
+    model's `readonly` modifier. The sub-rules below are checked against
+    the **application's designs**, not the `.mox` file alone — the same
+    class may be a `value` in one application and an `entity` in another,
+    and that is legal:
+    - **R-V1 — no identity.** A `value` whose target class declares an
+      `id`-modified feature is an error naming the design and the feature.
+      Workaround: drop the `id` (a value is identified by its state) or
+      design the class as an `entity`.
+    - **R-V2 — no owned mutable state.** A `value` may not own a
+      `contains` whose target class is designed as an `entity` in the same
+      application. Containment of other values is the normal nested-value
+      case.
+    - **R-V3 — no entity references.** A `value` may not declare a
+      `refers` whose target is designed as an `entity` in the same
+      application. This is an error, not a warning: a mutable entity
+      handle makes the value's observable state mutable and turns
+      structural equality into identity comparison. Workaround: refer by
+      id — `refers String personId`.
+    - **No abstract values.** `abstract value` is an error — abstractness
+      belongs to a hierarchy, and a value has no identity to inherit. A
+      shared shape without identity is a `.mox` interface or datatype.
+
+    A changeable class designs as `entity`; a transport shape as `dto`.
 13. **Aggregate reference constraint** — an outside class may hold a cross
     reference only to an aggregate's root: for every cross-reference
     (`refers`) feature whose target sits under a containment chain (a
@@ -484,12 +595,16 @@ paired `Model`.
     imply the service), and the artifact synthesizes nothing — so the author
     declares the repository the scaffolding
     would hang off. The service remains the author's to declare.
-15. **dto-with-ops warning** — a `dto` design whose class carries `ops`
-    warns once per op, naming the design and the op: a dto is a transfer
-    record, and behavior on it is almost always a modeling mistake (see
-    the layering heuristic under "Domain operations vs service
-    operations"). Warning-severity: the artifact is unaffected, and the
-    check runs only against a fully lowered union.
+15. **dto-with-ops error** — a `dto` design whose class carries `ops` is an
+    error, once per op, naming the design and the op (`E0365`): a dto is a
+    behavior-free transport shape, and behavior on it is a modeling
+    mistake (see the layering heuristic under "Domain operations vs
+    service operations"). `derived` features stay legal — a computed wire
+    field, not behavior. The check runs for the **mirror** form only
+    (whose boundary *is* the class's shape); a projection reads a source
+    class that may legitimately carry behavior, so its ops are not the
+    boundary's. It runs only against a fully lowered union, and an error
+    drops the artifact.
 16. **Typed status fields** — an entity design whose class carries a
     feature named `status` or `state` typed as a bare `String` is an
     error: a status-like field is a lifecycle, and the bare-`String`
@@ -565,6 +680,34 @@ paired `Model`.
     bodies' generate-time deferral, the `.ddd` compiler never attaches an
     unchecked body. `NotFound` and `Conflict` are the reserved raise
     variants.
+20. **DTO boundaries** — a `dto` design is checked as a transport shape
+    (DD3, issue
+    [#300](https://github.com/yestechgroup/pherolang/issues/300); the
+    vocabulary is [Data transfer objects](#data-transfer-objects)):
+    - **Placement** — no identity semantics, aggregate membership,
+      repository, machine, or invariants, and no `op` (rule 15).
+      `nonPersistent` and `cache` stay legal; `scaffold`, `auditable`, and
+      `optimisticLocking` are entity-only (`E0372`, the transport-shape
+      wording of rule 4/rule 5).
+    - **Class** — a standalone DTO declares none; a projection resolves
+      its `from` source; a mirror resolves its own name (rule 3).
+    - **Name** — application-wide unique and no shadowing of a domain
+      type (`E0371`); a mirror DTO's name is its source class and is
+      exempt.
+    - **Members** — a mirror copies every stored feature (own and
+      inherited, derived excluded) in declaration order. A projection's
+      `name;` selects a feature, `name = path;` selects a nested feature
+      path, and `name = expr;` derives a value typed with the source class
+      as `self` (`E0367` unknown member/path, `E0368` invalid member
+      type). A standalone member declares `Type name;`, resolving to a
+      primitive, enum, datatype, vocabulary, value, or another DTO
+      boundary. A member may not carry or select an entity-designed class
+      (`E0369`) — project its fields, or refer to it by id. Duplicate
+      output names are errors (`E0366`); declaration order is wire order.
+    - **Direction** — any derived member makes the boundary `output`,
+      otherwise `input`; an output DTO in a parameter slot is `E0370`,
+      while a return type may be output. A projection over a
+      behavior-rich source is legal (rule 15's error is the mirror's).
 
 ## State machines
 
@@ -596,7 +739,7 @@ in `crates/phero-driver/src/ddd.rs`; behavior pinned by
 `crates/phero-driver/tests/ddd_machines.rs`):
 
 - Only an **entity** design carries a machine — a value object is
-  immutable and a dto is a transfer record; neither moves through states.
+  immutable and a dto is a transport shape; neither moves through states.
 - The machine's type must resolve to an **enum**, and the bound feature
   (`<field>`) must exist on the designed class and carry exactly that enum
   type.
@@ -717,6 +860,146 @@ contract (entity + field — `phero_driver::machines::derived_events`), which
 is what makes the push plane's `state_changed` vocabulary reachable for a
 plain CRUD model once its lifecycle is modeled.
 
+## Value objects
+
+A `value` design means **strict value semantics** — all four properties,
+together, with no opt-out (issue
+[#299](https://github.com/yestechgroup/pherolang/issues/299)):
+
+| Property | Meaning |
+|---|---|
+| **No identity** | The class has no identity-bearing feature. Two values with equal stored state are interchangeable. |
+| **Immutable** | All stored state is fixed at construction: no setters, no public mutable fields, no mutation of nested state after construction. |
+| **Deep** | Immutability includes nested values and collections: no mutable view of owned state escapes the constructor. |
+| **Structural equality** | Equality and hashing are over the stored features (derived features excluded), never over a handle. |
+
+There is no `!immutable` flag and no mutable-value spelling: the
+stereotype is the contract. A class that must mutate is designed
+`entity`; a shape that carries data between layers is designed `dto`.
+
+Construction is one step — the constructor inputs are exactly the stored
+features, in declaration order, so a consumer emits a constructor-only
+type with no `Default`-then-mutate path. Derived features are computed on
+read; they are neither construction inputs nor equality members. A
+persistence surrogate id is the consumer's internal detail at most: it
+never appears on the value's public surface and never participates in
+equality.
+
+The rules that keep the properties honest (R-V1 to R-V3 under rule 12)
+are checked against the **application's designs**, not the `.mox` file
+alone: the same class may be a `value` in one application and an
+`entity` in another, and that is legal — each design states its own
+semantics. The artifact records the four properties as the design's
+`semantics` block rather than leaving a consumer to infer them from
+`"stereotype": "value"` (see [Artifact wire format](#artifact-wire-format)
+and the [consumer contract](#consumer-contract)).
+
+Workarounds, when the model wants something a value may not have:
+
+| The model needs … | Write … |
+|---|---|
+| identity, a lifecycle, or mutation | an `entity` design |
+| a shape that crosses a layer boundary (no identity, no behavior) | a `dto` design (DD3) |
+| a reference to an entity | refer by id: `refers String personId` |
+| a class that already declares an `id` | drop the `id` — the value is identified by its state |
+| shared shape without identity | a `.mox` interface or datatype, not `abstract value` |
+
+The shipped example is `examples/support/support.mox`'s `RefundDecision`:
+it keeps `readonly String decisionId` as stored state — an ordinary
+stored feature, no longer marked `id` — and stays a value design
+(`value RefundDecision nonPersistent` in `support.ddd`).
+
+## Data transfer objects
+
+A `dto` design is a **transport shape**: the type that crosses a layer
+boundary. It is not a domain concept — no identity semantics, no aggregate
+membership, no repository, no machine, and no invariants — and it is
+behavior-free: an `op` on a dto is an error (rule 15), while a `derived`
+member is a legal computed wire field. A DTO is input-capable exactly when
+it has no derived members.
+
+Three forms, by what the declaration says:
+
+```
+dto User nonPersistent                       // mirror: every stored feature of the class
+dto BookSummary from Book {                  // projection
+    title;
+    isbn;
+    rating = playLength / 60;
+    authorName = category.name;
+}
+dto CreateBookRequest {                      // standalone
+    String title;
+    String isbn;
+}
+```
+
+| Form | Shape | Members |
+|---|---|---|
+| mirror | `dto User` | every stored feature of the class (own and inherited, derived excluded), in declaration order |
+| projection | `dto BookSummary from Book { ... }` | the block's members, in declaration order |
+| standalone | `dto CreateBookRequest { ... }` | the declared members, in declaration order |
+
+A projection member is one of three things, and the left-hand name is
+always the **wire name**:
+
+| Write | Meaning |
+|---|---|
+| `name;` | select the source feature `name` |
+| `name = path;` | select the plain feature path (inherited features included), renaming it to `name` |
+| `name = expr;` | a derived member: `expr` is typed and evaluated with the source class as `self` |
+
+A selected/renamed path whose final source feature is `derived` is
+computed, not copied: it lowers as a `derive` member (the path text is the
+expression) and makes the boundary `output`. A mirror excludes derived
+features entirely.
+
+A standalone member is `Type name;` (the usual multiplicity annotation
+included) and exists only in the standalone form — a projection's block
+takes the two shorthand member forms above, and the two block shapes are
+not interchangeable. Declared types resolve to primitives, enums,
+datatypes, vocabularies, values, and other DTO boundaries; an entity-class
+member is rejected — project the entity's fields instead, or refer to it
+by id. The same rejection applies to a selected or derived member whose
+type is a designed entity.
+
+Member order is wire order and the contract. Duplicate output names are
+errors; a rename changes the wire name, never the source path. A member
+carries at most one cardinality: a selected/declared feature keeps its
+multiplicity, and a derived expression's `T[]`/`T[0..1]` result lowers to
+the corresponding cardinality, but a nested shape (`List<Option<T>>` or the
+reverse) is rejected — the artifact has one multiplicity slot per member.
+
+**Direction** is derived, never authored: any derived member makes the
+boundary `output`; a boundary with none is `input`. An output DTO cannot
+fill an operation parameter slot — a caller has no value for a derived
+member — while a return type may be output. A projection with only
+selections is therefore input-capable, and a mirror always is (mirroring
+leaves the source's derived features out).
+
+**Names.** Boundary names are application-wide unique and must not shadow
+a domain type (class, enum, datatype, interface, or vocabulary). A mirror
+DTO is exempt: its name *is* its source class. A projection may coexist
+with its source class's entity design — the boundary is not a second
+design of the class. A consequence of the mirror's name: a signature
+spelling it resolves to the **domain class**, so a mirror DTO has no
+separate DTO-typed slot — use a projection or standalone boundary when an
+operation needs a DTO parameter or return. DTO-typed values are opaque to
+operation bodies: they can be passed and returned, but field access is not
+part of the transport contract.
+
+**Placement.** A dto carries no repository, no machine, and no entity-only
+flag (`scaffold`, `auditable`, `optimisticLocking`); `nonPersistent` and
+`cache` stay legal, and `nonPersistent` is the canonical spelling for a
+boundary that never reaches storage. A dto is never persisted, never an
+aggregate member, and carries no invariants; its members are data only.
+
+**Shared projection AST.** A DTO projection's assignment and a search
+`document` entry are the same AST node (`DddProjectionMember::Assign`)
+with the same raw-expression capture; parsing and typing are the driver's.
+Converging the two surfaces further — `document DtoName;` as a search's
+document shape — is a follow-up, not shipped.
+
 ## Aggregate derivation
 
 The aggregate boundary derives from the domain model's containment graph,
@@ -745,12 +1028,14 @@ layers, and the split is the layering heuristic:
   never take `capability` clauses — guarding a domain method would bypass
   the service boundary the policy dimension is defined over.
 
-A `dto`-designed class carrying `ops` is therefore flagged by validation
-rule 15 (a warning per op): transfer records carry data between layers, and
-behavior declared on them is almost always behavior that belongs on the
-aggregate's class or on a service. The escape hatch is unchanged: a
-body-less `op` stays the abstract hook implemented by hand in target code
-(the "Gap classes" divergence below).
+A `dto`-designed class carrying `ops` is therefore an error under
+validation rule 15 (one per op): a transport shape carries data between
+layers, and behavior declared on it is almost always behavior that belongs
+on the aggregate's class or on a service. A projection over a
+behavior-rich source class stays legal — its boundary does not carry the
+source's ops — and the escape hatch for behavior is the aggregate-owned
+`op` or a service operation, never a body on a DTO. A body-less `op` on a
+mirror DTO's class is an error too: the DTO *is* the class's shape.
 
 **Child-scoped operations** (`extend`, rule 18) are the root-side slice of
 the same heuristic: `boolean addLine(PayRunLineDraft line) => lines.add;`
@@ -986,15 +1271,15 @@ rationale for each divergence is in [Deliberate divergences](#deliberate-diverge
 | Sculptor | Phero Lang `.ddd` | Deliberately different / absent |
 |---|---|---|
 | Entity | `entity` design | — |
-| ValueObject | `value` design | no `!immutable` opt-out: strict value immutability (decision D3) |
+| ValueObject | `value` design — strictly immutable: no identity, immutable, deep (nested values and collections), structural equality over stored features (D3) | **no `!immutable` opt-out** (strictly forbidden); no `id`-bearing feature, no entity `contains`, no entity `refers` — refer by id instead (`refers String personId`) |
 | BasicType | `.mox` datatype (referenced in signatures, never designed) | a datatype wraps one platform type; a multi-field value is a class designed `value` |
 | Repository | `repository` block on an entity design | six built-in operations (`findById`, `findAll`, `findByExample`, `findByKeys`, `save`, `delete`) plus declared signatures |
 | Service (+ injected `=>` delegation) | `service` with `inject` lines and `name => target.operation` operations | a cross-module service → repository/search delegation is an error; targets carry a resolved identity (`targetRef`) |
-| `scaffold` / `auditable` / `optimisticLocking` / `!aggregateRoot`-style negations | design flags (entity-only; `auditable`/`optimisticLocking` default on for entities, `!flag` opts out) | `!immutable` is absent (D3); the artifact stores the effective flag values, never the raw spelling |
+| `scaffold` / `auditable` / `optimisticLocking` / `!aggregateRoot`-style negations | design flags (entity-only; `auditable`/`optimisticLocking` default on for entities, `!flag` opts out) | `!immutable` is absent (D3) — not an opt-out but a refused spelling; the artifact stores the effective flag values, never the raw spelling |
 | `belongsTo` / `!aggregateRoot` | derived from the domain model's containment graph (see aggregate derivation) | not authorable: derivation only (DD4 adds an authored override) |
 | Module | `module` label grouping services and designs | one application per file; the module is a design label, not a deployment boundary (DD8) |
 | child-scoped aggregate operations | `extend <Root> { ... }` block (issue [#179](https://github.com/yestechgroup/pherolang/issues/179)) | `extend` is not class inheritance (naming under review in DD4) |
-| DTO | `dto` design | today a `dto` reuses the referenced class's features; no subset, rename, or flatten yet (DD3); no behavior, identity, repository, or machine |
+| DTO | `dto` design in three forms: mirror (`dto User`), projection (`dto BookSummary from Book { ... }`), standalone (`dto CreateBookRequest { ... }`) | real parity, shaped differently: a projection selects (`name;`), renames a path (`name = path;`), or derives (`name = expr;`, source class as `self`); no identity, aggregate membership, repository, machine, invariants, or behavior; `input`/`output` is derived from the member set, and an output boundary is not a parameter; a standalone DTO has no domain class |
 | `findByQuery` / `findByCondition` finders | `search` projection (intent only: text fields with boosts, filters, sorts, ranking, pagination, document projections) — the backend chooses the engine (Postgres FTS, Tantivy, OpenSearch, ...) | no query language and no engine-specific ordering; the engine is the consumer's choice |
 | generated `GET /things/search?q=` endpoints | consumer concern — the artifact is backend-independent | — |
 | `Set` / `List` / `Bag` / `ordered` collections | multiplicity only (`String[]`, `Book[0,3]`) | absent as declarations: no collection kind and no ordering metadata; declaration order is retained (DD6) |
@@ -1011,6 +1296,15 @@ Sculptor concepts Phero Lang intentionally does not carry, and why. The
 mapping table's third column is the summary; this section is the detailed
 rationale.
 
+- **`!immutable` (mutable value objects)** — Sculptor lets a ValueObject
+  opt out of immutability. Phero Lang's `value` means strict value
+  semantics instead (rule 12, issue
+  [#299](https://github.com/yestechgroup/pherolang/issues/299)): a class
+  that must mutate is an `entity`, and a value that needs to name an
+  entity refers by id (`refers String personId`) rather than holding a
+  mutable handle. A mutable value is not a modeling style but a
+  contradiction — structural equality over state that can change is not
+  equality.
 - **Composite natural keys** — expressible already: several `id` features on
   one class lower with `isId`, and the composite key is that set; the
   Tier-1 backends give the group its meaning (docs/LANGUAGE.md keeps `id`
@@ -1188,9 +1482,10 @@ delegates across modules to `PersonService` (service → service, allowed).
 byte-compares the compiled artifact, the CLI fmt gate enforces the
 canonical formatting, and `pherolang artifact check` validates the artifact
 against the DDD contract — resolved companions, aligned parallel lists,
-search references, stereotype/flag legality, and provenance — not just its
-wire shape. Regenerate goldens with `PHERO_UPDATE_FIXTURES=1 cargo test
---workspace`.
+search references, stereotype/flag legality, value `semantics`, DTO
+`dtoShape`s and `DddTypeRef` references, and provenance — not just its wire
+shape. Regenerate goldens with
+`PHERO_UPDATE_FIXTURES=1 cargo test --workspace`.
 
 The machine-bearing pair `payrun.mox`/`payrun.ddd` (formatter-canonical)
 commits two goldens: `payrun.ddd.json` (the design artifact) and
@@ -1213,8 +1508,20 @@ is the pherolang#179 fixture: a `PayRun` aggregate root with a contained
 `dto PayRunLineDraft` parameter type, and an `extend PayRun` block with
 `add`/`remove`/`save` child operations (one guarded by a parameter field and
 one by a child feature). Its committed golden `childops.ddd.json` carries
-the design's `childOperations` with each operation's `childScope`; the
-acceptance rules are pinned by `crates/phero-driver/tests/ddd_child_ops.rs`.
+the design's `childOperations` with each operation's `childScope`, and the
+mirror DTO's `dtoShape` (its source class, `input` direction, and selected
+members); the acceptance rules are pinned by
+`crates/phero-driver/tests/ddd_child_ops.rs`.
+
+The DTO forms, member typing, direction derivation, name rules, and the DTO
+error surface (duplicate/unknown/mistyped members, entity members, name
+collisions, non-input parameters, entity-only constructs) are pinned by
+`crates/phero-driver/tests/ddd/dto_semantics.rs`; the dto-with-ops error is
+pinned by `crates/phero-driver/tests/ddd/rule_15_dto_ops.rs`. The artifact
+contract refuses a dto design without `dtoShape`, a `dtoShape` on any other
+stereotype, malformed or duplicate members, a DTO reference that names no
+boundary in the artifact, and an output DTO in a parameter slot — from the
+serialized artifact alone.
 
 The executable-body pair `bodies.mox`/`bodies.ddd` (formatter-canonical)
 is the pherolang#178 fixture: a void service body over the full statement
@@ -1231,6 +1538,13 @@ The `examples/` side ships `support.ddd` (entity/value/dto designs,
 searches, capabilities validated against `support.actor` through
 `compile_ddd_str_with_actors`) and `orders.ddd` (the aggregate-derivation
 rule over `ecommerce.mox`), byte-pinned against `examples/artifacts/` by
-`crates/phero-driver/tests/examples_artifacts.rs`. Note that
+`crates/phero-driver/tests/examples_artifacts.rs`. Its `RefundDecision` is
+the strict-value example: `decisionId` is stored state, not an `id`, and
+the design carries the `semantics` block. Note that
 `examples/library/library.mox` itself is *not* designable: its `Writer.books`
 cross reference escapes the Library aggregate (rule 13).
+
+The value rules (rule 12's R-V1 to R-V3) are pinned by the driver's
+negative-compile matrix, one case per rule: no in-tree backend consumes
+`.ddd`, so the design-aware generator is codegraph's, external by D1, and
+the in-tree proof is the rule matrix plus the artifact contract.

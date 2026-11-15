@@ -43,7 +43,7 @@ Root shapes, as actually serialized:
 | --- | --- |
 | Domain IR (`Model`) | `{"formatVersion": N, "pheroVersion"?: "…", "packages": […]}` |
 | Actor policy (`ActorModel`) | `{"formatVersion": N, "blocks"?: […]}` — block-less serializes as exactly `{"formatVersion": N}` |
-| DDD design (`ddd::DddModel`) | `{"formatVersion": N, "pheroVersion"?: "…", "application"?: {…}, "modules"?: […]}` (the design keys omitted when empty; `pheroVersion` is provenance only) |
+| DDD design (`ddd::DddModel`) | `{"formatVersion": N, "pheroVersion"?: "…", "application"?: {…}, "modules"?: […]}` (the design keys omitted when empty; `pheroVersion` is provenance only; a `value` design nested inside carries the fixed `semantics` block, entity and dto designs omit it — strict value semantics, issue #299; a `dto` design carries `dtoShape`, and `class` is omitted for a standalone DTO — DD3, issue #300) |
 | Event contract (`events::EventModel`) | `{"formatVersion": N, "events"?: […], "channels"?: […], "subscriptions"?: […]}` (all omitted when empty) |
 | Deployment (`deploy::DeployModel`) | `{"formatVersion": N, "applications"?: […], "profiles"?: […], "deployments"?: […]}` (all omitted when empty) |
 | Use case (`usecases::UseCaseModel`) | `{"formatVersion": N, "useCases"?: […]}` (omitted when empty) |
@@ -69,6 +69,13 @@ an actor artifact).
   (`formatVersion`, `isReadOnly`, `"crossReference"`). Note that `$type` /
   `$id` / `$ref` belong to the *instance* format; IR artifacts tag their
   enums **adjacently** as `{"type": "<variant>", "value": <payload>}`.
+- **DDD signature slots (DD3, issue #300).** A design operation's return and
+  parameter types are `DddTypeRef`, serialized **untagged**: the domain form
+  is exactly the shared `TypeRef` object, so domain-only signature bytes are
+  unchanged from pre-DD3 artifacts, and the DTO form is
+  `{"dto": "<boundary>"}`. `DddParam` mirrors `OperationParam` with that type
+  slot; the domain IR's own `TypeRef`/`OperationParam` stay untouched (a
+  `.mox` operation never references a DTO).
 - **Version gate.** Readers accept exactly their own
   `FORMAT_VERSION` (domain artifacts) or `ACTOR_MODEL_FORMAT_VERSION`
   (actor artifacts) and reject anything else with an error naming the
@@ -200,14 +207,22 @@ naming the file and violation when anything fails:
   instance);
 - `formatVersion` is present, an unsigned integer, and supported — a higher
   version is rejected with an error naming it;
-- DDD contract (issue #298): a contract-complete design carries its
-  `application` and a non-empty `pheroVersion`; every authored reference
-  carries its resolved companion (`typeRef`, `delegation.targetRef`,
-  `dependencyRefs`, `decisionDependencyRefs`, `capabilityRefs`,
-  `emittedRefs`, `decisionRefs`, `entityRef`, and search-member `typeRef`s),
-  the parallel lists are index-aligned, search references are complete, and
-  stereotype/flag combinations are legal — a violation names the design or
-  reference;
+- DDD contract (issues #298/#299/#300): a contract-complete design carries
+  its `application` and a non-empty `pheroVersion`; every authored reference
+  carries its resolved companion (`typeRef` — absent for a standalone DTO,
+  `delegation.targetRef`, `dependencyRefs`, `decisionDependencyRefs`,
+  `capabilityRefs`, `emittedRefs`, `decisionRefs`, `entityRef`, and
+  search-member `typeRef`s), the parallel lists are index-aligned, search
+  references are complete, stereotype/flag combinations are legal, every
+  `value` design carries the fixed `semantics` block (strict value
+  semantics, issue #299) while no entity or dto design carries one, every
+  `dto` design carries a `dtoShape` (boundary name, optional source,
+  `input`/`output` direction, members in declaration order of kind
+  `select`/`derive`/`declared` with unique output names) while no other
+  design does, every
+  `DddTypeRef` DTO reference (`{"dto": "<name>"}`) resolves to a `dtoShape`
+  name in the artifact, and no output DTO fills a parameter slot — a
+  violation names the design or reference;
 - structural keys are camelCase (a snake_case spelling of a known key is
   reported with the correct spelling; model-defined keys — feature names,
   target names — are exempt);

@@ -142,12 +142,14 @@ fn compile_ddd_with(
 /// 1. **base** — an unknown base package is an error naming it.
 /// 2. **Uniqueness** (application-wide unless noted) — module names;
 ///    service names; design class references (one design per class per
-///    application, keyed by the resolved class); repository names;
-///    operation names within one service; operation names within one
+///    application, keyed by the resolved class; a projection/standalone
+///    DTO introduces its own boundary name instead — rule 21); repository
+///    names; operation names within one service; operation names within one
 ///    repository.
 /// 3. **Stereotype targets** — every design's `class` must resolve to a
-///    class in the domain model (entity, value, and dto designs all target
-///    classes).
+///    class in the domain model (entity and value designs, a mirror DTO,
+///    and a projection DTO's `from` source all target classes; a
+///    standalone DTO has no source class at all — rule 21).
 /// 4. **Flag/stereotype compatibility** — `scaffold`, `auditable`, and
 ///    `optimisticLocking` are entity-only; `nonPersistent` is
 ///    value/dto-only; `cache` is legal on any design. A `!`-negated flag is
@@ -200,7 +202,9 @@ fn compile_ddd_with(
 ///     (Sculptor's ValueObject default, with no opt-out): every stored
 ///     feature of the resolved class (own and inherited, derived features
 ///     excluded) must carry the domain model's `readonly` modifier. A
-///     changeable class designs as `entity` or `dto` instead.
+///     changeable class designs as `entity` or `dto` instead. Rule 20 adds
+///     the strict value-semantics rules (R-V1–R-V3) the target class must
+///     also satisfy when the application designs the other end.
 /// 13. **Aggregate reference constraint** — an outside class may hold a
 ///     cross reference only to an aggregate's root: for every
 ///     cross-reference (`refers`) feature whose target sits under a
@@ -215,12 +219,12 @@ fn compile_ddd_with(
 ///     nothing is synthesized — so the author declares the repository the
 ///     scaffolding would hang off. The service remains the author's to
 ///     declare.
-/// 15. **dto-with-ops warning** — a `dto` design whose class carries `ops`
-///     warns once per op, naming the design and the op: a dto is a transfer
-///     record, and behavior on it is almost always a modeling mistake (the
-///     layering heuristic is documented under "Domain operations vs service
-///     operations" in docs/DDD.md). Warning-severity — the artifact is
-///     unaffected; the union is only consulted when fully lowered.
+/// 15. **dto-with-ops error** — a `dto` design whose class carries `ops`
+///     errors once per op, naming the design and the op (`E0365`, DD3): a
+///     dto is a behavior-free transfer record. A `derived` feature stays
+///     legal — it is a computed wire field, not behavior. The rule covers
+///     the mirror form (whose boundary *is* the class's shape); a
+///     projection reads a source class that may legitimately carry behavior.
 /// 16. **Typed status fields** — an entity design whose class carries a
 ///     feature named `status` or `state` typed as a bare `String` is an
 ///     error: a status-like field is a lifecycle, and the bare-`String`
@@ -287,6 +291,54 @@ fn compile_ddd_with(
 ///     always, own-record paths only in a multi-machine module (where the
 ///     owning machine is not derivable from the artifact alone); the
 ///     `condition` source string stays verbatim.
+/// 20. **Value semantics** (E0361–E0364, issue pherolang#299) — a `value`
+///     design means *strict* value semantics with no opt-out, so the
+///     compiler lowers the fixed `semantics` block (identity `none`,
+///     `immutable`, `deepImmutable`, structural equality) onto every value
+///     design — and only values — and refuses the shapes that contradict
+///     it. The rules read the **application's designs**, not the `.mox`
+///     file alone (one class may be a value in one application and an
+///     entity in another), and they are deferred until every module
+///     lowered, so a value design may precede the entity design it is
+///     judged against:
+///     **R-V1** — every `id` feature of the value's class (own or
+///     inherited) is an error (`E0361`), naming the design and the feature;
+///     **R-V2** — a `contains` feature whose class target is an `entity`
+///     design of the same application is an error (`E0362`): a value owns
+///     no mutable state, so it contains values only;
+///     **R-V3** — a `refers` feature whose class target is a designed
+///     entity of the same application is an error (`E0363`): refer to the
+///     entity by id (`refers String personId`) instead;
+///     **`abstract value`** is an error (`E0364`) — a value object is
+///     concrete. Every diagnostic spans the value design's class name;
+///     feature-level rules run only against a fully lowered union (the
+///     rule-6 deferral discipline).
+/// 21. **DTO boundaries** (DD3, issue pherolang#300; `E0365`–`E0372`) —
+///     a `dto` design is a behavior-free transport shape with a lowered
+///     `dtoShape`:
+///     a **mirror** (`dto User`) copies every stored feature of its class
+///     (derived features excluded) as a `select` in declaration order;
+///     a **projection** (`dto BookSummary from Book { … }`) selects
+///     inherited features too, lowers a plain feature path
+///     (`authorName = author.fullName`) as a `select` carrying the path,
+///     and lowers any other assignment as a typed `derive` carrying the
+///     verbatim source text; a **standalone** DTO
+///     (`dto CreateBookRequest { … }`) has **no** source class — its
+///     `class` and `typeRef` are absent and its declared members resolve
+///     against the domain union or another DTO boundary. Member output
+///     names are unique (`E0366`), projection features/paths must resolve
+///     (`E0367`), expressions and declared types must type-check
+///     (`E0368`), and a member may not embed a class designed as an
+///     `entity` (`E0369`; project its fields instead). The direction is
+///     derived — any `derive` member makes the boundary `output`, else
+///     `input` — and an output-only DTO cannot fill a signature's
+///     parameter slot (`E0370`, naming the derived members). DTO names are
+///     application-wide unique and must not shadow a domain type
+///     (`E0371`; a mirror's name is its source class and is exempt). A DTO
+///     carries no repository, machine, or entity-only flag (`E0372`; rule
+///     5's repository error and rule 4's flag errors carry the same code
+///     on a DTO). The pre-pass runs before services lower, so a signature
+///     in an earlier module may name a DTO declared later.
 /// ## Aggregate derivation
 ///
 /// The aggregate boundary derives from the domain model's containment

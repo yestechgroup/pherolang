@@ -5,13 +5,21 @@
 //! artifact is contract-complete without the `.mox` sources. Every
 //! violation carries the JSON path of the offending value, so a hand-edited
 //! artifact is diagnosable without a compiler session.
+//!
+//! The dimensions checked here are the resolved class companions (DD1), the
+//! strict `value` semantics block (DD2), and the DTO boundary (DD3,
+//! pherolang#300) — the `dtoShape` of every `dto` design, the
+//! `class`/`typeRef` pair agreeing with its source, the derived direction,
+//! member kind/payload consistency, and every `DddTypeRef::Dto` slot
+//! resolving to a boundary declared in the same artifact.
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::fmt;
 
 use phero_ir::ddd::{
-    DddModel, DecisionRef, Design, EventRef, Repository, RepositoryOperation, SearchDef, Service,
-    ServiceOperation, Stereotype, TargetKind, TargetRef, DDD_MODEL_FORMAT_VERSION,
+    DddModel, DddParam, DddTypeRef, DecisionRef, Design, DtoDirection, DtoMember, DtoMemberKind,
+    DtoShape, EqualityPolicy, EventRef, IdentityPolicy, Repository, RepositoryOperation, SearchDef,
+    Service, ServiceOperation, Stereotype, TargetKind, TargetRef, DDD_MODEL_FORMAT_VERSION,
 };
 use phero_ir::TypeRef;
 
@@ -91,11 +99,17 @@ pub fn check_contract(model: &DddModel) -> Vec<Violation> {
 /// Every declared service, repository, and search, by name, with the module
 /// that declares it. The compiler guarantees the names are unique within
 /// their kind, so a plain map is enough for resolution.
+///
+/// The registry also indexes the DD3 DTO dimensions (pherolang#300): every
+/// boundary shape by name, and the class names the designs target (the
+/// namespace a DTO boundary name must not shadow).
 #[derive(Default)]
 struct Registry<'a> {
     services: BTreeMap<&'a str, &'a str>,
     repositories: BTreeMap<&'a str, &'a str>,
     searches: BTreeMap<&'a str, &'a str>,
+    dtos: BTreeMap<&'a str, &'a DtoShape>,
+    designed_classes: BTreeSet<&'a str>,
 }
 
 impl<'a> Registry<'a> {
@@ -108,6 +122,19 @@ impl<'a> Registry<'a> {
                     .insert(service.name.as_str(), module.name.as_str());
             }
             for design in &module.designs {
+                // Every design that targets a class contributes its name to
+                // the DTO shadowing namespace — including a dto design, whose
+                // `class` is its source class (a mirror's boundary name is
+                // that same name; the self-collision is exempted at the
+                // declaration site).
+                if let Some(class) = &design.class {
+                    registry.designed_classes.insert(last_segment(class));
+                }
+                if let Some(shape) = &design.dto_shape {
+                    // The first declaration owns the boundary name; a
+                    // duplicate is reported at the later declaration.
+                    registry.dtos.entry(shape.name.as_str()).or_insert(shape);
+                }
                 if let Some(repository) = &design.repository {
                     registry
                         .repositories
@@ -121,6 +148,30 @@ impl<'a> Registry<'a> {
             }
         }
         registry
+    }
+
+    /// The boundary shape declared under `name`, when the artifact carries
+    /// one. A `DddTypeRef::Dto` resolves only against this map.
+    fn dto(&self, name: &str) -> Option<&'a DtoShape> {
+        self.dtos.get(name).copied()
+    }
+
+    /// The members of the boundary `name` that no caller can supply (the
+    /// derived ones), or `None` when the name is not declared.
+    fn dto_derived_members(&self, name: &str) -> Option<Vec<&'a str>> {
+        self.dto(name).map(|shape| {
+            shape
+                .members
+                .iter()
+                .filter(|member| member.kind == DtoMemberKind::Derive)
+                .map(|member| member.name.as_str())
+                .collect()
+        })
+    }
+
+    /// `true` when a design targets a class with this name.
+    fn class_is_designed(&self, name: &str) -> bool {
+        self.designed_classes.contains(name)
     }
 
     /// Resolves a dependency or delegation target with the compiler's
@@ -149,6 +200,9 @@ fn validate_modules(
     let mut repository_names: BTreeSet<&str> = BTreeSet::new();
     let mut search_names: BTreeSet<&str> = BTreeSet::new();
     let mut design_keys: BTreeSet<(String, String)> = BTreeSet::new();
+    // The boundary name of the first design that declares it, so a duplicate
+    // is reported at the later declaration (DD3, pherolang#300).
+    let mut dto_declarations: BTreeMap<String, String> = BTreeMap::new();
 
     for (module_index, module) in model.modules.iter().enumerate() {
         let module_path = format!("modules[{module_index}]");
@@ -177,12 +231,18 @@ fn validate_modules(
 
         for (design_index, design) in module.designs.iter().enumerate() {
             let design_path = format!("{module_path}.designs[{design_index}]");
-            if let Some(TypeRef::Class { package, name }) = &design.type_ref {
-                if !design_keys.insert((package.clone(), name.clone())) {
-                    violations.push(Violation::new(
-                        format!("{design_path}.typeRef"),
-                        format!("duplicate design for class '{package}.{name}'"),
-                    ));
+            // A dto design's `typeRef` is its *source* class, so a projection
+            // legitimately coexists with that class's entity design; the
+            // one-design-per-class rule therefore covers entity/value
+            // designs only (DTO boundary uniqueness is checked by name).
+            if design.stereotype != Stereotype::Dto {
+                if let Some(TypeRef::Class { package, name }) = &design.type_ref {
+                    if !design_keys.insert((package.clone(), name.clone())) {
+                        violations.push(Violation::new(
+                            format!("{design_path}.typeRef"),
+                            format!("duplicate design for class '{package}.{name}'"),
+                        ));
+                    }
                 }
             }
             if let Some(repository) = &design.repository {
@@ -196,7 +256,14 @@ fn validate_modules(
                     ));
                 }
             }
-            validate_design(design, &design_path, registry, application, violations);
+            validate_design(
+                design,
+                &design_path,
+                registry,
+                application,
+                &mut dto_declarations,
+                violations,
+            );
         }
 
         for (search_index, search) in module.searches.iter().enumerate() {
@@ -294,20 +361,56 @@ fn validate_service(
     }
 }
 
+/// Validates one design against the artifact contract.
+///
+/// The DD1/DD2 dimensions are the resolved class reference and the value
+/// semantics; DD3 (pherolang#300) adds the DTO boundary: a `dto` design
+/// carries exactly one `dtoShape`, its `class`/`typeRef` agree with the
+/// shape's `source` (and are absent for a standalone boundary), and its
+/// members' payloads match their kinds. Every other design carries none.
 fn validate_design(
     design: &Design,
     path: &str,
     registry: &Registry<'_>,
     application: Option<&str>,
+    dto_declarations: &mut BTreeMap<String, String>,
     violations: &mut Vec<Violation>,
 ) {
-    check_class_ref(
-        violations,
-        &format!("{path}.typeRef"),
-        &design.class,
-        design.type_ref.as_ref(),
-        "design",
-    );
+    match design.stereotype {
+        Stereotype::Dto => match &design.dto_shape {
+            Some(shape) => {
+                check_dto_source_refs(design, shape, path, violations);
+                validate_dto_shape(shape, path, registry, dto_declarations, violations);
+            }
+            None => violations.push(Violation::new(
+                format!("{path}.dtoShape"),
+                "a dto design must carry its boundary shape (\"dtoShape\"); a \
+                 hand-edited or truncated artifact lost it",
+            )),
+        },
+        Stereotype::Entity | Stereotype::Value => {
+            match &design.class {
+                None => violations.push(Violation::new(
+                    format!("{path}.class"),
+                    "an entity/value design must name the class it targets",
+                )),
+                Some(class) => check_class_ref(
+                    violations,
+                    &format!("{path}.typeRef"),
+                    class,
+                    design.type_ref.as_ref(),
+                    "design",
+                ),
+            }
+            if design.dto_shape.is_some() {
+                violations.push(Violation::new(
+                    format!("{path}.dtoShape"),
+                    "only a dto design may carry a boundary shape",
+                ));
+            }
+        }
+    }
+    validate_semantics(design, path, violations);
 
     match design.stereotype {
         Stereotype::Entity => {
@@ -359,7 +462,12 @@ fn validate_design(
     }
 
     if let Some(repository) = &design.repository {
-        validate_repository(repository, &format!("{path}.repository"), violations);
+        validate_repository(
+            repository,
+            &format!("{path}.repository"),
+            registry,
+            violations,
+        );
     }
 
     for (index, operation) in design.child_operations.iter().enumerate() {
@@ -374,7 +482,361 @@ fn validate_design(
     }
 }
 
-fn validate_repository(repository: &Repository, path: &str, violations: &mut Vec<Violation>) {
+/// The value-semantics contract (DD2, pherolang#299): a `value` design
+/// carries **exactly** the fixed strict block, and an `entity`/`dto` design
+/// carries none. Every violation is reported at the design's `semantics`
+/// path, so a hand-edited artifact is diagnosable without the compiler.
+fn validate_semantics(design: &Design, path: &str, violations: &mut Vec<Violation>) {
+    let semantics_path = format!("{path}.semantics");
+    match design.stereotype {
+        Stereotype::Value => match &design.semantics {
+            None => violations.push(Violation::new(
+                semantics_path,
+                "a value design must carry the strict value semantics block \
+                 (identity \"none\", immutable, deepImmutable, structural equality)",
+            )),
+            Some(semantics) => {
+                for (field, held) in [
+                    (
+                        "identity \"none\"",
+                        semantics.identity == IdentityPolicy::None,
+                    ),
+                    ("immutable: true", semantics.immutable),
+                    ("deepImmutable: true", semantics.deep_immutable),
+                    (
+                        "equality \"structural\"",
+                        semantics.equality == EqualityPolicy::Structural,
+                    ),
+                ] {
+                    if !held {
+                        violations.push(Violation::new(
+                            &semantics_path,
+                            format!("the value semantics block must declare {field}"),
+                        ));
+                    }
+                }
+            }
+        },
+        Stereotype::Entity | Stereotype::Dto => {
+            if design.semantics.is_some() {
+                violations.push(Violation::new(
+                    semantics_path,
+                    "only a value design may carry value semantics",
+                ));
+            }
+        }
+    }
+}
+
+/// The `class`/`typeRef` half of the DTO contract (DD3, pherolang#300).
+///
+/// A DTO with a `source` names that source class in `class` and resolves it
+/// in `typeRef`; a standalone DTO (no source) names no class at all, so both
+/// keys are absent. The check reads the **shape's** source, which is the
+/// boundary's own declaration of where it came from.
+fn check_dto_source_refs(
+    design: &Design,
+    shape: &DtoShape,
+    path: &str,
+    violations: &mut Vec<Violation>,
+) {
+    let Some(source) = &shape.source else {
+        if design.class.is_some() {
+            violations.push(Violation::new(
+                format!("{path}.class"),
+                "a standalone dto (no boundary source) must not carry \"class\"",
+            ));
+        }
+        if design.type_ref.is_some() {
+            violations.push(Violation::new(
+                format!("{path}.typeRef"),
+                "a standalone dto (no boundary source) must not carry \"typeRef\"",
+            ));
+        }
+        return;
+    };
+    let source_name = class_name(source);
+    match &design.class {
+        None => violations.push(Violation::new(
+            format!("{path}.class"),
+            format!("a dto sourced from '{source_name}' must carry that class as \"class\""),
+        )),
+        Some(class) if last_segment(class) != source_name => violations.push(Violation::new(
+            format!("{path}.class"),
+            format!(
+                "names '{}' but the dto boundary's source is '{source_name}'",
+                last_segment(class)
+            ),
+        )),
+        Some(_) => {}
+    }
+    match &design.type_ref {
+        None => violations.push(Violation::new(
+            format!("{path}.typeRef"),
+            format!("missing resolved class for the dto source '{source_name}'"),
+        )),
+        Some(resolved) if resolved != source => violations.push(Violation::new(
+            format!("{path}.typeRef"),
+            format!(
+                "resolves to '{}' but the dto boundary's source is '{source_name}'",
+                type_ref_label(resolved)
+            ),
+        )),
+        Some(_) => {}
+    }
+}
+
+/// The boundary half of the DTO contract (DD3, pherolang#300): the boundary
+/// `name` (non-empty, unique application-wide, never shadowing a designed
+/// class), the derived `direction`, the member names and their kind/payload
+/// consistency, and every member's `DddTypeRef` resolving to a boundary or
+/// staying in the (structurally opaque) domain namespace.
+fn validate_dto_shape(
+    shape: &DtoShape,
+    design_path: &str,
+    registry: &Registry<'_>,
+    dto_declarations: &mut BTreeMap<String, String>,
+    violations: &mut Vec<Violation>,
+) {
+    let path = format!("{design_path}.dtoShape");
+    if let Some(source) = &shape.source {
+        if !matches!(source, TypeRef::Class { .. }) {
+            violations.push(Violation::new(
+                format!("{path}.source"),
+                "the dto boundary source must be a resolved class type",
+            ));
+        }
+    }
+    if shape.name.trim().is_empty() {
+        violations.push(Violation::new(
+            format!("{path}.name"),
+            "the dto boundary name must be non-empty",
+        ));
+    } else {
+        match dto_declarations.get(shape.name.as_str()).cloned() {
+            Some(first) if first != design_path => violations.push(Violation::new(
+                format!("{path}.name"),
+                format!(
+                    "duplicate dto boundary '{}'; it is already declared at {first}",
+                    shape.name
+                ),
+            )),
+            Some(_) => {}
+            None => {
+                dto_declarations.insert(shape.name.clone(), design_path.to_string());
+            }
+        }
+        // A mirror boundary's name *is* its source class, so a collision with
+        // that class is the boundary referring to itself, not a shadow.
+        let self_collision = shape
+            .source
+            .as_ref()
+            .is_some_and(|source| class_name(source) == shape.name);
+        if !self_collision && registry.class_is_designed(shape.name.as_str()) {
+            violations.push(Violation::new(
+                format!("{path}.name"),
+                format!(
+                    "dto boundary '{}' shadows a designed class; a boundary name must be its \
+                     own type name",
+                    shape.name
+                ),
+            ));
+        }
+    }
+
+    let derived = shape
+        .members
+        .iter()
+        .any(|member| member.kind == DtoMemberKind::Derive);
+    let expected = if derived {
+        DtoDirection::Output
+    } else {
+        DtoDirection::Input
+    };
+    if shape.direction != expected {
+        violations.push(Violation::new(
+            format!("{path}.direction"),
+            format!(
+                "must be \"{}\": the direction is derived from the members, and the \
+                 boundary {}",
+                direction_label(expected),
+                if derived {
+                    "has a derive member"
+                } else {
+                    "has no derive member"
+                }
+            ),
+        ));
+    }
+
+    let mut member_names: BTreeSet<String> = BTreeSet::new();
+    for (index, member) in shape.members.iter().enumerate() {
+        let member_path = format!("{path}.members[{index}]");
+        validate_dto_member(member, &member_path, &mut member_names, violations);
+        check_ddd_type_ref(
+            violations,
+            &format!("{member_path}.type"),
+            &member.type_,
+            registry,
+        );
+    }
+}
+
+fn validate_dto_member(
+    member: &DtoMember,
+    path: &str,
+    member_names: &mut BTreeSet<String>,
+    violations: &mut Vec<Violation>,
+) {
+    if member.name.trim().is_empty() {
+        violations.push(Violation::new(
+            format!("{path}.name"),
+            "the dto member name must be non-empty",
+        ));
+    } else if !member_names.insert(member.name.clone()) {
+        violations.push(Violation::new(
+            format!("{path}.name"),
+            format!("duplicate dto member '{}'", member.name),
+        ));
+    }
+    match member.kind {
+        DtoMemberKind::Select => {
+            if member.path.is_empty() {
+                violations.push(Violation::new(
+                    format!("{path}.path"),
+                    "a select member must carry the selected feature path",
+                ));
+            }
+            if member.expression.is_some() {
+                violations.push(Violation::new(
+                    format!("{path}.expression"),
+                    "a select member must not carry a derivation expression",
+                ));
+            }
+        }
+        DtoMemberKind::Derive => {
+            match member.expression.as_deref() {
+                None => violations.push(Violation::new(
+                    format!("{path}.expression"),
+                    "a derive member must carry the derivation's source text",
+                )),
+                Some(expression) if expression.trim().is_empty() => {
+                    violations.push(Violation::new(
+                        format!("{path}.expression"),
+                        "the derivation's source text must be non-empty",
+                    ));
+                }
+                Some(_) => {}
+            }
+            if !member.path.is_empty() {
+                violations.push(Violation::new(
+                    format!("{path}.path"),
+                    "a derive member must not carry a selected feature path",
+                ));
+            }
+        }
+        DtoMemberKind::Declared => {
+            if !member.path.is_empty() {
+                violations.push(Violation::new(
+                    format!("{path}.path"),
+                    "a declared member must not carry a selected feature path",
+                ));
+            }
+            if member.expression.is_some() {
+                violations.push(Violation::new(
+                    format!("{path}.expression"),
+                    "a declared member must not carry a derivation expression",
+                ));
+            }
+        }
+    }
+}
+
+/// Resolves one DDD signature/member type slot (DD3, pherolang#300): a
+/// domain reference is structurally opaque (the paired domain `Model` owns
+/// its identity), while a DTO reference must name a boundary declared in
+/// this artifact.
+fn check_ddd_type_ref(
+    violations: &mut Vec<Violation>,
+    path: &str,
+    type_: &DddTypeRef,
+    registry: &Registry<'_>,
+) {
+    if let DddTypeRef::Dto { dto } = type_ {
+        if registry.dto(dto).is_none() {
+            violations.push(Violation::new(
+                path,
+                format!(
+                    "references dto '{dto}' but no dto design in this artifact declares that \
+                     boundary"
+                ),
+            ));
+        }
+    }
+}
+
+/// Checks one operation parameter's DTO slot: the boundary must resolve,
+/// and it must be input-capable — a boundary with derived members has values
+/// only the source class can compute, so a caller cannot supply it.
+fn check_dto_param(
+    violations: &mut Vec<Violation>,
+    path: &str,
+    param: &DddParam,
+    registry: &Registry<'_>,
+) {
+    check_ddd_type_ref(violations, path, &param.type_, registry);
+    let DddTypeRef::Dto { dto } = &param.type_ else {
+        return;
+    };
+    let Some(derived) = registry.dto_derived_members(dto) else {
+        return;
+    };
+    if !derived.is_empty() {
+        violations.push(Violation::new(
+            path,
+            format!(
+                "references dto '{dto}' as parameter '{}', but that boundary is output-only; \
+                 derived member(s): {}",
+                param.name,
+                derived.join(", ")
+            ),
+        ));
+    }
+}
+
+/// The `Derive`/`Input` wire spellings, for violation messages.
+fn direction_label(direction: DtoDirection) -> &'static str {
+    match direction {
+        DtoDirection::Input => "input",
+        DtoDirection::Output => "output",
+    }
+}
+
+/// The class name of a resolved reference, or its wire spelling when the
+/// reference is not a class (which [`check_class_ref`] reports separately).
+fn class_name(type_ref: &TypeRef) -> &str {
+    match type_ref {
+        TypeRef::Class { name, .. } => name,
+        _ => "",
+    }
+}
+
+/// A resolved reference rendered for a message.
+fn type_ref_label(type_ref: &TypeRef) -> String {
+    match type_ref {
+        TypeRef::Class { package, name } => format!("{package}.{name}"),
+        other => format!("{other:?}"),
+    }
+}
+
+/// Validates a repository's operations, including the DTO slots of each
+/// declared signature (DD3, pherolang#300).
+fn validate_repository(
+    repository: &Repository,
+    path: &str,
+    registry: &Registry<'_>,
+    violations: &mut Vec<Violation>,
+) {
     let mut operation_names: BTreeSet<&str> = BTreeSet::new();
     for (index, operation) in repository.operations.iter().enumerate() {
         let operation_path = format!("{path}.operations[{index}]");
@@ -387,15 +849,32 @@ fn validate_repository(repository: &Repository, path: &str, violations: &mut Vec
                 ),
             ));
         }
-        validate_repository_operation(operation, &operation_path, violations);
+        validate_repository_operation(operation, &operation_path, registry, violations);
     }
 }
 
 fn validate_repository_operation(
     operation: &RepositoryOperation,
     path: &str,
+    registry: &Registry<'_>,
     violations: &mut Vec<Violation>,
 ) {
+    if let Some(return_type) = &operation.return_type {
+        check_ddd_type_ref(
+            violations,
+            &format!("{path}.returnType"),
+            return_type,
+            registry,
+        );
+    }
+    for (index, param) in operation.params.iter().enumerate() {
+        check_dto_param(
+            violations,
+            &format!("{path}.params[{index}].type"),
+            param,
+            registry,
+        );
+    }
     let declared = operation.return_type.is_some() || !operation.params.is_empty();
     match (operation.builtin.is_some(), declared) {
         (true, true) => violations.push(Violation::new(
@@ -441,6 +920,22 @@ fn validate_operation(
             format!("{path}.returnMultiplicity"),
             "a return multiplicity requires a return type",
         ));
+    }
+    if let Some(return_type) = &operation.return_type {
+        check_ddd_type_ref(
+            violations,
+            &format!("{path}.returnType"),
+            return_type,
+            registry,
+        );
+    }
+    for (index, param) in operation.params.iter().enumerate() {
+        check_dto_param(
+            violations,
+            &format!("{path}.params[{index}].type"),
+            param,
+            registry,
+        );
     }
     if let Some(delegation) = &operation.delegation {
         match &delegation.target_ref {
