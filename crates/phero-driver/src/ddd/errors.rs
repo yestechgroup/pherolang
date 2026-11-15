@@ -172,6 +172,17 @@ impl ErrorTable {
         }
     }
 
+    /// `true` when `name` is declared module-private in `module` (the
+    /// delegation-superset help reads it: a private target error names the
+    /// application-scope fix, an application-scoped one does not).
+    pub(crate) fn is_private_to(&self, name: &str, module: &str) -> bool {
+        self.entries.iter().any(|entry| {
+            entry.name == name
+                && entry.scope == ErrorScope::Module
+                && entry.module.as_deref() == Some(module)
+        })
+    }
+
     /// The payload types of every declared error (the deferred entity-payload
     /// pass reads them against the completed design registry).
     pub(crate) fn payload_checks(&self) -> Vec<PayloadCheck<'_>> {

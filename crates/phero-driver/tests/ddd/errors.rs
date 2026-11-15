@@ -421,3 +421,64 @@ fn entity_payload_diagnostic_spans_the_declaration() {
     let diagnostic = single(&compilation, "E0376");
     assert_eq!(diagnostic.span, Some(declaration));
 }
+
+/// A cross-module narrowed delegation whose missing target error is
+/// module-private names the application-scope fix; one whose missing error
+/// is application-scoped gets the plain add-it help instead.
+#[test]
+fn narrowed_delegation_help_names_the_right_fix() {
+    let private = concat!(
+        "import \"payments.mox\";\n",
+        "application Cross {\n",
+        "    base test.payments\n",
+        "    error AppDecline(String reference);\n",
+        "    module billing {\n",
+        "        error PrivateDecline(String reference);\n",
+        "        service BillingService {\n",
+        "            boolean pay(String id) throws AppDecline, PrivateDecline;\n",
+        "        }\n",
+        "    }\n",
+        "    module desk {\n",
+        "        service DeskService {\n",
+        "            inject BillingService;\n",
+        "            pay => BillingService.pay throws AppDecline;\n",
+        "        }\n",
+        "    }\n",
+        "}\n",
+    );
+    let compilation = payments(private);
+    let diagnostic = single(&compilation, "missing 'PrivateDecline'");
+    let help = diagnostic.help.as_deref().unwrap_or_default();
+    assert!(
+        help.contains("private to module 'billing'")
+            && help.contains("declare it at application scope"),
+        "expected the application-scope fix, got: {help:?}"
+    );
+
+    let application_scoped = concat!(
+        "import \"payments.mox\";\n",
+        "application Cross {\n",
+        "    base test.payments\n",
+        "    error AppDecline(String reference);\n",
+        "    module billing {\n",
+        "        service BillingService {\n",
+        "            boolean pay(String id) throws AppDecline;\n",
+        "        }\n",
+        "    }\n",
+        "    module desk {\n",
+        "        service DeskService {\n",
+        "            inject BillingService;\n",
+        "            pay => BillingService.pay throws NotFound;\n",
+        "        }\n",
+        "    }\n",
+        "}\n",
+    );
+    let compilation = payments(application_scoped);
+    let diagnostic = single(&compilation, "missing 'AppDecline'");
+    let help = diagnostic.help.as_deref().unwrap_or_default();
+    assert!(
+        help.contains("add `AppDecline` to this delegation's `throws` clause")
+            && !help.contains("private to module"),
+        "expected the plain add-it help, got: {help:?}"
+    );
+}

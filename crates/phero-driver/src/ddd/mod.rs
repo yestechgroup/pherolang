@@ -460,6 +460,7 @@ pub(crate) fn compile_ddd_file(
         &registries.services,
         &registries.repositories,
         &registries.searches,
+        &error_table,
     ));
     local.extend(rule_10_validate_capabilities(
         &registries.capability_checks,

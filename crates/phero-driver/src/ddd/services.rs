@@ -66,6 +66,7 @@ pub(crate) fn rule_8_resolve_delegations(
     services: &[(String, ServiceEntry)],
     repositories: &[(String, RepositoryEntry)],
     searches: &[(String, SearchEntry)],
+    error_table: &ErrorTable,
 ) -> Vec<Diagnostic> {
     let mut local: Vec<Diagnostic> = Vec::new();
     for check in delegation_checks {
@@ -84,6 +85,7 @@ pub(crate) fn rule_8_resolve_delegations(
                     &entry.op_throws,
                     &target,
                     operation,
+                    error_table,
                     &mut local,
                 );
             }
@@ -109,6 +111,7 @@ pub(crate) fn rule_8_resolve_delegations(
                     &entry.op_throws,
                     &target,
                     operation,
+                    error_table,
                     &mut local,
                 );
             }
@@ -156,6 +159,7 @@ fn check_delegation_superset(
     target_throws: &[(String, Vec<String>)],
     target_name: &str,
     operation: &str,
+    error_table: &ErrorTable,
     local: &mut Vec<Diagnostic>,
 ) {
     let Some((_, target_throws)) = target_throws.iter().find(|(name, _)| name == operation) else {
@@ -173,7 +177,7 @@ fn check_delegation_superset(
             ),
             Some(check.delegation.span),
         );
-        diagnostic = if target_module != check.module {
+        diagnostic = if error_table.is_private_to(missing, target_module) {
             diagnostic.with_help(format!(
                 "error '{missing}' is private to module '{target_module}'; declare it at \
                  application scope to use it across modules, then add it to this \
