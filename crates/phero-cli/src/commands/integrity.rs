@@ -49,6 +49,18 @@ pub(crate) fn run_union_pass(
 ) -> anyhow::Result<usize> {
     let mut contributions: Vec<Contribution> = Vec::new();
     for file in expanded {
+        // A `.ddd` fragment is merged into its root's artifact; compiling
+        // it standalone would report a spurious "compile the root" error
+        // (DD8).
+        if SurfaceKind::of_path(file) == Some(SurfaceKind::Ddd)
+            && std::fs::read_to_string(file).ok().is_some_and(|source| {
+                phero_syntax::parse_ddd(&source)
+                    .ast
+                    .is_some_and(|ast| ast.application.is_none() && !ast.fragments.is_empty())
+            })
+        {
+            continue;
+        }
         if let Some(contribution) = check_contribution(file)? {
             contributions.push(contribution);
         }

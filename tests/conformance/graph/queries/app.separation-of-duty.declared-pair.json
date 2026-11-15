@@ -3,7 +3,7 @@
   "query": "separationOfDuty",
   "results": [
     {
-      "application": "app.actor",
+      "application": "GraphDesk",
       "pair": [
         "capability:app.actor#App.ReadTicket",
         "capability:app.actor#App.ResolveTicket"

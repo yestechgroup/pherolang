@@ -804,8 +804,8 @@ fn support_stack_emits_the_expected_nodes_and_edges() {
     // One application: every surface imports support.mox (or a sibling), so
     // the stack clusters as exactly one component carrying every file.
     assert_eq!(graph.applications.len(), 1, "{:#?}", graph.applications);
-    // The application id is the component's smallest member path.
-    assert_eq!(graph.applications[0].id, "examples/support/support.actor");
+    // The application id is the authored design application name (DD8).
+    assert_eq!(graph.applications[0].id, "SupportDesk");
     assert_eq!(graph.applications[0].packages, ["nz.example.support"]);
     assert!(
         graph.applications[0].files.contains(&DDD.to_string()),
@@ -1565,11 +1565,11 @@ fn two_unrelated_applications_do_not_merge() {
     let graph = build(&two_application_inputs());
     assert_eq!(graph.applications.len(), 2, "{:#?}", graph.applications);
     assert_eq!(
-        graph.applications[0].id, "examples/shop/ecommerce.mox",
+        graph.applications[0].id, "Orders",
         "applications sort by id"
     );
     assert_eq!(graph.applications[0].packages, ["nz.example.shop"]);
-    assert_eq!(graph.applications[1].id, "examples/support/support.actor");
+    assert_eq!(graph.applications[1].id, "SupportDesk");
     assert_eq!(graph.applications[1].packages, ["nz.example.support"]);
 
     // No edge crosses an application boundary: the pooled resolution never

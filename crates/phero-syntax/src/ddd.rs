@@ -53,15 +53,26 @@ pub(crate) const MODULE: &str = "module";
 pub(crate) const SERVICE: &str = "service";
 /// The `search <name> { ... }` keyword of a module body.
 pub(crate) const SEARCH: &str = "search";
-/// The `extend <Class> { ... }` keyword of a module body (issue
-/// pherolang#179): module-level child-scoped operations over an aggregate
-/// root's contained children (`add`/`remove`/`save`). A contextual word
-/// like the rest — special only in module-member position, an ordinary
-/// identifier everywhere else (`^extend` escapes). A class may carry
-/// several `extend` blocks; they merge in source order.
+/// The deprecated `extend <Class> { ... }` alias of [`CHILDREN`]
+/// (issue pherolang#179; renamed by DD4, issue pherolang#301). A contextual
+/// word like the rest — special only in module-member position, an ordinary
+/// identifier everywhere else (`^extend` escapes). The parser accepts it,
+/// the driver warns, and the formatter rewrites it to `children`.
 pub(crate) const EXTEND: &str = "extend";
 /// The optional `abstract` modifier of a design declaration.
 pub(crate) const ABSTRACT: &str = "abstract";
+/// The `root` boundary clause of an entity design (DD4, issue
+/// pherolang#301): an authored aggregate root.
+pub(crate) const ROOT: &str = "root";
+/// The `aggregate <Root>` boundary clause of an entity design (DD4): an
+/// authored aggregate membership.
+pub(crate) const AGGREGATE: &str = "aggregate";
+/// The `invariant <raw_expr>;` clause of an entity or value design (DD5,
+/// issue pherolang#302).
+pub(crate) const INVARIANT: &str = "invariant";
+/// The canonical `children <Class> { ... }` child-operation block keyword
+/// (DD4, issue pherolang#301; formerly `extend`).
+pub(crate) const CHILDREN: &str = "children";
 /// The `repository <name> { ... }` keyword of a design declaration.
 pub(crate) const REPOSITORY: &str = "repository";
 /// The `inject <name>;` keyword of a service body.

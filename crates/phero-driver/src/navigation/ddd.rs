@@ -20,7 +20,7 @@
 //! `=> Repo.op` delegations name repository operations, and machine `via`
 //! triggers name transitions. Binding is the graph index's job.
 
-use phero_syntax::ast::{DddApplication, DddDecisionRef, DddDesign, DddModule};
+use phero_syntax::ast::{DddDecisionRef, DddDesign, DddModule};
 
 use phero_ir::graph::kinds;
 
@@ -44,40 +44,56 @@ fn dto_boundary_name(design: &DddDesign) -> Option<&str> {
 /// Builds the span index for one `.ddd` source. A source that does not parse
 /// (or declares no application) yields an empty index; this never panics.
 pub fn ddd_index(source: &str) -> SurfaceIndex {
+    ddd_index_with_application(source, None)
+}
+
+/// Builds the span index for one `.ddd` source, optionally supplying the
+/// root application's name for a **fragment** (DD8, issue pherolang#305).
+/// A root supplies its own name; a fragment needs the caller's (the editor
+/// resolves it through the directory snapshot). Without a name, a fragment
+/// yields an empty index — never a guess.
+pub fn ddd_index_with_application(source: &str, application_name: Option<&str>) -> SurfaceIndex {
     let mut index = SurfaceIndex::default();
     let Some(ast) = phero_syntax::parse_ddd(source).ast else {
         return index;
     };
-    let Some(application) = &ast.application else {
+    let application = ast.application.as_ref();
+    let Some(name) = application
+        .map(|application| application.name.text.as_str())
+        .or(application_name)
+    else {
         return index;
     };
-    index.push_definition(
-        kinds::DESIGN_APPLICATION,
-        application.name.text.clone(),
-        application.name.span,
-        application.span,
-    );
-    // Application-scoped error declarations (DD7): `<App>.<Error>`.
-    for error in &application.errors {
+    if let Some(application) = application {
         index.push_definition(
-            kinds::ERROR,
-            ids::error_name(&application.name.text, &error.name.text),
-            error.name.span,
-            error.span,
+            kinds::DESIGN_APPLICATION,
+            application.name.text.clone(),
+            application.name.span,
+            application.span,
         );
+        // Application-scoped error declarations (DD7): `<App>.<Error>`.
+        for error in &application.errors {
+            index.push_definition(
+                kinds::ERROR,
+                ids::error_name(&application.name.text, &error.name.text),
+                error.name.span,
+                error.span,
+            );
+        }
+        for module in &application.modules {
+            module_index(&mut index, name, module);
+        }
     }
-    // The application's own name is the module-name prefix (the graph's
-    // `designApplication` name is the declared `application <name>`).
-    for module in &application.modules {
-        module_index(&mut index, application, module);
+    for module in &ast.fragments {
+        module_index(&mut index, name, module);
     }
     index.sort();
     index
 }
 
 /// Indexes one module: its nodes and the references of its members.
-fn module_index(index: &mut SurfaceIndex, application: &DddApplication, module: &DddModule) {
-    let module_name = ids::module_name(&application.name.text, &module.name.text);
+fn module_index(index: &mut SurfaceIndex, application: &str, module: &DddModule) {
+    let module_name = ids::module_name(application, &module.name.text);
     index.push_definition(
         kinds::MODULE,
         module_name.clone(),

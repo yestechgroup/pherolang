@@ -33,7 +33,7 @@ application Orders {
         // member, so it may declare no repository. Aggregate-internal
         // mutation is declared on the root, naming the child feature.
         entity OrderLine
-        extend Order {
+        children Order {
             OrderLine addLine(OrderLine line) => lines.add;
             boolean removeLine(String sku) => lines.remove;
             boolean saveLine(OrderLine line) => lines.save when (line.quantity > 0);

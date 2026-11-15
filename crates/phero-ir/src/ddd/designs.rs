@@ -293,6 +293,51 @@ impl DtoMember {
     }
 }
 
+/// How an entity design's aggregate boundary was decided (DD4, issue
+/// pherolang#301): derived from the domain model's containment graph, or
+/// authored with `root`/`aggregate <Root>`.
+///
+/// Serializes as the bare lowercase string `"derived"` / `"authored"`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum AggregateOrigin {
+    /// The containment closure decided the boundary.
+    Derived,
+    /// The design authored the boundary.
+    Authored,
+}
+
+/// The aggregate membership of a non-root entity design (DD4): the resolved
+/// root class and how the placement was decided. A root design omits the
+/// field entirely; `None` on `Design::aggregate` means this class is a root.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AggregateMembership {
+    /// The resolved aggregate root class.
+    pub root: TypeRef,
+    /// Whether containment or an authored declaration placed the member.
+    pub origin: AggregateOrigin,
+}
+
+/// One invariant of a design (DD5, issue pherolang#302): the verbatim source
+/// text between `invariant` and `;`. Typing is proven at compile time; the
+/// consumer re-parses with the shared expression semantics.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Invariant {
+    /// The invariant expression, verbatim.
+    pub expression: String,
+}
+
+impl Invariant {
+    /// Creates one invariant from its verbatim source text.
+    pub fn new(expression: impl Into<String>) -> Self {
+        Self {
+            expression: expression.into(),
+        }
+    }
+}
+
 /// The design decision for one class or DTO boundary: its stereotype, flags,
 /// and optionally its repository.
 ///
@@ -303,9 +348,11 @@ impl DtoMember {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Design {
-    /// The referenced `.mox` class name (unqualified or package-qualified
-    /// at this layer; resolution is a driver/consumer concern). `None` for
-    /// a standalone DTO, which has no source class; the key is omitted
+    /// The referenced `.mox` class name, exactly as authored (unqualified
+    /// or package-qualified at this layer); its resolved identity rides in
+    /// [`Self::type_ref`], which is absent for a standalone DTO. The
+    /// authored spelling stays for round-tripping and diagnostics. `None`
+    /// for a standalone DTO, which has no source class; the key is omitted
     /// entirely there.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub class: Option<String>,
@@ -336,6 +383,19 @@ pub struct Design {
     /// omitted when absent.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub dto_shape: Option<DtoShape>,
+    /// The effective aggregate-root verdict (DD4, pherolang#301): `true` for
+    /// a root, `false` for a member, **absent when unknown** (the imported
+    /// domain union did not fully lower). Entity designs only.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub is_aggregate_root: Option<bool>,
+    /// The resolved aggregate membership of a **non-root** entity design,
+    /// with the decision's origin. Absent on roots and non-entities.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub aggregate: Option<AggregateMembership>,
+    /// The design's invariants (DD5, pherolang#302), in declaration order.
+    /// Sparse: designs without invariants stay byte-identical.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub invariants: Vec<Invariant>,
     /// The class's repository, when designed.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub repository: Option<Repository>,
@@ -364,6 +424,9 @@ impl Design {
             flags: DesignFlags::default(),
             semantics: None,
             dto_shape: None,
+            is_aggregate_root: None,
+            aggregate: None,
+            invariants: Vec::new(),
             repository: None,
             machine: None,
             child_operations: Vec::new(),
@@ -387,6 +450,9 @@ impl Design {
             flags: DesignFlags::default(),
             semantics: None,
             dto_shape: Some(DtoShape::new(name, DtoDirection::Output)),
+            is_aggregate_root: None,
+            aggregate: None,
+            invariants: Vec::new(),
             repository: None,
             machine: None,
             child_operations: Vec::new(),

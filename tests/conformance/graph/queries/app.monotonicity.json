@@ -3,7 +3,7 @@
   "query": "monotonicity",
   "results": [
     {
-      "application": "app.actor",
+      "application": "GraphDesk",
       "child": "actor:app.actor#App.Agent",
       "parent": "actor:app.actor#App.Customer",
       "dominates": true,
@@ -11,7 +11,7 @@
       "unknown": false
     },
     {
-      "application": "app.actor",
+      "application": "GraphDesk",
       "child": "actor:app.actor#App.Manager",
       "parent": "actor:app.actor#App.Agent",
       "missing": [

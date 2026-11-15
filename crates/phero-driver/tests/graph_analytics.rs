@@ -533,7 +533,7 @@ fn declared_pair_reports_holders_and_no_violation() {
 
     assert_eq!(answer.results.len(), 1, "one declared pair, in app only");
     let result = &answer.results[0];
-    assert_eq!(result.application, "app.actor");
+    assert_eq!(result.application, "GraphDesk");
     assert!(result.declared);
     assert_eq!(result.pair, [READ, RESOLVE]);
     assert!(result.violations.is_empty());
@@ -828,7 +828,7 @@ fn unrelated_applications_never_cross_check() {
     let app_results = answer
         .results
         .iter()
-        .filter(|result| result.application == "app.actor")
+        .filter(|result| result.application == "GraphDesk")
         .count();
     let other_results = answer
         .results
@@ -841,7 +841,7 @@ fn unrelated_applications_never_cross_check() {
         answer
             .results
             .iter()
-            .filter(|result| result.application == "app.actor")
+            .filter(|result| result.application == "GraphDesk")
             .all(|result| result.status != CapabilityStatus::Unknown),
         "the support app carries no opaque grant"
     );

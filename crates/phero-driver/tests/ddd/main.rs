@@ -3,9 +3,11 @@
 
 mod support;
 
+mod aggregate_override;
 mod dto_semantics;
 mod errors;
 mod happy_path;
+mod invariants;
 mod repository_breadth;
 mod resolution_semantics;
 mod rule_10_capabilities;

@@ -27,8 +27,17 @@ pub(crate) fn run(files: Vec<PathBuf>, deny_warnings: bool) -> anyhow::Result<Ex
         let expanded = expand_check_inputs(&files)?;
         let mut project = Project::gather(&expanded);
         let mut failed = 0usize;
+        for error in project.ddd_tree_errors() {
+            eprintln!("Error: {error}");
+            failed += 1;
+        }
         let mut checked_clean: std::collections::BTreeSet<String> = Default::default();
         for file in &expanded {
+            if project.is_ddd_fragment(file) {
+                // A fragment is checked through its root's merged compile;
+                // the root reports `OK` for it.
+                continue;
+            }
             match check_files(
                 std::slice::from_ref(file),
                 Some(&mut project),

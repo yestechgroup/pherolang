@@ -414,3 +414,25 @@ fn golden_artifact_round_trips_through_from_json() {
     let reserialized = model.to_json_pretty().expect("re-serialize IR");
     assert_eq!(reserialized, expected, "artifact round trip must be stable");
 }
+
+/// The DD4 + DD5 fixture (issues pherolang#301/#302): an authored `root`,
+/// an authored `aggregate <Root>` restatement, an aggregate invariant over
+/// collection algebra, and a value invariant.
+const AGGREGATES_DESIGN_PATH: &str = "tests/conformance/ddd/aggregates.ddd";
+const AGGREGATES_DOMAIN_PATH: &str = "tests/conformance/ddd/aggregates.mox";
+const AGGREGATES_ARTIFACT_PATH: &str = "tests/conformance/ddd/aggregates.ddd.json";
+
+#[test]
+fn aggregates_and_invariants_fixture_matches_its_golden() {
+    let model = compile_fixture(AGGREGATES_DESIGN_PATH, AGGREGATES_DOMAIN_PATH);
+    let order = &model.modules[0].designs[0];
+    assert_eq!(order.is_aggregate_root, Some(true));
+    assert_eq!(order.invariants.len(), 2);
+    let line = &model.modules[0].designs[1];
+    assert_eq!(line.is_aggregate_root, Some(false));
+    assert_eq!(
+        line.aggregate.as_ref().expect("membership").origin,
+        phero_ir::ddd::AggregateOrigin::Authored
+    );
+    assert_golden_artifact(model, AGGREGATES_ARTIFACT_PATH, AGGREGATES_DESIGN_PATH);
+}

@@ -257,3 +257,213 @@ fn artifact_check_passes_on_the_ifml_golden_artifact() {
         format!("OK {}\n", path.display())
     );
 }
+
+// --- DD8: multi-file applications ---------------------------------------------
+
+const DDD_APP_DOMAIN: &str = "package demo\n\nclass Order { String orderNo }\n";
+
+fn ddd_app_dir(tag: &str) -> std::path::PathBuf {
+    let dir = scratch_dir().join(format!("ddd-app-{tag}"));
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(&dir).expect("create app dir");
+    dir
+}
+
+fn write_app(dir: &std::path::Path, name: &str, source: &str) {
+    std::fs::write(dir.join(name), source).expect("write app source");
+}
+
+#[test]
+fn check_directory_compiles_a_root_and_its_fragments_once() {
+    let dir = ddd_app_dir("check");
+    write_app(&dir, "demo.mox", DDD_APP_DOMAIN);
+    write_app(
+        &dir,
+        "app.ddd",
+        concat!(
+            "import \"demo.mox\"\n",
+            "import \"sales.ddd\"\n",
+            "application Shop {\n",
+            "    base demo\n",
+            "    module core {\n",
+            "        entity Order repository OrderRepository { findById; }\n",
+            "    }\n",
+            "}\n",
+        ),
+    );
+    write_app(
+        &dir,
+        "sales.ddd",
+        "module sales {\n    service SalesService { boolean sell(String orderNo); }\n}\n",
+    );
+    let output = pherolang()
+        .args(["check", dir.to_str().expect("utf-8")])
+        .output()
+        .expect("run check");
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(
+        output.status.success(),
+        "stdout: {stdout}\nstderr: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    assert!(stdout.contains("app.ddd"), "{stdout}");
+    assert!(stdout.contains("sales.ddd"), "{stdout}");
+    assert!(
+        String::from_utf8_lossy(&output.stderr).is_empty(),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+}
+
+#[test]
+fn build_emits_one_artifact_per_root_and_none_for_a_fragment() {
+    let dir = ddd_app_dir("build");
+    write_app(&dir, "demo.mox", DDD_APP_DOMAIN);
+    write_app(
+        &dir,
+        "app.ddd",
+        concat!(
+            "import \"demo.mox\"\n",
+            "import \"sales.ddd\"\n",
+            "application Shop {\n",
+            "    base demo\n",
+            "    module core { entity Order }\n",
+            "}\n",
+        ),
+    );
+    write_app(
+        &dir,
+        "sales.ddd",
+        "module sales { service SalesService { boolean sell(String orderNo); } }\n",
+    );
+    let out = ddd_app_dir("build-out");
+    let output = pherolang()
+        .args([
+            "build",
+            dir.to_str().expect("utf-8"),
+            "-o",
+            out.to_str().expect("utf-8"),
+        ])
+        .output()
+        .expect("run build");
+    assert!(
+        output.status.success(),
+        "stderr: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    fn collect(dir: &std::path::Path, out: &mut Vec<std::path::PathBuf>) {
+        for entry in std::fs::read_dir(dir).expect("read out dir").flatten() {
+            let path = entry.path();
+            if path.is_dir() {
+                collect(&path, out);
+            } else {
+                out.push(path);
+            }
+        }
+    }
+    let mut files = Vec::new();
+    collect(&out, &mut files);
+    assert!(
+        files.iter().any(|path| path.ends_with("app.ddd.json")),
+        "{files:?}"
+    );
+    assert!(
+        !files.iter().any(|path| path.ends_with("sales.ddd.json")),
+        "{files:?}"
+    );
+}
+
+#[test]
+fn ir_on_a_fragment_names_the_fragment_error() {
+    let dir = ddd_app_dir("ir-fragment");
+    write_app(
+        &dir,
+        "sales.ddd",
+        "module sales { service SalesService { boolean sell(String orderNo); } }\n",
+    );
+    let output = pherolang()
+        .args(["ir", dir.join("sales.ddd").to_str().expect("utf-8")])
+        .output()
+        .expect("run ir");
+    assert!(!output.status.success());
+    assert!(
+        String::from_utf8_lossy(&output.stderr).contains("design fragment"),
+        "stderr: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+}
+
+#[test]
+fn a_directory_of_only_fragments_is_a_clean_error() {
+    let dir = ddd_app_dir("orphan");
+    write_app(
+        &dir,
+        "sales.ddd",
+        "module sales { service SalesService { boolean sell(String orderNo); } }\n",
+    );
+    let output = pherolang()
+        .args(["check", dir.to_str().expect("utf-8")])
+        .output()
+        .expect("run check");
+    assert!(!output.status.success());
+    assert!(
+        String::from_utf8_lossy(&output.stderr).contains("has no root"),
+        "stderr: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+}
+
+#[test]
+fn a_fragment_imported_by_two_roots_is_refused() {
+    let dir = ddd_app_dir("two-roots");
+    write_app(&dir, "demo.mox", DDD_APP_DOMAIN);
+    for (name, app) in [("one.ddd", "One"), ("two.ddd", "Two")] {
+        write_app(
+            &dir,
+            name,
+            &format!(
+                "import \"demo.mox\"\nimport \"shared.ddd\"\napplication {app} {{\n    base demo\n    module core {{ entity Order }}\n}}\n"
+            ),
+        );
+    }
+    write_app(
+        &dir,
+        "shared.ddd",
+        "module shared { service SharedService { boolean touch(String id); } }\n",
+    );
+    let output = pherolang()
+        .args(["check", dir.to_str().expect("utf-8")])
+        .output()
+        .expect("run check");
+    assert!(!output.status.success());
+    assert!(
+        String::from_utf8_lossy(&output.stderr).contains("more than one root"),
+        "stderr: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+}
+
+#[test]
+fn two_roots_with_one_application_name_are_refused() {
+    let dir = ddd_app_dir("same-name");
+    write_app(&dir, "demo.mox", DDD_APP_DOMAIN);
+    for (file, module) in [("one.ddd", "one"), ("two.ddd", "two")] {
+        write_app(
+            &dir,
+            file,
+            &format!(
+                "import \"demo.mox\"\napplication Shop {{\n    base demo\n    module {module} {{ entity Order }}\n}}\n"
+            ),
+        );
+    }
+    let output = pherolang()
+        .args(["check", dir.to_str().expect("utf-8")])
+        .output()
+        .expect("run check");
+    assert!(!output.status.success());
+    assert!(
+        String::from_utf8_lossy(&output.stderr).contains("duplicate design application name"),
+        "stderr: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+}

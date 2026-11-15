@@ -10,7 +10,7 @@
       "kind": "capability",
       "name": "Support.RaiseRefund",
       "file": "support/support.actor",
-      "application": "support/cli.ifml",
+      "application": "SupportDesk",
       "depth": 0
     },
     {
@@ -18,7 +18,7 @@
       "kind": "actor",
       "name": "Support.Agent",
       "file": "support/support.actor",
-      "application": "support/cli.ifml",
+      "application": "SupportDesk",
       "depth": 1,
       "parent": "capability:support/support.actor#Support.RaiseRefund",
       "via": "permits"
@@ -28,7 +28,7 @@
       "kind": "capability",
       "name": "Support.ApproveRefund",
       "file": "support/support.actor",
-      "application": "support/cli.ifml",
+      "application": "SupportDesk",
       "depth": 1,
       "parent": "capability:support/support.actor#Support.RaiseRefund",
       "via": "excludes"
@@ -38,7 +38,7 @@
       "kind": "serviceOperation",
       "name": "SupportDesk.desk.TicketService.raiseRefund",
       "file": "support/support.ddd",
-      "application": "support/cli.ifml",
+      "application": "SupportDesk",
       "depth": 1,
       "parent": "capability:support/support.actor#Support.RaiseRefund",
       "via": "carries"
@@ -48,7 +48,7 @@
       "kind": "useCase",
       "name": "RaiseRefund",
       "file": "support/support.uc",
-      "application": "support/cli.ifml",
+      "application": "SupportDesk",
       "depth": 1,
       "parent": "capability:support/support.actor#Support.RaiseRefund",
       "via": "requires"
@@ -58,7 +58,7 @@
       "kind": "action",
       "name": "RaiseRefund",
       "file": "support/support.ifml",
-      "application": "support/cli.ifml",
+      "application": "SupportDesk",
       "depth": 2,
       "parent": "serviceOperation:support/support.ddd#SupportDesk.desk.TicketService.raiseRefund",
       "via": "binds"
@@ -68,7 +68,7 @@
       "kind": "actor",
       "name": "Support.Finance",
       "file": "support/support.actor",
-      "application": "support/cli.ifml",
+      "application": "SupportDesk",
       "depth": 2,
       "parent": "capability:support/support.actor#Support.ApproveRefund",
       "via": "permits"
@@ -78,7 +78,7 @@
       "kind": "actor",
       "name": "Support.Manager",
       "file": "support/support.actor",
-      "application": "support/cli.ifml",
+      "application": "SupportDesk",
       "depth": 2,
       "parent": "actor:support/support.actor#Support.Agent",
       "via": "extends"
@@ -88,7 +88,7 @@
       "kind": "caseRole",
       "name": "RefundDesk.triage",
       "file": "support/support.cmmn",
-      "application": "support/cli.ifml",
+      "application": "SupportDesk",
       "depth": 2,
       "parent": "actor:support/support.actor#Support.Agent",
       "via": "requires"
@@ -98,7 +98,7 @@
       "kind": "command",
       "name": "tickets",
       "file": "support/cli.ifml",
-      "application": "support/cli.ifml",
+      "application": "SupportDesk",
       "depth": 2,
       "parent": "actor:support/support.actor#Support.Agent",
       "via": "requires"
@@ -108,7 +108,7 @@
       "kind": "planItem",
       "name": "RefundDesk.AssessRefund",
       "file": "support/support.cmmn",
-      "application": "support/cli.ifml",
+      "application": "SupportDesk",
       "depth": 2,
       "parent": "serviceOperation:support/support.ddd#SupportDesk.desk.TicketService.raiseRefund",
       "via": "executes"
@@ -118,7 +118,7 @@
       "kind": "service",
       "name": "SupportDesk.desk.TicketService",
       "file": "support/support.ddd",
-      "application": "support/cli.ifml",
+      "application": "SupportDesk",
       "depth": 2,
       "parent": "serviceOperation:support/support.ddd#SupportDesk.desk.TicketService.raiseRefund",
       "via": "memberOf"
@@ -128,7 +128,7 @@
       "kind": "serviceOperation",
       "name": "SupportDesk.desk.TicketService.approveRefund",
       "file": "support/support.ddd",
-      "application": "support/cli.ifml",
+      "application": "SupportDesk",
       "depth": 2,
       "parent": "capability:support/support.actor#Support.ApproveRefund",
       "via": "carries"
@@ -138,7 +138,7 @@
       "kind": "useCase",
       "name": "ApproveRefund",
       "file": "support/support.uc",
-      "application": "support/cli.ifml",
+      "application": "SupportDesk",
       "depth": 2,
       "parent": "capability:support/support.actor#Support.ApproveRefund",
       "via": "requires"
@@ -148,7 +148,7 @@
       "kind": "action",
       "name": "ApproveRefund",
       "file": "support/support.ifml",
-      "application": "support/cli.ifml",
+      "application": "SupportDesk",
       "depth": 3,
       "parent": "serviceOperation:support/support.ddd#SupportDesk.desk.TicketService.approveRefund",
       "via": "binds"
@@ -158,7 +158,7 @@
       "kind": "case",
       "name": "RefundDesk",
       "file": "support/support.cmmn",
-      "application": "support/cli.ifml",
+      "application": "SupportDesk",
       "depth": 3,
       "parent": "caseRole:support/support.cmmn#RefundDesk.triage",
       "via": "memberOf"
@@ -168,7 +168,7 @@
       "kind": "caseRole",
       "name": "RefundDesk.escalation",
       "file": "support/support.cmmn",
-      "application": "support/cli.ifml",
+      "application": "SupportDesk",
       "depth": 3,
       "parent": "actor:support/support.actor#Support.Manager",
       "via": "requires"
@@ -178,7 +178,7 @@
       "kind": "caseRole",
       "name": "RefundDesk.finance",
       "file": "support/support.cmmn",
-      "application": "support/cli.ifml",
+      "application": "SupportDesk",
       "depth": 3,
       "parent": "actor:support/support.actor#Support.Finance",
       "via": "requires"
@@ -188,7 +188,7 @@
       "kind": "component",
       "name": "Queue.intake",
       "file": "support/support.ifml",
-      "application": "support/cli.ifml",
+      "application": "SupportDesk",
       "depth": 3,
       "parent": "action:support/support.ifml#RaiseRefund",
       "via": "invokesAction"
@@ -198,7 +198,7 @@
       "kind": "flow",
       "name": "cli",
       "file": "support/cli.ifml",
-      "application": "support/cli.ifml",
+      "application": "SupportDesk",
       "depth": 3,
       "parent": "command:support/cli.ifml#tickets",
       "via": "memberOf"
@@ -208,7 +208,7 @@
       "kind": "flow",
       "name": "support",
       "file": "support/support.ifml",
-      "application": "support/cli.ifml",
+      "application": "SupportDesk",
       "depth": 3,
       "parent": "action:support/support.ifml#RaiseRefund",
       "via": "memberOf"
@@ -218,7 +218,7 @@
       "kind": "module",
       "name": "SupportDesk.desk",
       "file": "support/support.ddd",
-      "application": "support/cli.ifml",
+      "application": "SupportDesk",
       "depth": 3,
       "parent": "service:support/support.ddd#SupportDesk.desk.TicketService",
       "via": "memberOf"
@@ -228,7 +228,7 @@
       "kind": "planItem",
       "name": "RefundDesk.CloseTicket",
       "file": "support/support.cmmn",
-      "application": "support/cli.ifml",
+      "application": "SupportDesk",
       "depth": 3,
       "parent": "caseRole:support/support.cmmn#RefundDesk.triage",
       "via": "assignedTo"
@@ -238,7 +238,7 @@
       "kind": "planItem",
       "name": "RefundDesk.ReviewTicket",
       "file": "support/support.cmmn",
-      "application": "support/cli.ifml",
+      "application": "SupportDesk",
       "depth": 3,
       "parent": "caseRole:support/support.cmmn#RefundDesk.triage",
       "via": "assignedTo"
@@ -248,7 +248,7 @@
       "kind": "component",
       "name": "Queue.refunds",
       "file": "support/support.ifml",
-      "application": "support/cli.ifml",
+      "application": "SupportDesk",
       "depth": 4,
       "parent": "action:support/support.ifml#ApproveRefund",
       "via": "invokesAction"
@@ -258,7 +258,7 @@
       "kind": "deployComponent",
       "name": "SupportDesk.api",
       "file": "support/support.deploy",
-      "application": "support/cli.ifml",
+      "application": "SupportDesk",
       "depth": 4,
       "parent": "module:support/support.ddd#SupportDesk.desk",
       "via": "bindsDesign"
@@ -268,7 +268,7 @@
       "kind": "deployComponent",
       "name": "SupportDesk.web",
       "file": "support/support.deploy",
-      "application": "support/cli.ifml",
+      "application": "SupportDesk",
       "depth": 4,
       "parent": "flow:support/support.ifml#support",
       "via": "bindsFlow"
@@ -278,7 +278,7 @@
       "kind": "designApplication",
       "name": "SupportDesk",
       "file": "support/support.ddd",
-      "application": "support/cli.ifml",
+      "application": "SupportDesk",
       "depth": 4,
       "parent": "module:support/support.ddd#SupportDesk.desk",
       "via": "memberOf"
@@ -288,7 +288,7 @@
       "kind": "planItem",
       "name": "RefundDesk.ApproveRefund",
       "file": "support/support.cmmn",
-      "application": "support/cli.ifml",
+      "application": "SupportDesk",
       "depth": 4,
       "parent": "caseRole:support/support.cmmn#RefundDesk.finance",
       "via": "assignedTo"
@@ -298,7 +298,7 @@
       "kind": "planItem",
       "name": "RefundDesk.Escalate",
       "file": "support/support.cmmn",
-      "application": "support/cli.ifml",
+      "application": "SupportDesk",
       "depth": 4,
       "parent": "caseRole:support/support.cmmn#RefundDesk.escalation",
       "via": "assignedTo"
@@ -308,7 +308,7 @@
       "kind": "deployApplication",
       "name": "SupportDesk",
       "file": "support/support.deploy",
-      "application": "support/cli.ifml",
+      "application": "SupportDesk",
       "depth": 5,
       "parent": "deployComponent:support/support.deploy#SupportDesk.web",
       "via": "memberOf"
@@ -318,7 +318,7 @@
       "kind": "deployment",
       "name": "SupportDesk.edgeLive",
       "file": "support/support.deploy",
-      "application": "support/cli.ifml",
+      "application": "SupportDesk",
       "depth": 6,
       "parent": "deployApplication:support/support.deploy#SupportDesk",
       "via": "deploys"
@@ -328,7 +328,7 @@
       "kind": "deployment",
       "name": "SupportDesk.production",
       "file": "support/support.deploy",
-      "application": "support/cli.ifml",
+      "application": "SupportDesk",
       "depth": 6,
       "parent": "deployApplication:support/support.deploy#SupportDesk",
       "via": "deploys"

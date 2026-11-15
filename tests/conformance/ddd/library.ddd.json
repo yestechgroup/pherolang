@@ -154,6 +154,7 @@
             "optimisticLocking": true,
             "cache": true
           },
+          "isAggregateRoot": true,
           "repository": {
             "name": "LibraryRepository",
             "operations": [
@@ -205,6 +206,17 @@
           "flags": {
             "auditable": true,
             "optimisticLocking": true
+          },
+          "isAggregateRoot": false,
+          "aggregate": {
+            "root": {
+              "type": "class",
+              "value": {
+                "package": "nz.example.library",
+                "name": "Library"
+              }
+            },
+            "origin": "derived"
           }
         },
         {
@@ -221,7 +233,8 @@
           "flags": {
             "auditable": true,
             "optimisticLocking": true
-          }
+          },
+          "isAggregateRoot": true
         },
         {
           "class": "Chapter",
@@ -236,6 +249,17 @@
           "flags": {
             "auditable": true,
             "optimisticLocking": true
+          },
+          "isAggregateRoot": false,
+          "aggregate": {
+            "root": {
+              "type": "class",
+              "value": {
+                "package": "nz.example.library",
+                "name": "Library"
+              }
+            },
+            "origin": "derived"
           }
         },
         {
@@ -252,6 +276,7 @@
             "auditable": true,
             "optimisticLocking": true
           },
+          "isAggregateRoot": true,
           "repository": {
             "name": "MovieRepository",
             "operations": [
@@ -308,6 +333,7 @@
             "auditable": true,
             "optimisticLocking": true
           },
+          "isAggregateRoot": true,
           "repository": {
             "name": "PhysicalMediaRepository",
             "operations": [
@@ -548,6 +574,7 @@
             "auditable": true,
             "optimisticLocking": true
           },
+          "isAggregateRoot": true,
           "repository": {
             "name": "PersonRepository",
             "operations": [

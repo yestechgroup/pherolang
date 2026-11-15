@@ -142,6 +142,9 @@ fn sample_model() -> DddModel {
                     },
                     semantics: None,
                     dto_shape: None,
+                    is_aggregate_root: None,
+                    aggregate: None,
+                    invariants: Vec::new(),
                     repository: Some(Repository {
                         name: "BookRepository".to_string(),
                         operations: vec![
@@ -169,6 +172,9 @@ fn sample_model() -> DddModel {
                     flags: DesignFlags::default(),
                     semantics: Some(ValueSemantics::strict()),
                     dto_shape: None,
+                    is_aggregate_root: None,
+                    aggregate: None,
+                    invariants: Vec::new(),
                     repository: None,
                     machine: None,
                     child_operations: Vec::new(),
@@ -186,6 +192,9 @@ fn sample_model() -> DddModel {
                     },
                     semantics: None,
                     dto_shape: None,
+                    is_aggregate_root: None,
+                    aggregate: None,
+                    invariants: Vec::new(),
                     repository: None,
                     machine: None,
                     child_operations: Vec::new(),
@@ -553,6 +562,9 @@ fn default_flags_and_abstract_false_are_omitted() {
         flags: DesignFlags::default(),
         semantics: None,
         dto_shape: None,
+        is_aggregate_root: None,
+        aggregate: None,
+        invariants: Vec::new(),
         repository: None,
         machine: None,
         child_operations: Vec::new(),
@@ -579,6 +591,9 @@ fn all_flags_serialize_with_camel_case_keys() {
         },
         semantics: None,
         dto_shape: None,
+        is_aggregate_root: None,
+        aggregate: None,
+        invariants: Vec::new(),
         repository: None,
         machine: None,
         child_operations: Vec::new(),
@@ -1441,5 +1456,44 @@ fn operation_throws_are_additive_and_round_trip() {
             .expect("serialize")
             .contains("throws"),
         "an operation with no clause omits the key"
+    );
+}
+
+#[test]
+fn aggregate_boundary_fields_are_sparse_and_ordered() {
+    let mut design = Design::new("OrderLine", Stereotype::Entity);
+    design.is_aggregate_root = Some(false);
+    design.aggregate = Some(crate::ddd::AggregateMembership {
+        root: class_ref("Order"),
+        origin: crate::ddd::AggregateOrigin::Authored,
+    });
+    let json = serde_json::to_string(&design).expect("serialize");
+    assert!(json.contains(r#""isAggregateRoot":false"#), "{json}");
+    assert!(
+        json.contains(r#""aggregate":{"root":{"type":"class""#),
+        "{json}"
+    );
+    assert!(json.contains(r#""origin":"authored""#), "{json}");
+
+    let mut root = Design::new("Order", Stereotype::Entity);
+    root.is_aggregate_root = Some(true);
+    let json = serde_json::to_string(&root).expect("serialize");
+    assert!(json.contains(r#""isAggregateRoot":true"#), "{json}");
+    assert!(!json.contains("aggregate"), "{json}");
+}
+
+#[test]
+fn invariants_are_omitted_when_empty_and_ordered_when_present() {
+    let mut design = Design::new("Order", Stereotype::Entity);
+    let bare = serde_json::to_string(&design).expect("serialize");
+    assert!(!bare.contains("invariants"), "{bare}");
+    design.invariants = vec![
+        crate::ddd::Invariant::new("total >= 0"),
+        crate::ddd::Invariant::new("total <= 100"),
+    ];
+    let json = serde_json::to_string(&design).expect("serialize");
+    assert_eq!(
+        json,
+        r#"{"class":"Order","stereotype":"entity","invariants":[{"expression":"total >= 0"},{"expression":"total <= 100"}]}"#
     );
 }

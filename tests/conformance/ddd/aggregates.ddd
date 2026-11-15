@@ -1,0 +1,21 @@
+// DD4 + DD5: an authored aggregate boundary and invariants at the
+// consistency boundary. Order is an explicit root (the shop's OrderLine is
+// contained, but an order can also stand alone); OrderLine restates its
+// containment root as an authored membership.
+import "aggregates.mox";
+
+application Sales {
+    base nz.example.sales
+    module sales {
+        entity Order root
+            invariant total == lines.map(l => l.quantity * l.unitPrice).sum();
+            invariant total >= 0;
+            repository OrderRepository {
+                findById;
+                save;
+            }
+        entity OrderLine aggregate Order
+        value DateRange
+            invariant start <= end;
+    }
+}

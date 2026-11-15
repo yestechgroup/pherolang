@@ -152,6 +152,24 @@ pub struct GraphInputs {
     pub cases: Vec<GraphFile<CmmnModel>>,
     /// `.dmn` decision-model artifacts.
     pub decisions: Vec<GraphFile<DmnModel>>,
+    /// `.ddd` fragments (DD8): host facts only — a fragment has no artifact
+    /// of its own, but it is a file in the application, so its file node,
+    /// import edges, and `applications[].files` membership are emitted.
+    pub design_fragments: Vec<GraphFragment>,
+}
+
+/// One `.ddd` fragment as the graph builder sees it (DD8, issue
+/// pherolang#305): the host-resolved path, display path, and normalized
+/// imports. The fragment's declarations are already merged into its root's
+/// [`DddModel`].
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct GraphFragment {
+    /// Root-relative POSIX display path.
+    pub display: String,
+    /// Host-normalized matching key.
+    pub path: String,
+    /// Normalized import targets (the fragment's own `.mox`/`.ddd` imports).
+    pub imports: Vec<String>,
 }
 
 /// One input file as the builder indexes it: the display path, the matching
@@ -162,6 +180,10 @@ pub(crate) struct FileRef {
     pub(crate) path: String,
     pub(crate) imports: Vec<String>,
     pub(crate) application: String,
+    /// The authored `application <Name>` of a `.ddd` root (DD8); `None` for
+    /// every other file. A component with exactly one root uses it as the
+    /// graph application id.
+    pub(crate) authored_application: Option<String>,
 }
 
 /// The graph builder's working state across the two passes.
@@ -255,6 +277,15 @@ pub fn build(inputs: &GraphInputs) -> GraphModel {
     let deploy_files: Vec<FileRef> =
         builder.files[deploy_base..deploy_base + inputs.deploys.len()].to_vec();
     deploy::platform_capability_nodes(&mut builder, &inputs.deploys, &deploy_files);
+
+    // DD8: a `.ddd` fragment owns a file node (its declarations live in the
+    // root artifact, but the file still participates in the application and
+    // the import graph).
+    for fragment in &inputs.design_fragments {
+        if let Some(file) = builder.files.iter().find(|file| file.path == fragment.path) {
+            builder.add_node(ids::file_node(&file.display, &file.application));
+        }
+    }
 
     // Pass A — nodes for every surface (all nodes exist before any edge
     // resolves, so cross-surface references see their targets).
@@ -370,6 +401,7 @@ fn cluster(inputs: &GraphInputs) -> (Vec<FileRef>, [usize; 9], Vec<GraphApplicat
             path: path.to_string(),
             imports: imports.to_vec(),
             application: String::new(),
+            authored_application: None,
         });
     };
     for file in &inputs.domains {
@@ -399,6 +431,17 @@ fn cluster(inputs: &GraphInputs) -> (Vec<FileRef>, [usize; 9], Vec<GraphApplicat
     for file in &inputs.decisions {
         push(&file.display, &file.path, &file.imports);
     }
+    for fragment in &inputs.design_fragments {
+        push(&fragment.display, &fragment.path, &fragment.imports);
+    }
+
+    // The design bucket starts after domains and actors.
+    let design_start = inputs.domains.len() + inputs.actors.len();
+    for (index, file) in inputs.designs.iter().enumerate() {
+        if let Some(application) = &file.model.application {
+            files[design_start + index].authored_application = Some(application.name.clone());
+        }
+    }
 
     let application_files: Vec<ApplicationFile> = files
         .iter()
@@ -415,7 +458,17 @@ fn cluster(inputs: &GraphInputs) -> (Vec<FileRef>, [usize; 9], Vec<GraphApplicat
             .map(|&member| &files[member])
             .min_by(|left, right| left.path.cmp(&right.path))
             .expect("a component is never empty");
-        let id = id_file.display.clone();
+        // DD8 (issue pherolang#305): a component with exactly one `.ddd`
+        // root takes the authored application name as its id; otherwise the
+        // smallest member path stays the fallback.
+        let authored: Vec<&str> = members
+            .iter()
+            .filter_map(|&member| files[member].authored_application.as_deref())
+            .collect();
+        let id = match authored.as_slice() {
+            [name] => (*name).to_string(),
+            _ => id_file.display.clone(),
+        };
         for &member in members {
             files[member].application = id.clone();
         }

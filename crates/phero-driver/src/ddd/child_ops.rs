@@ -29,8 +29,8 @@
 //! the artifact), and no child scope lowers then.
 
 use phero_diagnostics::ddd::{
-    E_CHILD_ACTION_NEEDS_COLLECTION, E_UNKNOWN_CHILD_ACTION, E_UNKNOWN_CHILD_FEATURE,
-    E_UNKNOWN_EXTEND_TARGET,
+    E_CHILD_ACTION_NEEDS_COLLECTION, E_DEPRECATED_EXTEND, E_UNKNOWN_CHILD_ACTION,
+    E_UNKNOWN_CHILD_FEATURE, E_UNKNOWN_EXTEND_TARGET,
 };
 use phero_ir::ddd::{ChildRef, Design, ServiceOperation, Stereotype};
 use phero_syntax::ast as dsl;
@@ -69,6 +69,19 @@ pub(crate) fn lower_module_child_operations(
     let mut declared: Vec<((String, String), Vec<String>)> = Vec::new();
 
     for extend in &module.extends {
+        if extend.deprecated {
+            local.push(
+                Diagnostic::warning(
+                    format!(
+                        "{E_DEPRECATED_EXTEND} 'extend' is deprecated; write \
+                         'children {}'",
+                        extend.class.text
+                    ),
+                    Some(extend.span),
+                )
+                .with_help("the block was renamed so it no longer reads like class inheritance"),
+            );
+        }
         // The target must be a domain class (the rule-3 resolution).
         let help = format!(
             "an `extend` target must be an aggregate root designed in module '{}'",

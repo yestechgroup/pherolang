@@ -9,8 +9,10 @@ its modules, the application services with their use-case operations, and
 per-class design decisions (stereotype, flags, repository, state machine,
 delegation targets). Parsed by **phero-syntax** (`parse_ddd`, the chumsky parser) at
 compile time, lowered and validated by **phero-driver**
-(`compile_ddd_str`) against the imported domains, and emitted as the
-versioned `phero_ir::ddd::DddModel` artifact (the phero-ir crate).
+(`compile_ddd_str`, or `compile_ddd_app_str` for a root with imported
+fragments — see [Multi-file applications](#multi-file-applications-roots-and-fragments))
+against the imported domains, and emitted as the versioned
+`phero_ir::ddd::DddModel` artifact (the phero-ir crate).
 
 The `.ddd` DSL lives alongside the `.mox` domain model as a *complementary*
 input: a design never declares classes or features — it references the
@@ -23,9 +25,9 @@ by decision rather than by omission; `phero-backend-ddd` is the in-tree
 artifact backend, and its job is the artifact-only contract check.
 
 The normative contract — entry points, resolution semantics, the validation
-rules, the aggregate-derivation rule, and the capabilities
-contract — is documented on `phero_driver::compile_ddd_str`; this page is the
-language reference.
+rules, the aggregate-boundary rules, and the capabilities
+contract — is documented on `phero_driver::compile_ddd_str` /
+`phero_driver::compile_ddd_app_str`; this page is the language reference.
 
 ---
 
@@ -84,7 +86,8 @@ docs):
   artifact that does not declare them — body-less and machine-less models
   stay byte-identical, `DDD_MODEL_FORMAT_VERSION` stays 2. The pherolang#179
   additions follow the same discipline: a design's `childOperations`
-  (ordinary `ServiceOperation` rows declared by `extend` blocks) and an
+  (ordinary `ServiceOperation` rows declared by `children` blocks, the
+  deprecated `extend` alias included) and an
   operation's `childScope` (`ChildRef { feature, class, action }` — the
   root's child feature, the child class's full name, the `Delegation.target`
   convention, and the validated action `"add" | "remove" | "save"`) appear
@@ -118,6 +121,32 @@ docs):
   A consumer reads the block; it never infers the four properties from
   `"stereotype": "value"`. `pherolang artifact check` requires the block on
   every value design and refuses it on an entity or dto.
+- **Aggregate boundary** (DD4, issue
+  [#301](https://github.com/yestechgroup/pherolang/issues/301)): a decided
+  entity design carries `isAggregateRoot` (`true` for a root, `false` for a
+  member), and a non-root entity design also carries `aggregate` —
+  `{root, origin}`, where `root` is the resolved root class `TypeRef` and
+  `origin` is the bare `"derived" | "authored"`. A root omits `aggregate`,
+  and a value or dto design omits both. The keys are sparse; an **unknown**
+  verdict (an incomplete imported-domain union, or ambiguous or cyclic
+  containment) leaves `isAggregateRoot` absent, never a guessed `false`.
+  `pherolang artifact check` requires the verdict on every entity design (an
+  absent one is a contract-incomplete artifact), requires `aggregate`
+  exactly on a non-root, and requires the named root to be an entity design
+  marked as a root. `formatVersion` stays 2.
+- **Invariants** (DD5, issue
+  [#302](https://github.com/yestechgroup/pherolang/issues/302)): a design's
+  `invariants` is an ordered, sparse list of `{"expression": "..."}` — the
+  verbatim source text of each `invariant <expr>;` clause. Entity and value
+  designs may carry them, a dto may not, and an invariant-less design omits
+  the key, so `formatVersion` stays 2. `pherolang artifact check` requires
+  every expression to be non-empty and refuses a dto's invariants.
+- **Multi-file applications** (DD8, issue
+  [#305](https://github.com/yestechgroup/pherolang/issues/305)): a `.ddd`
+  **root** compiled with `compile_ddd_app_str` merges its imported fragments
+  into this one artifact; a **fragment** has no artifact of its own. A
+  single-file application stays byte-identical. See
+  [Multi-file applications](#multi-file-applications-roots-and-fragments).
 - **Declared error vocabulary and `throws`** (DD7, issue
   [#304](https://github.com/yestechgroup/pherolang/issues/304)): the model
   root carries the application-scoped `errors`, each module its private
@@ -181,22 +210,26 @@ module docs under [*`.ddd` design
 sources*](https://docs.rs/phero-syntax/latest/phero_syntax/parser/index.html)
 (`crates/phero-syntax/src/parser/mod.rs`) — the single authority for `ddd_file`,
 `application_decl`, `module_decl`, `service_decl`, `design_decl`,
-`repository_decl`, `machine_decl`, `search_decl`, and `extend_decl`; this
-page keeps only the language-level rules. The `.ddd` keyword tables in
-`crates/phero-syntax/src/ddd.rs` are the keyword authority the parser and the
-formatter share.
+`boundary_decl`, `invariant_decl`, `repository_decl`, `machine_decl`,
+`search_decl`, and `children_decl`; this page keeps only the language-level
+rules. The `.ddd` keyword tables in `crates/phero-syntax/src/ddd.rs` are the
+keyword authority the parser and the formatter share.
 
 Lexical and structural rules:
 
-- Every `.ddd` word (`application`, `base`, `module`, `service`, `extend`,
-  `inject`, `entity`, `value`, `dto`, `abstract`, the flags, `repository`,
+- Every `.ddd` word (`application`, `base`, `module`, `service`, `children`,
+  `extend` (deprecated), `root`, `aggregate`, `invariant`, `inject`,
+  `entity`, `value`, `dto`, `abstract`, the flags, `repository`,
   and the built-in operation names) is a **contextual identifier**, not a
   keyword: it is special only in the grammar position it is parsed in,
   remains usable as a class or operation name elsewhere, and can be escaped
   with `^` (the `id`/`readonly` precedent).
-- `import` declarations must precede the `application` declaration; there
-  is exactly one application per file, and `base` must be its first member
-  when present.
+- `import` declarations must precede the application (or top-level module)
+  declarations. A file is either one **root** (`application <name>`, which
+  owns the application name, `base`, and application-scoped errors) or a
+  **fragment** of top-level `module` blocks, never both; `base` must be the
+  application's first member when present. See
+  [Multi-file applications](#multi-file-applications-roots-and-fragments).
 - A `///` doc comment run directly above a `service` or `search` declaration
   becomes its description in the artifact. Contiguous `///` lines join with
   newlines — the same semantic as the `.mox` doc collection (`docs/LANGUAGE.md`).
@@ -259,14 +292,31 @@ Lexical and structural rules:
   modifier (Sculptor's visibility): the operation stays off the public
   interface. `protected` is contextual — in leading position it is the
   modifier, anywhere else an ordinary name (`^protected` escapes).
+- **Aggregate boundary** (DD4, issue
+  [#301](https://github.com/yestechgroup/pherolang/issues/301)) — a design
+  header may carry `root` or `aggregate <Root>` after the flags and before
+  any invariant. `root` authors an aggregate root; `aggregate <Root>` authors
+  membership in a root designed in the same module. Both are entity-only and
+  mutually exclusive (`E0379`), an authored clause outranks the containment
+  derivation, and the legality rules and artifact shape are in
+  [Aggregate derivation](#aggregate-derivation).
+- **Invariants** (DD5, issue
+  [#302](https://github.com/yestechgroup/pherolang/issues/302)) — an entity
+  or value design may repeat `invariant <raw_expr>;` after its flags and
+  boundary, before any dto suffix, repository, or machine. The expression is
+  captured raw and re-emitted verbatim; each invariant sits on its own line
+  one indent deeper in the canonical layout (see [CLI usage](#cli-usage)). A
+  dto carries none (`E0389`), and the typing contract is rule 24.
 - **Child-scoped operations** (issue
   [#179](https://github.com/yestechgroup/pherolang/issues/179)) — a
-  module-level `extend <Class> { ... }` block declares operations that act
+  module-level `children <Class> { ... }` block declares operations that act
   on the aggregate root's contained children (the root-side counterpart of
-  a child aggregate's own lifecycle):
+  a child aggregate's own lifecycle). The block was named `extend` before
+  DD4; that spelling is a deprecated alias (a warning, `E0387`) and the
+  formatter rewrites it to `children`:
 
   ```
-  extend PayRun {
+  children PayRun {
       boolean addLine(PayRunLineDraft line) => lines.add;
       boolean removeLine(String lineId) => lines.remove;
       boolean saveLine(PayRunLineDraft line) => lines.save when (line.quantity > 0);
@@ -281,7 +331,7 @@ Lexical and structural rules:
   `add`/`remove` require a many-valued feature, while `save` (insert or
   replace) is legal for a single-valued child too. A class may carry
   several blocks — they merge in source order — and child-operation names
-  must be unique per extend target. `extend` is a contextual word like the
+  must be unique per target. `children` is a contextual word like the
   rest, and the block stays in the module holding the root's design (the
   same-module coupling rule searches follow).
 - **Executable operation bodies** (issue
@@ -342,6 +392,54 @@ Lexical and structural rules:
 
 ---
 
+## Multi-file applications (roots and fragments)
+
+A `.ddd` compilation unit is either a **root** or a **fragment** (DD8, issue
+[#305](https://github.com/yestechgroup/pherolang/issues/305)):
+
+- a **root** declares `import`s and one `application <Name> { ... }`. It owns
+  the application's name, its `base` package, and its application-scoped
+  `errors`;
+- a **fragment** declares `import`s and top-level `module` blocks, with no
+  `application` declaration. It owns no application identity: it contributes
+  modules to the root that imports it, and may not declare `base`, the
+  application name, or application-scoped errors.
+
+A fragment may `import` `.mox` domains, `.dmn` decision models, and other
+`.ddd` fragments; the fragment closure is transitive. The import graph is
+refused, never guessed, on a cycle, a fragment reached by two roots, a root
+imported as a fragment, a fragment with no root, and two roots declaring the
+same application name.
+
+Modules may **reopen** across fragments: a `module core { ... }` block in the
+root and another in a fragment are one module in the artifact, and their
+members concatenate in first-appearance/import order. Duplicate service,
+design, search, or child-operation names remain the existing application-wide
+errors (rule 2) — reopening is not an allowlist for duplicates.
+
+`compile_ddd_str` remains the single-file entry. A host compiles a root with
+`compile_ddd_app_str` (or `compile_ddd_app_str_with_decisions` for the
+capability and decision joins), passing the root source and its
+`DddFragment { path, source }` closure; the result is one merged `DddModel`
+for the application and there is no fragment artifact. A single-file
+application compiles byte-identically to before.
+
+The CLI follows the root. `pherolang check <dir>` compiles each root with its
+fragments, treats a fragment as an input rather than a second compilation
+unit, and prints `OK` for the root and for every fragment. `pherolang build`
+emits one artifact per root, and `pherolang ir` on a fragment reports the
+fragment error naming the root to compile. `pherolang fmt` formats a fragment
+normally. `pherolang verify` hashes fragment sources as part of the root's
+closure but emits no fragment artifact. The LSP compiles an open fragment
+through its root and publishes the diagnostics against the fragment; its
+navigation index can carry the root's application name for a fragment
+(`ddd_index_with_application`). The semantic graph includes the root's
+`.ddd` import edges and fragment files in the application, and names the
+application by the authored `application <Name>` when the component has
+exactly one design root ([GRAPH.md](GRAPH.md#applications)).
+
+---
+
 ## Resolution semantics
 
 Names resolve with the `.mox` cross-package rules against the union
@@ -365,6 +463,7 @@ the bare / `base`-preferred / unique-across-packages rules above.
 | Authored field | Resolved companion | Carries |
 |---|---|---|
 | `Design.class` | `typeRef` | the resolved design class (`TypeRef`); absent for a standalone DTO |
+| `aggregate <Root>` | `Design.aggregate.root` | the resolved aggregate root (`TypeRef`); a root design omits `aggregate` |
 | `Delegation.target` | `targetRef` | the delegated service, repository, or search |
 | `Service.dependencies[]` | `dependencyRefs[]` | one target identity per injected dependency |
 | `Service.decisionDependencies[]` | `decisionDependencyRefs[]` | one decision-service identity per injection |
@@ -447,6 +546,22 @@ ignore it for compatibility.
 - **Capabilities, events, decisions** — `capabilityRefs`, `emittedRefs`,
   `decisionRefs`, and `decisionDependencyRefs` are index-aligned with
   their authored name lists; read the companion at the same index.
+- **Aggregate boundaries** — an entity design's `isAggregateRoot` is the
+  effective verdict; absent means the compile could not decide it and the
+  artifact is contract-incomplete, never "false". A non-root's
+  `aggregate.root` names the boundary root and `origin` says whether an
+  authored `root`/`aggregate <Root>` or containment decided it. Only a root
+  owns a repository, and a cross reference may target only a root; load the
+  whole boundary before checking its invariants.
+- **Invariants** — `invariants` is the ordered list of predicates to hold at
+  the boundary. Re-parse `expression` with the shared expression semantics
+  (`docs/EXPRESSIONS.md`): the designed class is `self`, machine states bind
+  as enum-typed names, and optional navigation follows R3. A repository or
+  global read is outside an invariant. Check the predicates at value
+  construction, at aggregate save for the root **and every member**, and
+  after every transition, in declaration order. A failure is
+  `InvariantViolation { class, aggregateRoot, invariantIndex }`; broken state
+  is never a recoverable success path.
 - **Values** — a design carrying `semantics` is a strictly immutable value
   object: no identity, immutable, deep-immutable, structural equality. The
   block is the contract; never infer it from `stereotype`. Emit a
@@ -490,7 +605,9 @@ ignore it for compatibility.
 compile time" — unresolved by design, not an error. The authored name is
 still recorded and the companion still exists; only the cross-dimension
 join is open. A consumer that needs the join must require the counterpart
-artifact; one that does not may ignore it.
+artifact; one that does not may ignore it. An absent `isAggregateRoot` is
+different: it means the aggregate verdict itself is unknown, so the artifact
+is contract-incomplete and no downstream rule should guess it.
 
 **What `pherolang artifact check` guarantees.** From the serialized artifact
 alone, with no sources or models present, it checks the version gate and the
@@ -507,9 +624,14 @@ artifact, no output DTO fills a parameter slot, every error name/scope
 resolves with no prelude shadow and every payload field name unique, every
 `throws` reference resolves to a declared error or the prelude with a
 consistent scope/module, every body raise appears in its operation's
-`throws`, every delegation's `throws` is a superset of its target's, and
+`throws`, every delegation's `throws` is a superset of its target's, every
+entity design carries an effective aggregate verdict with the membership
+shape that verdict implies (a root carries no `aggregate`, a non-root's
+`aggregate.root` names an entity design this artifact marks as a root),
+invariant expressions are non-empty and no dto carries one, and
 `pheroVersion` is present and well-formed. A hand-edited or truncated artifact that drops a
-companion, a `semantics` block, or a `dtoShape`, or invents an illegal
+companion, a `semantics` block, a `dtoShape`, an aggregate verdict, or an
+invariant, or invents an illegal
 combination fails with a diagnostic naming the design or reference. It does
 not re-typecheck against the domain — that needs the paired `Model` — and it
 cannot re-check the value rules (R-V1 to R-V3), which read the `.mox`
@@ -541,8 +663,21 @@ classes, nor the DTO member typing, which reads the source class.
    (`!auditable`, `!optimisticLocking`). Negating a flag that defaults off
    (`!scaffold`, `!nonPersistent`, `!cache`) is rejected wherever written.
 5. **Repository placement** — only entity designs may declare a repository.
-6. **Aggregate boundary** — see the derivation rule below; an entity design
-   derived as a non-root may not declare a repository.
+6. **Aggregate boundary** (DD4, issue
+   [#301](https://github.com/yestechgroup/pherolang/issues/301)) — only an
+   **effective aggregate root** may declare a repository. The effective
+   boundary is the authored `root`/`aggregate
+   <Root>` decision when written, otherwise the containment derivation (see
+   [Aggregate derivation](#aggregate-derivation)); an unknown verdict never
+   convicts. The boundary clauses themselves are validated with the
+   derivation: a design may author only one boundary (`E0379`), `root` and
+   `aggregate` are entity-only (`E0384`), `root` may not name a contained
+   class (`E0380`), `aggregate <Root>` must name a same-module entity design
+   (`E0382`/`E0383`) that is not itself a member (`E0386`), and a contained
+   class may only restate its derived root (`E0381`). An entity design with no
+   authored decision whose verdict cannot be decided warns `E0385` and
+   carries no verdict in the artifact; `pherolang artifact check` then refuses
+   the contract-incomplete artifact.
 7. **Signature type-check** — declared service and repository operation
    signatures type-check against the domain model or the application's DTO
    boundaries: the `phero-syntax` primitives resolve everywhere, every
@@ -568,7 +703,9 @@ classes, nor the DTO member typing, which reads the source class.
    Service"); service → service across modules is allowed.
 9. **inject** — every dependency name must resolve to a service, a
    repository, or a search of the application.
-10. **Capabilities** — only `compile_ddd_str_with_actors` validates: each
+10. **Capabilities** — only the actor-aware entries
+    (`compile_ddd_str_with_actors` and
+    `compile_ddd_app_str_with_decisions`) validate: each
     declared capability name must exist in the union of the actor model's
     blocks' capabilities. Plain compiles record the names unvalidated —
     the design dimension is loosely coupled to the policy dimension by
@@ -622,10 +759,11 @@ classes, nor the DTO member typing, which reads the source class.
     reference only to an aggregate's root: for every cross-reference
     (`refers`) feature whose target sits under a containment chain (a
     non-root aggregate member), the referring class must share the target's
-    containment root. Computed over the whole union like the
-    aggregate-derivation rule, and skipped when the verdict would be a
-    guess (the target or source sits under two distinct roots, or under a
-    containment cycle).
+    root. Computed over the **effective** boundary (authored `root`/
+    `aggregate <Root>` over the containment derivation, see
+    [Aggregate derivation](#aggregate-derivation)) and skipped when the
+    verdict would be a guess (an unknown boundary, or a target or source
+    under two distinct roots or a containment cycle).
 14. **scaffold** — a scaffolded entity design must declare a repository:
     `scaffold` stands for Sculptor's generated CRUD operations (which also
     imply the service), and the artifact synthesizes nothing — so the author
@@ -650,7 +788,9 @@ classes, nor the DTO member typing, which reads the source class.
     rule's scope), and enum-typed fields stay legal — an enum without a
     machine is a legitimate modeling choice (the canonical fixture's
     `MediaStatus status` field is the shape).
-17. **Decision links** — only `compile_ddd_str_with_decisions` validates:
+17. **Decision links** — only the decision-aware entries
+    (`compile_ddd_str_with_decisions` and
+    `compile_ddd_app_str_with_decisions`) validate:
     every decision-service reference (an operation's `invokes` name, a
     service's `inject decision` name) must resolve by its **last segment**
     to a decision service declared in the union of the provided `.dmn`
@@ -784,15 +924,17 @@ classes, nor the DTO member typing, which reads the source class.
       cross-module contract.
     - **Built-ins** — a built-in repository operation takes no `throws`; its
       failures are structural, not declared.
-23. **Child operations** (`extend`) — the target class must resolve to a
+23. **Child operations** (`children`) — the target class must resolve to a
     domain class with an **entity design in the same module** that is an
-    aggregate root (a repository-bearing entity — rule 6's root predicate);
-    an unresolved class, a missing design, and a design without a
-    repository are all `E0358 unknown extend target`. The child feature must
+    effective aggregate root (the repository-bearing entity predicate —
+    rule 6); an unresolved class, a missing design, and a design without a
+    repository are all `E0358`. The child feature must
     exist on the target class (the `extends` chain included) and be a
     containment or cross reference (`E0355`); the action must be one of
     `add`, `remove`, `save` (`E0357`), with `add`/`remove` requiring a
-    many-valued feature (`E0356`). A child operation's `when` guard is
+    many-valued feature (`E0356`). The deprecated `extend` block spelling
+    parses to the same declaration: it emits warning `E0387` and the
+    formatter rewrites it to `children`. A child operation's `when` guard is
     typed with the operation's declared parameters in scope **and** the
     child feature's target class as `self` — `line.quantity` reads a
     parameter, a bare `quantity` reads the child's feature, and the root's
@@ -800,6 +942,22 @@ classes, nor the DTO member typing, which reads the source class.
     `condition` and carries no `conditionPaths` (the resolved-path lowering
     belongs to service operations). The lowered operation rides the target
     design's `childOperations` with its `childScope`.
+24. **Invariants** (DD5, issue
+    [#302](https://github.com/yestechgroup/pherolang/issues/302)) —
+    `invariant <expr>;` is legal on an **entity** or
+    **value** design only (a dto is `E0389`), repeated in declaration
+    order. Each expression is typed with the designed class as `self` and
+    must be boolean (`E0388`); stored, inherited, and derived features are
+    in scope, machine states bind as enum-typed names, collection algebra
+    (`map`, `sum`, `size`, `any`, `all`, …) is available, and optional
+    navigation follows R3 — `customer.name` on a `refers Customer[0..1]`
+    is an error until handled. A repository or global read is `E0388` (an
+    invariant reads only the class's own state; cross-aggregate consistency
+    belongs in a process manager or an operation guard), and an empty
+    expression is `E0388` too. With the domain union lowered there is **no
+    deferral**: every invariant is either typed or an error. Each expression
+    lowers verbatim into the sparse `invariants` list; the consumer
+    contract is [above](#consumer-contract).
 
 ## The executable-body posture
 
@@ -1131,14 +1289,58 @@ document shape — is a follow-up, not shipped.
 
 ## Aggregate derivation
 
-The aggregate boundary derives from the domain model's containment graph,
-standing in for Sculptor's `belongsTo`/`!aggregateRoot` markers: a class B
-is *contained* when some class A owns a containment feature (`contains`)
-whose type resolves to B, transitively. An entity design whose class is
-contained by another stereotyped entity's class is a non-root — it may not
-declare a repository. The closure is computed only when every imported
-domain lowered (a failed domain may hide containments, and a wrong
-non-root verdict is worse than none).
+The aggregate boundary is the **effective** boundary: the authored
+`root`/`aggregate <Root>` decision when written, otherwise the containment
+derivation (DD4, issue
+[#301](https://github.com/yestechgroup/pherolang/issues/301)). The verdict
+is root or member-of-a-root, and when it cannot be decided it is **unknown** —
+never a guess. Rules 6 (repository placement) and 13 (reference constraint)
+read this effective boundary, and the artifact records it on every entity
+design (see [Artifact wire format](#artifact-wire-format)).
+
+**Derived.** A class B is *contained* when some class A owns a `contains`
+feature (e.g. `contains B[] children`) whose type resolves to B,
+transitively. The derivation counts containment by another **designed
+entity** only: the topmost designed container is B's root, and a designed
+entity that no other designed entity contains is its own root (the pre-DD4
+behavior). Several unrelated topmost containers, or a containment cycle,
+make the verdict unknown. The closure is computed only when every imported
+domain lowered (a failed domain may hide containments, and a wrong non-root
+verdict is worse than none).
+
+**Authored.** A design header may author the boundary after its flags:
+
+- `root` asserts the class is its own aggregate root. It is legal only for an
+  entity that no other designed entity contains; a contained class is
+  `E0380`.
+- `aggregate <Root>` places the class in `<Root>`'s boundary. It is legal
+  only for an entity, and the root must be an entity design in the same
+  module: no such design (or a non-entity target) is `E0382`, a root from
+  another module is `E0383`, and a root that is itself a member of another
+  aggregate is `E0386`. A contained class may only restate its derived root;
+  naming a different root is `E0381`.
+- A design may author at most one of the two clauses — `root` plus
+  `aggregate <Root>` is contradictory (`E0379`) — and only an entity has an
+  aggregate boundary (`E0384`).
+
+**Unknown.** With no authored clause, an incomplete imported-domain union or
+an ambiguous or cyclic containment graph makes the verdict unknown: the
+compiler warns `E0385` once per affected entity design and leaves
+`isAggregateRoot` absent in the artifact. Rules 6 and 13 never convict an
+unknown boundary, and `pherolang artifact check` refuses an artifact whose
+entity design carries no verdict (unknown is contract-incomplete). An
+authored clause settles the verdict where it is legal, so it is also the
+escape hatch for a domain the compiler cannot fully see.
+
+**Artifact and origin.** A decided entity design carries `isAggregateRoot`; a
+non-root also carries `aggregate { root, origin }`, where `root` is the
+resolved root class and `origin` is `"authored"` when `root`/`aggregate`
+decided the boundary or `"derived"` when containment did. A root omits
+`aggregate`, and non-entity designs carry neither key.
+
+**Children.** The root-side child operations are declared with
+`children <Root> { ... }` (rule 23); the pre-DD4 `extend` spelling is a
+deprecated alias (`E0387`) that the formatter rewrites to `children`.
 
 ## Domain operations vs service operations
 
@@ -1166,13 +1368,14 @@ source's ops — and the escape hatch for behavior is the aggregate-owned
 `op` or a service operation, never a body on a DTO. A body-less `op` on a
 mirror DTO's class is an error too: the DTO *is* the class's shape.
 
-**Child-scoped operations** (`extend`, rule 23) are the root-side slice of
+**Child-scoped operations** (`children`, rule 23) are the root-side slice of
 the same heuristic: `boolean addLine(PayRunLineDraft line) => lines.add;`
 declares, on the root's design, an operation that reaches the aggregate's
 contained child through the root — no outside cross reference to a
 non-root member (rule 13) is needed. The child's own behavior stays a
-domain `op` on the child class; the `extend` operation is the root-owned
-entry point over it, and the aggregate boundary stays intact.
+domain `op` on the child class; the `children` operation is the root-owned
+entry point over it, and the aggregate boundary stays intact. The pre-DD4
+`extend` spelling is a deprecated alias (`E0387`).
 
 ## The lowering contract (issue #143)
 
@@ -1217,8 +1420,9 @@ the gap.
 ## Capabilities and the actor dimension
 
 A service operation's `capability` clause names actor capabilities. Only
-the library entry point `compile_ddd_str_with_actors` validates the names
-against a caller-provided actor-model **slice**; capability names pool
+the actor-aware library entries (`compile_ddd_str_with_actors` and
+`compile_ddd_app_str_with_decisions`) validate the names against a
+caller-provided actor-model **slice**; capability names pool
 across every model, so a host passes all of the application's `.actor`
 artifacts. An empty slice is the plain `compile_ddd_str` behavior (the
 records-unvalidated loose-mapping contract); `capabilityRefs` still records
@@ -1251,8 +1455,8 @@ A capability is granted on a class (`capability X on <Class>`), and the
 class's place in the aggregate machinery decides whether that noun is a
 sound grant. With designs provided, `NounClassification`
 (`crates/phero-driver/src/ddd/graph.rs`) — a pure table over the union model
-and the designs, exactly rule 6's predicate — classifies every resolved
-design class:
+and the designs, using the containment derivation's root predicate —
+classifies every resolved design class:
 
 | verdict | class | a grant on it |
 |---|---|---|
@@ -1334,8 +1538,9 @@ invokes; `inject decision <qualified-name>;` names a decision service the
 whole service injects. Like `capability` and `emits` names, decision
 references are **loosely coupled** at the wire layer: they lower into the
 artifact as their last segment exactly as the resolution universe spells
-them, and a plain `compile_ddd_str` never validates them. Only the library
-entry point `compile_ddd_str_with_decisions` validates the links (rule 17
+them, and a plain `compile_ddd_str` never validates them. Only the
+decision-aware library entries (`compile_ddd_str_with_decisions` and
+`compile_ddd_app_str_with_decisions`) validate the links (rule 17
 above) against a caller-provided `(path, DmnModel)` bucket — the same
 shape the `.uc` import buckets use. Decision services pool across every
 provided model, so a host gathers the sibling `.dmn` artifacts the way it
@@ -1362,32 +1567,44 @@ pherolang fmt --check library.ddd            # canonical formatting gate
 pherolang artifact check library.ddd.json    # validate the artifact's DDD contract
 ```
 
-- Import paths resolve **relative to the `.ddd` file's directory**; each
-  imported `.mox` is read from disk and compiled through the ordinary
-  domain pipeline. A missing import file is a clean error naming the
-  resolved path. An imported domain may itself declare `import schema` and
-  `import sigil` — the CLI provides that content too, so designs target
-  lowered JSON-Schema and Rune types like any other class (see
+- Import paths resolve **relative to the importing file's directory** —
+  the root's and each fragment's. Every imported `.mox` is read from disk and
+  compiled through the ordinary domain pipeline, `.dmn` imports key the
+  decision bucket, and `.ddd` imports gather the fragment closure. A missing
+  import file is a clean error naming the resolved path. An imported domain
+  may itself declare `import schema` and `import sigil` — the CLI provides
+  that content too, so designs target lowered JSON-Schema and Rune types like
+  any other class (see
   [Importing Rune models](LANGUAGE.md#importing-rune-models)).
 - Diagnostics come from every file involved and render grouped per file,
   the way `.actor` compiles render them.
-- `pherolang ir` on a `.ddd` file emits only the design artifact; the domain
-  IR is emitted by running `ir` on the `.mox` files themselves.
+- `pherolang ir` on a `.ddd` root emits only the design artifact; the domain
+  IR is emitted by running `ir` on the `.mox` files themselves. A multi-file
+  application emits one artifact for its root (never one per fragment), and
+  `ir` on a fragment reports the fragment error naming the root to compile.
 - `pherolang fmt` formats `.ddd` files with the canonical layout rules:
   imports hoisted into a tight first section (each ending in `;`), then
-  the `application` block; `base` first, design flags canonicalized to
+  the `application` block (or a fragment's top-level modules); `base` first,
+  design flags canonicalized to
   `scaffold auditable optimisticLocking nonPersistent cache`, search
   members canonicalized to `entity text filters sort document ranking
   analyzer pagination capability` (clause contents keep their source
   order; document expressions are re-emitted verbatim), and every
-  operation/`inject` line ending in `;`. An `extend <Class>` header
-  expands like a service/design header, and each child operation is one
+  operation/`inject` line ending in `;`. A design's `root`/`aggregate
+  <Root>` boundary stays on its header line, and each invariant sits on its
+  own line one indent deeper, before the repository/machine block, with its
+  expression re-emitted verbatim. A `children <Class>` header
+  expands like a service/design header — the deprecated `extend` spelling is
+  rewritten to `children` — and each child operation is one
   canonical line — `boolean addLine(PayRunLineDraft line) => lines.add;`,
   with an optional leading `protected` and the trailing `when (...)` in
   the service-operation order.
-- Directory batch mode (`pherolang check <dir>`) picks `.ddd` files up like
-  every other surface: each design in the directory compiles independently,
-  imports resolved relative to it.
+- Directory batch mode (`pherolang check <dir>`) compiles each `.ddd`
+  **root** with its imported fragments, imports resolved relative to the
+  importing file, and prints `OK` for the root and for every fragment. A
+  fragment is an input, never checked standalone; `pherolang build` emits
+  one artifact per root. A fragment with no root is an error naming that
+  fact.
 
 ---
 
@@ -1404,10 +1621,10 @@ rationale for each divergence is in [Deliberate divergences](#deliberate-diverge
 | BasicType | `.mox` datatype (referenced in signatures, never designed) | a datatype wraps one platform type; a multi-field value is a class designed `value` |
 | Repository | `repository` block on an entity design | six built-in operations (`findById`, `findAll`, `findByExample`, `findByKeys`, `save`, `delete`) plus declared signatures |
 | Service (+ injected `=>` delegation) | `service` with `inject` lines and `name => target.operation` operations | a cross-module service → repository/search delegation is an error; targets carry a resolved identity (`targetRef`) |
-| `scaffold` / `auditable` / `optimisticLocking` / `!aggregateRoot`-style negations | design flags (entity-only; `auditable`/`optimisticLocking` default on for entities, `!flag` opts out) | `!immutable` is absent (D3) — not an opt-out but a refused spelling; the artifact stores the effective flag values, never the raw spelling |
-| `belongsTo` / `!aggregateRoot` | derived from the domain model's containment graph (see aggregate derivation) | not authorable: derivation only (DD4 adds an authored override) |
-| Module | `module` label grouping services and designs | one application per file; the module is a design label, not a deployment boundary (DD8) |
-| child-scoped aggregate operations | `extend <Root> { ... }` block (issue [#179](https://github.com/yestechgroup/pherolang/issues/179)) | `extend` is not class inheritance (naming under review in DD4) |
+| `scaffold` / `auditable` / `optimisticLocking` / `cache` | design flags (entity-only where noted; `auditable`/`optimisticLocking` default on for entities, `!flag` opts out) | `!immutable` is absent (D3) — not an opt-out but a refused spelling; there is no `!aggregateRoot` flag — the boundary is authored with `root`/`aggregate <Root>` or derived (DD4); the artifact stores the effective flag values, never the raw spelling |
+| `belongsTo` / `!aggregateRoot` | authored with `root` / `aggregate <Root>`, or derived from the domain model's containment graph (see [aggregate derivation](#aggregate-derivation)) | both authorable and derived (DD4): an authored clause wins over the derivation; an unknown verdict warns `E0385` and the artifact carries no `isAggregateRoot` |
+| Module | `module` label grouping services and designs; an application may span a root file and its imported fragments (DD8) | a root owns the application name, `base`, and application-scoped errors; fragments contribute modules only (they may reopen a module); the module is a design label, not a deployment boundary, and duplicate members stay application-wide errors |
+| child-scoped aggregate operations | `children <Root> { ... }` block (issue [#179](https://github.com/yestechgroup/pherolang/issues/179)) | not class inheritance; the pre-DD4 `extend` spelling parses as a deprecated alias (`E0387`) and formats to `children` |
 | DTO | `dto` design in three forms: mirror (`dto User`), projection (`dto BookSummary from Book { ... }`), standalone (`dto CreateBookRequest { ... }`) | real parity, shaped differently: a projection selects (`name;`), renames a path (`name = path;`), or derives (`name = expr;`, source class as `self`); no identity, aggregate membership, repository, machine, invariants, or behavior; `input`/`output` is derived from the member set, and an output boundary is not a parameter; a standalone DTO has no domain class |
 | `findByQuery` / `findByCondition` finders | `search` projection (intent only: text fields with boosts, filters, sorts, ranking, pagination, document projections) — the backend chooses the engine (Postgres FTS, Tantivy, OpenSearch, ...) | no query language and no engine-specific ordering; the engine is the consumer's choice |
 | generated `GET /things/search?q=` endpoints | consumer concern — the artifact is backend-independent | — |
@@ -1418,7 +1635,7 @@ rationale for each divergence is in [Deliberate divergences](#deliberate-diverge
 | Traits | interface `extends` in the `.mox` domain model (signature-sharing half) | absent as a composition feature |
 | Gap classes | body-less `.mox` `op` as the hand-written hook | absent: whole-file generation, no generated-base/subclass split |
 | Composite natural keys | several `id` features on one class | no composite-key declaration; the `id` set is the key |
-| Date validation (`past` / `future`), custom validators | schema constraints (`unique` precedent) | absent: no runtime validator hook; constraints are schema-only |
+| Date validation (`past` / `future`), custom validators | entity/value `invariant <expr>;` state predicates (DD5, issue [#302](https://github.com/yestechgroup/pherolang/issues/302)) | `past`/`future` schema date validation stays absent; an invariant is a typed boolean predicate the consumer checks at construction, aggregate save, and transitions — not a runtime validator hook or a schema keyword |
 
 ## Deliberate divergences
 
@@ -1465,10 +1682,15 @@ rationale.
 - **Fetch / cascade** — JPA persistence knobs with aggregate-derived
   defaults in Sculptor's generator; the artifact is backend-independent,
   so persistence behavior belongs to the backend that owns the storage.
-- **Date validation (`past` / `future`) and custom validators** — runtime
-  validation semantics; Phero Lang's constraint system is deliberately
-  schema-only (the `unique` precedent), and there is no runtime validator
-  hook to hang them on.
+- **Date validation (`past` / `future`) and custom validators** — Sculptor's
+  date validators and validator methods are runtime hooks. Phero Lang's
+  constraint system stays schema-only for data shape (the `unique`
+  precedent), and a state predicate that must hold is an `invariant` (DD5,
+  issue [#302](https://github.com/yestechgroup/pherolang/issues/302)): a
+  typed boolean expression the consumer checks at value construction,
+  aggregate save, and transitions. That is a consistency rule on the model,
+  not a validator callback and not a schema keyword; cross-aggregate
+  consistency remains outside an invariant.
 - **Gap classes** — Sculptor's generated-base/handwritten-subclass split is
   a generation strategy; Phero Lang generates whole files, and a body-less
   `op` stays an abstract hook implemented by hand in target code — the
@@ -1628,7 +1850,8 @@ byte-compares the compiled artifact, the CLI fmt gate enforces the
 canonical formatting, and `pherolang artifact check` validates the artifact
 against the DDD contract — resolved companions, aligned parallel lists,
 search references, stereotype/flag legality, value `semantics`, DTO
-`dtoShape`s and `DddTypeRef` references, and provenance — not just its wire
+`dtoShape`s and `DddTypeRef` references, aggregate verdicts and memberships,
+invariants, and provenance — not just its wire
 shape. Regenerate goldens with
 `PHERO_UPDATE_FIXTURES=1 cargo test --workspace`.
 
@@ -1650,13 +1873,30 @@ are pinned by `crates/phero-driver/tests/ddd_transitions.rs` and
 The child-operation pair `childops.mox`/`childops.ddd` (formatter-canonical)
 is the pherolang#179 fixture: a `PayRun` aggregate root with a contained
 `PayRunLine[] lines` collection and a single-valued `PayRunNote` child, a
-`dto PayRunLineDraft` parameter type, and an `extend PayRun` block with
+`dto PayRunLineDraft` parameter type, and a `children PayRun` block with
 `add`/`remove`/`save` child operations (one guarded by a parameter field and
 one by a child feature). Its committed golden `childops.ddd.json` carries
 the design's `childOperations` with each operation's `childScope`, and the
 mirror DTO's `dtoShape` (its source class, `input` direction, and selected
 members); the acceptance rules are pinned by
 `crates/phero-driver/tests/ddd_child_ops.rs`.
+
+The aggregate/invariant pair `aggregates.mox`/`aggregates.ddd`
+(formatter-canonical) is the DD4/DD5 fixture (issues pherolang#301/#302): an
+authored `root`, a contained class restating its derived root with
+`aggregate Order`, an aggregate invariant over collection algebra, and a
+value invariant. Its committed golden `aggregates.ddd.json` carries
+`isAggregateRoot`, the authored `aggregate` membership, and the ordered
+`invariants`; the acceptance rules are pinned by
+`crates/phero-driver/tests/ddd/aggregate_override.rs`,
+`crates/phero-driver/tests/ddd/invariants.rs`, and the golden test in
+`crates/phero-driver/tests/ddd_golden.rs`.
+
+The multi-file behavior (DD8, issue pherolang#305) — fragment merging,
+module reopening, fragment-tagged diagnostics, a root imported as a
+fragment, and a fragment refused standalone — is pinned by
+`crates/phero-driver/tests/ddd_app.rs` and the CLI's root/fragment matrix in
+`crates/phero-cli/tests/cli/ddd.rs`.
 
 The DTO forms, member typing, direction derivation, name rules, and the DTO
 error surface (duplicate/unknown/mistyped members, entity members, name
@@ -1694,12 +1934,13 @@ exclusions — is pinned by `crates/phero-driver/tests/ddd/errors.rs` and
 `crates/phero-driver/tests/ddd_bodies.rs`.
 
 The `examples/` side ships `support.ddd` (entity/value/dto designs,
-searches, capabilities validated against `support.actor` through
-`compile_ddd_str_with_actors`) and `orders.ddd` (the aggregate-derivation
-rule over `ecommerce.mox`), byte-pinned against `examples/artifacts/` by
+searches, aggregate and value invariants, capabilities validated against
+`support.actor` through `compile_ddd_str_with_actors`) and `orders.ddd` (the
+aggregate-derivation rule over `ecommerce.mox` plus a `children Order`
+block), byte-pinned against `examples/artifacts/` by
 `crates/phero-driver/tests/examples_artifacts.rs`. Its `RefundDecision` is
-the strict-value example: `decisionId` is stored state, not an `id`, and
-the design carries the `semantics` block. Note that
+the strict-value example: `decisionId` is stored state, not an `id`, the
+design carries the `semantics` block and a value invariant. Note that
 `examples/library/library.mox` itself is *not* designable: its `Writer.books`
 cross reference escapes the Library aggregate (rule 13).
 

@@ -5,7 +5,7 @@
   "to": "feature:app.mox#nz.example.graph.Invoice.amount",
   "results": [
     {
-      "application": "app.actor",
+      "application": "GraphDesk",
       "reachable": false,
       "starts": [
         "capability:app.actor#App.RaiseRefund",

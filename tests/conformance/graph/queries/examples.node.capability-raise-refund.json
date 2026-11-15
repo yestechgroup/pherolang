@@ -9,7 +9,7 @@
       "kind": "capability",
       "name": "Support.RaiseRefund",
       "file": "support/support.actor",
-      "application": "support/cli.ifml"
+      "application": "SupportDesk"
     }
   ],
   "edges": {

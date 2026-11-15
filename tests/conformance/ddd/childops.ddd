@@ -15,7 +15,7 @@ application Payroll {
             delete;
         }
         dto PayRunLineDraft
-        extend PayRun {
+        children PayRun {
             boolean addLine(PayRunLineDraft line) => lines.add;
             boolean removeLine(String lineId) => lines.remove;
             boolean recalculateLine(PayRunLineDraft line) => lines.save when (line.quantity > 0 && line.unitCost > 0);

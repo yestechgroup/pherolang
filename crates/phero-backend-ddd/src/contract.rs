@@ -95,7 +95,106 @@ pub fn check_contract(model: &DddModel) -> Vec<Violation> {
     let registry = Registry::build(model);
     validate_error_vocabulary(model, &registry, &mut violations);
     validate_modules(model, application_name, &registry, &mut violations);
+    validate_aggregate_and_invariants(model, &mut violations);
     violations
+}
+
+/// The aggregate-boundary contract (DD4, pherolang#301) and the invariant
+/// contract (DD5, pherolang#302), checked from the artifact alone:
+///
+/// - every entity design carries `isAggregateRoot`; an absent verdict means
+///   the compile could not derive it and the artifact is not contract-complete;
+/// - roots carry no `aggregate`; members carry `aggregate { root, origin }`
+///   and the root names an entity design marked as a root in this artifact;
+/// - non-entity designs carry neither key;
+/// - invariants are non-empty and only entity/value designs carry them.
+fn validate_aggregate_and_invariants(model: &DddModel, violations: &mut Vec<Violation>) {
+    let mut roots: BTreeSet<(String, String)> = BTreeSet::new();
+    for module in &model.modules {
+        for design in &module.designs {
+            if design.stereotype == Stereotype::Entity && design.is_aggregate_root == Some(true) {
+                if let Some(TypeRef::Class { package, name }) = &design.type_ref {
+                    roots.insert((package.clone(), name.clone()));
+                }
+            }
+        }
+    }
+    for (module_index, module) in model.modules.iter().enumerate() {
+        for (design_index, design) in module.designs.iter().enumerate() {
+            let path = format!("modules[{module_index}].designs[{design_index}]");
+            match design.stereotype {
+                Stereotype::Entity => match design.is_aggregate_root {
+                    None => violations.push(Violation::new(
+                        format!("{path}.isAggregateRoot"),
+                        "an entity design must carry its effective aggregate verdict; \
+                         absent means the compile could not derive it (an incomplete \
+                         imported domain union)",
+                    )),
+                    Some(true) => {
+                        if design.aggregate.is_some() {
+                            violations.push(Violation::new(
+                                format!("{path}.aggregate"),
+                                "an aggregate root must not carry an \"aggregate\" membership",
+                            ));
+                        }
+                    }
+                    Some(false) => match &design.aggregate {
+                        None => violations.push(Violation::new(
+                            format!("{path}.aggregate"),
+                            "a non-root entity design must carry its resolved aggregate \
+                             membership",
+                        )),
+                        Some(membership) => {
+                            let TypeRef::Class { package, name } = &membership.root else {
+                                violations.push(Violation::new(
+                                    format!("{path}.aggregate.root"),
+                                    "an aggregate root must be a resolved class reference",
+                                ));
+                                continue;
+                            };
+                            let key = (package.clone(), name.clone());
+                            if design.type_ref.as_ref() == Some(&membership.root) {
+                                violations.push(Violation::new(
+                                    format!("{path}.aggregate.root"),
+                                    "an aggregate member cannot be its own root",
+                                ));
+                            } else if !roots.contains(&key) {
+                                violations.push(Violation::new(
+                                    format!("{path}.aggregate.root"),
+                                    format!(
+                                        "aggregate root '{package}.{name}' is not an entity \
+                                         design marked as a root in this artifact"
+                                    ),
+                                ));
+                            }
+                        }
+                    },
+                },
+                Stereotype::Value | Stereotype::Dto => {
+                    if design.is_aggregate_root.is_some() || design.aggregate.is_some() {
+                        violations.push(Violation::new(
+                            &path,
+                            "only an entity design may carry an aggregate boundary",
+                        ));
+                    }
+                }
+            }
+            if design.stereotype == Stereotype::Dto && !design.invariants.is_empty() {
+                violations.push(Violation::new(
+                    format!("{path}.invariants"),
+                    "a dto design cannot carry invariants",
+                ));
+            }
+            for (index, invariant) in design.invariants.iter().enumerate() {
+                if invariant.expression.trim().is_empty() {
+                    violations.push(Violation::new(
+                        format!("{path}.invariants[{index}].expression"),
+                        "an invariant expression must be non-empty",
+                    ));
+                }
+            }
+        }
+    }
 }
 
 /// The standard prelude's fixed error names (DD7). The prelude is implicit

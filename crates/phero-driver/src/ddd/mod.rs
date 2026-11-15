@@ -31,6 +31,7 @@ mod designs;
 mod dtos;
 mod errors;
 mod graph;
+mod invariants;
 mod links;
 mod machines;
 mod searches;
@@ -50,7 +51,10 @@ use dtos::{
     record_dto_param, DesignPrep,
 };
 use errors::{check_entity_payloads, collect_errors};
-use graph::{rule_13_aggregate_references, rule_6_aggregate_boundary};
+use graph::{
+    apply_aggregate_boundaries, resolve_aggregate_boundaries, rule_13_aggregate_references,
+    rule_6_aggregate_boundary,
+};
 use links::fill_resolved_links;
 use machines::{collect_machine_scopes, lower_design_machine, MachineScopes};
 use searches::{lower_module_searches, rule_11_bind_searches};
@@ -106,6 +110,12 @@ struct EntityDesign {
     package: String,
     class: String,
     module: String,
+    /// The authored boundary clause, when written (DD4).
+    authored: Option<dsl::DddBoundaryDecl>,
+    /// The resolved target of an authored `aggregate <Root>` clause.
+    resolved_aggregate: Option<(String, String)>,
+    /// The design declaration's span, for boundary warnings.
+    span: Span,
 }
 /// One `value` design awaiting the deferred strict value-semantics pass
 /// (DD2, pherolang#299 — R-V1/R-V2/R-V3 and the `abstract value`
@@ -437,18 +447,21 @@ pub(crate) fn compile_ddd_file(
     ));
 
     // Stage 7 — the deferred validations, in emission order: rules
-    // 11-binding, 6, 13, 9, 8, 10, 17, then the strict value-semantics pass
-    // (DD2, pherolang#299). Each reads the completed registries.
+    // 11-binding, the DD4 boundary resolution, 6, 13, 9, 8, 10, 17, then the
+    // strict value-semantics pass (DD2, pherolang#299). Each reads the
+    // completed registries.
     local.extend(rule_11_bind_searches(
         &registries.search_bindings,
         &registries.entity_designs,
     ));
+    let (boundaries, boundary_diagnostics) =
+        resolve_aggregate_boundaries(&registries.entity_designs, union.as_ref(), domains);
+    local.extend(boundary_diagnostics);
     local.extend(rule_6_aggregate_boundary(
         &registries.root_candidates,
-        &registries.entity_designs,
-        union.as_ref(),
+        &boundaries,
     ));
-    local.extend(rule_13_aggregate_references(union.as_ref()));
+    local.extend(rule_13_aggregate_references(union.as_ref(), &boundaries));
     local.extend(rule_9_resolve_injects(
         &registries.inject_checks,
         &registries.services,
@@ -479,6 +492,11 @@ pub(crate) fn compile_ddd_file(
         union.as_ref(),
         &application_name,
     ));
+
+    // Stage 7.5 — the effective aggregate boundary lands on every entity
+    // design (DD4, pherolang#301): `isAggregateRoot` plus, for members, the
+    // resolved root and its origin. Unknown stays absent, never false.
+    apply_aggregate_boundaries(&mut model, &boundaries);
 
     // Stage 8 — the resolved-identity companions (DD1, pherolang#298): every
     // application-wide reference gains its resolved companion now that the
@@ -554,6 +572,11 @@ fn check_design_imports(
     let imports = ast.map(|file| file.imports.as_slice()).unwrap_or_default();
     let mut import_diagnostics = Vec::new();
     for import in imports {
+        if import.path.ends_with(".ddd") {
+            // A design fragment is provided as a pre-parsed source by
+            // `compile_ddd_app_str`; it is never a domain (DD8).
+            continue;
+        }
         if import.path.ends_with(".dmn") {
             // Provision is checked only when the host actually provided the
             // decisions bucket (an empty bucket is the plain compile's

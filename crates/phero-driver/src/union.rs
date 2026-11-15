@@ -79,7 +79,7 @@ pub(crate) fn lower_domains(
         // models, which the host provides as pre-compiled `DmnModel`s (the
         // decisions bucket). A plain compile simply ignores them; treating
         // them as `.mox` sources would mis-parse the artifact.
-        if import.path.ends_with(".dmn") {
+        if import.path.ends_with(".dmn") || import.path.ends_with(".ddd") {
             continue;
         }
         if lookups.iter().any(|(path, _)| *path == import.path) {

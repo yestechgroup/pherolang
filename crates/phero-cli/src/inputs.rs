@@ -600,25 +600,99 @@ pub(crate) fn read_actor_pair_in(
     )
 }
 
-/// A `.ddd` design file plus the domain sources it imports, ready for
-/// [`phero_driver::compile_ddd_str`].
-pub(crate) type DddDesignPair = DomainPair;
+/// A `.ddd` design root plus the domain sources and `.ddd` fragments it
+/// imports, ready for [`phero_driver::compile_ddd_app_str_with_decisions`]
+/// (DD8, issue pherolang#305).
+pub(crate) struct DddDesignPair {
+    /// The root file and its `.mox` imports.
+    pub(crate) pair: DomainPair,
+    /// The transitive `.ddd` fragment closure, `(resolved path, source)`.
+    pub(crate) fragments: Vec<(String, String)>,
+}
 
-/// Reads a `.ddd` file plus every domain it imports.
+impl DddDesignPair {
+    /// The source text of the root, an imported domain, or a fragment.
+    pub(crate) fn source_of(&self, path: &str) -> Option<&str> {
+        self.pair.source_of(path).or_else(|| {
+            self.fragments
+                .iter()
+                .find(|(name, _)| name == path)
+                .map(|(_, source)| source.as_str())
+        })
+    }
+}
+
+/// Reads a `.ddd` file plus every domain and `.ddd` fragment it imports.
 pub(crate) fn read_ddd_design(
     file: &Path,
-    project: Option<&mut Project>,
+    mut project: Option<&mut Project>,
 ) -> anyhow::Result<DddDesignPair> {
-    read_domain_pair(
-        file,
-        |source| {
-            phero_syntax::parse_ddd(source)
-                .ast
-                .map(|ast| ast.imports.into_iter().map(|import| import.path).collect())
-                .unwrap_or_default()
+    let source = std::fs::read_to_string(file)
+        .map_err(|error| anyhow::anyhow!("cannot read {}: {error}", file.display()))?;
+    let path = file.display().to_string();
+    let mut read_error: Option<anyhow::Error> = None;
+    let mut fetch = |resolved: &str| -> Option<String> {
+        let fetched = match project.as_deref_mut() {
+            Some(project) => project.fetch(resolved),
+            None => std::fs::read_to_string(resolved),
+        };
+        match fetched {
+            Ok(text) => Some(text),
+            Err(error) => {
+                if read_error.is_none() {
+                    read_error = Some(anyhow::anyhow!(
+                        "cannot read imported file {resolved} (imported by {path}): {error}"
+                    ));
+                }
+                None
+            }
+        }
+    };
+    let import_paths = |source: &str| -> Vec<String> {
+        phero_syntax::parse_ddd(source)
+            .ast
+            .map(|ast| {
+                ast.imports
+                    .into_iter()
+                    .map(|import| import.path)
+                    .filter(|import| !import.ends_with(".ddd") && !import.ends_with(".dmn"))
+                    .collect()
+            })
+            .unwrap_or_default()
+    };
+    let domains = gather_domain_sources(&path, &source, import_paths, &mut fetch);
+    let fragment_gather = phero_driver::project::gather_ddd_fragments(&path, &source, &mut fetch);
+    if let Some(error) = read_error {
+        return Err(error);
+    }
+    if let Some(missing) = fragment_gather.missing.first() {
+        anyhow::bail!("imported design fragment \"{missing}\" was not provided");
+    }
+    if let Some(cycle) = fragment_gather.cycles.first() {
+        anyhow::bail!("design import cycle through {cycle}");
+    }
+    let schemas = collect_schema_imports(&domains)?;
+    let sigil = collect_sigil_imports(&domains)?;
+    let import_strings = phero_syntax::parse_ddd(&source)
+        .ast
+        .map(|ast| {
+            ast.imports
+                .into_iter()
+                .map(|import| import.path)
+                .collect::<Vec<_>>()
+        })
+        .unwrap_or_default();
+    Ok(DddDesignPair {
+        pair: DomainPair {
+            path,
+            import_keys: render_keys(file, &import_strings, &domains),
+            source,
+            domains,
+            schemas,
+            sigil,
         },
-        project,
-    )
+        fragments: fragment_gather.fragments,
+    })
 }
 
 /// An `.evt` contract file plus the domain sources it imports, ready for

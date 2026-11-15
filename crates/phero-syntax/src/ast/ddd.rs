@@ -4,17 +4,21 @@ use super::*;
 
 // --- .ddd design DSL ---------------------------------------------------------
 
-/// The root node of a parsed `.ddd` source: `import` declarations followed by
-/// exactly one `application` declaration. The application is mandatory per the
-/// grammar; a source without one still parses (with an error) to
-/// `application: None` so recovery never loses the imports. An `import` after
-/// the application is a syntax error and is dropped from the AST.
+/// The root node of a parsed `.ddd` source. A **root** file declares imports
+/// followed by one `application` declaration; a **fragment** declares imports
+/// followed by top-level `module` blocks and no application (DD8, issue
+/// pherolang#305). The two forms are mutually exclusive. An `import` after
+/// the application or after a top-level module is a syntax error and is
+/// dropped from the AST.
 #[derive(Debug, Clone, PartialEq)]
 pub struct DddFile {
     /// The `import` declarations in source order.
     pub imports: Vec<Import>,
-    /// The `application` declaration, when one was parsed.
+    /// The `application` declaration of a root file, when one was parsed.
     pub application: Option<DddApplication>,
+    /// The top-level module blocks of a **fragment** file, in source order.
+    /// Empty for a root file.
+    pub fragments: Vec<DddModule>,
 }
 
 /// The `application <name> { ... }` declaration of a `.ddd` file: the
@@ -337,7 +341,10 @@ pub struct DddExtend {
     pub class: Name,
     /// The child operations in source order.
     pub operations: Vec<DddChildOp>,
-    /// Span of the whole block, `extend` keyword included.
+    /// `true` when the deprecated `extend` spelling was written; the driver
+    /// warns and the formatter rewrites it to `children` (DD4).
+    pub deprecated: bool,
+    /// Span of the whole block, the block keyword included.
     pub span: Span,
 }
 
@@ -464,11 +471,32 @@ impl DddFlags {
     }
 }
 
+/// The authored aggregate-boundary declaration of a design (DD4, issue
+/// pherolang#301): `root` asserts the class is an aggregate root,
+/// `aggregate <Root>` places it in the named root's boundary.
+#[derive(Debug, Clone, PartialEq)]
+pub enum DddBoundary {
+    /// `root` — an authored aggregate root.
+    Root,
+    /// `aggregate <Root>` — an authored membership in another root.
+    Aggregate(QualifiedName),
+}
+
+/// One authored boundary clause with its span, so the driver can diagnose a
+/// contradictory or illegal declaration at the exact word.
+#[derive(Debug, Clone, PartialEq)]
+pub struct DddBoundaryDecl {
+    /// The authored boundary kind.
+    pub kind: DddBoundary,
+    /// Span of the whole clause (`root` or `aggregate <Root>`).
+    pub span: Span,
+}
+
 /// A design declaration of a [`DddModule`]: the DDD decisions for one
 /// referenced `.mox` class — `("abstract")? stereotype name flag*
-/// dto_suffix? ("repository" ...)? ("machine" ...)?` (the members are
-/// ordered by the grammar: the DTO suffix first, then the repository, then
-/// the machine).
+/// boundary_decl? invariant_decl* dto_suffix? ("repository" ...)?
+/// ("machine" ...)?` (the members are ordered by the grammar: the boundary
+/// and invariants first, then the DTO suffix, the repository, the machine).
 ///
 /// [`DddDesign::class`] is the **declaration name**. For an entity, value,
 /// or mirror (`dto` with neither `from` nor a member block) it is the
@@ -489,6 +517,13 @@ pub struct DddDesign {
     pub is_abstract: bool,
     /// The design flags, in canonical field order regardless of source order.
     pub flags: DddFlags,
+    /// The authored aggregate boundary (DD4, issue pherolang#301), when
+    /// written.
+    pub boundary: Option<DddBoundaryDecl>,
+    /// The `invariant <raw_expr>;` clauses (DD5, issue pherolang#302), in
+    /// declaration order. Each span covers the raw expression between
+    /// `invariant` and `;`; the driver slices and types it.
+    pub invariants: Vec<Span>,
     /// The `from <source>` class of a **projection** DTO — the designed
     /// class the projection reads — or `None` for a standalone DTO, a
     /// mirror DTO, and every non-DTO design.

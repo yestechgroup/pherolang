@@ -3,7 +3,7 @@
   "query": "deadCapabilities",
   "results": [
     {
-      "application": "app.actor",
+      "application": "GraphDesk",
       "capability": "capability:app.actor#App.ApproveRefund",
       "name": "App.ApproveRefund",
       "status": "alive",
@@ -13,13 +13,13 @@
       ]
     },
     {
-      "application": "app.actor",
+      "application": "GraphDesk",
       "capability": "capability:app.actor#App.EscalateRefund",
       "name": "App.EscalateRefund",
       "status": "latent"
     },
     {
-      "application": "app.actor",
+      "application": "GraphDesk",
       "capability": "capability:app.actor#App.RaiseRefund",
       "name": "App.RaiseRefund",
       "status": "alive",
@@ -29,7 +29,7 @@
       ]
     },
     {
-      "application": "app.actor",
+      "application": "GraphDesk",
       "capability": "capability:app.actor#App.ReadTicket",
       "name": "App.ReadTicket",
       "status": "alive",
@@ -40,7 +40,7 @@
       ]
     },
     {
-      "application": "app.actor",
+      "application": "GraphDesk",
       "capability": "capability:app.actor#App.ResolveTicket",
       "name": "App.ResolveTicket",
       "status": "dead",
@@ -49,7 +49,7 @@
       ]
     },
     {
-      "application": "app.actor",
+      "application": "GraphDesk",
       "capability": "capability:app.actor#App.UpdateTicket",
       "name": "App.UpdateTicket",
       "status": "alive",

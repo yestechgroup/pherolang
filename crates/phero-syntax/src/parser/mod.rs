@@ -223,7 +223,7 @@
 //!
 //! ```text
 //! ddd_file          := ddd_file_item*
-//! ddd_file_item     := ddd_import | application_decl
+//! ddd_file_item     := ddd_import | application_decl | module_decl
 //! ddd_import        := "import" string ";"?
 //! application_decl  := "application" name "{" application_item* "}"
 //! application_item  := base_decl | error_decl | module_decl
@@ -231,7 +231,7 @@
 //! error_decl        := "error" name "(" (param ("," param)*)? ")" ";"
 //! module_decl       := "module" name "{" module_member* "}"
 //! module_member     := error_decl | service_decl | design_decl
-//!                    | search_decl | extend_decl
+//!                    | search_decl | children_decl
 //! service_decl      := "service" name "{" service_member* "}"
 //! service_member    := service_op | inject_decl
 //! service_op        := "protected"? signature capability_clause?
@@ -258,10 +258,13 @@
 //! transition_clause := "transition" name ("." name)?
 //! throws_clause     := "throws" name ("," name)*
 //! design_decl       := "abstract"? stereotype name design_flag*
-//!                      dto_suffix? repository_decl? machine_decl?
+//!                      boundary_decl? invariant_decl* dto_suffix?
+//!                      repository_decl? machine_decl?
 //! stereotype        := "entity" | "value" | "dto"
 //! design_flag       := "!"? ("scaffold" | "auditable" | "optimisticLocking"
 //!                               | "nonPersistent" | "cache")
+//! boundary_decl     := "root" | "aggregate" qualified_name
+//! invariant_decl    := "invariant" raw_expr ";"
 //! dto_suffix        := "from" qualified_name dto_projection_block
 //!                    | dto_standalone_block
 //! dto_projection_block := "{" (name ";" | name "=" raw_expr ";")* "}"
@@ -304,7 +307,7 @@
 //! search_field      := qualified_name ("boost" int)? ("analyzer" string)?
 //! document_entry    := name "=" raw_expr ";"
 //! pagination_member := "limit" int | "max" int | "cursor"
-//! extend_decl       := "extend" name "{" child_op* "}"
+//! children_decl     := ("children" | "extend") name "{" child_op* "}"
 //! child_op          := "protected"? signature "=>" name "." name
 //!                      guard_clause? ";"
 //! ```
@@ -313,8 +316,14 @@
 //!   `readonly` precedent), escapable with `^`; the tables in `crate::ddd`
 //!   are the keyword authority, and the stereotype/flag/builtin/search-member
 //!   alternatives follow the table orders (the formatter's canonical order).
-//! * Imports must precede the `application` declaration and there is exactly
-//!   one application per file (violations are reported errors); the
+//! * Imports must precede the `application`/top-level `module` declarations.
+//!   A `.ddd` file is a **root** (imports then exactly one `application
+//!   <name> { ... }`, which owns the application name, `base`, and
+//!   application-scoped errors) or a **fragment** (imports then top-level
+//!   `module` blocks, with no `application`) — the two forms are mutually
+//!   exclusive, mixing them or importing after either is a named parse error,
+//!   and a fragment contributes its modules to the root that imports it
+//!   (DD8, issue pherolang#305). The
 //!   delegated-operation `qualified_name` is `target.operation`, split at its
 //!   last segment (a bare name recovers with an error).
 //! * Declared repository operations take no `capability`, `invokes`, or
@@ -359,6 +368,14 @@
 //!   `name;`/`name = ...` shorthand inside a standalone block are named
 //!   errors). Duplicate member names parse cleanly; the driver validates
 //!   them.
+//! * A design header may carry the authored aggregate boundary (DD4, issue
+//!   pherolang#301) after its flags: `root` or `aggregate <Root>`, at most
+//!   one (a second clause recovers with E0379). The boundary is entity-only;
+//!   the driver validates the target and resolves authored-over-derived. The
+//!   invariant clauses (DD5, issue pherolang#302) follow the boundary:
+//!   `invariant <raw_expr>;` repeated, captured verbatim through the
+//!   depth-0 `;` (the `document_entry` convention), lowered in declaration
+//!   order and typed by the driver with the designed class as `self`.
 //! * `design_flag`s and the single-member search lines (`entity`, `ranking`,
 //!   `analyzer`, `pagination`) are idempotent on repeat — the first
 //!   declaration wins; repeated `text`/`filters`/`sort`/`document`/
@@ -399,14 +416,17 @@
 //!   guard/op state references, the bound feature and its enum) and derives
 //!   the workflow actions (`via` names; bare arrows get a documented
 //!   derivation) — see `docs/DDD.md`.
-//! * An `extend_decl` (issue pherolang#179) declares child-scoped operations
+//! * A `children_decl` (issue pherolang#179; `children` since DD4, issue
+//!   pherolang#301) declares child-scoped operations
 //!   over an aggregate root's contained children: the `signature` is the
 //!   service-operation production, and the dotted pair names the root's
 //!   child feature and the action (`add`, `remove`, `save` — the closed
 //!   vocabulary the driver validates against the feature's multiplicity).
 //!   Blocks may repeat for one class and merge in source order; the target
-//!   must be an aggregate root designed in the same module (the driver's
-//!   `E0358`). A `child_op`'s `when` guard types against the operation's
+//!   must be an effective aggregate root designed in the same module (the
+//!   driver's `E0358`). The deprecated `extend` spelling parses as an alias
+//!   of `children`; the driver warns E0387 and the formatter rewrites it. A
+//!   `child_op`'s `when` guard types against the operation's
 //!   parameters and the child feature's target class as `self`.
 //! * Executable operation bodies (issue pherolang#178) are the `statement_body`
 //!   forms: a service operation writes `Type? name(params) clauses? =>

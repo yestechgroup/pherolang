@@ -64,7 +64,7 @@ mod usecases;
 
 pub use actors::actors_index;
 pub use cmmn::cmmn_index;
-pub use ddd::ddd_index;
+pub use ddd::{ddd_index, ddd_index_with_application};
 pub use deploy::deploy_index;
 pub use dmn::dmn_index;
 pub use evt::evt_index;

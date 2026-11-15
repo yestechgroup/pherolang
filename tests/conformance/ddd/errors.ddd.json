@@ -213,6 +213,7 @@
             "auditable": true,
             "optimisticLocking": true
           },
+          "isAggregateRoot": true,
           "repository": {
             "name": "PaymentRepository",
             "operations": [

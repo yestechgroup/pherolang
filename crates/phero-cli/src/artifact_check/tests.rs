@@ -1258,7 +1258,8 @@ const GOOD_DTO_ARTIFACT: &str = r#"{
             "type": "class",
             "value": { "package": "nz.example.library", "name": "Book" }
           },
-          "stereotype": "entity"
+          "stereotype": "entity",
+          "isAggregateRoot": true
         },
         {
           "class": "Book",

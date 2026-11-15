@@ -67,6 +67,7 @@
             "auditable": true,
             "optimisticLocking": true
           },
+          "isAggregateRoot": true,
           "repository": {
             "name": "PayRunRepository",
             "operations": [

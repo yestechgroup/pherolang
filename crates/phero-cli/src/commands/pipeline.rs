@@ -13,8 +13,9 @@
 use std::path::{Path, PathBuf};
 
 use phero_driver::{
-    compile_actors_str_with_designs, compile_cmmn_str, compile_ddd_str_with_decisions,
-    compile_deploy_str, compile_dmn_str, compile_evt_str, compile_usecase_str, SurfaceKind,
+    compile_actors_str_with_designs, compile_cmmn_str, compile_ddd_app_str_with_decisions,
+    compile_deploy_str, compile_dmn_str, compile_evt_str, compile_usecase_str, DddFragment,
+    SurfaceKind,
 };
 
 use crate::inputs::{
@@ -281,11 +282,20 @@ fn compile_ddd(file: &Path, ctx: &mut CompileContext<'_>) -> Compiled {
         .project
         .as_deref_mut()
         .map_or_else(Vec::new, |project| project.sibling_decisions(file));
-    let compilation = compile_ddd_str_with_decisions(
-        &design.path,
-        &design.source,
-        &design.domains,
-        &design.imports(),
+    let fragments: Vec<DddFragment> = design
+        .fragments
+        .iter()
+        .map(|(path, source)| DddFragment {
+            path: path.clone(),
+            source: source.clone(),
+        })
+        .collect();
+    let compilation = compile_ddd_app_str_with_decisions(
+        &design.pair.path,
+        &design.pair.source,
+        &fragments,
+        &design.pair.domains,
+        &design.pair.imports(),
         &actors,
         &decisions,
     );
@@ -295,8 +305,37 @@ fn compile_ddd(file: &Path, ctx: &mut CompileContext<'_>) -> Compiled {
     let Some(model) = compilation.model else {
         return Ok(None);
     };
-    let imports = import_paths(&design.domains);
-    outcome(ctx, file, Artifact::Design(model), design.path, imports)
+    let mut imports = import_paths(&design.pair.domains);
+    imports.extend(design.fragments.iter().map(|(path, _)| path.clone()));
+    imports.sort();
+    imports.dedup();
+    let mut ok = vec![design.pair.path.clone()];
+    ok.extend(design.fragments.iter().map(|(path, _)| path.clone()));
+    outcome_many(ctx, file, Artifact::Design(model), ok, imports)
+}
+
+/// [`outcome`] with several compiling source paths (a design root plus its
+/// fragments): `check` prints one `OK` line per source.
+fn outcome_many(
+    ctx: &mut CompileContext<'_>,
+    file: &Path,
+    artifact: Artifact,
+    ok: Vec<String>,
+    imports: Vec<String>,
+) -> Compiled {
+    ctx.store(file, &artifact);
+    let json = if ctx.serialize {
+        artifact.to_json_pretty()?
+    } else {
+        String::new()
+    };
+    Ok(Some(SurfaceOutcome {
+        ok,
+        json,
+        warnings: 0,
+        artifact: Some(artifact),
+        imports,
+    }))
 }
 
 /// The `.actor` pipeline: grant coverage resolves against the

@@ -331,3 +331,29 @@ async fn a_document_uri_without_a_directory_publishes_nothing() {
         "a document with no directory snapshot publishes nothing: {publish:?}"
     );
 }
+
+#[tokio::test]
+async fn a_design_fragment_publishes_its_diagnostics_through_the_root() {
+    let scratch = Scratch::new("ddd-fragment");
+    scratch.write(
+        "demo.mox",
+        "package demo\n\nclass Order { String orderNo }\n",
+    );
+    scratch.write(
+        "app.ddd",
+        concat!(
+            "import \"demo.mox\"\n",
+            "import \"sales.ddd\"\n",
+            "application Shop {\n",
+            "    base demo\n",
+            "    module core { entity Order }\n",
+            "}\n",
+        ),
+    );
+    scratch.write("sales.ddd", "module sales {\n    entity Missing\n}\n");
+
+    let (mut service, mut socket) = initialized_service().await;
+    let publish = open_file(&mut service, &mut socket, &scratch, "sales.ddd").await;
+
+    diagnostic_with(&publish, "unknown type 'Missing'");
+}

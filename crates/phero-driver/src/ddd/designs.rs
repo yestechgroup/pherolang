@@ -5,9 +5,10 @@
 //! pherolang#299); the rules that keep the properties honest are deferred to
 //! [`super::values`].
 
-use phero_diagnostics::ddd::{E_DTO_ENTITY_ONLY, E_DTO_OPERATION};
+use phero_diagnostics::ddd::{E_AGGREGATE_NON_ENTITY, E_DTO_ENTITY_ONLY, E_DTO_OPERATION};
 use phero_ir::ddd::{
-    BuiltinRepositoryOp, DddParam, Design, DesignFlags, Repository, RepositoryOperation, Stereotype,
+    BuiltinRepositoryOp, DddParam, Design, DesignFlags, Invariant, Repository, RepositoryOperation,
+    Stereotype,
 };
 use phero_syntax::ast as dsl;
 
@@ -122,6 +123,39 @@ pub(crate) fn lower_module_designs(
         // Rule 4 — flag/stereotype compatibility.
         check_flags(design, &mut local);
 
+        // DD4 (pherolang#301): the authored aggregate boundary is entity-only;
+        // an `aggregate <Root>` target resolves like every design reference.
+        let mut resolved_aggregate = None;
+        if let Some(boundary) = &design.boundary {
+            if design.stereotype != dsl::DddStereotype::Entity {
+                local.push(
+                    Diagnostic::error(
+                        format!(
+                            "{E_AGGREGATE_NON_ENTITY} design '{}' declares an aggregate boundary, \
+                             but is a {}; only an entity has an aggregate boundary",
+                            design.class.text,
+                            stereotype_label(design.stereotype)
+                        ),
+                        Some(boundary.span),
+                    )
+                    .with_help("remove the boundary clause, or design the class as an `entity`"),
+                );
+            } else if let dsl::DddBoundary::Aggregate(target) = &boundary.kind {
+                resolved_aggregate = lower::resolve_ddd_class(
+                    &qualified_type_ref(target),
+                    packages,
+                    base,
+                    &format!(
+                        "aggregate root '{}' of '{}' must target a class declared in the \
+                         imported domains",
+                        target.full_name(),
+                        design.class.text
+                    ),
+                    &mut local,
+                );
+            }
+        }
+
         // Rule 12 — the value contract.
         local.extend(rule_12_value_contract(design, resolved.as_ref(), union));
 
@@ -170,6 +204,24 @@ pub(crate) fn lower_module_designs(
         // DD2 (pherolang#299): every value design — and only a value
         // design — lowers the fixed strict semantics block.
         design_out.semantics = value_semantics(design);
+
+        // DD5 (pherolang#302): invariants lower verbatim, in declaration
+        // order. The type-check pass is deferred to `invariants.rs`.
+        design_out.invariants = design
+            .invariants
+            .iter()
+            .map(|span| {
+                Invariant::new(design_source.get(span.start..span.end).unwrap_or("").trim())
+            })
+            .collect();
+        super::invariants::check_design_invariants(
+            design,
+            design_source,
+            resolved.as_ref(),
+            expr_context,
+            machines,
+            &mut local,
+        );
 
         // DD3 (pherolang#300): every dto design lowers its boundary shape.
         if let Some(form) = form {
@@ -246,6 +298,9 @@ pub(crate) fn lower_module_designs(
                     package: package.clone(),
                     class: class.clone(),
                     module: module.name.text.clone(),
+                    authored: design.boundary.clone(),
+                    resolved_aggregate: resolved_aggregate.clone(),
+                    span: design.span,
                 });
                 if design_out.repository.is_some() {
                     registries.root_candidates.push(RootCandidate {

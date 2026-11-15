@@ -73,12 +73,13 @@ pub use compilation::{
     ActorCompilation, CmmnCompilation, Compilation, Compiled, DddCompilation, DeployCompilation,
     DmnCompilation, EventCompilation, MultiCompilation, UseCaseCompilation,
 };
+pub use entry::ddd::DddFragment;
 pub use entry::{
     compile, compile_actors, compile_actors_str, compile_actors_str_with_designs, compile_cmmn,
-    compile_cmmn_str, compile_ddd, compile_ddd_str, compile_ddd_str_with_actors,
-    compile_ddd_str_with_decisions, compile_deploy_str, compile_dmn, compile_dmn_str, compile_evt,
-    compile_evt_str, compile_files, compile_str, compile_usecase, compile_usecase_str,
-    compile_with_imports,
+    compile_cmmn_str, compile_ddd, compile_ddd_app_str, compile_ddd_app_str_with_decisions,
+    compile_ddd_str, compile_ddd_str_with_actors, compile_ddd_str_with_decisions,
+    compile_deploy_str, compile_dmn, compile_dmn_str, compile_evt, compile_evt_str, compile_files,
+    compile_str, compile_usecase, compile_usecase_str, compile_with_imports,
 };
 pub use imports::{DomainImports, SchemaImports, SigilImports};
 pub use session::{
