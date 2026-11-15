@@ -2,7 +2,7 @@ use std::collections::BTreeMap;
 
 use serde::{Deserialize, Serialize};
 
-use crate::ddd::{CapabilityRef, DecisionRef, EventRef, TargetRef};
+use crate::ddd::{CapabilityRef, DecisionRef, ErrorRef, EventRef, TargetRef};
 use crate::wire::is_false;
 use crate::{Multiplicity, TypeRef};
 
@@ -280,6 +280,13 @@ pub struct ServiceOperation {
     /// existing goldens stay byte-identical).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub child_scope: Option<ChildRef>,
+    /// The resolved error vocabulary the operation declares it can raise
+    /// (DD7, issue pherolang#304): the `throws` clause's entries, resolved
+    /// to their declaration scope. Explicit and complete — a body raise must
+    /// be declared here, and a delegation's set is a superset of its
+    /// target's. Additive; an operation with no clause omits the key.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub throws: Vec<ErrorRef>,
     /// Checked executable bodies, keyed by target name (the
     /// [`crate::Operation::bodies`] discipline; issue pherolang#178). The
     /// `"stmt"` target holds the canonical JSON of the operation's
@@ -318,6 +325,7 @@ impl ServiceOperation {
             condition_paths: Vec::new(),
             transition: None,
             child_scope: None,
+            throws: Vec::new(),
             bodies: BTreeMap::new(),
             body_receiver: None,
         }
@@ -363,6 +371,13 @@ impl ServiceOperation {
     /// Chainable setter for the child-scoped target (issue pherolang#179).
     pub fn with_child_scope(mut self, child_scope: Option<ChildRef>) -> Self {
         self.child_scope = child_scope;
+        self
+    }
+
+    /// Chainable setter for the resolved error vocabulary (DD7, issue
+    /// pherolang#304).
+    pub fn with_throws(mut self, throws: Vec<ErrorRef>) -> Self {
+        self.throws = throws;
         self
     }
 
