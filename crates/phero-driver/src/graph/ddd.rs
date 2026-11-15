@@ -15,7 +15,7 @@
 //!   and a machine's transitions bind the workflow operations that trigger
 //!   them (`triggers`).
 
-use phero_ir::ddd::{DddModel, Design, Module, ServiceOperation, StateMachine};
+use phero_ir::ddd::{DddModel, Design, ErrorRef, Module, ServiceOperation, StateMachine};
 use phero_ir::graph::{kinds, GraphEdge};
 
 use super::resolve::Symbols;
@@ -55,6 +55,14 @@ pub(super) fn nodes(builder: &mut Builder, file: &FileRef, model: &DddModel) {
         &file.application,
         &application,
     );
+    for error in &model.errors {
+        builder.add_named(
+            kinds::ERROR,
+            &file.display,
+            &file.application,
+            &ids::error_name(&application, &error.name),
+        );
+    }
     for module in &model.modules {
         let module_name = ids::module_name(&application, &module.name);
         builder.add_named(
@@ -63,6 +71,14 @@ pub(super) fn nodes(builder: &mut Builder, file: &FileRef, model: &DddModel) {
             &file.application,
             &module_name,
         );
+        for error in &module.errors {
+            builder.add_named(
+                kinds::ERROR,
+                &file.display,
+                &file.application,
+                &ids::error_name(&module_name, &error.name),
+            );
+        }
         for service in &module.services {
             let service_name = ids::service_name(&module_name, &service.name);
             builder.add_named(
@@ -168,6 +184,18 @@ pub(super) fn edges(builder: &mut Builder, file: &FileRef, model: &DddModel) {
             .application
             .as_ref()
             .and_then(|application| application.base.clone());
+        for error in &model.errors {
+            let error_id = ids::node(
+                kinds::ERROR,
+                display,
+                &ids::error_name(&application_name, &error.name),
+            );
+            edges.push(GraphEdge::new(
+                error_id,
+                application_id.clone(),
+                kinds::MEMBER_OF,
+            ));
+        }
         for module in &model.modules {
             module_edges(
                 &mut edges,
@@ -206,6 +234,18 @@ fn module_edges(
         application_id,
         kinds::MEMBER_OF,
     ));
+    for error in &module.errors {
+        let error_id = ids::node(
+            kinds::ERROR,
+            display,
+            &ids::error_name(&module_name, &error.name),
+        );
+        edges.push(GraphEdge::new(
+            error_id,
+            module_id.clone(),
+            kinds::MEMBER_OF,
+        ));
+    }
 
     // Service operations, kept for the trigger pass at the end of the module.
     let mut operations: Vec<(String, String, &ServiceOperation)> = Vec::new();
@@ -225,7 +265,14 @@ fn module_edges(
                 service_id.clone(),
                 kinds::MEMBER_OF,
             ));
-            operation_edges(edges, symbols, application, &operation_id, operation);
+            operation_edges(
+                edges,
+                symbols,
+                application,
+                application_name,
+                &operation_id,
+                operation,
+            );
             operations.push((operation.name.clone(), operation_id, operation));
         }
         for dependency in &service.dependencies {
@@ -316,6 +363,14 @@ fn module_edges(
                         );
                     }
                 }
+                throw_edges(
+                    edges,
+                    symbols,
+                    application,
+                    application_name,
+                    &operation_id,
+                    &operation.throws,
+                );
             }
         }
         // The designed class's local name: the node table's `<Class>` segment
@@ -356,7 +411,14 @@ fn module_edges(
                 module_id.clone(),
                 kinds::MEMBER_OF,
             ));
-            operation_edges(edges, symbols, application, &operation_id, operation);
+            operation_edges(
+                edges,
+                symbols,
+                application,
+                application_name,
+                &operation_id,
+                operation,
+            );
         }
     }
 
@@ -501,6 +563,7 @@ fn operation_edges(
     edges: &mut Vec<GraphEdge>,
     symbols: &Symbols,
     application: &str,
+    application_name: &str,
     operation_id: &str,
     operation: &ServiceOperation,
 ) {
@@ -553,6 +616,14 @@ fn operation_edges(
             &[("via", "invokes"), ("pin", pin.as_deref().unwrap_or(""))],
         );
     }
+    throw_edges(
+        edges,
+        symbols,
+        application,
+        application_name,
+        operation_id,
+        &operation.throws,
+    );
     if let Some(delegation) = &operation.delegation {
         let suffix = ids::qualify(&[&delegation.target, &delegation.operation]);
         let mut targets = symbols.by_suffix(kinds::REPOSITORY_OPERATION, &suffix, application);
@@ -568,6 +639,42 @@ fn operation_edges(
             targets,
             &[("operation", &delegation.operation)],
         );
+    }
+}
+
+/// Emits an operation's `throws` edges (DD7): each resolved reference names
+/// a declared error node. A prelude reference is implicit — the prelude is
+/// never declared in the artifact and has no node — so it emits no edge
+/// (consumers know its fixed shape). The reference's scope and module make
+/// the target name deterministic; resolution still goes through the symbol
+/// table so a hand-edited artifact cannot invent an edge.
+fn throw_edges(
+    edges: &mut Vec<GraphEdge>,
+    symbols: &Symbols,
+    application: &str,
+    application_name: &str,
+    operation_id: &str,
+    throws: &[ErrorRef],
+) {
+    for reference in throws {
+        let prefix = match reference.scope {
+            phero_ir::ddd::ErrorScope::Application => application_name.to_string(),
+            phero_ir::ddd::ErrorScope::Module => {
+                let Some(module) = &reference.module else {
+                    continue;
+                };
+                ids::module_name(application_name, module)
+            }
+            phero_ir::ddd::ErrorScope::Prelude => continue,
+        };
+        let name = ids::error_name(&prefix, &reference.name);
+        if let Some(target) = symbols.one(kinds::ERROR, &name, application) {
+            edges.push(GraphEdge::new(
+                operation_id,
+                target.id.clone(),
+                kinds::THROWS,
+            ));
+        }
     }
 }
 

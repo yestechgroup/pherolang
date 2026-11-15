@@ -151,7 +151,15 @@ pub(crate) fn attach_ddd_docs(
     let line_of = |byte: usize| line_of(byte, &starts);
     let docs = collect_docs(comments, source);
     if let Some(application) = &mut file.application {
+        for error in &mut application.errors {
+            let start_line = line_of(error.span.start);
+            error.doc = doc_run_above(&docs, start_line);
+        }
         for module in &mut application.modules {
+            for error in &mut module.errors {
+                let start_line = line_of(error.span.start);
+                error.doc = doc_run_above(&docs, start_line);
+            }
             for service in &mut module.services {
                 let start_line = line_of(service.span.start);
                 service.doc = doc_run_above(&docs, start_line);

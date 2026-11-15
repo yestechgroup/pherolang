@@ -226,22 +226,23 @@
 //! ddd_file_item     := ddd_import | application_decl
 //! ddd_import        := "import" string ";"?
 //! application_decl  := "application" name "{" application_item* "}"
-//! application_item  := base_decl | module_decl
+//! application_item  := base_decl | error_decl | module_decl
 //! base_decl         := "base" qualified_name
+//! error_decl        := "error" name "(" (param ("," param)*)? ")" ";"
 //! module_decl       := "module" name "{" module_member* "}"
-//! module_member     := service_decl | design_decl | search_decl
-//!                    | extend_decl
+//! module_member     := error_decl | service_decl | design_decl
+//!                    | search_decl | extend_decl
 //! service_decl      := "service" name "{" service_member* "}"
 //! service_member    := service_op | inject_decl
 //! service_op        := "protected"? signature capability_clause?
 //!                      invokes_clause? emits_clause? transition_clause?
-//!                      guard_clause? ";"
+//!                      throws_clause? guard_clause? ";"
 //!                    | "protected"? body_signature capability_clause?
 //!                      invokes_clause? emits_clause? transition_clause?
-//!                      guard_clause? "=>" name statement_body
+//!                      throws_clause? guard_clause? "=>" name statement_body
 //!                    | "protected"? name "=>" qualified_name
 //!                      capability_clause? invokes_clause? emits_clause?
-//!                      transition_clause? guard_clause? ";"
+//!                      transition_clause? throws_clause? guard_clause? ";"
 //! inject_decl       := "inject" name ";"
 //!                    | "inject" "decision" qualified_name version_pin? ";"
 //! signature         := type_ref multiplicity? name
@@ -255,6 +256,7 @@
 //! version_pin       := "version" ("compatible" | string)
 //! emits_clause      := "emits" name ("," name)*
 //! transition_clause := "transition" name ("." name)?
+//! throws_clause     := "throws" name ("," name)*
 //! design_decl       := "abstract"? stereotype name design_flag*
 //!                      dto_suffix? repository_decl? machine_decl?
 //! stereotype        := "entity" | "value" | "dto"
@@ -266,8 +268,9 @@
 //! dto_standalone_block := "{" (type_ref multiplicity? name ";")* "}"
 //! repository_decl   := "repository" name "{" repository_op* "}"
 //! repository_op     := "protected"? (repository_builtin ";"
-//!                    | body_signature guard_clause? statement_body
-//!                    | signature guard_clause? ";")
+//!                    | body_signature throws_clause? guard_clause?
+//!                      statement_body
+//!                    | signature throws_clause? guard_clause? ";")
 //! repository_builtin := "findById" | "findAll" | "findByExample"
 //!                    | "findByKeys" | "save" | "delete"
 //! statement_body    := "{" statement* "}"
@@ -318,7 +321,7 @@
 //!   `emits` clause (the wire artifact carries none, so accepting one
 //!   would silently drop data); a delegated op may be named `save` etc. —
 //!   contextual words. A service operation's clauses are fixed in the
-//!   canonical order `capability? invokes? emits? transition? when?`:
+//!   canonical order `capability? invokes? emits? transition? throws? when?`:
 //!   `invokes` names
 //!   the decision services the operation invokes (the `.dmn` dimension,
 //!   loosely coupled to the decision surface), `emits` names the events
@@ -364,7 +367,19 @@
 //!   the opt-out from a flag that defaults on — whether a `!flag` is
 //!   *meaningful* (and each flag's default) is the driver's rule 4.
 //! * `base` must be the application's first member; a duplicate or late
-//!   `base` is an error.
+//!   `base` is an error. An `error_decl` (DD7, issue pherolang#304) declares
+//!   one error of the application's vocabulary with its typed payload: at
+//!   application scope the declarations sit between `base` and the modules
+//!   (`base? error* module*`), at module scope they lead the module body
+//!   (`error* module_member*`) — a late declaration is a named parse error
+//!   and is dropped from the AST, so the canonical order is the only order.
+//!   `error` is contextual (the body raise word reused at declaration
+//!   position). The `throws_clause` on a service or repository operation
+//!   names that vocabulary; it is a bare-name list and sits between the
+//!   service operation's `transition` binding and its `when` guard (a
+//!   repository operation's: directly after the signature). A builtin
+//!   repository operation takes no clause (a named parse error — its
+//!   failures are structural).
 //! * `document_entry`'s `raw_expr` spans balanced `()`/`[]`/`{}` nesting up
 //!   to the terminating `;` (string literals are single tokens), and is
 //!   stored verbatim; parsing/typing it is the driver's job. The entry is
@@ -399,9 +414,15 @@
 //!   `self`), a declared repository operation writes `Type? name(params)
 //!   when? { ... }`. A builtin repository operation takes no body (the
 //!   parser refuses it by name), and a qualified body receiver is a syntax
-//!   error. The subset is closed — `let`, `let … else error …`, assignment,
-//!   `guard … else error …`, `if`/`else`, `return`; any other statement is a
-//!   named parse error. Each `raw_expr` is a token run ending at the
+//!   error. The subset is closed and orchestration-only — `let`, `let … else
+//!   error …`, feature-path assignment, `guard … else error …`, `if`/`else`,
+//!   `return`; loops (`for`/`while`), `try`/`catch`, compound assignment,
+//!   collection mutation (`push`/`remove`/`clear`), and bare expression
+//!   statements are **named** refusals (each says where the construct
+//!   belongs: a domain `op`, or a bound `let`), and any other statement is
+//!   the generic named error. A raise names a declared error (the driver
+//!   supplies the vocabulary; the syntax keeps the written name and raw
+//!   argument spans). Each `raw_expr` is a token run ending at the
 //!   depth-0 terminator (`;`, an `else`, an `if` block's `{`, or a raise
 //!   argument's `,`/`)`), tracking `()`/`[]`/`{}` nesting and consuming a
 //!   whole expression-level `if cond { … } else { … }` atom; `let`, `guard`,

@@ -141,6 +141,14 @@ pub(crate) fn dto_name(module_name: &str, dto: &str) -> String {
     qualify(&[module_name, dto])
 }
 
+/// The node name of a declared error (DD7, pherolang#304):
+/// `<App>.<Error>` at application scope, `<App>.<module>.<Error>` at module
+/// scope. The `prefix` is the application's or the module's node name; the
+/// prelude has no node at all, so no caller passes it here.
+pub(crate) fn error_name(prefix: &str, error: &str) -> String {
+    qualify(&[prefix, error])
+}
+
 /// The node name of a designed class's state machine:
 /// `<App>.<module>.<Class>` (the class segment is the authored class name's
 /// last `.`-separated segment).

@@ -4,6 +4,7 @@
 mod support;
 
 mod dto_semantics;
+mod errors;
 mod happy_path;
 mod repository_breadth;
 mod resolution_semantics;

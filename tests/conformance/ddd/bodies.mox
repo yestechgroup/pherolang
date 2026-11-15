@@ -11,6 +11,7 @@ class PayRun {
     PayRunStatus status
     int total
     contains PayRunLine[] lines opposite payRun
+    op boolean submit()
 }
 
 class PayRunLine {

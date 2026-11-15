@@ -133,6 +133,8 @@ pub enum ReferenceContext {
     MachineField,
     /// A machine's state enum type.
     StateEnum,
+    /// An operation's `throws <Error>` name (DD7).
+    Throws,
 
     // --- `.evt` -----------------------------------------------------------
     /// A subscription's `consumer <Component>`.
@@ -256,6 +258,7 @@ impl ReferenceContext {
             Self::Transition => "transition",
             Self::MachineField => "machine-field",
             Self::StateEnum => "state-enum",
+            Self::Throws => "throws",
             Self::Consumer => "consumer",
             Self::Subscribes => "subscribes",
             Self::Publishes => "publishes",

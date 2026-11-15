@@ -35,6 +35,7 @@ impl<'src> Formatter<'src> {
                 self.take_name();
                 self.scan_body(BodyKind::DddModule);
             }
+            Some(Token::Ident(ddd::ERROR)) => self.scan_ddd_error_decl(),
             _ => {
                 // Junk always consumes the front token first (the stop set
                 // contains identifiers, and the body loop cannot make
@@ -56,6 +57,7 @@ impl<'src> Formatter<'src> {
 
     pub(crate) fn scan_ddd_module_item(&mut self) {
         match self.peek_tok() {
+            Some(Token::Ident(ddd::ERROR)) => self.scan_ddd_error_decl(),
             Some(Token::Ident(ddd::SERVICE)) => {
                 self.advance();
                 self.take_name();
@@ -164,6 +166,17 @@ impl<'src> Formatter<'src> {
         }
     }
 
+    /// One `error <Name>(<field> (, <field>)*);` declaration of an
+    /// application or module body (DD7, issue pherolang#304): the
+    /// declaration keyword, the name, the parenthesized payload fields (the
+    /// service-operation parameter layout), and the terminating `;`.
+    pub(crate) fn scan_ddd_error_decl(&mut self) {
+        self.advance(); // the `error` keyword
+        self.take_name();
+        self.scan_ddd_params();
+        self.take_if(|token| matches!(token, Token::Other(';')));
+    }
+
     /// One member of a `machine` body: an `initial <State>;` line, a
     /// `terminal <State>;` line, or a `<From> -> <To> [via <Trigger>]
     /// [when (...)] ;` transition (the guard's parens re-emit verbatim, the
@@ -251,6 +264,7 @@ impl<'src> Formatter<'src> {
                 self.scan_ddd_invokes();
                 self.scan_ddd_emits();
                 self.scan_ddd_transition();
+                self.scan_ddd_throws();
                 if self.take_if(|token| matches!(token, Token::When)) {
                     self.scan_raw_parens();
                 }
@@ -370,6 +384,23 @@ impl<'src> Formatter<'src> {
         self.scan_qname();
     }
 
+    /// Consumes and emits an optional `throws <Error> (, <Error>)*` clause,
+    /// kept on the operation's line: the canonical position between the
+    /// `transition` binding and the `when` guard (service operations) or
+    /// between the signature and the `when` guard (repository operations) —
+    /// the parser enforces that order, so re-emitting in scan order is the
+    /// canonical order (DD7, issue pherolang#304). `throws` is a contextual
+    /// word, so the scan matches the [`ddd::THROWS`] identifier.
+    pub(crate) fn scan_ddd_throws(&mut self) {
+        if !self.take_if(|token| matches!(token, Token::Ident(ddd::THROWS))) {
+            return;
+        }
+        self.take_name();
+        while self.take_if(|token| matches!(token, Token::Comma)) {
+            self.take_name();
+        }
+    }
+
     /// Like [`Formatter::scan_params`], but for `.ddd` parameters, which may
     /// carry a multiplicity between the type and the name.
     pub(crate) fn scan_ddd_params(&mut self) {
@@ -421,6 +452,7 @@ impl<'src> Formatter<'src> {
                 self.scan_multiplicity();
                 self.take_name();
                 self.scan_ddd_params();
+                self.scan_ddd_throws();
                 if self.take_if(|token| matches!(token, Token::When)) {
                     self.scan_raw_parens();
                 }

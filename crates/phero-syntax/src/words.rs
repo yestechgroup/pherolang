@@ -171,6 +171,7 @@ pub const DDD_CONTEXTUAL: &[&str] = &[
     "filters",
     "sort",
     "document",
+    "throws",
     "let",
     "guard",
     "else",

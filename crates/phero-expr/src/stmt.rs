@@ -6,7 +6,11 @@
 //! guard/alias/`set` shape, while [`StmtBody`] is the closed procedural
 //! subset design operations need — `let`, `let … else error …`,
 //! `assign`, `guard … else error …`, `if`, and `return`, with every failure
-//! path raising one of a closed set of error variants ([`BodyRaise`]).
+//! path raising a declared error ([`BodyRaise`]) — the caller supplies the
+//! raised vocabulary ([`RaiseSignature`]) and, when it wants the subset
+//! enforced, the operation's `throws` set. The body is orchestration-only:
+//! one primary aggregate, feature-path assignment, and calls to the
+//! aggregate's own `op`s (DD7, issue pherolang#304).
 //!
 //! Expression slots are **phero-expr source text**, the same discipline as the
 //! Rune body: phero-ir never depends on phero-expr, so the driver serializes a
@@ -29,9 +33,18 @@
 //!   read-only); the remaining segments navigate class features
 //!   (supertypes included), and the navigated slot unifies exactly with the
 //!   assigned expression — no implicit conversions.
-//! - **guard** conditions are `boolean`; a raise's `variant` is exactly
-//!   `NotFound` (two arguments) or `Conflict` (one argument), and every
-//!   argument types as a scalar.
+//! - **guard** conditions are `boolean`; a raise names one of the
+//!   [`RaiseSignature`]s the caller provides (the operation's declared error
+//!   vocabulary plus the standard prelude, whose `NotFound(resource, key)`
+//!   and `Conflict(detail)` payloads are strings), its arguments type-check
+//!   exactly against the declared payload (arity included), and — when the
+//!   caller supplies the operation's `throws` set — every raised name must
+//!   be declared there (explicit and complete, never inferred).
+//! - **orchestration only**: the body orchestrates one aggregate; it never
+//!   implements algorithms. A whole-local reassignment (`x = …`) is refused
+//!   (assignment targets an aggregate feature path), and a non-primary
+//!   receiver may not run `findById`/`findAll` (a body binds one primary
+//!   repository), so one body never loads a second aggregate.
 //! - **flow**: when the operation declares an output, every successful path
 //!   must `return` — a `guard`/`let … else` failure is an *error* exit whose
 //!   success continues, and an `if` exits only when both branches do.
@@ -112,13 +125,15 @@ pub enum Stmt {
     },
 }
 
-/// A raised error: one declared failure variant plus its argument
-/// expressions (phero-expr source text). The v1 variant set is closed:
-/// `NotFound` with two arguments and `Conflict` with one.
+/// A raised error: one declared error name plus its argument expressions
+/// (phero-expr source text). The vocabulary is the caller's
+/// [`RaiseSignature`] list — never hardcoded here; the standard prelude's
+/// `NotFound(resource, key)` and `Conflict(detail)` come from
+/// [`RaiseSignature::prelude`].
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct BodyRaise {
-    /// The error variant name (`NotFound` or `Conflict`).
+    /// The error name (`NotFound`, `PaymentDeclined`, …).
     pub variant: String,
     /// The argument expressions, in written order; omitted when empty.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
@@ -138,6 +153,63 @@ pub struct StmtReceiver<'a> {
     pub package: &'a str,
     /// The synthetic repository class's name in [`DomainTypes`].
     pub class: &'a str,
+    /// `true` for the operation's primary repository (`self`): the one
+    /// aggregate the body orchestrates. Loading through any other receiver
+    /// (`findById`/`findAll`) is a cross-aggregate load and refused.
+    pub is_primary: bool,
+}
+
+/// One declared error a body may raise (DD7, issue pherolang#304): its name
+/// and typed payload fields, in declaration order. The driver builds one per
+/// declared error in scope plus [`RaiseSignature::prelude`]'s two standard
+/// signatures; the raise itself carries only the name and its argument
+/// source text (phero-expr does not depend on the IR).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RaiseSignature {
+    /// The error name (`PaymentDeclined`, `NotFound`, …).
+    pub name: String,
+    /// The payload fields, in declaration order.
+    pub fields: Vec<OperationParam>,
+}
+
+impl RaiseSignature {
+    /// Creates a raise signature from its name and payload fields.
+    pub fn new(name: impl Into<String>, fields: Vec<OperationParam>) -> Self {
+        Self {
+            name: name.into(),
+            fields,
+        }
+    }
+
+    /// The standard prelude's fixed signatures: `NotFound(resource: string,
+    /// key: string)` and `Conflict(detail: string)`. Always available, never
+    /// shadowable, and a prelude raise still has to appear in `throws`.
+    pub fn prelude() -> Vec<Self> {
+        let string = || phero_ir::TypeRef::Primitive(phero_ir::PrimitiveType::String);
+        let field = |name: &str| OperationParam {
+            name: name.to_string(),
+            type_: string(),
+            multiplicity: None,
+        };
+        vec![
+            Self::new("NotFound", vec![field("resource"), field("key")]),
+            Self::new("Conflict", vec![field("detail")]),
+        ]
+    }
+
+    /// The declaration rendered for an error message:
+    /// `NotFound(resource: string, key: string)`.
+    fn describe(&self) -> String {
+        format!(
+            "{}({})",
+            self.name,
+            self.fields
+                .iter()
+                .map(|field| format!("{}: {}", field.name, Ty::from_type_ref(&field.type_)))
+                .collect::<Vec<_>>()
+                .join(", ")
+        )
+    }
 }
 
 /// Everything one body is checked against.
@@ -153,18 +225,36 @@ struct StmtCx<'a> {
     params: Vec<String>,
     /// Receiver names (assignment roots are rejected).
     receivers: Vec<String>,
+    /// The non-primary receivers: `findById`/`findAll` through one is a
+    /// cross-aggregate load. The class keys catch an alias
+    /// (`let other = AuditRepository; other.findById(…)`), the names the
+    /// direct call.
+    secondary_receivers: Vec<String>,
+    secondary_classes: Vec<Ty>,
+    primary_classes: Vec<Ty>,
+    /// The declared error vocabulary a raise may name, prelude included.
+    raises: &'a [RaiseSignature],
+    /// The operation's declared `throws` set; `None` disables the subset
+    /// check (the crate's own focused tests), `Some(&[])` means no raise is
+    /// allowed.
+    throws: Option<&'a [&'a str]>,
 }
 
 /// Types a statement body against `context`: `params` are the operation's
 /// parameters (lifted per the parameter rules), `output` the declared output
-/// slot (absent for a void operation), and `receivers` the class-typed
-/// bindings the caller registered synthetically. Every error is reported per
-/// slot, in statement order.
+/// slot (absent for a void operation), `receivers` the class-typed bindings
+/// the caller registered synthetically (the first primary), `raises` the
+/// declared error vocabulary (prelude included), and `throws` the
+/// operation's declared set — `None` skips the subset check, `Some(&[])`
+/// allows no raise at all. Every error is reported per slot, in statement
+/// order.
 pub fn check_stmt_body(
     context: &DomainTypes,
     params: &[OperationParam],
     output: Option<BodyOutput<'_>>,
     receivers: &[StmtReceiver<'_>],
+    raises: &[RaiseSignature],
+    throws: Option<&[&str]>,
     body: &StmtBody,
 ) -> Result<(), Vec<BodyError>> {
     let output_ty = output.map(|output| result_ty(output.type_, output.multiplicity));
@@ -192,6 +282,23 @@ pub fn check_stmt_body(
             .iter()
             .map(|receiver| receiver.name.to_string())
             .collect(),
+        secondary_receivers: receivers
+            .iter()
+            .filter(|receiver| !receiver.is_primary)
+            .map(|receiver| receiver.name.to_string())
+            .collect(),
+        secondary_classes: receivers
+            .iter()
+            .filter(|receiver| !receiver.is_primary)
+            .map(|receiver| Ty::class(receiver.package, receiver.class))
+            .collect(),
+        primary_classes: receivers
+            .iter()
+            .filter(|receiver| receiver.is_primary)
+            .map(|receiver| Ty::class(receiver.package, receiver.class))
+            .collect(),
+        raises,
+        throws,
     };
 
     let mut errors = Vec::new();
@@ -407,6 +514,17 @@ impl StmtCx<'_> {
             }
         };
 
+        if rest.is_empty() {
+            errors.push(BodyError {
+                slot,
+                message: format!(
+                    "cannot reassign the local '{root}': the body is orchestration-only and \
+                     assigns an aggregate feature path (`{root}.<feature> = …`); move the \
+                     computation into a domain `op`"
+                ),
+            });
+            return;
+        }
         let slot_ty = match self.navigate(base, rest, &slot, errors) {
             Some(ty) => ty,
             None => return,
@@ -423,8 +541,10 @@ impl StmtCx<'_> {
         }
     }
 
-    /// Validates one raise: the closed v1 variant set with its arity, and a
-    /// scalar argument type for each argument expression.
+    /// Validates one raise against the declared vocabulary: the name
+    /// resolves, the operation's `throws` set contains it (when a set was
+    /// supplied), and every argument types exactly against the declared
+    /// payload field.
     fn check_raise(
         &self,
         scope: &[(String, Ty)],
@@ -432,42 +552,127 @@ impl StmtCx<'_> {
         slot: &str,
         errors: &mut Vec<BodyError>,
     ) {
-        let expected = match raise.variant.as_str() {
-            "NotFound" => 2,
-            "Conflict" => 1,
-            other => {
-                errors.push(BodyError {
-                    slot: slot.to_string(),
-                    message: format!(
-                        "unknown error variant `{other}`: the closed set is `NotFound` \
-                         (2 arguments) or `Conflict` (1 argument)"
-                    ),
-                });
-                return;
-            }
-        };
-        if raise.args.len() != expected {
+        let Some(signature) = self
+            .raises
+            .iter()
+            .find(|signature| signature.name == raise.variant)
+        else {
+            let declared: Vec<&str> = self
+                .raises
+                .iter()
+                .map(|signature| signature.name.as_str())
+                .collect();
+            let declared = if declared.is_empty() {
+                "no errors are declared in scope".to_string()
+            } else {
+                format!("declared: {}", declared.join(", "))
+            };
             errors.push(BodyError {
                 slot: slot.to_string(),
                 message: format!(
-                    "error variant `{}` expects {expected} argument{}, found {}",
+                    "unknown error `{}`: declare it with `error {}(...)` or raise a \
+                     prelude error (`NotFound`, `Conflict`); {declared}",
+                    raise.variant, raise.variant
+                ),
+            });
+            return;
+        };
+        if let Some(throws) = self.throws {
+            if !throws.iter().any(|name| *name == raise.variant) {
+                let declared = if throws.is_empty() {
+                    "the operation declares no `throws` clause, so it raises no error".to_string()
+                } else {
+                    format!("declared: {}", throws.join(", "))
+                };
+                errors.push(BodyError {
+                    slot: slot.to_string(),
+                    message: format!(
+                        "error `{}` is not declared in the operation's `throws`; {declared}",
+                        raise.variant
+                    ),
+                });
+            }
+        }
+        if raise.args.len() != signature.fields.len() {
+            errors.push(BodyError {
+                slot: slot.to_string(),
+                message: format!(
+                    "error `{}` expects {} argument{}, found {}: `{}`",
                     raise.variant,
-                    if expected == 1 { "" } else { "s" },
-                    raise.args.len()
+                    signature.fields.len(),
+                    if signature.fields.len() == 1 { "" } else { "s" },
+                    raise.args.len(),
+                    signature.describe()
                 ),
             });
             return;
         }
-        for arg in &raise.args {
+        for (arg, field) in raise.args.iter().zip(&signature.fields) {
+            let expected = result_ty(&field.type_, field.multiplicity.as_ref());
             if let Some(ty) = self.type_in(scope, arg, slot, errors) {
-                if !matches!(ty, Ty::Primitive(_)) {
+                if ty != expected {
                     errors.push(BodyError {
                         slot: slot.to_string(),
-                        message: format!("error argument must be a scalar value, found {ty}"),
+                        message: format!(
+                            "error argument `{}` types {ty} but the declared payload \
+                             field is {expected} (`{}`)",
+                            field.name,
+                            signature.describe()
+                        ),
                     });
                 }
             }
         }
+    }
+
+    /// The orchestration-only aggregate rule: a body binds one primary
+    /// repository, so `findById`/`findAll` through any other receiver is a
+    /// cross-aggregate load. Walks every expression slot's parsed form.
+    fn check_aggregate_loads(
+        &self,
+        expr: &crate::Expr,
+        scope: &[(String, Ty)],
+        slot: &str,
+        errors: &mut Vec<BodyError>,
+    ) {
+        let secondary: Vec<&str> = self
+            .secondary_receivers
+            .iter()
+            .map(String::as_str)
+            .collect();
+        if secondary.is_empty() {
+            return;
+        }
+        walk_calls(expr, &mut |receiver, name| {
+            let crate::ast::ExprKind::Name(binding) = &receiver.kind else {
+                return;
+            };
+            if !matches!(name.value.as_str(), "findById" | "findAll") {
+                return;
+            }
+            // Direct call through a non-primary receiver, or an alias whose
+            // binding carries a non-primary repository's class (the same
+            // class as the primary is the same aggregate — an alias of the
+            // primary is not a second aggregate).
+            let aliased_secondary = scope
+                .iter()
+                .rev()
+                .find(|(name, _)| name == binding)
+                .map(|(_, ty)| {
+                    self.secondary_classes.contains(ty) && !self.primary_classes.contains(ty)
+                })
+                .unwrap_or(false);
+            if secondary.contains(&binding.as_str()) || aliased_secondary {
+                errors.push(BodyError {
+                    slot: slot.to_string(),
+                    message: format!(
+                        "`{}.{}` is a cross-aggregate load: the body is orchestration-only \
+                         and binds one primary repository (`self`)",
+                        binding, name.value
+                    ),
+                });
+            }
+        });
     }
 
     /// Walks a class feature path from `base`; `None` when a segment fails
@@ -528,6 +733,7 @@ impl StmtCx<'_> {
             return None;
         }
         let ast = parsed.ast?;
+        self.check_aggregate_loads(&ast, scope, slot, errors);
         let mut checker = TypeChecker::new(self.context.clone());
         for (name, ty) in scope {
             checker = checker.with_binding(name.clone(), ty.clone());
@@ -551,5 +757,76 @@ impl StmtCx<'_> {
                 None
             }
         }
+    }
+}
+
+/// Walks every call node of an expression, handing each call's receiver
+/// expression and written operation name to `visit`. Used by the
+/// orchestration-only aggregate rule; the walk covers every expression
+/// shape, so a call nested in an `if`, a lambda, or a binary operand is
+/// found too.
+fn walk_calls(
+    expr: &crate::Expr,
+    visit: &mut dyn FnMut(&crate::Expr, &crate::ast::Spanned<String>),
+) {
+    use crate::ast::ExprKind;
+    match &expr.kind {
+        ExprKind::Call {
+            receiver,
+            name,
+            args,
+            ..
+        } => {
+            visit(receiver, name);
+            walk_calls(receiver, visit);
+            for arg in args {
+                walk_calls(arg, visit);
+            }
+        }
+        ExprKind::FeatureAccess { receiver, .. } => walk_calls(receiver, visit),
+        ExprKind::Coalesce { value, default } => {
+            walk_calls(value, visit);
+            walk_calls(default, visit);
+        }
+        ExprKind::FunctionCall { args, .. } => {
+            for arg in args {
+                walk_calls(arg, visit);
+            }
+        }
+        ExprKind::Algebra {
+            receiver, lambda, ..
+        } => {
+            walk_calls(receiver, visit);
+            if let Some((_, body)) = lambda {
+                walk_calls(body, visit);
+            }
+        }
+        ExprKind::Binary { lhs, rhs, .. } => {
+            walk_calls(lhs, visit);
+            walk_calls(rhs, visit);
+        }
+        ExprKind::Unary { expr, .. } => walk_calls(expr, visit),
+        ExprKind::If { cond, then, else_ } => {
+            walk_calls(cond, visit);
+            walk_calls(then, visit);
+            walk_calls(else_, visit);
+        }
+        ExprKind::Let { init, body, .. } => {
+            walk_calls(init, visit);
+            walk_calls(body, visit);
+        }
+        ExprKind::Lambda { body, .. } => walk_calls(body, visit),
+        ExprKind::ListLiteral(items) => {
+            for item in items {
+                walk_calls(item, visit);
+            }
+        }
+        ExprKind::Int(_)
+        | ExprKind::Float(_)
+        | ExprKind::String(_)
+        | ExprKind::Bool(_)
+        | ExprKind::Null
+        | ExprKind::Date { .. }
+        | ExprKind::Name(_) => {}
     }
 }

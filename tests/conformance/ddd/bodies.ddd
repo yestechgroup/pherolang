@@ -2,22 +2,28 @@ import "bodies.mox";
 
 application Payroll {
     base nz.example.payroll
+    /// The pay run is locked by another submitter.
+    error PayRunLocked(String runId);
+    /// The computed total is negative.
+    error NegativeTotal(int total);
     module payroll {
         service PayRunService {
             inject PayRunRepository;
             inject PayRunAuditRepository;
-            submit(PayRunLineDraft draft) capability ApprovePayRun => PayRunRepository {
+            submit(PayRunLineDraft draft) capability ApprovePayRun throws NotFound, Conflict, PayRunLocked => PayRunRepository {
                 let run = self.findById("current") else error NotFound("PayRun", "current");
                 guard run.total >= 0 else error Conflict("total");
                 let units = run.lines.map(line => line.quantity).sum();
                 let anyPositive = run.lines.any(line => line.quantity > 0);
                 let allCosted = run.lines.all(line => line.unitCost >= 0);
                 let lineCount = run.lines.size();
+                let submitted = run.submit();
+                guard submitted else error PayRunLocked("current");
                 run.total = units;
                 let saved = self.save(run);
                 let audit = PayRunAuditRepository.record("submit");
             }
-            boolean approve() capability ApprovePayRun when (status == Draft) => PayRunRepository {
+            boolean approve() capability ApprovePayRun throws NotFound when (status == Draft) => PayRunRepository {
                 let run = self.findById("current") else error NotFound("PayRun", "current");
                 if (run.total > 0) {
                     return true;
@@ -29,7 +35,7 @@ application Payroll {
                 let entry = self.record(note);
                 return entry.accepted;
             }
-            int totalFor(String runId) => PayRunRepository {
+            int totalFor(String runId) throws NotFound => PayRunRepository {
                 let run = self.findById(runId) else error NotFound("PayRun", runId);
                 return run.lines.map(line => line.quantity * line.unitCost).sum();
             }
@@ -39,7 +45,7 @@ application Payroll {
             findAll;
             save;
             delete;
-            int totalQuantity(String runId) when (status == Draft) {
+            int totalQuantity(String runId) throws NotFound when (status == Draft) {
                 let run = self.findById(runId) else error NotFound("PayRun", runId);
                 return run.lines.map(line => line.quantity).sum();
             }

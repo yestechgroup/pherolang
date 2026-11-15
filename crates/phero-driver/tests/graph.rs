@@ -500,6 +500,9 @@ fn search(file: &str, name: &str) -> String {
 fn event(file: &str, name: &str) -> String {
     format!("{}:{file}#{name}", kinds::EVENT)
 }
+fn error_node(file: &str, name: &str) -> String {
+    format!("{}:{file}#{name}", kinds::ERROR)
+}
 fn decision(file: &str, name: &str) -> String {
     format!("{}:{file}#{name}", kinds::DECISION)
 }
@@ -1024,6 +1027,71 @@ fn ddd_emits_resolve_to_events() {
         ),
         kinds::EMITS,
         &event(EVT, "support.RefundApproved"),
+    );
+}
+
+/// A declared error owns a node under its scope (`<App>.<Error>` or
+/// `<App>.<module>.<Error>`), and an operation's resolved `throws` emits an
+/// edge to it; a prelude reference is implicit and emits none (DD7).
+#[test]
+fn ddd_declared_errors_and_throws_emit() {
+    let graph = build(&support_inputs());
+    let error_id = error_node(DDD, "SupportDesk.TicketAlreadyResolved");
+    let application = format!("{}:{DDD}#SupportDesk", kinds::DESIGN_APPLICATION);
+    edge(&graph, &error_id, kinds::MEMBER_OF, &application);
+    let update = service_operation(DDD, "SupportDesk.desk.TicketService.updateTicket");
+    edge(&graph, &update, kinds::THROWS, &error_id);
+
+    // `NotFound` is prelude: it is declared nowhere in the artifact and has
+    // no node, so the operation's throws edge set is exactly the declared
+    // error.
+    let thrown: Vec<&str> = graph
+        .edges
+        .iter()
+        .filter(|candidate| candidate.from == update && candidate.kind == kinds::THROWS)
+        .map(|candidate| candidate.to.as_str())
+        .collect();
+    assert_eq!(thrown, vec![error_id.as_str()], "{thrown:?}");
+}
+
+/// A module-level error is scoped to its module: the node name carries the
+/// module and the membership edge points at the module node.
+#[test]
+fn ddd_module_scoped_errors_are_qualified_by_their_module() {
+    let source = concat!(
+        "import \"support.mox\";\n",
+        "\n",
+        "application Inline {\n",
+        "    base nz.example.support\n",
+        "    module desk {\n",
+        "        error TicketAlreadyResolved(String ticketNo);\n",
+        "        service TicketService {\n",
+        "            boolean updateTicket(String ticketNo) throws TicketAlreadyResolved;\n",
+        "        }\n",
+        "    }\n",
+        "}\n",
+    );
+    let mut inputs = support_inputs();
+    inputs.designs.push(inline_file(
+        "examples/inline-errors.ddd",
+        &["examples/support/support.mox"],
+        inline_ddd("examples/inline-errors.ddd", source),
+    ));
+    let graph = build(&inputs);
+    let error_id = error_node(
+        "examples/inline-errors.ddd",
+        "Inline.desk.TicketAlreadyResolved",
+    );
+    let module = format!("{}:examples/inline-errors.ddd#Inline.desk", kinds::MODULE);
+    edge(&graph, &error_id, kinds::MEMBER_OF, &module);
+    edge(
+        &graph,
+        &service_operation(
+            "examples/inline-errors.ddd",
+            "Inline.desk.TicketService.updateTicket",
+        ),
+        kinds::THROWS,
+        &error_id,
     );
 }
 
@@ -1679,7 +1747,7 @@ fn artifact_contains_no_absolute_paths() {
 /// `phero_ir::graph::kinds`.
 #[test]
 fn emitted_kinds_are_the_published_vocabulary() {
-    const NODE_KINDS: [&str; 43] = [
+    const NODE_KINDS: [&str; 44] = [
         kinds::FILE,
         kinds::CLASS,
         kinds::ENUM,
@@ -1698,6 +1766,7 @@ fn emitted_kinds_are_the_published_vocabulary() {
         kinds::DTO,
         kinds::STATE_MACHINE,
         kinds::TRANSITION,
+        kinds::ERROR,
         kinds::DECISION_MODEL,
         kinds::DECISION,
         kinds::DECISION_SERVICE,
@@ -1724,7 +1793,7 @@ fn emitted_kinds_are_the_published_vocabulary() {
         kinds::DEPLOYMENT,
         kinds::PLATFORM_CAPABILITY,
     ];
-    const EDGE_KINDS: [&str; 40] = [
+    const EDGE_KINDS: [&str; 41] = [
         kinds::IMPORTS,
         kinds::MEMBER_OF,
         kinds::EXTENDS,
@@ -1761,6 +1830,7 @@ fn emitted_kinds_are_the_published_vocabulary() {
         kinds::FORWARDS_TO,
         kinds::INJECTS,
         kinds::TRIGGERS,
+        kinds::THROWS,
         kinds::ASSIGNED_TO,
         kinds::PROVIDES,
         kinds::USES_PROFILE,
@@ -1815,6 +1885,7 @@ fn emitted_kinds_are_the_published_vocabulary() {
         kinds::REPOSITORY_OPERATION,
         kinds::SEARCH,
         kinds::DTO,
+        kinds::ERROR,
         kinds::DECISION_MODEL,
         kinds::DECISION,
         kinds::DECISION_SERVICE,
@@ -1879,6 +1950,7 @@ fn emitted_kinds_are_the_published_vocabulary() {
         kinds::USES_MODULE,
         kinds::DESIGNS,
         kinds::FORWARDS_TO,
+        kinds::THROWS,
         kinds::ASSIGNED_TO,
         kinds::PROVIDES,
         kinds::USES_PROFILE,

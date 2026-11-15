@@ -5,6 +5,21 @@
     "name": "SupportDesk",
     "base": "nz.example.support"
   },
+  "errors": [
+    {
+      "name": "TicketAlreadyResolved",
+      "description": "The ticket is already resolved, so the requested transition cannot run.",
+      "fields": [
+        {
+          "name": "ticketNo",
+          "type": {
+            "type": "primitive",
+            "value": "string"
+          }
+        }
+      ]
+    }
+  ],
   "modules": [
     {
       "name": "desk",
@@ -353,8 +368,18 @@
                   "name": "UpdateTicket"
                 }
               ],
+              "throws": [
+                {
+                  "name": "NotFound",
+                  "scope": "prelude"
+                },
+                {
+                  "name": "TicketAlreadyResolved",
+                  "scope": "application"
+                }
+              ],
               "bodies": {
-                "stmt": "{\"stmts\":[{\"kind\":\"letElse\",\"name\":\"ticket\",\"expr\":\"self.findById(ticketNo)\",\"error\":{\"variant\":\"NotFound\",\"args\":[\"\\\"Ticket\\\"\",\"ticketNo\"]}},{\"kind\":\"guard\",\"expr\":\"ticket.state != TicketState.Resolved\",\"error\":{\"variant\":\"Conflict\",\"args\":[\"\\\"already resolved\\\"\"]}},{\"kind\":\"assign\",\"path\":[\"ticket\",\"internal\"],\"expr\":\"false\"},{\"kind\":\"let\",\"name\":\"saved\",\"expr\":\"self.save(ticket)\"},{\"kind\":\"return\",\"expr\":\"true\"}]}"
+                "stmt": "{\"stmts\":[{\"kind\":\"letElse\",\"name\":\"ticket\",\"expr\":\"self.findById(ticketNo)\",\"error\":{\"variant\":\"NotFound\",\"args\":[\"\\\"Ticket\\\"\",\"ticketNo\"]}},{\"kind\":\"guard\",\"expr\":\"ticket.state != TicketState.Resolved\",\"error\":{\"variant\":\"TicketAlreadyResolved\",\"args\":[\"ticketNo\"]}},{\"kind\":\"assign\",\"path\":[\"ticket\",\"internal\"],\"expr\":\"false\"},{\"kind\":\"let\",\"name\":\"saved\",\"expr\":\"self.save(ticket)\"},{\"kind\":\"return\",\"expr\":\"true\"}]}"
               },
               "bodyReceiver": "TicketRepository"
             },

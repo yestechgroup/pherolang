@@ -200,6 +200,7 @@ contract; it is just not exercised by `examples/` any more.
 | `dto` | `.ddd` DTO boundary — a projection (`dto X from Y { … }`) or a standalone (`dto X { … }`) `dto` design; a mirror DTO emits none (its boundary name is its source class's `class` node) | `<App>.<module>.<DTO>` |
 | `stateMachine` | `.ddd` entity machine | `<App>.<module>.<Class>` (`attributes["field"]` = the state-carrying feature) |
 | `transition` | machine transition | `<machine>.<from>-><to>`, suffixed `~<n>` (n ≥ 2) when a pair repeats |
+| `error` | declared `.ddd` error, application-scoped or module-private | `<App>.<Error>` (application scope), `<App>.<module>.<Error>` (module scope); the standard prelude is implicit and has no node |
 | `decisionModel` | `.dmn` model | `<Model>` |
 | `decision` | `.dmn` decision | `<Model>.<Decision>` |
 | `decisionService` | `.dmn` decision service | `<Model>.<Service>` |
@@ -301,6 +302,7 @@ actor.
 | `forwardsTo` | serviceOperation → repositoryOperation (or serviceOperation, when the delegation targets another service) | `operation` |
 | `injects` | service → repository | — |
 | `triggers` | serviceOperation → transition | `ambiguous` |
+| `throws` | serviceOperation/repositoryOperation → error | — (a prelude `throws` reference emits no edge: the prelude is implicit and has no node) |
 | `assignedTo` | planItem → caseRole | — |
 | `provides` | decisionService → decision | — |
 | `usesProfile` | deployment → profile | — |
@@ -762,7 +764,7 @@ indexes call the same helpers — a naming rule is written once.
 | surface | builder | definitions (the graph's nodes) |
 |---|---|---|
 | `.actor` | `navigation::actors_index` | `actor`, `capability` — `<Block>.<Name>` |
-| `.ddd` | `navigation::ddd_index` | `designApplication`, `module`, `service`, `serviceOperation`, `repository`, `repositoryOperation`, `search`, `dto`, `stateMachine`, `transition` (child-scoped aggregate operations are `serviceOperation`s; a projection/standalone DTO's boundary is a `dto`, a mirror DTO's is its source `class`) |
+| `.ddd` | `navigation::ddd_index` | `designApplication`, `module`, `service`, `serviceOperation`, `repository`, `repositoryOperation`, `search`, `dto`, `stateMachine`, `transition`, `error` (child-scoped aggregate operations are `serviceOperation`s; a projection/standalone DTO's boundary is a `dto`, a mirror DTO's is its source `class`; an error's node is application- or module-qualified) |
 | `.evt` | `navigation::evt_index` (takes the document path: the model prefix is the file stem) | `event`, `channel`, `subscription` — `<Model>.<Name>` |
 | `.deploy` | `navigation::deploy_index` | `deployApplication` (`<App>`), `deployComponent` (`<App>.<Component>`), `deployProfile` (`<Profile>`), `deployment` (`<App>.<Deployment>`) |
 | `.uc` | `navigation::uc_index` | `useCase` (`<UseCase>` — the artifact carries no model prefix) |
@@ -796,7 +798,7 @@ layer's.
 | surface | references (`target_kinds`) |
 |---|---|
 | `.actor` | `capability … on <Class>` → `class`; grant/delegation capability names → `capability`; grant actors, `extends`, delegation `from`/`to` → `actor`; `never_both` names → `capability`; delegation `purpose` → none yet (indexed, never bound) |
-| `.ddd` | operation/search `capability X` → `capability`; `invokes` / `inject decision` → `decision`, `decisionService`; `emits` → `event`; `inject <Repo>` / body receiver → `repository`; design, DTO-projection source, and search class names → `class`; `=> Repo.op` → `repositoryOperation`, `serviceOperation`; machine `via` triggers and operation `transition` bindings → `transition`; machine state field → `feature`; machine state enum → `enum` |
+| `.ddd` | operation/search `capability X` → `capability`; `invokes` / `inject decision` → `decision`, `decisionService`; `emits` → `event`; `inject <Repo>` / body receiver → `repository`; design, DTO-projection source, and search class names → `class`; `=> Repo.op` → `repositoryOperation`, `serviceOperation`; machine `via` triggers and operation `transition` bindings → `transition`; machine state field → `feature`; machine state enum → `enum`; a service/repository operation's `throws <Error>` entries → `error` (the `throws` reference context) |
 | `.evt` | subscription `consumer` → `deployComponent`; subscription `events` and channel `publishes` → `event`; event field types → `class`, `enum`, `datatype` |
 | `.deploy` | `design "<path>#<Module>"` → `module`, `designApplication` (the mention is the module suffix when written, else the path as written); `flow "<path>[#<Module>]"` → `flow`; component `requires` names → `platformCapability` (the vocabulary word's node; definitions land on the word's first mention); `connects a -> b` → `deployComponent`; `deployment … for <App>` → `deployApplication`; `use <Profile>` → `deployProfile` |
 | `.uc` | `subject`/actor `: <type>` → `class`; a bare (untyped) actor's name → `actor`; `realizes Service.operation` and a step's `: <operation>` → `serviceOperation`, `useCase`; step `requires [ … ]` → `capability`; a message's `of <type>` payload → `class`, `enum`, `datatype`, `event` (the surface types payloads with a bare reference — class-vs-event is a resolution fact) |

@@ -1,0 +1,13 @@
+package nz.example.payments
+
+enum DeclineReason {
+    InsufficientFunds as "I" = 0
+    ExpiredCard as "E" = 1
+}
+
+class Order {
+    String id
+    String label
+    int total
+    op boolean submit()
+}
