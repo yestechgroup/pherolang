@@ -506,6 +506,12 @@
           "stereotype": "value",
           "flags": {
             "nonPersistent": true
+          },
+          "semantics": {
+            "identity": "none",
+            "immutable": true,
+            "deepImmutable": true,
+            "equality": "structural"
           }
         }
       ],

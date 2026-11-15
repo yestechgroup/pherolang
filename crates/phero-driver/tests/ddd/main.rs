@@ -22,3 +22,4 @@ mod rule_7_signature_typecheck;
 mod rule_8_delegations;
 mod rule_9_inject;
 mod syntax_errors;
+mod value_semantics;

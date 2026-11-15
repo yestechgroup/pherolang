@@ -1,6 +1,9 @@
 //! Entity/value/dto design lowering: repositories and their operations,
 //! plus the value-contract, dto-ops, bare-`String`-status, and scaffold
-//! rules (12, 14, 15, 16).
+//! rules (12, 14, 15, 16). A `value` design also lowers the fixed strict
+//! [`ValueSemantics`](phero_ir::ddd::ValueSemantics) block here (DD2, issue
+//! pherolang#299); the rules that keep the properties honest are deferred to
+//! [`super::values`].
 
 use phero_ir::ddd::{
     BuiltinRepositoryOp, Design, DesignFlags, Repository, RepositoryOperation, Stereotype,
@@ -96,6 +99,9 @@ pub(crate) fn lower_module_designs(
             });
         design_out.is_abstract = design.is_abstract;
         design_out.flags = flags(design);
+        // DD2 (pherolang#299): every value design — and only a value
+        // design — lowers the fixed strict semantics block.
+        design_out.semantics = value_semantics(design);
 
         if let Some(repository) = &design.repository {
             let (repository_out, stage_diags) = lower_design_repository(
@@ -148,6 +154,19 @@ pub(crate) fn lower_module_designs(
                     });
                 }
             }
+        }
+
+        // DD2 (pherolang#299): every value design awaits the deferred strict
+        // value-semantics pass, which reads the completed entity-design
+        // registry (so an entity designed later still convicts).
+        if design.stereotype == dsl::DddStereotype::Value {
+            registries.value_designs.push(ValueDesign {
+                resolved: resolved.clone(),
+                module: module.name.text.clone(),
+                authored: design.class.text.clone(),
+                span: design.class.span,
+                is_abstract: design.is_abstract,
+            });
         }
 
         if let Some(key) = resolved {

@@ -1,0 +1,10 @@
+import "values.mox";
+
+application Values {
+    base nz.example.values
+    module pricing {
+        value Money
+        value PriceRange
+        value Snapshot nonPersistent
+    }
+}

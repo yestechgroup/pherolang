@@ -32,7 +32,9 @@ class Ticket {
 }
 
 class RefundDecision {
-    id readonly String decisionId
+    /// The reference recorded with the decision: stored state, not identity
+    /// (a value object has no identity).
+    readonly String decisionId
     readonly int cents
     readonly boolean approved
 }

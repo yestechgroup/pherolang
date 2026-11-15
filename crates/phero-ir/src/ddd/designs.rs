@@ -64,6 +64,75 @@ impl DesignFlags {
     }
 }
 
+/// The identity policy a value design carries. Strict value semantics admit
+/// exactly one: [`IdentityPolicy::None`] — a value object has no identity.
+///
+/// Serializes as the bare lowercase string `"none"`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum IdentityPolicy {
+    /// No identity: equality and lifetime derive from the value's structure,
+    /// never from a feature (a value object carries no `id`).
+    None,
+}
+
+/// The equality policy a value design carries. Strict value semantics admit
+/// exactly one: [`EqualityPolicy::Structural`] — two instances are equal when
+/// their stored features are equal.
+///
+/// Serializes as the bare lowercase string `"structural"`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum EqualityPolicy {
+    /// Structural equality over the value's stored features.
+    Structural,
+}
+
+/// The effective, non-optional value semantics of a `value`-stereotyped
+/// [`Design`] (DD2, pherolang#299).
+///
+/// A value design is strictly immutable — there is **no opt-out** (no
+/// `!immutable` spelling, no flag that relaxes it) — so every value design
+/// the compiler lowers carries exactly [`ValueSemantics::strict`]:
+///
+/// ```json
+/// {"identity":"none","immutable":true,"deepImmutable":true,
+///  "equality":"structural"}
+/// ```
+///
+/// Only `value` designs carry the block: [`Design::semantics`] is `None` on
+/// every `entity`/`dto` design and the key is omitted entirely there.
+/// Consumers may rely on the values being fixed — the artifact contract
+/// (`phero-backend-ddd`) refuses any other block and refuses one on an
+/// entity/dto design.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ValueSemantics {
+    /// The identity policy — always [`IdentityPolicy::None`].
+    pub identity: IdentityPolicy,
+    /// Feature values cannot be reassigned after construction. Always
+    /// `true`; a value design has no opt-out.
+    pub immutable: bool,
+    /// Every transitively reached value is immutable too — a value contains
+    /// values, never mutable entities (wire key `deepImmutable`). Always
+    /// `true`.
+    pub deep_immutable: bool,
+    /// The equality policy — always [`EqualityPolicy::Structural`].
+    pub equality: EqualityPolicy,
+}
+
+impl ValueSemantics {
+    /// The one strict value-semantics block every `value` design carries.
+    pub fn strict() -> Self {
+        Self {
+            identity: IdentityPolicy::None,
+            immutable: true,
+            deep_immutable: true,
+            equality: EqualityPolicy::Structural,
+        }
+    }
+}
+
 /// The design decision for one referenced `.mox` class: its stereotype,
 /// flags, and optionally its repository.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -85,6 +154,13 @@ pub struct Design {
     /// Design flags; omitted entirely when fully default.
     #[serde(default, skip_serializing_if = "DesignFlags::is_empty")]
     pub flags: DesignFlags,
+    /// The effective value semantics (DD2, pherolang#299), present on a
+    /// `value` design and absent on every `entity`/`dto` design. The
+    /// compiler lowers the fixed [`ValueSemantics::strict`] block; the
+    /// block is a decision, never author input (there is no `.ddd`
+    /// spelling for it). Additive; omitted when absent.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub semantics: Option<ValueSemantics>,
     /// The class's repository, when designed.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub repository: Option<Repository>,
@@ -102,7 +178,8 @@ pub struct Design {
 
 impl Design {
     /// Creates a concrete design with default flags, no resolved class
-    /// reference, no repository, no machine, and no child operations.
+    /// reference, no value semantics, no repository, no machine, and no
+    /// child operations.
     pub fn new(class: impl Into<String>, stereotype: Stereotype) -> Self {
         Self {
             class: class.into(),
@@ -110,10 +187,19 @@ impl Design {
             stereotype,
             is_abstract: false,
             flags: DesignFlags::default(),
+            semantics: None,
             repository: None,
             machine: None,
             child_operations: Vec::new(),
         }
+    }
+
+    /// Chainable setter for the value semantics block (DD2, pherolang#299).
+    /// The driver sets `Some(ValueSemantics::strict())` on value designs and
+    /// leaves every other design `None`.
+    pub fn with_semantics(mut self, semantics: Option<ValueSemantics>) -> Self {
+        self.semantics = semantics;
+        self
     }
 
     /// Chainable setter for the child-scoped operations (issue pherolang#179).

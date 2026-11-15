@@ -1,7 +1,7 @@
 {
   "formatVersion": 1,
   "surface": "mox",
-  "sourceHash": "sha256:9eb97b8933b1e6bf5bfdf77a930af12fcb0e0ea8a726c233cc97d6698c28f446",
+  "sourceHash": "sha256:b86c0e76ea73115148d3f0fec913031b999739b1a4ec58dafa44d1db3b134dbe",
   "generator": {
     "name": "pherolang",
     "version": "0.3.0"
@@ -788,27 +788,37 @@
     },
     {
       "start": 747,
-      "end": 749,
+      "end": 819,
+      "class": "comment",
+      "modifiers": [
+        "documentation"
+      ]
+    },
+    {
+      "start": 824,
+      "end": 861,
+      "class": "comment",
+      "modifiers": [
+        "documentation"
+      ]
+    },
+    {
+      "start": 866,
+      "end": 874,
       "class": "keyword",
       "modifiers": []
     },
     {
-      "start": 750,
-      "end": 758,
-      "class": "keyword",
-      "modifiers": []
-    },
-    {
-      "start": 759,
-      "end": 765,
+      "start": 875,
+      "end": 881,
       "class": "type",
       "modifiers": [
         "defaultLibrary"
       ]
     },
     {
-      "start": 766,
-      "end": 776,
+      "start": 882,
+      "end": 892,
       "class": "property",
       "modifiers": [
         "declaration",
@@ -816,22 +826,22 @@
       ]
     },
     {
-      "start": 781,
-      "end": 789,
+      "start": 897,
+      "end": 905,
       "class": "keyword",
       "modifiers": []
     },
     {
-      "start": 790,
-      "end": 793,
+      "start": 906,
+      "end": 909,
       "class": "type",
       "modifiers": [
         "defaultLibrary"
       ]
     },
     {
-      "start": 794,
-      "end": 799,
+      "start": 910,
+      "end": 915,
       "class": "property",
       "modifiers": [
         "declaration",
@@ -839,22 +849,22 @@
       ]
     },
     {
-      "start": 804,
-      "end": 812,
+      "start": 920,
+      "end": 928,
       "class": "keyword",
       "modifiers": []
     },
     {
-      "start": 813,
-      "end": 820,
+      "start": 929,
+      "end": 936,
       "class": "type",
       "modifiers": [
         "defaultLibrary"
       ]
     },
     {
-      "start": 821,
-      "end": 829,
+      "start": 937,
+      "end": 945,
       "class": "property",
       "modifiers": [
         "declaration",
@@ -862,8 +872,8 @@
       ]
     },
     {
-      "start": 830,
-      "end": 831,
+      "start": 946,
+      "end": 947,
       "class": "punctuation",
       "modifiers": []
     }

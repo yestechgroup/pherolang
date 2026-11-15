@@ -43,8 +43,9 @@ application SupportDesk {
             delete;
             protected Ticket findByTitle(String title);
         }
-        /// One immutable refund decision; every stored feature of the
-        /// class is readonly, as the value contract requires.
+        /// One refund decision under strict value semantics: no identity,
+        /// deep-immutable, structural equality — so every stored feature of
+        /// the class is readonly (R-V1–R-V3).
         value RefundDecision nonPersistent
         /// Full-text search over the ticket queue.
         search TicketSearch {

@@ -33,6 +33,7 @@ mod links;
 mod machines;
 mod searches;
 mod services;
+mod values;
 
 use crate::conditions::{
     check_condition as pipeline_check_condition, when_interior, ConditionSpanning, ConditionTriage,
@@ -50,6 +51,7 @@ use services::{
     lower_module_services, rule_17_validate_decision_links, rule_8_resolve_delegations,
     rule_9_resolve_injects,
 };
+use values::{check_value_semantics, value_semantics};
 
 // The shared decision-service resolver (pherolang#154) and its outcome: the
 // `.cmmn` decision-task check resolves through the same core rule 17 runs,
@@ -91,6 +93,18 @@ struct EntityDesign {
     package: String,
     class: String,
     module: String,
+}
+/// One `value` design awaiting the deferred strict value-semantics pass
+/// (DD2, pherolang#299 — R-V1/R-V2/R-V3 and the `abstract value`
+/// rejection). `resolved` is the class key (absent when rule 3 already
+/// failed), `module`/`authored`/`span` are the diagnostic context, and
+/// `is_abstract` feeds the concrete-only rule.
+struct ValueDesign {
+    resolved: Option<(String, String)>,
+    module: String,
+    authored: String,
+    span: Span,
+    is_abstract: bool,
 }
 /// A declared search projection awaiting the completed registries.
 struct SearchEntry {
@@ -153,6 +167,7 @@ struct Registries<'a> {
     searches: Vec<(String, SearchEntry)>,
     design_keys: Vec<(String, String)>,
     entity_designs: Vec<EntityDesign>,
+    value_designs: Vec<ValueDesign>,
     root_candidates: Vec<RootCandidate>,
     delegation_checks: Vec<DelegationCheck<'a>>,
     search_bindings: Vec<SearchBindingCheck<'a>>,
@@ -177,9 +192,10 @@ struct Registries<'a> {
 /// validations ([`rule_11_bind_searches`], [`rule_6_aggregate_boundary`],
 /// [`rule_13_aggregate_references`], [`rule_9_resolve_injects`],
 /// [`rule_8_resolve_delegations`], [`rule_10_validate_capabilities`],
-/// [`rule_17_validate_decision_links`]) — the emission order of those
-/// stages is the diagnostics contract, pinned by the `ddd_diagnostic_order`
-/// characterization suite.
+/// [`rule_17_validate_decision_links`], and the strict value-semantics pass
+/// (R-V1/R-V2/R-V3 and the `abstract value` rejection, issue
+/// pherolang#299)) — the emission order of those stages is the diagnostics
+/// contract, pinned by the `ddd_diagnostic_order` characterization suite.
 ///
 /// See [`compile_ddd_str`](crate::compile_ddd_str) for the normative
 /// contract.
@@ -230,6 +246,7 @@ pub(crate) fn compile_ddd_file(
         searches: Vec::new(),
         design_keys: Vec::new(),
         entity_designs: Vec::new(),
+        value_designs: Vec::new(),
         root_candidates: Vec::new(),
         delegation_checks: Vec::new(),
         search_bindings: Vec::new(),
@@ -245,6 +262,9 @@ pub(crate) fn compile_ddd_file(
     // block the artifact).
     let expr_context = union.as_ref().map(phero_expr::TypeContext::from_model);
 
+    // The application name is the diagnostics context of the deferred
+    // value-semantics pass (DD2), so keep it before the header moves.
+    let application_name = application_out.name.clone();
     let mut model = DddModel::new().application(application_out);
 
     for module in &application.modules {
@@ -337,7 +357,8 @@ pub(crate) fn compile_ddd_file(
     }
 
     // Stage 7 — the deferred validations, in emission order: rules
-    // 11-binding, 6, 13, 9, 8, 10, 17. Each reads the completed registries.
+    // 11-binding, 6, 13, 9, 8, 10, 17, then the strict value-semantics pass
+    // (DD2, pherolang#299). Each reads the completed registries.
     local.extend(rule_11_bind_searches(
         &registries.search_bindings,
         &registries.entity_designs,
@@ -367,6 +388,15 @@ pub(crate) fn compile_ddd_file(
     local.extend(rule_17_validate_decision_links(
         &registries.decision_checks,
         decisions,
+    ));
+    // The strict value-semantics pass (DD2, pherolang#299) reads the
+    // completed registries — a value design may precede the entity design it
+    // is judged against — and emits after every other deferred rule.
+    local.extend(check_value_semantics(
+        &registries.value_designs,
+        &registries.entity_designs,
+        union.as_ref(),
+        &application_name,
     ));
 
     // Stage 8 — the resolved-identity companions (DD1, pherolang#298): every

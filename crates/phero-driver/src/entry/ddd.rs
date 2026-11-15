@@ -200,7 +200,9 @@ fn compile_ddd_with(
 ///     (Sculptor's ValueObject default, with no opt-out): every stored
 ///     feature of the resolved class (own and inherited, derived features
 ///     excluded) must carry the domain model's `readonly` modifier. A
-///     changeable class designs as `entity` or `dto` instead.
+///     changeable class designs as `entity` or `dto` instead. Rule 20 adds
+///     the strict value-semantics rules (R-V1–R-V3) the target class must
+///     also satisfy when the application designs the other end.
 /// 13. **Aggregate reference constraint** — an outside class may hold a
 ///     cross reference only to an aggregate's root: for every
 ///     cross-reference (`refers`) feature whose target sits under a
@@ -287,6 +289,28 @@ fn compile_ddd_with(
 ///     always, own-record paths only in a multi-machine module (where the
 ///     owning machine is not derivable from the artifact alone); the
 ///     `condition` source string stays verbatim.
+/// 20. **Value semantics** (E0361–E0364, issue pherolang#299) — a `value`
+///     design means *strict* value semantics with no opt-out, so the
+///     compiler lowers the fixed `semantics` block (identity `none`,
+///     `immutable`, `deepImmutable`, structural equality) onto every value
+///     design — and only values — and refuses the shapes that contradict
+///     it. The rules read the **application's designs**, not the `.mox`
+///     file alone (one class may be a value in one application and an
+///     entity in another), and they are deferred until every module
+///     lowered, so a value design may precede the entity design it is
+///     judged against:
+///     **R-V1** — every `id` feature of the value's class (own or
+///     inherited) is an error (`E0361`), naming the design and the feature;
+///     **R-V2** — a `contains` feature whose class target is an `entity`
+///     design of the same application is an error (`E0362`): a value owns
+///     no mutable state, so it contains values only;
+///     **R-V3** — a `refers` feature whose class target is a designed
+///     entity of the same application is an error (`E0363`): refer to the
+///     entity by id (`refers String personId`) instead;
+///     **`abstract value`** is an error (`E0364`) — a value object is
+///     concrete. Every diagnostic spans the value design's class name;
+///     feature-level rules run only against a fully lowered union (the
+///     rule-6 deferral discipline).
 /// ## Aggregate derivation
 ///
 /// The aggregate boundary derives from the domain model's containment

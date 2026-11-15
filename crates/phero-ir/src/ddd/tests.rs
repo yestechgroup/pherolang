@@ -139,6 +139,7 @@ fn sample_model() -> DddModel {
                         cache: true,
                         ..Default::default()
                     },
+                    semantics: None,
                     repository: Some(Repository {
                         name: "BookRepository".to_string(),
                         operations: vec![
@@ -162,6 +163,7 @@ fn sample_model() -> DddModel {
                     stereotype: Stereotype::Value,
                     is_abstract: false,
                     flags: DesignFlags::default(),
+                    semantics: Some(ValueSemantics::strict()),
                     repository: None,
                     machine: None,
                     child_operations: Vec::new(),
@@ -177,6 +179,7 @@ fn sample_model() -> DddModel {
                         non_persistent: true,
                         ..Default::default()
                     },
+                    semantics: None,
                     repository: None,
                     machine: None,
                     child_operations: Vec::new(),
@@ -213,6 +216,12 @@ fn wire_format_is_camel_case_with_no_snake_case_keys() {
     assert!(json.contains("\"optimisticLocking\":true"), "{json}");
     assert!(json.contains("\"nonPersistent\":true"), "{json}");
     assert!(json.contains("\"base\":\"nz.example.library\""), "{json}");
+    assert!(
+        json.contains(
+            r#""semantics":{"identity":"none","immutable":true,"deepImmutable":true,"equality":"structural"}"#
+        ),
+        "a value design carries the fixed semantics block: {json}"
+    );
     assert!(
         json.contains(r#"{"type":"class","value":{"package":"nz.example.library","name":"Book"}}"#),
         "signatures reuse the IR TypeRef adjacent tagging: {json}"
@@ -536,6 +545,7 @@ fn default_flags_and_abstract_false_are_omitted() {
         stereotype: Stereotype::Value,
         is_abstract: false,
         flags: DesignFlags::default(),
+        semantics: None,
         repository: None,
         machine: None,
         child_operations: Vec::new(),
@@ -560,6 +570,7 @@ fn all_flags_serialize_with_camel_case_keys() {
             non_persistent: true,
             cache: true,
         },
+        semantics: None,
         repository: None,
         machine: None,
         child_operations: Vec::new(),
@@ -570,6 +581,65 @@ fn all_flags_serialize_with_camel_case_keys() {
     );
     assert!(DesignFlags::default().is_empty());
     assert!(!design.flags.is_empty());
+}
+
+/// The fixed strict value-semantics block every `value` design lowers
+/// (DD2, pherolang#299): no identity, immutable and deep-immutable,
+/// structural equality.
+fn value_semantics() -> ValueSemantics {
+    ValueSemantics {
+        identity: IdentityPolicy::None,
+        immutable: true,
+        deep_immutable: true,
+        equality: EqualityPolicy::Structural,
+    }
+}
+
+#[test]
+fn semantics_policies_serialize_as_bare_strings() {
+    assert_eq!(
+        serde_json::to_string(&IdentityPolicy::None).expect("serialize"),
+        r#""none""#
+    );
+    assert_eq!(
+        serde_json::to_string(&EqualityPolicy::Structural).expect("serialize"),
+        r#""structural""#
+    );
+}
+
+#[test]
+fn a_value_design_serializes_the_fixed_semantics_block() {
+    let design = Design::new("Money", Stereotype::Value).with_semantics(Some(value_semantics()));
+    assert_eq!(
+        serde_json::to_string(&design).expect("serialize"),
+        r#"{"class":"Money","stereotype":"value","semantics":{"identity":"none","immutable":true,"deepImmutable":true,"equality":"structural"}}"#
+    );
+}
+
+#[test]
+fn entity_and_dto_designs_omit_semantics() {
+    for stereotype in [Stereotype::Entity, Stereotype::Dto] {
+        let design = Design::new("Thing", stereotype);
+        let json = serde_json::to_string(&design).expect("serialize");
+        assert!(
+            !json.contains("semantics"),
+            "a {} design carries no semantics block: {json}",
+            serde_json::to_string(&stereotype).expect("serialize")
+        );
+    }
+}
+
+#[test]
+fn semantics_round_trips_and_stays_additive() {
+    let design = Design::new("Money", Stereotype::Value).with_semantics(Some(value_semantics()));
+    let json = serde_json::to_string(&design).expect("serialize");
+    let reloaded: Design = serde_json::from_str(&json).expect("deserialize");
+    assert_eq!(reloaded, design);
+
+    // A value design written before the field existed still deserializes.
+    let legacy: Design = serde_json::from_str(r#"{"class":"Money","stereotype":"value"}"#)
+        .expect("a semantics-less value design deserializes");
+    assert_eq!(legacy.semantics, None);
 }
 
 #[test]

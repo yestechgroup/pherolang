@@ -11,11 +11,12 @@
 //! discipline:
 //!
 //! - **Casing.** Struct fields serialize as `camelCase` (`formatVersion`,
-//!   `returnType`, `optimisticLocking`, ...). Unit-only enums serialize as
-//!   bare strings: [`Stereotype`] lowercase (`"entity" | "value" | "dto"`),
-//!   [`BuiltinRepositoryOp`] camelCase (`"findById"`, `"findAll"`,
-//!   `"findByExample"`, `"findByKeys"`, `"save"`, `"delete"`). The one
-//!   payload-bearing enum,
+//!   `returnType`, `optimisticLocking`, `deepImmutable`, ...). Unit-only
+//!   enums serialize as bare strings: [`Stereotype`] lowercase
+//!   (`"entity" | "value" | "dto"`), [`IdentityPolicy`] / [`EqualityPolicy`]
+//!   lowercase (`"none"`, `"structural"`), [`BuiltinRepositoryOp`] camelCase
+//!   (`"findById"`, `"findAll"`, `"findByExample"`, `"findByKeys"`,
+//!   `"save"`, `"delete"`). The one payload-bearing enum,
 //!   [`RankingStrategy`], is adjacently tagged instead (`{"type":
 //!   "tfIdf"}`, `{"type": "custom", "value": "..."}`).
 //! - **Version gate.** [`DddModel::from_json`] rejects any other
@@ -60,6 +61,13 @@
 //!   and its `guard`/an operation's `condition` are the `when`-condition
 //!   rule: verbatim source text between the parentheses, typed by the
 //!   driver.
+//! - **Value semantics.** A `value`-stereotyped [`Design`] carries the fixed
+//!   [`ValueSemantics`] block in [`Design::semantics`] — identity `"none"`,
+//!   `immutable`, `deepImmutable`, structural equality — with **no opt-out**
+//!   (DD2, pherolang#299). Entity and dto designs omit the key entirely. The
+//!   strict rules (no `id` feature, no contained entity, no entity reference,
+//!   no `abstract value`) are driver errors, so an artifact that exists
+//!   states the semantics its consumer must honor.
 //! - **Child-scoped operations.** A [`Design`] may carry child operations
 //!   ([`Design::child_operations`]) declared by module-level `extend
 //!   <Class>` blocks (issue pherolang#179): operations over the aggregate's
@@ -116,8 +124,8 @@ mod services;
 
 pub use application::{Application, Module};
 pub use designs::{
-    BuiltinRepositoryOp, Design, DesignFlags, Repository, RepositoryOperation, StateMachine,
-    Stereotype, Transition,
+    BuiltinRepositoryOp, Design, DesignFlags, EqualityPolicy, IdentityPolicy, Repository,
+    RepositoryOperation, StateMachine, Stereotype, Transition, ValueSemantics,
 };
 pub use references::{CapabilityRef, DecisionRef, EventRef, TargetKind, TargetRef};
 pub use searches::{

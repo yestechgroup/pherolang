@@ -10,8 +10,9 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::fmt;
 
 use phero_ir::ddd::{
-    DddModel, DecisionRef, Design, EventRef, Repository, RepositoryOperation, SearchDef, Service,
-    ServiceOperation, Stereotype, TargetKind, TargetRef, DDD_MODEL_FORMAT_VERSION,
+    DddModel, DecisionRef, Design, EqualityPolicy, EventRef, IdentityPolicy, Repository,
+    RepositoryOperation, SearchDef, Service, ServiceOperation, Stereotype, TargetKind, TargetRef,
+    DDD_MODEL_FORMAT_VERSION,
 };
 use phero_ir::TypeRef;
 
@@ -308,6 +309,7 @@ fn validate_design(
         design.type_ref.as_ref(),
         "design",
     );
+    validate_semantics(design, path, violations);
 
     match design.stereotype {
         Stereotype::Entity => {
@@ -371,6 +373,52 @@ fn validate_design(
             true,
             violations,
         );
+    }
+}
+
+/// The value-semantics contract (DD2, pherolang#299): a `value` design
+/// carries **exactly** the fixed strict block, and an `entity`/`dto` design
+/// carries none. Every violation is reported at the design's `semantics`
+/// path, so a hand-edited artifact is diagnosable without the compiler.
+fn validate_semantics(design: &Design, path: &str, violations: &mut Vec<Violation>) {
+    let semantics_path = format!("{path}.semantics");
+    match design.stereotype {
+        Stereotype::Value => match &design.semantics {
+            None => violations.push(Violation::new(
+                semantics_path,
+                "a value design must carry the strict value semantics block \
+                 (identity \"none\", immutable, deepImmutable, structural equality)",
+            )),
+            Some(semantics) => {
+                for (field, held) in [
+                    (
+                        "identity \"none\"",
+                        semantics.identity == IdentityPolicy::None,
+                    ),
+                    ("immutable: true", semantics.immutable),
+                    ("deepImmutable: true", semantics.deep_immutable),
+                    (
+                        "equality \"structural\"",
+                        semantics.equality == EqualityPolicy::Structural,
+                    ),
+                ] {
+                    if !held {
+                        violations.push(Violation::new(
+                            &semantics_path,
+                            format!("the value semantics block must declare {field}"),
+                        ));
+                    }
+                }
+            }
+        },
+        Stereotype::Entity | Stereotype::Dto => {
+            if design.semantics.is_some() {
+                violations.push(Violation::new(
+                    semantics_path,
+                    "only a value design may carry value semantics",
+                ));
+            }
+        }
     }
 }
 

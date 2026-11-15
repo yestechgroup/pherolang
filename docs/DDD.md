@@ -85,6 +85,17 @@ docs):
   that authors none of them stays byte-identical apart from the provenance
   line. See [Resolution semantics](#resolution-semantics) and the
   [consumer contract](#consumer-contract).
+- **Value semantics** (issue
+  [#299](https://github.com/yestechgroup/pherolang/issues/299)): a value
+  design carries `semantics`, the fixed four-property block
+  `{"identity":"none","immutable":true,"deepImmutable":true,"equality":"structural"}`
+  — every member always present, `identity` and `equality` closed
+  vocabularies (`"none"`, `"structural"`). The field is **sparse**: entity
+  and dto designs omit it, so an artifact without value designs stays
+  byte-identical apart from the provenance line and `formatVersion` stays 2.
+  A consumer reads the block; it never infers the four properties from
+  `"stereotype": "value"`. `pherolang artifact check` requires the block on
+  every value design and refuses it on an entity or dto.
 - Executable operation bodies (issue [#178](https://github.com/yestechgroup/pherolang/issues/178))
   ride the same additive fields: a service or repository operation's
   `bodies` map holds the checked body under the `"stmt"` target — the
@@ -389,6 +400,18 @@ ignore it for compatibility.
 - **Capabilities, events, decisions** — `capabilityRefs`, `emittedRefs`,
   `decisionRefs`, and `decisionDependencyRefs` are index-aligned with
   their authored name lists; read the companion at the same index.
+- **Values** — a design carrying `semantics` is a strictly immutable value
+  object: no identity, immutable, deep-immutable, structural equality. The
+  block is the contract; never infer it from `stereotype`. Emit a
+  constructor-only type whose inputs are exactly the stored features in
+  declaration order — private or immutable fields, no public setters, no
+  `Default`-then-mutate path, and no mutable view of nested values or
+  collections escaping the constructor (expose immutable collection
+  views). Implement equality and hash over the stored features in
+  declaration order; derived features are computed on read, never
+  construction inputs, never equality members, never persisted. A
+  persistence surrogate id is the consumer's internal detail at most:
+  never on the type's public surface, never equality-bearing.
 - **Flags** — `Design.flags` already carries the effective value (`auditable`
   and `optimisticLocking` are on for a plain entity design), so never
   re-apply the source defaults.
@@ -404,11 +427,13 @@ artifact; one that does not may ignore it.
 alone, with no sources or models present, it checks the version gate and the
 DDD contract: every authored reference carries its resolved companion, the
 parallel lists are index-aligned, the search references are complete,
-stereotype/flag combinations are legal, and `pheroVersion` is present and
-well-formed. A hand-edited or truncated artifact that drops a companion or
-invents an illegal combination fails with a diagnostic naming the design or
-reference. It does not re-typecheck against the domain — that needs the
-paired `Model`.
+stereotype/flag combinations are legal, every value design carries its
+`semantics` block (and no entity or dto design does), and `pheroVersion` is
+present and well-formed. A hand-edited or truncated artifact that drops a
+companion, a `semantics` block, or invents an illegal combination fails with
+a diagnostic naming the design or reference. It does not re-typecheck against
+the domain — that needs the paired `Model` — and it cannot re-check the
+value rules (R-V1 to R-V3), which read the `.mox` classes.
 
 ---
 
@@ -466,11 +491,37 @@ paired `Model`.
     type-checked with the entity as `self` (any value type is legal; the
     consumer decides the rendered form). Pagination bounds satisfy
     `1 ≤ limit ≤ max`.
-12. **Value contract** — a `value` design is an immutable value object
-    (Sculptor's ValueObject default, with no opt-out): every stored feature
-    of the resolved class (own and inherited, derived features excluded)
-    must carry the domain model's `readonly` modifier. A changeable class
-    designs as `entity` or `dto` instead.
+12. **Value contract** — a `value` design is a strictly immutable value
+    object (Sculptor's ValueObject with no `!immutable` opt-out, issue
+    [#299](https://github.com/yestechgroup/pherolang/issues/299)): no
+    identity, immutable, deep-immutable (nested values and collections),
+    and structural equality over the stored features (derived excluded) —
+    the four properties in [Value objects](#value-objects), carried in the
+    artifact as `semantics`. Every stored feature of the resolved class
+    (own and inherited, derived features excluded) must carry the domain
+    model's `readonly` modifier. The sub-rules below are checked against
+    the **application's designs**, not the `.mox` file alone — the same
+    class may be a `value` in one application and an `entity` in another,
+    and that is legal:
+    - **R-V1 — no identity.** A `value` whose target class declares an
+      `id`-modified feature is an error naming the design and the feature.
+      Workaround: drop the `id` (a value is identified by its state) or
+      design the class as an `entity`.
+    - **R-V2 — no owned mutable state.** A `value` may not own a
+      `contains` whose target class is designed as an `entity` in the same
+      application. Containment of other values is the normal nested-value
+      case.
+    - **R-V3 — no entity references.** A `value` may not declare a
+      `refers` whose target is designed as an `entity` in the same
+      application. This is an error, not a warning: a mutable entity
+      handle makes the value's observable state mutable and turns
+      structural equality into identity comparison. Workaround: refer by
+      id — `refers String personId`.
+    - **No abstract values.** `abstract value` is an error — abstractness
+      belongs to a hierarchy, and a value has no identity to inherit. A
+      shared shape without identity is a `.mox` interface or datatype.
+
+    A changeable class designs as `entity`; a transport shape as `dto`.
 13. **Aggregate reference constraint** — an outside class may hold a cross
     reference only to an aggregate's root: for every cross-reference
     (`refers`) feature whose target sits under a containment chain (a
@@ -716,6 +767,55 @@ ddd_machine_golden`.
 contract (entity + field — `phero_driver::machines::derived_events`), which
 is what makes the push plane's `state_changed` vocabulary reachable for a
 plain CRUD model once its lifecycle is modeled.
+
+## Value objects
+
+A `value` design means **strict value semantics** — all four properties,
+together, with no opt-out (issue
+[#299](https://github.com/yestechgroup/pherolang/issues/299)):
+
+| Property | Meaning |
+|---|---|
+| **No identity** | The class has no identity-bearing feature. Two values with equal stored state are interchangeable. |
+| **Immutable** | All stored state is fixed at construction: no setters, no public mutable fields, no mutation of nested state after construction. |
+| **Deep** | Immutability includes nested values and collections: no mutable view of owned state escapes the constructor. |
+| **Structural equality** | Equality and hashing are over the stored features (derived features excluded), never over a handle. |
+
+There is no `!immutable` flag and no mutable-value spelling: the
+stereotype is the contract. A class that must mutate is designed
+`entity`; a shape that carries data between layers is designed `dto`.
+
+Construction is one step — the constructor inputs are exactly the stored
+features, in declaration order, so a consumer emits a constructor-only
+type with no `Default`-then-mutate path. Derived features are computed on
+read; they are neither construction inputs nor equality members. A
+persistence surrogate id is the consumer's internal detail at most: it
+never appears on the value's public surface and never participates in
+equality.
+
+The rules that keep the properties honest (R-V1 to R-V3 under rule 12)
+are checked against the **application's designs**, not the `.mox` file
+alone: the same class may be a `value` in one application and an
+`entity` in another, and that is legal — each design states its own
+semantics. The artifact records the four properties as the design's
+`semantics` block rather than leaving a consumer to infer them from
+`"stereotype": "value"` (see [Artifact wire format](#artifact-wire-format)
+and the [consumer contract](#consumer-contract)).
+
+Workarounds, when the model wants something a value may not have:
+
+| The model needs … | Write … |
+|---|---|
+| identity, a lifecycle, or mutation | an `entity` design |
+| a shape that crosses a layer boundary (no identity, no behavior) | a `dto` design (DD3) |
+| a reference to an entity | refer by id: `refers String personId` |
+| a class that already declares an `id` | drop the `id` — the value is identified by its state |
+| shared shape without identity | a `.mox` interface or datatype, not `abstract value` |
+
+The shipped example is `examples/support/support.mox`'s `RefundDecision`:
+it keeps `readonly String decisionId` as stored state — an ordinary
+stored feature, no longer marked `id` — and stays a value design
+(`value RefundDecision nonPersistent` in `support.ddd`).
 
 ## Aggregate derivation
 
@@ -986,11 +1086,11 @@ rationale for each divergence is in [Deliberate divergences](#deliberate-diverge
 | Sculptor | Phero Lang `.ddd` | Deliberately different / absent |
 |---|---|---|
 | Entity | `entity` design | — |
-| ValueObject | `value` design | no `!immutable` opt-out: strict value immutability (decision D3) |
+| ValueObject | `value` design — strictly immutable: no identity, immutable, deep (nested values and collections), structural equality over stored features (D3) | **no `!immutable` opt-out** (strictly forbidden); no `id`-bearing feature, no entity `contains`, no entity `refers` — refer by id instead (`refers String personId`) |
 | BasicType | `.mox` datatype (referenced in signatures, never designed) | a datatype wraps one platform type; a multi-field value is a class designed `value` |
 | Repository | `repository` block on an entity design | six built-in operations (`findById`, `findAll`, `findByExample`, `findByKeys`, `save`, `delete`) plus declared signatures |
 | Service (+ injected `=>` delegation) | `service` with `inject` lines and `name => target.operation` operations | a cross-module service → repository/search delegation is an error; targets carry a resolved identity (`targetRef`) |
-| `scaffold` / `auditable` / `optimisticLocking` / `!aggregateRoot`-style negations | design flags (entity-only; `auditable`/`optimisticLocking` default on for entities, `!flag` opts out) | `!immutable` is absent (D3); the artifact stores the effective flag values, never the raw spelling |
+| `scaffold` / `auditable` / `optimisticLocking` / `!aggregateRoot`-style negations | design flags (entity-only; `auditable`/`optimisticLocking` default on for entities, `!flag` opts out) | `!immutable` is absent (D3) — not an opt-out but a refused spelling; the artifact stores the effective flag values, never the raw spelling |
 | `belongsTo` / `!aggregateRoot` | derived from the domain model's containment graph (see aggregate derivation) | not authorable: derivation only (DD4 adds an authored override) |
 | Module | `module` label grouping services and designs | one application per file; the module is a design label, not a deployment boundary (DD8) |
 | child-scoped aggregate operations | `extend <Root> { ... }` block (issue [#179](https://github.com/yestechgroup/pherolang/issues/179)) | `extend` is not class inheritance (naming under review in DD4) |
@@ -1011,6 +1111,15 @@ Sculptor concepts Phero Lang intentionally does not carry, and why. The
 mapping table's third column is the summary; this section is the detailed
 rationale.
 
+- **`!immutable` (mutable value objects)** — Sculptor lets a ValueObject
+  opt out of immutability. Phero Lang's `value` means strict value
+  semantics instead (rule 12, issue
+  [#299](https://github.com/yestechgroup/pherolang/issues/299)): a class
+  that must mutate is an `entity`, and a value that needs to name an
+  entity refers by id (`refers String personId`) rather than holding a
+  mutable handle. A mutable value is not a modeling style but a
+  contradiction — structural equality over state that can change is not
+  equality.
 - **Composite natural keys** — expressible already: several `id` features on
   one class lower with `isId`, and the composite key is that set; the
   Tier-1 backends give the group its meaning (docs/LANGUAGE.md keeps `id`
@@ -1188,9 +1297,9 @@ delegates across modules to `PersonService` (service → service, allowed).
 byte-compares the compiled artifact, the CLI fmt gate enforces the
 canonical formatting, and `pherolang artifact check` validates the artifact
 against the DDD contract — resolved companions, aligned parallel lists,
-search references, stereotype/flag legality, and provenance — not just its
-wire shape. Regenerate goldens with `PHERO_UPDATE_FIXTURES=1 cargo test
---workspace`.
+search references, stereotype/flag legality, value `semantics`, and
+provenance — not just its wire shape. Regenerate goldens with
+`PHERO_UPDATE_FIXTURES=1 cargo test --workspace`.
 
 The machine-bearing pair `payrun.mox`/`payrun.ddd` (formatter-canonical)
 commits two goldens: `payrun.ddd.json` (the design artifact) and
@@ -1231,6 +1340,13 @@ The `examples/` side ships `support.ddd` (entity/value/dto designs,
 searches, capabilities validated against `support.actor` through
 `compile_ddd_str_with_actors`) and `orders.ddd` (the aggregate-derivation
 rule over `ecommerce.mox`), byte-pinned against `examples/artifacts/` by
-`crates/phero-driver/tests/examples_artifacts.rs`. Note that
+`crates/phero-driver/tests/examples_artifacts.rs`. Its `RefundDecision` is
+the strict-value example: `decisionId` is stored state, not an `id`, and
+the design carries the `semantics` block. Note that
 `examples/library/library.mox` itself is *not* designable: its `Writer.books`
 cross reference escapes the Library aggregate (rule 13).
+
+The value rules (rule 12's R-V1 to R-V3) are pinned by the driver's
+negative-compile matrix, one case per rule: no in-tree backend consumes
+`.ddd`, so the design-aware generator is codegraph's, external by D1, and
+the in-tree proof is the rule matrix plus the artifact contract.

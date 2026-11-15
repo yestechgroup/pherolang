@@ -22,6 +22,30 @@ policy in [docs/VERSIONING.md](docs/VERSIONING.md).
   references, provenance). `docs/DDD.md` gains the resolution table, the
   consumer contract, and the Sculptor "deliberately different / absent"
   mapping column.
+- **Strict value semantics in the `.ddd` surface** (DD2, issue #299, epic
+  #297): a `value` design now means all four properties together — no
+  identity, immutable, deep-immutable (nested values and collections), and
+  structural equality over the stored features with derived features
+  excluded — with **no `!immutable` opt-out**. New compile rules, checked
+  against the application's designs (one class may be a value in one
+  application and an entity in another): R-V1, a value's target class may
+  not declare an `id`-modified feature; R-V2, a value may not own a
+  `contains` whose target is designed as an `entity`; R-V3, a value may not
+  declare a `refers` to a designed `entity` (an error, not a warning —
+  refer by id instead: `refers String personId`); and `abstract value` is
+  refused. Value designs carry the fixed artifact block `semantics` —
+  `{"identity":"none","immutable":true,"deepImmutable":true,"equality":"structural"}`
+  — and the field is sparse, so entity/dto designs and value-less models stay
+  byte-identical and `formatVersion` stays 2; `pherolang artifact check`
+  requires the block on every value design and refuses it elsewhere.
+  `examples/support` migrates: `RefundDecision` keeps
+  `readonly String decisionId` as stored state but no longer marks it `id`.
+  The Rust backend does not consume `.ddd`, so the in-tree proof is the
+  compile-rule matrix plus the artifact contract, and the consumer (codegraph)
+  contract — constructor-only type, private/immutable fields, no `Default`,
+  immutable collection views, structural equality/hash in declaration
+  order, derived features computed, surrogate id never public or
+  equality-bearing — is written into `docs/DDD.md`.
 
 ## [0.3.0] — Phero Lang (2026-11-14)
 

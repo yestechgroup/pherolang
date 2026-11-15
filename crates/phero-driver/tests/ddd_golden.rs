@@ -51,6 +51,14 @@ const BODIES_DESIGN_PATH: &str = "tests/conformance/ddd/bodies.ddd";
 const BODIES_DOMAIN_PATH: &str = "tests/conformance/ddd/bodies.mox";
 const BODIES_ARTIFACT_PATH: &str = "tests/conformance/ddd/bodies.ddd.json";
 
+/// The DD2 value-semantics fixture (issue pherolang#299): three value
+/// designs — enum/datatype fields, a nested value (a value containing
+/// values), and a `nonPersistent` one; the golden carries the fixed
+/// `semantics` block on each.
+const VALUES_DESIGN_PATH: &str = "tests/conformance/ddd/values.ddd";
+const VALUES_DOMAIN_PATH: &str = "tests/conformance/ddd/values.mox";
+const VALUES_ARTIFACT_PATH: &str = "tests/conformance/ddd/values.ddd.json";
+
 /// Compiles one `(design, domain)` fixture pair the way the CLI resolves
 /// the import (paths relative to the design file) and returns the lowered
 /// artifact, failing on any diagnostic.
@@ -222,6 +230,32 @@ fn conformance_bodies_matches_golden_artifact() {
     assert!(total.bodies.contains_key("stmt"));
 
     assert_golden_artifact(model, BODIES_ARTIFACT_PATH, BODIES_DESIGN_PATH);
+}
+
+/// The DD2 value fixture (issue pherolang#299): every value design carries
+/// the fixed strict semantics block, and none of the three names an
+/// identity, a contained entity, or an entity reference.
+#[test]
+fn conformance_values_matches_golden_artifact() {
+    let model = compile_fixture(VALUES_DESIGN_PATH, VALUES_DOMAIN_PATH);
+    assert_eq!(
+        model.modules[0]
+            .designs
+            .iter()
+            .map(|design| design.class.as_str())
+            .collect::<Vec<_>>(),
+        ["Money", "PriceRange", "Snapshot"],
+    );
+    for design in &model.modules[0].designs {
+        assert_eq!(
+            design.semantics.as_ref(),
+            Some(&phero_ir::ddd::ValueSemantics::strict()),
+            "value design '{}' carries the fixed block",
+            design.class
+        );
+    }
+    assert!(model.modules[0].designs[2].flags.non_persistent);
+    assert_golden_artifact(model, VALUES_ARTIFACT_PATH, VALUES_DESIGN_PATH);
 }
 
 #[test]

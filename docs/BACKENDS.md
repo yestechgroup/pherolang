@@ -43,7 +43,7 @@ Root shapes, as actually serialized:
 | --- | --- |
 | Domain IR (`Model`) | `{"formatVersion": N, "pheroVersion"?: "…", "packages": […]}` |
 | Actor policy (`ActorModel`) | `{"formatVersion": N, "blocks"?: […]}` — block-less serializes as exactly `{"formatVersion": N}` |
-| DDD design (`ddd::DddModel`) | `{"formatVersion": N, "pheroVersion"?: "…", "application"?: {…}, "modules"?: […]}` (the design keys omitted when empty; `pheroVersion` is provenance only) |
+| DDD design (`ddd::DddModel`) | `{"formatVersion": N, "pheroVersion"?: "…", "application"?: {…}, "modules"?: […]}` (the design keys omitted when empty; `pheroVersion` is provenance only; a `value` design nested inside carries the fixed `semantics` block, entity and dto designs omit it — strict value semantics, issue #299) |
 | Event contract (`events::EventModel`) | `{"formatVersion": N, "events"?: […], "channels"?: […], "subscriptions"?: […]}` (all omitted when empty) |
 | Deployment (`deploy::DeployModel`) | `{"formatVersion": N, "applications"?: […], "profiles"?: […], "deployments"?: […]}` (all omitted when empty) |
 | Use case (`usecases::UseCaseModel`) | `{"formatVersion": N, "useCases"?: […]}` (omitted when empty) |
@@ -205,8 +205,10 @@ naming the file and violation when anything fails:
   carries its resolved companion (`typeRef`, `delegation.targetRef`,
   `dependencyRefs`, `decisionDependencyRefs`, `capabilityRefs`,
   `emittedRefs`, `decisionRefs`, `entityRef`, and search-member `typeRef`s),
-  the parallel lists are index-aligned, search references are complete, and
-  stereotype/flag combinations are legal — a violation names the design or
+  the parallel lists are index-aligned, search references are complete,
+  stereotype/flag combinations are legal, and every `value` design carries
+  the fixed `semantics` block (strict value semantics, issue #299) while no
+  entity or dto design carries one — a violation names the design or
   reference;
 - structural keys are camelCase (a snake_case spelling of a known key is
   reported with the correct spelling; model-defined keys — feature names,

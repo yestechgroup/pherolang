@@ -8,7 +8,10 @@ use phero_backend_ddd::{canonical_json, canonical_json_string, check_contract, V
 use phero_driver::{
     compile_actors_str, compile_ddd_str, compile_ddd_str_with_actors, DomainImports, Severity,
 };
-use phero_ir::ddd::{DddModel, Stereotype, TargetKind, TargetRef, DDD_MODEL_FORMAT_VERSION};
+use phero_ir::ddd::{
+    DddModel, Design, EqualityPolicy, IdentityPolicy, Stereotype, TargetKind, TargetRef,
+    ValueSemantics, DDD_MODEL_FORMAT_VERSION,
+};
 use phero_ir::Multiplicity;
 
 fn workspace_root() -> PathBuf {
@@ -102,6 +105,34 @@ application Library {
         .expect("the focused design lowers under actor validation")
 }
 
+/// The strict value-semantics block every `value` design carries (DD2,
+/// pherolang#299).
+fn fixed_semantics() -> ValueSemantics {
+    ValueSemantics {
+        identity: IdentityPolicy::None,
+        immutable: true,
+        deep_immutable: true,
+        equality: EqualityPolicy::Structural,
+    }
+}
+
+/// The canonical value fixture: three value designs — enum/datatype
+/// fields, a nested value, and a non-persistent one.
+fn compiled_values() -> DddModel {
+    let (design_path, design) = fixture("values.ddd");
+    let (domain_path, domain) = fixture("values.mox");
+    let compilation = compile_ddd_str(
+        &design_path,
+        &design,
+        &[(domain_path, domain)],
+        &DomainImports::default(),
+    );
+    assert_clean(&compilation.diagnostics);
+    compilation
+        .model
+        .expect("values.ddd lowers to a design artifact")
+}
+
 fn assert_clean(diagnostics: &[(String, phero_driver::Diagnostic)]) {
     assert!(
         diagnostics
@@ -125,6 +156,105 @@ fn has(violations: &[Violation], path: &str) -> bool {
 #[test]
 fn a_compiled_design_is_contract_complete() {
     assert_eq!(check_contract(&compiled()), Vec::new());
+}
+
+// --- value semantics (DD2, pherolang#299) ------------------------------------
+
+#[test]
+fn a_compiled_value_design_is_contract_complete() {
+    let model = compiled_values();
+    assert_eq!(check_contract(&model), Vec::new());
+    for design in &model.modules[0].designs {
+        assert_eq!(
+            design.semantics,
+            Some(fixed_semantics()),
+            "value design '{}' carries the fixed block",
+            design.class
+        );
+    }
+}
+
+#[test]
+fn a_value_design_without_the_semantics_block_is_reported() {
+    let mut model = compiled_values();
+    model.modules[0].designs[0].semantics = None;
+    let violations = check_contract(&model);
+    assert!(
+        has(&violations, "modules[0].designs[0].semantics"),
+        "{violations:?}"
+    );
+    assert_eq!(
+        violations.len(),
+        1,
+        "one violation per design: {violations:?}"
+    );
+    let violation = &violations[0];
+    assert!(
+        violation.message.contains("value design") && violation.message.contains("semantics"),
+        "the message names the missing block: {}",
+        violation.message
+    );
+}
+
+#[test]
+fn a_value_design_with_a_wrong_semantics_field_is_reported() {
+    for (field, mutate) in [
+        (
+            "immutable",
+            (|semantics: &mut ValueSemantics| semantics.immutable = false)
+                as fn(&mut ValueSemantics),
+        ),
+        ("deepImmutable", |semantics: &mut ValueSemantics| {
+            semantics.deep_immutable = false;
+        }),
+    ] {
+        let mut model = compiled_values();
+        let semantics = model.modules[0].designs[0]
+            .semantics
+            .as_mut()
+            .expect("the compiled value design carries the block");
+        mutate(semantics);
+        let violations = check_contract(&model);
+        assert!(
+            has(&violations, "modules[0].designs[0].semantics"),
+            "{field}: {violations:?}"
+        );
+        assert!(
+            violations
+                .iter()
+                .any(|violation| violation.message.contains(field)),
+            "{field}: the message names the offending field: {violations:?}"
+        );
+    }
+}
+
+#[test]
+fn entity_and_dto_designs_may_not_carry_semantics() {
+    for stereotype in [Stereotype::Entity, Stereotype::Dto] {
+        let mut model = compiled_values();
+        let mut design = Design::new("Summary", stereotype);
+        design.type_ref = Some(phero_ir::TypeRef::Class {
+            package: "nz.example.values".to_string(),
+            name: "Summary".to_string(),
+        });
+        design.semantics = Some(fixed_semantics());
+        model.modules[0].designs.push(design);
+        let index = model.modules[0].designs.len() - 1;
+        let violations = check_contract(&model);
+        assert!(
+            has(
+                &violations,
+                &format!("modules[0].designs[{index}].semantics")
+            ),
+            "{stereotype:?}: {violations:?}"
+        );
+        assert!(
+            violations
+                .iter()
+                .any(|violation| violation.message.contains("only a value design")),
+            "{stereotype:?}: the message names the rule: {violations:?}"
+        );
+    }
 }
 
 #[test]

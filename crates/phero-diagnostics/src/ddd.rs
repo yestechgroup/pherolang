@@ -7,7 +7,9 @@
 //! `dmn.check` band's E0250/E0251 precedent. E0350–E0352 are the
 //! transition-binding checks; E0353–E0354 are the condition-scope checks;
 //! E0355–E0358 are the `extend` child-operation checks; E0359–E0360 are the
-//! executable operation-body checks (issue pherolang#178).
+//! executable operation-body checks (issue pherolang#178); E0361–E0364 are
+//! the strict value-semantics checks (issue pherolang#299: R-V1, R-V2, R-V3,
+//! and the `abstract value` rejection).
 //! Claim a new code by adding a documented constant plus an `Entry` to
 //! `ENTRIES`.
 
@@ -75,6 +77,27 @@ pub const E_UNKNOWN_BODY_RECEIVER: &str = "E0359";
 /// does not return. Unlike the sigil statement bodies, every failure here is
 /// a hard compile error.
 pub const E_INVALID_OPERATION_BODY: &str = "E0360";
+/// `value design '<design>' in module '<module>' of application
+/// '<application>': feature '<feature>' carries the 'id' modifier; a value
+/// object has no identity` — rule R-V1 of the strict value semantics (DD2,
+/// pherolang#299): a `value` design targets a class with no identity, so
+/// every `id` feature of the class (including inherited ones) is refused.
+pub const E_VALUE_HAS_IDENTITY: &str = "E0361";
+/// `value design '<design>' in module '<module>' of application
+/// '<application>': feature '<feature>' contains entity '<entity>'; a value
+/// object owns no mutable state` — rule R-V2: a value may contain values,
+/// never a class designed as an `entity` in the same application.
+pub const E_VALUE_CONTAINS_ENTITY: &str = "E0362";
+/// `value design '<design>' in module '<module>' of application
+/// '<application>': feature '<feature>' refers to entity '<entity>'; a value
+/// object carries no entity references` — rule R-V3: a value refers to an
+/// entity by id, never by object reference.
+pub const E_VALUE_REFERENCES_ENTITY: &str = "E0363";
+/// `value design '<design>' in module '<module>' of application
+/// '<application>' is abstract; a value object is concrete` — strict value
+/// semantics have no abstract values (an abstract value would leave its
+/// identity/structure undefined).
+pub const E_ABSTRACT_VALUE: &str = "E0364";
 
 pub(crate) const ENTRIES: &[Entry] = &[
     Entry {
@@ -164,5 +187,37 @@ pub(crate) const ENTRIES: &[Entry] = &[
         title: "Invalid operation body",
         meaning: "`invalid service body in operation '<op>': <slot>: <detail>` (repository bodies use the same shape) — the `.ddd` statement body is a closed procedural subset (`let`, `let … else error …`, assignment, `guard … else error …`, `if`/`else`, `return`), typed against the operation's parameters, the designed aggregate, and the synthetic repository classes. Unknown features/operations, type mismatches, non-boolean guards, unknown raise variants or arities, and value-returning paths that do not return (`missing return`) are all hard compile errors — unlike the sigil Rune bodies' generate-time deferral, the `.ddd` compiler never attaches an unchecked body.",
         fix: "Fix the named slot: use a declared feature or operation, match the target type exactly, make guards boolean, raise `NotFound` (2 arguments) or `Conflict` (1 argument), and return on every successful path of a value-returning operation.",
+    },
+    Entry {
+        code: E_VALUE_HAS_IDENTITY,
+        band: DDD_BAND,
+        severity: Severity::Error,
+        title: "Value design has an identity feature",
+        meaning: "`value design '<design>' in module '<module>' of application '<application>': feature '<feature>' carries the 'id' modifier; a value object has no identity` — rule R-V1 of the strict value semantics (DD2). A `value` design is strictly structural: it has no identity, so every `id` feature of its class (own or inherited) is refused.",
+        fix: "Remove the `id` modifier from the named feature (a stored surrogate id may stay a plain `readonly` attribute, which is not identity), or design the class as an `entity`.",
+    },
+    Entry {
+        code: E_VALUE_CONTAINS_ENTITY,
+        band: DDD_BAND,
+        severity: Severity::Error,
+        title: "Value design contains an entity",
+        meaning: "`value design '<design>' in module '<module>' of application '<application>': feature '<feature>' contains entity '<entity>'; a value object owns no mutable state` — rule R-V2 of the strict value semantics (DD2). Deep immutability means a value may contain other values, never a class designed as an `entity` in the same application (whose state could mutate after construction).",
+        fix: "Contain another value object, refer to the entity by id (`refers String <name>Id`), or move the containment onto an entity design.",
+    },
+    Entry {
+        code: E_VALUE_REFERENCES_ENTITY,
+        band: DDD_BAND,
+        severity: Severity::Error,
+        title: "Value design references an entity",
+        meaning: "`value design '<design>' in module '<module>' of application '<application>': feature '<feature>' refers to entity '<entity>'; a value object carries no entity references` — rule R-V3 of the strict value semantics (DD2). A cross-reference to a designed entity would let a mutable object hide inside an immutable value; a value refers to an entity by id instead.",
+        fix: "Refer to the entity by id (`refers String <name>Id`), or model the relationship on the entity that owns it.",
+    },
+    Entry {
+        code: E_ABSTRACT_VALUE,
+        band: DDD_BAND,
+        severity: Severity::Error,
+        title: "Abstract value design",
+        meaning: "`value design '<design>' in module '<module>' of application '<application>' is abstract; a value object is concrete` — the strict value semantics (DD2) admit no abstract values: a value's identity, structure, and equality are exactly its stored features, so an abstract value would leave its instances undefined.",
+        fix: "Remove `abstract` from the design, or design the class as an `entity` (abstract entity designs are the sanctioned polymorphism shape).",
     },
 ];

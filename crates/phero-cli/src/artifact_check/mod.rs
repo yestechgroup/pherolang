@@ -24,9 +24,10 @@
 //!   document;
 //! * a DDD design artifact satisfies the artifact-only DDD contract from
 //!   [`phero_backend_ddd::check_contract`] (resolved companions, legal
-//!   stereotype/flag combinations, aligned parallel lists) — the one
-//!   per-kind check that inspects the deserialized artifact, not only its
-//!   JSON shape.
+//!   stereotype/flag combinations, aligned parallel lists, the fixed strict
+//!   `semantics` block on every `value` design and none on an entity/dto) —
+//!   the one per-kind check that inspects the deserialized artifact, not
+//!   only its JSON shape.
 //!
 //! The wire-format contract itself is normative in the `phero-ir` crate docs;
 //! `docs/BACKENDS.md` is the backend-author guide.
