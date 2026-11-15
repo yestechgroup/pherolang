@@ -268,7 +268,7 @@ function countBy(items, key) {
     const value = item[key] ?? 'unknown';
     counts[value] = (counts[value] ?? 0) + 1;
   }
-  return Object.fromEntries(Object.entries(counts).sort(([a], [b]) => a.localeCompare(b)));
+  return Object.fromEntries(Object.entries(counts).sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0)));
 }
 
 // ---------------------------------------------------------------------------

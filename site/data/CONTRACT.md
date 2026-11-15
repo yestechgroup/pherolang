@@ -27,12 +27,17 @@ node scripts/sync-model.mjs          # regenerate this directory
 | `receipt.json` | `support.receipt.json`, copied | copy | lane 2/5 (verification story) |
 | `register.json` | `docs/verification/register.json`, copied | copy | lane 2/5 (proof-obligation ladder) |
 | `docs-inventory.json` | `{ formatVersion, docs[] }` — title, slug, size, lines | sync-model | `ingest-docs.mjs` |
-| `docs-manifest.json` | `{ formatVersion, generated[] }` — source → output mapping | `ingest-docs.mjs` | gate (docs coverage) |
+| `docs-manifest.json` | `{ formatVersion, generated[] }` — `{ source, slug, collection, target, url }` per page, ADRs included | `ingest-docs.mjs` | gate (docs coverage), lane 3 (doc URLs) |
 | `support-model.json` | **lane 5's contract**, below | `scripts/render-graph.mjs` | lane 6 (island) |
 
 ### `support-model.json` — the demo projection (lane 5 → lane 6)
 
-Baked layout, so the first paint is static SVG and JavaScript only enhances:
+Baked layout, so the first paint is static SVG and JavaScript only enhances.
+`provenance` is **base-relative** (`support/support.mox`), exactly as the graph
+artifact writes it — not repo-relative. `meta` carries the application id, the
+source artifact, the graph totals and the per-perspective counts; each
+perspective also carries a `viewport` (`width`/`height`) and a `groups[]` array
+of cluster header boxes. Lane 6 needs only `nodes`/`edges`.
 
 ```jsonc
 {
@@ -63,8 +68,14 @@ Baked layout, so the first paint is static SVG and JavaScript only enhances:
 
 Rules: node ids are the graph artifact's ids verbatim (so a visitor can find the
 same node in `graph.json`); every edge endpoint exists in the same perspective
-(the gate asserts referential integrity); coordinates are deterministic
-(`node scripts/render-graph.mjs` twice → identical bytes).
+(the gate asserts referential integrity); no two node boxes overlap and every
+box sits inside its group and the viewport (asserted by the script); coordinates
+are deterministic (`node scripts/render-graph.mjs` twice → identical bytes).
+
+One slug caveat: `docs-inventory.json` keeps the document's own slug
+(`release-0.3.0`) as its identity key, while the *emitted* page slug drops dots
+(Starlight does), so `target`/`url` in the manifest read `release-030`. Compare
+`url`, not `slug`, when resolving a link.
 
 ---
 
@@ -78,6 +89,9 @@ same node in `graph.json`); every edge endpoint exists in the same perspective
 - Lanes 2–6 own only the files listed in their brief.
 - `site/data/**` is generated. If you need a new field, edit `scripts/sync-model.mjs`
   (or `scripts/render-graph.mjs` for `support-model.json`) and say so.
+- The one authored data file lives in the app, not here:
+  `phero-web/src/data/commands.json` — every shell command the site shows, the
+  single list `scripts/check-commands.mjs` executes and the gate runs.
 
 ## The docs site is not a copy
 

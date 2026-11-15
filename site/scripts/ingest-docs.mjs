@@ -482,7 +482,7 @@ function buildLandingPage(readme, allPages) {
   for (const group of GROUPS) {
     const inGroup = allPages
       .filter((page) => page.collection === group && page !== landing)
-      .sort((a, b) => a.order - b.order || a.slug.localeCompare(b.slug));
+      .sort((a, b) => a.order - b.order || (a.slug < b.slug ? -1 : a.slug > b.slug ? 1 : 0));
     if (inGroup.length === 0) continue;
     out.push(`### ${GROUP_LABEL[group]}`, '');
     for (const page of inGroup) {
@@ -556,7 +556,7 @@ const manifest = pages.all
     (a, b) =>
       GROUPS.indexOf(a.collection) - GROUPS.indexOf(b.collection) ||
       a.order - b.order ||
-      a.slug.localeCompare(b.slug),
+      (a.slug < b.slug ? -1 : a.slug > b.slug ? 1 : 0),
   )
   .map((page) => ({
     source: page.source,

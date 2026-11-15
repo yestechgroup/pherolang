@@ -3,7 +3,7 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "node ../scripts/ingest-docs.mjs && astro dev",
+    "dev": "node ../scripts/ingest-docs.mjs && astro dev --port 4322",
     "build": "node ../scripts/ingest-docs.mjs && astro build",
     "preview": "astro preview",
     "check": "node ../scripts/ingest-docs.mjs && astro check",
