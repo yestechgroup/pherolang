@@ -111,12 +111,125 @@ fn family_mismatch(
     Diagnostic::error(message, span)
 }
 
-/// Lowers an attribute's declared constraints into the IR, type-checking
-/// them against the attribute's resolved type. For a many-valued attribute
-/// the value bounds apply to the elements.
+/// The feature kinds that admit a constraint block (DD6, issue #303).
+/// Attributes admit the value bounds plus the collection constraints; the
+/// relationship kinds and `derived` admit only `unique`/`set`.
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub(crate) enum ConstraintTarget {
+    /// An ordinary value-holding attribute.
+    Attribute,
+    /// A `contains` feature.
+    Containment,
+    /// A `refers` feature.
+    Reference,
+    /// The single-valued owner slot (`container`): never carries a block in
+    /// the grammar, but the noun keeps diagnostics honest.
+    Container,
+    /// A `derived` feature.
+    Derived,
+}
+
+impl ConstraintTarget {
+    fn noun(self) -> &'static str {
+        match self {
+            Self::Attribute => "attribute",
+            Self::Containment => "containment",
+            Self::Reference => "reference",
+            Self::Container => "container",
+            Self::Derived => "derived feature",
+        }
+    }
+}
+
+/// The lowered constraint block: the value/duplicate constraints plus the
+/// collection kind a `set` selects.
+pub(crate) struct LoweredConstraints {
+    /// The value bounds and the duplicate rule.
+    pub constraints: ir::FeatureConstraints,
+    /// `Some(Set)` when the block carried `set`; `None` is an ordered list.
+    pub collection: Option<ir::CollectionKind>,
+}
+
+impl LoweredConstraints {
+    fn empty() -> Self {
+        Self {
+            constraints: ir::FeatureConstraints::default(),
+            collection: None,
+        }
+    }
+}
+
+/// The constraint family a value-bound keyword belongs to (named in the
+/// attribute-only rejection so the fix is apparent).
+fn constraint_family(keyword: &str) -> &'static str {
+    match keyword {
+        "pattern" | "minLength" | "maxLength" => "string family",
+        "minimum" | "maximum" => "numeric family",
+        _ => "value family",
+    }
+}
+
+/// The non-attribute constraint path (DD6, issue #303): on a `contains`,
+/// `refers`, or `derived` feature only the collection constraints apply, so
+/// every value-bound keyword is rejected naming its family. Extending the
+/// block to relationships therefore never admits value bounds there.
+fn lower_collection_constraints_only(
+    constraints: &[mox::Constraint],
+    noun: &str,
+    subject: &str,
+    many: bool,
+    lowered: &mut LoweredConstraints,
+    diags: &mut Vec<Diagnostic>,
+) {
+    for constraint in constraints {
+        let span = Some(constraint.name.span);
+        let keyword = constraint.name.text.as_str();
+        match (keyword, &constraint.value) {
+            ("unique" | "set", mox::ConstraintValue::Flag { .. }) => {
+                if !many {
+                    diags.push(Diagnostic::error(
+                        format!(
+                            "constraint '{keyword}' requires a many-valued {noun}, which {subject} is not"
+                        ),
+                        span,
+                    ));
+                } else {
+                    lowered.constraints.unique = true;
+                    if keyword == "set" {
+                        lowered.collection = Some(ir::CollectionKind::Set);
+                    }
+                }
+            }
+            ("unique" | "set", _) => diags.push(Diagnostic::error(
+                format!("constraint '{keyword}' takes no value"),
+                span,
+            )),
+            (keyword, mox::ConstraintValue::Flag { .. }) => diags.push(Diagnostic::error(
+                format!("constraint '{keyword}' takes no value"),
+                span,
+            )),
+            (keyword, mox::ConstraintValue::Str { .. } | mox::ConstraintValue::Int { .. }) => {
+                diags.push(Diagnostic::error(
+                    format!(
+                        "constraint '{keyword}' ({family}) is only allowed on attributes, not on {subject}",
+                        family = constraint_family(keyword)
+                    ),
+                    span,
+                ));
+            }
+        }
+    }
+}
+
+/// Lowers one feature's declared constraints into the IR, type-checking
+/// them against the feature kind and (for attributes) its resolved type.
+/// For a many-valued attribute the value bounds apply to the elements.
 ///
 /// A constraint family is admitted by the most explicit type knowledge
 /// available (violations are errors, never silently dropped):
+/// - on a `contains`/`refers`/`derived` feature only the collection
+///   constraints apply (`unique`, `set`); every value-bound keyword is an
+///   error naming its family (DD6, issue #303);
 /// - `pattern`, `minLength`, `maxLength` (the string family) require a
 ///   `string` attribute; `minimum`, `maximum` (the numeric family) require
 ///   a numeric attribute (`char` and `boolean` fall under neither rule);
@@ -131,25 +244,33 @@ fn family_mismatch(
 ///   numeric family literal values, and both may coexist. A numeric or
 ///   length bound that admits zero literals is a compile error; `pattern`
 ///   is never statically validated;
-/// - the value-less `unique` is family-agnostic: it is admitted on any
-///   many-valued attribute regardless of element type and rejected on a
-///   single-valued one (a set of one value is trivially unique);
-/// - class and interface types take no constraints;
+/// - the value-less `unique` and `set` are family-agnostic: admitted on any
+///   many-valued feature of each kind and rejected on a single-valued one.
+///   `set` implies `unique` (a set is unordered *and* duplicate-free), so a
+///   set lowers `collection: "set"` and `constraints.unique: true` together;
+///   a unique list lowers the flag alone;
+/// - class and interface types take no value bounds;
 /// - length bounds must be non-negative and ordered; numeric bounds must be
 ///   ordered.
 pub(crate) fn lower_constraints(
     constraints: &[mox::Constraint],
+    target: ConstraintTarget,
     many: bool,
     resolution: Option<&Resolution>,
     prep: &PrepMaps<'_>,
     feature_name: &str,
     diags: &mut Vec<Diagnostic>,
-) -> ir::FeatureConstraints {
-    let mut lowered = ir::FeatureConstraints::default();
+) -> LoweredConstraints {
+    let mut lowered = LoweredConstraints::empty();
     if constraints.is_empty() {
         return lowered;
     }
-    let subject = format!("attribute '{feature_name}'");
+    let noun = target.noun();
+    let subject = format!("{noun} '{feature_name}'");
+    if target != ConstraintTarget::Attribute {
+        lower_collection_constraints_only(constraints, noun, &subject, many, &mut lowered, diags);
+        return lowered;
+    }
     // The attribute's constraint space, or `None` when checks are skipped:
     // either resolution failed (the resolver already reported the error) or
     // a diagnostic was just raised here — both avoid cascading noise.
@@ -215,8 +336,8 @@ pub(crate) fn lower_constraints(
         match (constraint.name.text.as_str(), &constraint.value) {
             ("pattern", mox::ConstraintValue::Str { value, .. }) => {
                 if space.admits_string_family() {
-                    if lowered.pattern.is_none() {
-                        lowered.pattern = Some(value.clone());
+                    if lowered.constraints.pattern.is_none() {
+                        lowered.constraints.pattern = Some(value.clone());
                     }
                 } else {
                     diags.push(family_mismatch(
@@ -235,10 +356,10 @@ pub(crate) fn lower_constraints(
                         span,
                     ));
                 } else if keyword == "minLength" {
-                    lowered.min_length = Some(*value as u64);
+                    lowered.constraints.min_length = Some(*value as u64);
                     min_length_span = span;
                 } else {
-                    lowered.max_length = Some(*value as u64);
+                    lowered.constraints.max_length = Some(*value as u64);
                     max_length_span = span;
                 }
             }
@@ -248,17 +369,17 @@ pub(crate) fn lower_constraints(
                         keyword, "numeric", &subject, resolution, prep, span,
                     ));
                 } else if keyword == "minimum" {
-                    lowered.minimum = Some(*value);
+                    lowered.constraints.minimum = Some(*value);
                     minimum_span = span;
                 } else {
-                    lowered.maximum = Some(*value);
+                    lowered.constraints.maximum = Some(*value);
                     maximum_span = span;
                 }
             }
             ("unique", mox::ConstraintValue::Flag { .. }) => {
                 // Family-agnostic: any many-valued attribute admits it.
                 if many {
-                    lowered.unique = true;
+                    lowered.constraints.unique = true;
                 } else {
                     diags.push(Diagnostic::error(
                         format!(
@@ -268,9 +389,24 @@ pub(crate) fn lower_constraints(
                     ));
                 }
             }
-            ("unique", _) => {
+            ("set", mox::ConstraintValue::Flag { .. }) => {
+                // A set is unordered and duplicate-free: it implies `unique`
+                // and lowers both markers together.
+                if many {
+                    lowered.constraints.unique = true;
+                    lowered.collection = Some(ir::CollectionKind::Set);
+                } else {
+                    diags.push(Diagnostic::error(
+                        format!(
+                            "constraint 'set' requires a many-valued attribute, which {subject} is not"
+                        ),
+                        span,
+                    ));
+                }
+            }
+            (keyword @ ("unique" | "set"), _) => {
                 diags.push(Diagnostic::error(
-                    "constraint 'unique' takes no value".to_string(),
+                    format!("constraint '{keyword}' takes no value"),
                     span,
                 ));
             }
@@ -290,7 +426,9 @@ pub(crate) fn lower_constraints(
             }
         }
     }
-    if let (Some(minimum), Some(maximum)) = (lowered.minimum, lowered.maximum) {
+    if let (Some(minimum), Some(maximum)) =
+        (lowered.constraints.minimum, lowered.constraints.maximum)
+    {
         if minimum > maximum {
             diags.push(Diagnostic::error(
                 format!(
@@ -300,7 +438,10 @@ pub(crate) fn lower_constraints(
             ));
         }
     }
-    if let (Some(min_length), Some(max_length)) = (lowered.min_length, lowered.max_length) {
+    if let (Some(min_length), Some(max_length)) = (
+        lowered.constraints.min_length,
+        lowered.constraints.max_length,
+    ) {
         if min_length > max_length {
             diags.push(Diagnostic::error(
                 format!(
@@ -315,14 +456,14 @@ pub(crate) fn lower_constraints(
     // check stays silent for them — one clear error each.
     if let ConstraintSpace::Enum(enum_decl) = space {
         let enum_name = &enum_decl.name.text;
-        if lowered.minimum.is_some() || lowered.maximum.is_some() {
-            let ordered = match (lowered.minimum, lowered.maximum) {
+        if lowered.constraints.minimum.is_some() || lowered.constraints.maximum.is_some() {
+            let ordered = match (lowered.constraints.minimum, lowered.constraints.maximum) {
                 (Some(min), Some(max)) => min <= max,
                 _ => true,
             };
             let admits = |value: i64| {
-                lowered.minimum.is_none_or(|min| value >= min)
-                    && lowered.maximum.is_none_or(|max| value <= max)
+                lowered.constraints.minimum.is_none_or(|min| value >= min)
+                    && lowered.constraints.maximum.is_none_or(|max| value <= max)
             };
             let any = enum_decl
                 .literals
@@ -330,38 +471,48 @@ pub(crate) fn lower_constraints(
                 .filter_map(|literal| literal.value)
                 .any(admits);
             if ordered && !any {
-                let (keyword, span, detail) = match (lowered.minimum, lowered.maximum) {
-                    (Some(min), None) => (
-                        "minimum",
-                        minimum_span,
-                        format!("no literal value is >= {min}"),
-                    ),
-                    (None, Some(max)) => (
-                        "maximum",
-                        maximum_span,
-                        format!("no literal value is <= {max}"),
-                    ),
-                    (Some(min), Some(max)) => (
-                        "minimum",
-                        minimum_span,
-                        format!("no literal value lies in [{min}, {max}]"),
-                    ),
-                    (None, None) => unreachable!("range is bounded"),
-                };
+                let (keyword, span, detail) =
+                    match (lowered.constraints.minimum, lowered.constraints.maximum) {
+                        (Some(min), None) => (
+                            "minimum",
+                            minimum_span,
+                            format!("no literal value is >= {min}"),
+                        ),
+                        (None, Some(max)) => (
+                            "maximum",
+                            maximum_span,
+                            format!("no literal value is <= {max}"),
+                        ),
+                        (Some(min), Some(max)) => (
+                            "minimum",
+                            minimum_span,
+                            format!("no literal value lies in [{min}, {max}]"),
+                        ),
+                        (None, None) => unreachable!("range is bounded"),
+                    };
                 diags.push(Diagnostic::error(
                     format!("constraint '{keyword}' on attribute '{feature_name}' admits no literal of enum '{enum_name}': {detail}"),
                     span,
                 ));
             }
         }
-        if lowered.min_length.is_some() || lowered.max_length.is_some() {
-            let ordered = match (lowered.min_length, lowered.max_length) {
+        if lowered.constraints.min_length.is_some() || lowered.constraints.max_length.is_some() {
+            let ordered = match (
+                lowered.constraints.min_length,
+                lowered.constraints.max_length,
+            ) {
                 (Some(min), Some(max)) => min <= max,
                 _ => true,
             };
             let admits = |length: usize| {
-                lowered.min_length.is_none_or(|min| length >= min as usize)
-                    && lowered.max_length.is_none_or(|max| length <= max as usize)
+                lowered
+                    .constraints
+                    .min_length
+                    .is_none_or(|min| length >= min as usize)
+                    && lowered
+                        .constraints
+                        .max_length
+                        .is_none_or(|max| length <= max as usize)
             };
             let any = enum_decl
                 .literals
@@ -369,7 +520,10 @@ pub(crate) fn lower_constraints(
                 .map(|literal| literal.name.text.chars().count())
                 .any(admits);
             if ordered && !any {
-                let (keyword, span, detail) = match (lowered.min_length, lowered.max_length) {
+                let (keyword, span, detail) = match (
+                    lowered.constraints.min_length,
+                    lowered.constraints.max_length,
+                ) {
                     (Some(min), None) => (
                         "minLength",
                         min_length_span,
@@ -580,14 +734,17 @@ pub(crate) fn lower_class(
                 );
                 let mut ir_feature = apply_modifiers(ir_feature, feature.modifiers());
                 ir_feature.description = doc.clone();
-                ir_feature.constraints = lower_constraints(
+                let lowered_constraints = lower_constraints(
                     constraints,
+                    ConstraintTarget::Attribute,
                     multiplicity.is_many(),
                     resolution.as_ref(),
                     prep,
                     &name.text,
                     diags,
                 );
+                ir_feature.constraints = lowered_constraints.constraints;
+                ir_feature.collection = lowered_constraints.collection;
                 features.push(ir_feature);
                 records.push(FeatureRecord {
                     name: name.text.clone(),
@@ -605,6 +762,7 @@ pub(crate) fn lower_class(
                 multiplicity,
                 name,
                 opposite,
+                constraints,
                 ..
             } => {
                 let (ir_feature, record) = lower_relation(
@@ -613,6 +771,9 @@ pub(crate) fn lower_class(
                     multiplicity.as_ref(),
                     name,
                     opposite.as_ref(),
+                    constraints,
+                    ConstraintTarget::Containment,
+                    prep,
                     scope,
                     diags,
                 );
@@ -627,6 +788,7 @@ pub(crate) fn lower_class(
                 multiplicity,
                 name,
                 opposite,
+                constraints,
                 ..
             } => {
                 let (ir_feature, record) = lower_relation(
@@ -635,6 +797,9 @@ pub(crate) fn lower_class(
                     multiplicity.as_ref(),
                     name,
                     opposite.as_ref(),
+                    constraints,
+                    ConstraintTarget::Reference,
+                    prep,
                     scope,
                     diags,
                 );
@@ -651,13 +816,17 @@ pub(crate) fn lower_class(
                 ..
             } => {
                 // Containers never take a multiplicity in the grammar; the
-                // driver forces OPTIONAL regardless.
+                // driver forces OPTIONAL regardless. The grammar admits no
+                // constraint block here either.
                 let (ir_feature, record) = lower_relation(
                     FKind::Container,
                     type_ref,
                     None,
                     name,
                     opposite.as_ref(),
+                    &[],
+                    ConstraintTarget::Container,
+                    prep,
                     scope,
                     diags,
                 );
@@ -748,6 +917,7 @@ pub(crate) fn lower_class(
                 name,
                 body,
                 bodies,
+                constraints,
                 ..
             } => {
                 let resolution = scope.resolve(type_ref, diags);
@@ -795,6 +965,17 @@ pub(crate) fn lower_class(
                 ir_feature = apply_modifiers(ir_feature, feature.modifiers());
                 ir_feature.description = doc.clone();
                 ir_feature.bodies = lowered_bodies;
+                let lowered_constraints = lower_constraints(
+                    constraints,
+                    ConstraintTarget::Derived,
+                    multiplicity.is_many(),
+                    resolution.as_ref(),
+                    prep,
+                    &name.text,
+                    diags,
+                );
+                ir_feature.constraints = lowered_constraints.constraints;
+                ir_feature.collection = lowered_constraints.collection;
                 features.push(ir_feature);
                 records.push(FeatureRecord {
                     name: name.text.clone(),
@@ -868,6 +1049,9 @@ pub(crate) fn lower_relation(
     multiplicity: Option<&mox::Multiplicity>,
     name: &mox::Name,
     opposite: Option<&mox::Name>,
+    constraints: &[mox::Constraint],
+    target: ConstraintTarget,
+    prep: &PrepMaps<'_>,
     scope: &Scope<'_>,
     diags: &mut Vec<Diagnostic>,
 ) -> (ir::Feature, FeatureRecord) {
@@ -900,6 +1084,17 @@ pub(crate) fn lower_relation(
         ir_type,
         multiplicity,
     );
+    let lowered_constraints = lower_constraints(
+        constraints,
+        target,
+        multiplicity.is_many(),
+        resolution.as_ref(),
+        prep,
+        &name.text,
+        diags,
+    );
+    ir_feature.constraints = lowered_constraints.constraints;
+    ir_feature.collection = lowered_constraints.collection;
     if let (Some(opposite), Some(class)) = (opposite, class_of(resolution.as_ref())) {
         ir_feature = ir_feature.with_opposite(class, &opposite.text);
     }

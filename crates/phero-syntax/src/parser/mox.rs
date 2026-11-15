@@ -93,15 +93,19 @@ pub(crate) fn containment<'src>(
         .then(multiplicity().or_not())
         .then(name())
         .then(opposite().or_not())
+        .then(constraint_block().or_not())
         .map_with(
-            |(((type_ref, multiplicity), name), opposite), e| FeatureDecl::Containment {
-                modifiers: Modifiers::default(),
-                doc: None,
-                type_ref,
-                multiplicity,
-                name,
-                opposite,
-                span: e.span(),
+            |((((type_ref, multiplicity), name), opposite), constraints), e| {
+                FeatureDecl::Containment {
+                    modifiers: Modifiers::default(),
+                    doc: None,
+                    type_ref,
+                    multiplicity,
+                    name,
+                    opposite,
+                    constraints: constraints.unwrap_or_default(),
+                    span: e.span(),
+                }
             },
         )
 }
@@ -113,15 +117,19 @@ pub(crate) fn reference<'src>(
         .then(multiplicity().or_not())
         .then(name())
         .then(opposite().or_not())
+        .then(constraint_block().or_not())
         .map_with(
-            |(((type_ref, multiplicity), name), opposite), e| FeatureDecl::Reference {
-                modifiers: Modifiers::default(),
-                doc: None,
-                type_ref,
-                multiplicity,
-                name,
-                opposite,
-                span: e.span(),
+            |((((type_ref, multiplicity), name), opposite), constraints), e| {
+                FeatureDecl::Reference {
+                    modifiers: Modifiers::default(),
+                    doc: None,
+                    type_ref,
+                    multiplicity,
+                    name,
+                    opposite,
+                    constraints: constraints.unwrap_or_default(),
+                    span: e.span(),
+                }
             },
         )
 }
@@ -163,6 +171,43 @@ pub(crate) fn op_decl<'src>() -> impl Parser<'src, Tokens<'src>, FeatureDecl, Mo
         )
 }
 
+/// The tail of a `derived` declaration: an optional body plus an optional
+/// constraint block. A `{ ... }` block after the name is resolved
+/// tagged-body first (`{ expr { ... } }`), then constraint block (`{ set }`),
+/// then the bare body the driver rejects — so a body and a constraint block
+/// co-occur as `{ expr { ... } } { set }` (DD6, issue #303).
+pub(crate) fn derived_tail<'src>(
+) -> impl Parser<'src, Tokens<'src>, (Option<Span>, Vec<TargetBody>, Vec<Constraint>), MoxExtra<'src>>
+       + Clone {
+    enum First {
+        Tagged(Option<Span>, Vec<TargetBody>),
+        Constraints(Vec<Constraint>),
+        Bare(Span),
+    }
+    let tagged = kw(Token::LBrace)
+        .ignore_then(target_body().repeated().at_least(1).collect::<Vec<_>>())
+        .then_ignore(kw(Token::RBrace))
+        .map_with(|bodies, e| First::Tagged(Some(e.span()), bodies));
+    let constraints = constraint_block().map(First::Constraints);
+    let bare = raw_body().map(First::Bare);
+    tagged
+        .or(constraints)
+        .or(bare)
+        .or_not()
+        .then(constraint_block().or_not())
+        .map(|(first, trailing)| match first {
+            None => (None, Vec::new(), trailing.unwrap_or_default()),
+            Some(First::Tagged(body, bodies)) => (body, bodies, trailing.unwrap_or_default()),
+            Some(First::Constraints(mut entries)) => {
+                if let Some(more) = trailing {
+                    entries.extend(more);
+                }
+                (None, Vec::new(), entries)
+            }
+            Some(First::Bare(span)) => (Some(span), Vec::new(), trailing.unwrap_or_default()),
+        })
+}
+
 pub(crate) fn derived_decl<'src>(
 ) -> impl Parser<'src, Tokens<'src>, FeatureDecl, MoxExtra<'src>> + Clone {
     kw(Token::Derived)
@@ -172,17 +217,22 @@ pub(crate) fn derived_decl<'src>(
         // Tier 2: a derived body is the same shape as an operation body —
         // target-tagged blocks (the neutral expression lives in a single
         // `expr { ... }` block) or a bare `{ ... }` the driver rejects.
-        .then(op_body())
+        // DD6: the constraint block may stand alone (no body) or follow the
+        // body; the tail parser resolves a `{ ... }` block in that order.
+        .then(derived_tail())
         .map_with(
-            |(((type_ref, multiplicity), name), (body, bodies)), e| FeatureDecl::Derived {
-                modifiers: Modifiers::default(),
-                doc: None,
-                type_ref,
-                multiplicity,
-                name,
-                body,
-                bodies,
-                span: e.span(),
+            |(((type_ref, multiplicity), name), (body, bodies, constraints)), e| {
+                FeatureDecl::Derived {
+                    modifiers: Modifiers::default(),
+                    doc: None,
+                    type_ref,
+                    multiplicity,
+                    name,
+                    body,
+                    bodies,
+                    constraints,
+                    span: e.span(),
+                }
             },
         )
 }

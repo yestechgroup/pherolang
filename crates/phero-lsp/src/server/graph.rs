@@ -1155,6 +1155,10 @@ fn hover_markdown(index: &GraphIndex<'_>, node: &GraphNode) -> String {
             push_line(&mut lines, "carries", target_names(kinds::CARRIES));
             push_line(&mut lines, "invokes", target_names(kinds::INVOKES_DECISION));
             push_line(&mut lines, "emits", target_names(kinds::EMITS));
+            push_line(&mut lines, "throws", target_names(kinds::THROWS));
+        }
+        kinds::ERROR => {
+            push_line(&mut lines, "raised by", holder_names(kinds::THROWS));
         }
         _ => {}
     }
@@ -1197,7 +1201,8 @@ fn lsp_kind(kind: &str) -> SymbolKind {
         | kinds::VIEW
         | kinds::SERVICE
         | kinds::REPOSITORY
-        | kinds::DTO => SymbolKind::CLASS,
+        | kinds::DTO
+        | kinds::ERROR => SymbolKind::CLASS,
         kinds::FEATURE | kinds::CASE_FILE_ITEM | kinds::DEPLOY_COMPONENT => SymbolKind::FIELD,
         kinds::OPERATION
         | kinds::SERVICE_OPERATION

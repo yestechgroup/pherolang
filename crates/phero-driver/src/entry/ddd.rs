@@ -339,6 +339,34 @@ fn compile_ddd_with(
 ///     5's repository error and rule 4's flag errors carry the same code
 ///     on a DTO). The pre-pass runs before services lower, so a signature
 ///     in an earlier module may name a DTO declared later.
+/// 22. **Error vocabulary and `throws`** (DD7, issue pherolang#304;
+///     `E0373`–`E0378`) — `error <Name>(<payload>);` declarations lead their
+///     enclosing body (`base? error* module*` at application scope, `error*
+///     module_member*` at module scope) and lower to the root/module
+///     `errors` lists with typed payloads. Error names are application-wide
+///     unique (`E0374`), never shadow the implicit prelude
+///     (`NotFound(resource, key)`, `Conflict(detail)` — `E0374`), carry
+///     unique payload field names (`E0378`), and a payload field may not
+///     embed a class designed as an `entity` (`E0376`, deferred until the
+///     designs are known — an error payload is serializable data).
+///     Application-scoped errors are visible everywhere; a module-scoped
+///     error is private (`E0375`, naming the owning module and the
+///     application-scope fix). A declared, delegated, or body service
+///     operation and a declared repository operation may carry `throws`
+///     (service order: after `transition`, before `when`; repository order:
+///     after the signature); each bare name resolves against the prelude,
+///     the application declarations, and the operation's module (`E0373`;
+///     a foreign module's private error is `E0375`) and lowers to a
+///     resolved `ErrorRef { name, scope, module? }`. `throws` is explicit
+///     and complete — the body's raises must be a subset (an undeclared
+///     raise is `E0360` naming the declared set; a declared-but-unraised
+///     entry stays legal, never inferred), and a delegation's `throws` must
+///     be a **superset** of its target's (`E0377`, naming each missing
+///     error). Built-in repository operations take no `throws` (the parser
+///     refuses it). The body checker (`phero_expr::stmt::check_stmt_body`)
+///     receives the module's visible raise signatures and the operation's
+///     declared set; the statement subset stays orchestration-only (see
+///     `docs/DDD.md`).
 /// ## Aggregate derivation
 ///
 /// The aggregate boundary derives from the domain model's containment

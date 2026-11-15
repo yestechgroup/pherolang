@@ -18,6 +18,10 @@
           "category": "ScienceFiction",
           "copyright": "1965-08-01",
           "pages": 412,
+          "tags": [
+            "classic",
+            "desert"
+          ],
           "title": "Dune"
         },
         {
@@ -34,6 +38,10 @@
           "category": "Mystery",
           "copyright": "1937-09-21",
           "pages": 310,
+          "tags": [
+            "classic",
+            "fantasy"
+          ],
           "title": "The Hobbit"
         }
       ],

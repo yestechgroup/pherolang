@@ -76,7 +76,7 @@ save;
 delete;
 findByExample;
 findByKeys;
-int totalQuantity(String runId) when (status == Draft) {
+int totalQuantity(String runId) throws NotFound when (status == Draft) {
     let run = self.findById(runId) else error NotFound("Run", runId);
     return run.lines.map(line => line.quantity).sum();
 }"#;
@@ -88,7 +88,7 @@ AuditRecord record(String note);"#;
 /// The default service operations: a void body exercising every statement
 /// form and reduction, a value-returning body with `if`/`else`, an injected
 /// bare-name repository call, and a returning single-expression body.
-const SERVICE_OPERATIONS: &str = r#"submit(DraftLine draft) capability SubmitRun => RunRepository {
+const SERVICE_OPERATIONS: &str = r#"submit(DraftLine draft) capability SubmitRun throws NotFound, Conflict => RunRepository {
     let run = self.findById("current") else error NotFound("Run", "current");
     guard run.total >= 0 else error Conflict("total");
     let units = run.lines.map(line => line.quantity).sum();
@@ -99,7 +99,7 @@ const SERVICE_OPERATIONS: &str = r#"submit(DraftLine draft) capability SubmitRun
     let saved = self.save(run);
     let audit = AuditRepository.record("submit");
 }
-boolean approve() capability ApproveRun when (status == Draft) => RunRepository {
+boolean approve() capability ApproveRun throws NotFound when (status == Draft) => RunRepository {
     let run = self.findById("current") else error NotFound("Run", "current");
     if (run.total > 0) {
         return true;
@@ -111,7 +111,7 @@ boolean note(String text) => AuditRepository {
     let record = self.record(text);
     return record.accepted;
 }
-int totalFor(String runId) => RunRepository {
+int totalFor(String runId) throws NotFound => RunRepository {
     let run = self.findById(runId) else error NotFound("Run", runId);
     return run.lines.map(line => line.quantity * line.unitCost).sum();
 }"#;
@@ -452,7 +452,7 @@ fn unknown_error_variant_and_arity_emit_e0360() {
     return true;
 }"#;
     assert_error(&design_with_op(unknown), "E0360");
-    assert_error(&design_with_op(unknown), "unknown error variant `Maybe`");
+    assert_error(&design_with_op(unknown), "unknown error `Maybe`");
 
     let wrong_arity = r#"boolean submit() => RunRepository {
     guard true else error NotFound("only-one");
@@ -498,7 +498,7 @@ fn unsupported_statement_is_named() {
     assert!(
         diagnostics.iter().any(|diagnostic| diagnostic
             .message
-            .contains("unsupported statement 'while' in a service body")),
+            .contains("unsupported statement 'while' in a service body: loops")),
         "expected the named refusal, got: {diagnostics:?}"
     );
 }
@@ -511,4 +511,100 @@ fn transition_on_a_body_op_is_e0351() {
     return true;
 }"#;
     assert_error(&design_with_op(op), "E0351");
+}
+
+// --- the orchestration-only posture (DD7, issue pherolang#304) ---------------
+
+/// Every deliberate exclusion is a named rejection, not a generic parse
+/// failure: loops, `try`/`catch`, compound assignment, collection mutation,
+/// and bare expression statements each say what they refused.
+#[test]
+fn orchestration_only_exclusions_are_named() {
+    for (statement, expected) in [
+        (
+            "while (true) { return true; }",
+            "loops (`for`, `while`) are outside the orchestration-only subset",
+        ),
+        (
+            "for (line in run.lines) { }",
+            "loops (`for`, `while`) are outside the orchestration-only subset",
+        ),
+        (
+            "try { return true; } catch { }",
+            "`try`/`catch` is outside the orchestration-only subset",
+        ),
+        ("run.total += 1;", "unsupported compound assignment '+='"),
+        (
+            "run.lines.push(line);",
+            "unsupported collection mutation 'push'",
+        ),
+        (
+            "self.save(run);",
+            "unsupported expression statement in a service body",
+        ),
+    ] {
+        let op = format!("boolean submit() => RunRepository {{\n    {statement}\n}}");
+        let diagnostics = diagnose(&design_with_op(&op));
+        assert!(
+            diagnostics
+                .iter()
+                .any(|diagnostic| diagnostic.message.contains(expected)),
+            "expected `{expected}` for `{statement}`, got: {diagnostics:?}"
+        );
+    }
+}
+
+/// A whole-local reassignment and a cross-aggregate load are E0360 — the
+/// body orchestrates one aggregate and assigns feature paths only.
+#[test]
+fn orchestration_only_reassign_and_cross_load_are_e0360() {
+    let reassign = r#"boolean submit() => RunRepository {
+    let run = self.findById("x") else error NotFound("Run", "x");
+    let other = run;
+    other = run;
+    return true;
+}"#;
+    assert_error(&design_with_op(reassign), "E0360");
+    assert_error(
+        &design_with_op(reassign),
+        "cannot reassign the local 'other'",
+    );
+
+    let cross = r#"boolean submit() => RunRepository {
+    let run = self.findById("x") else error NotFound("Run", "x");
+    let audit = AuditRepository.findById("x");
+    return true;
+}"#;
+    assert_error(&design_with_op(cross), "E0360");
+    assert_error(
+        &design_with_op(cross),
+        "`AuditRepository.findById` is a cross-aggregate load",
+    );
+}
+
+/// A body raise must be in the operation's `throws`; a declared-but-unraised
+/// entry is an interface promise, not an error.
+#[test]
+fn body_raises_are_checked_against_throws() {
+    let undeclared = r#"boolean submit() throws Conflict => RunRepository {
+    let run = self.findById("x") else error NotFound("Run", "x");
+    return true;
+}"#;
+    assert_error(&design_with_op(undeclared), "E0360");
+    assert_error(
+        &design_with_op(undeclared),
+        "error `NotFound` is not declared in the operation's `throws`",
+    );
+    assert_error(&design_with_op(undeclared), "declared: Conflict");
+
+    let declared_but_unraised = r#"boolean submit() throws NotFound, Conflict => RunRepository {
+    let run = self.findById("x") else error NotFound("Run", "x");
+    return true;
+}"#;
+    let compilation = compile(&design_with_op(declared_but_unraised));
+    assert!(
+        compilation.diagnostics.is_empty(),
+        "a declared-but-unraised entry is legal: {:?}",
+        compilation.diagnostics
+    );
 }

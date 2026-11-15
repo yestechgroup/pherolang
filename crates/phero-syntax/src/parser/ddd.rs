@@ -89,6 +89,84 @@ pub(crate) fn ddd_emits<'src>() -> impl Parser<'src, Tokens<'src>, Vec<Name>, Mo
         })
 }
 
+/// The `throws <Error> (, <Error>)*` clause of a declared/delegated service
+/// operation and a declared repository operation (DD7, issue
+/// pherolang#304): the error vocabulary the operation can raise. The
+/// `throws` keyword is contextual (the [`ddd::THROWS`] identifier, not a
+/// lexer token), so an operation may be named `throws` — the keyword
+/// position is unambiguous. The clause is committed once the keyword
+/// matched: a missing name list is a syntax error (with recovery), not a
+/// failed alternative. Entries are bare names; a qualified spelling and an
+/// unknown name are driver diagnostics.
+pub(crate) fn ddd_throws<'src>(
+) -> impl Parser<'src, Tokens<'src>, Vec<Name>, MoxExtra<'src>> + Clone {
+    // Each entry is scanned as a qualified name so a dotted spelling gets a
+    // **clear** diagnostic rather than a generic `expected ';'`: the error
+    // vocabulary is application-wide unique, so the bare last segment is the
+    // canonical spelling.
+    let entry =
+        qname()
+            .map_with(|qname, e| (qname, e.span()))
+            .validate(|(qname, span), _e, emitter| {
+                let segments = qname.segments.len();
+                let last = qname.segments.last().cloned().unwrap_or(Name {
+                    text: String::new(),
+                    span,
+                    escaped: false,
+                });
+                if segments > 1 {
+                    emitter.emit(Rich::custom(
+                        span,
+                        format!(
+                            "`throws` entries are bare error names; error '{}' is referenced \
+                         application-wide, so write `{}`",
+                            last.text, last.text
+                        ),
+                    ));
+                }
+                last
+            });
+    ddd_keyword(ddd::THROWS)
+        .ignore_then(entry.clone().or_not())
+        .then(
+            kw(Token::Comma)
+                .ignore_then(entry)
+                .repeated()
+                .collect::<Vec<_>>(),
+        )
+        .map_with(|(first, rest), e| (first, rest, e.span()))
+        .validate(|(first, rest, span), _e, emitter| {
+            if first.is_none() {
+                emitter.emit(Rich::custom(
+                    span,
+                    "`throws` requires at least one error name",
+                ));
+            }
+            first.into_iter().chain(rest).collect::<Vec<_>>()
+        })
+}
+
+/// One `error <Name>(<field> (, <field>)*);` declaration of an application
+/// or module body (DD7, issue pherolang#304). The `error` word is the body
+/// raise word reused at declaration position — contextual like every other
+/// `.ddd` word — and the payload reuses the operation-parameter production
+/// (`type_ref multiplicity? name`). The `error*` declarations lead their
+/// enclosing body: `base? error* module*` at application scope, `error*
+/// module_member*` at module scope (the driver reports a late declaration).
+pub(crate) fn ddd_error_decl<'src>(
+) -> impl Parser<'src, Tokens<'src>, DddErrorDecl, MoxExtra<'src>> + Clone {
+    ddd_keyword(ddd::ERROR)
+        .ignore_then(name())
+        .then(ddd_params())
+        .then_ignore(kw(Token::Other(';')))
+        .map_with(|(name, fields), e| DddErrorDecl {
+            name,
+            fields,
+            doc: None,
+            span: e.span(),
+        })
+}
+
 /// The `version <pin>` clause of a decision-service reference (pherolang#154):
 /// `version compatible` or `version "<X.Y.Z>"`. The `version` discriminator
 /// is the existing lexer keyword token (the `.mox` vocabulary keyword — no
@@ -495,6 +573,12 @@ impl<'src> BodyParser<'_, 'src> {
 
     /// The statement dispatch. `None` means the statement was refused (the
     /// named error is recorded and the cursor resynchronized).
+    ///
+    /// The deliberate exclusions are **named** refusals, not the generic
+    /// unsupported-statement message: loops (`for`/`while`), `try`/`catch`,
+    /// compound assignment, collection mutation, and non-binding expression
+    /// statements are the orchestration-only cap DD7 states, so a body says
+    /// exactly which construct it refused and where the construct belongs.
     fn parse_statement(&mut self) -> Option<DddStmt> {
         if self.at_ident(ddd::LET) {
             return self.parse_let();
@@ -508,18 +592,79 @@ impl<'src> BodyParser<'_, 'src> {
         if self.at_ident(ddd::RETURN) {
             return self.parse_return();
         }
-        if let Some(path) = self.assignment_path() {
-            self.pos += 1; // the `=`
-            let Some(expr) = self.scan_expr(ExprStop::Semi) else {
-                self.error_here("expected an expression after `=`");
-                self.resync();
-                return None;
-            };
-            if !self.take(|token| matches!(token, Token::Other(';'))) {
-                self.error_here("expected `;` to end the assignment");
-                self.resync();
+        if self.at_ident("for") || self.at_ident("while") {
+            let word = if self.at_ident("for") { "for" } else { "while" };
+            self.error_here(format!(
+                "unsupported statement '{word}' in a {} body: loops (`for`, `while`) are \
+                 outside the orchestration-only subset; move the iteration into a domain \
+                 `op` the body calls",
+                self.kind.label()
+            ));
+            self.resync();
+            return None;
+        }
+        if self.at_ident("try") || self.at_ident("catch") {
+            let word = if self.at_ident("try") { "try" } else { "catch" };
+            self.error_here(format!(
+                "unsupported statement '{word}' in a {} body: `try`/`catch` is outside the \
+                 orchestration-only subset — a body raises an error, it never catches one",
+                self.kind.label()
+            ));
+            self.resync();
+            return None;
+        }
+        if let Some((path, next)) = self.path_ahead() {
+            match self.tokens.get(next).map(|(token, _)| token) {
+                Some(Token::Eq) => {
+                    self.pos = next + 1; // the `=`
+                    let Some(expr) = self.scan_expr(ExprStop::Semi) else {
+                        self.error_here("expected an expression after `=`");
+                        self.resync();
+                        return None;
+                    };
+                    if !self.take(|token| matches!(token, Token::Other(';'))) {
+                        self.error_here("expected `;` to end the assignment");
+                        self.resync();
+                    }
+                    return Some(DddStmt::Assign { path, expr });
+                }
+                Some(Token::Other(operator @ ('+' | '-' | '*' | '/' | '%')))
+                    if matches!(
+                        self.tokens.get(next + 1).map(|(token, _)| token),
+                        Some(Token::Eq)
+                    ) =>
+                {
+                    self.error_here(format!(
+                        "unsupported compound assignment '{operator}=' in a {} body: the \
+                         orchestration-only subset has no compound assignment; assign the \
+                         computed value to a feature path (`<local>.<feature> = …`)",
+                        self.kind.label()
+                    ));
+                    self.resync();
+                    return None;
+                }
+                Some(Token::LParen) => {
+                    let callee = path.last().map(|name| name.text.as_str()).unwrap_or("");
+                    if matches!(callee, "push" | "remove" | "clear") {
+                        self.error_here(format!(
+                            "unsupported collection mutation '{callee}' in a {} body: the \
+                             orchestration-only subset mutates no collection; move the \
+                             mutation into a domain `op` the body calls",
+                            self.kind.label()
+                        ));
+                    } else {
+                        self.error_here(format!(
+                            "unsupported expression statement in a {} body: bind the call's \
+                             result (`let <name> = <expression>;`) — the orchestration-only \
+                             subset has no bare expression statements",
+                            self.kind.label()
+                        ));
+                    }
+                    self.resync();
+                    return None;
+                }
+                _ => {}
             }
-            return Some(DddStmt::Assign { path, expr });
         }
 
         // Anything else is outside the closed subset: name the construct and
@@ -539,9 +684,11 @@ impl<'src> BodyParser<'_, 'src> {
         None
     }
 
-    /// Looks ahead for `name ("." name)* "="`; on success consumes the path
-    /// and leaves the cursor on the `=`.
-    fn assignment_path(&mut self) -> Option<Vec<Name>> {
+    /// Looks ahead for `name ("." name)*`; on success returns the path and the
+    /// index of the token after it, without moving the cursor. The caller
+    /// decides whether the following token makes it an assignment, a
+    /// compound assignment, an expression statement, or ordinary junk.
+    fn path_ahead(&self) -> Option<(Vec<Name>, usize)> {
         let mut index = self.pos;
         let mut path = Vec::new();
         loop {
@@ -553,12 +700,7 @@ impl<'src> BodyParser<'_, 'src> {
             }
             break;
         }
-        if matches!(self.tokens.get(index), Some((Token::Eq, _))) {
-            self.pos = index;
-            Some(path)
-        } else {
-            None
-        }
+        Some((path, index))
     }
 
     fn parse_let(&mut self) -> Option<DddStmt> {
@@ -816,18 +958,18 @@ impl<'src> BodyParser<'_, 'src> {
 /// One operation of a `service` body: an optional `protected` modifier, then
 /// a declared signature
 /// (`type_ref multiplicity? name "(" params? ")" capability*? invokes? emits?
-/// transition? ";"`)
+/// transition? throws? ";"`)
 /// or a delegation (`name "=>" target.operation capability*? invokes? emits?
-/// transition? ";"`).
+/// transition? throws? ";"`).
 /// The two alternatives are distinguished by the `=>` after the leading name;
 /// chumsky backtracks, so a delegated op may be named `save` and a declared
 /// op's type may be any contextual keyword. Both forms carry the clause
-/// sequence `capability? invokes? emits? transition? when?` (the canonical
-/// clause order the formatter emits; the `transition` binding is issue
-/// pherolang#176's); repository operations take none of the
-/// `capability`/`invokes`/`emits`/`transition` clauses — the wire artifact's
-/// repository operations carry neither, so accepting one would silently drop
-/// data.
+/// sequence `capability? invokes? emits? transition? throws? when?` (the
+/// canonical clause order the formatter emits; the `transition` binding is
+/// issue pherolang#176's, the `throws` vocabulary DD7's); repository
+/// operations take none of the `capability`/`invokes`/`emits`/`transition`
+/// clauses — the wire artifact's repository operations carry neither, so
+/// accepting one would silently drop data.
 pub(crate) fn ddd_service_op<'src>(
 ) -> impl Parser<'src, Tokens<'src>, DddServiceOp, MoxExtra<'src>> + Clone {
     let declared = ddd_signature()
@@ -835,13 +977,17 @@ pub(crate) fn ddd_service_op<'src>(
         .then(ddd_invokes().or_not())
         .then(ddd_emits().or_not())
         .then(ddd_transition_clause().or_not())
+        .then(ddd_throws().or_not())
         .then(ddd_guard_clause().or_not())
         .then_ignore(kw(Token::Other(';')))
         .map_with(
             |(
                 (
-                    ((((type_ref, multiplicity, name, params), capabilities), invokes), emits),
-                    transition,
+                    (
+                        ((((type_ref, multiplicity, name, params), capabilities), invokes), emits),
+                        transition,
+                    ),
+                    throws,
                 ),
                 condition,
             ),
@@ -857,6 +1003,7 @@ pub(crate) fn ddd_service_op<'src>(
                     invokes: invokes.unwrap_or_default(),
                     emits: emits.unwrap_or_default(),
                     transition,
+                    throws: throws.unwrap_or_default(),
                     condition,
                     body: None,
                     body_receiver: None,
@@ -871,10 +1018,14 @@ pub(crate) fn ddd_service_op<'src>(
         .then(ddd_invokes().or_not())
         .then(ddd_emits().or_not())
         .then(ddd_transition_clause().or_not())
+        .then(ddd_throws().or_not())
         .then(ddd_guard_clause().or_not())
         .then_ignore(kw(Token::Other(';')))
         .map_with(
-            |((((((name, delegation), capabilities), invokes), emits), transition), condition),
+            |(
+                ((((((name, delegation), capabilities), invokes), emits), transition), throws),
+                condition,
+            ),
              e| {
                 DddServiceOp {
                     name,
@@ -887,6 +1038,7 @@ pub(crate) fn ddd_service_op<'src>(
                     invokes: invokes.unwrap_or_default(),
                     emits: emits.unwrap_or_default(),
                     transition,
+                    throws: throws.unwrap_or_default(),
                     condition,
                     body: None,
                     body_receiver: None,
@@ -903,6 +1055,7 @@ pub(crate) fn ddd_service_op<'src>(
         .then(ddd_invokes().or_not())
         .then(ddd_emits().or_not())
         .then(ddd_transition_clause().or_not())
+        .then(ddd_throws().or_not())
         .then(ddd_guard_clause().or_not())
         .then_ignore(kw(Token::FatArrow))
         .then(qname())
@@ -910,7 +1063,10 @@ pub(crate) fn ddd_service_op<'src>(
         .map_with(
             |(
                 (
-                    (((((signature, capabilities), invokes), emits), transition), condition),
+                    (
+                        (((((signature, capabilities), invokes), emits), transition), throws),
+                        condition,
+                    ),
                     receiver,
                 ),
                 body,
@@ -932,6 +1088,7 @@ pub(crate) fn ddd_service_op<'src>(
                         invokes: invokes.unwrap_or_default(),
                         emits: emits.unwrap_or_default(),
                         transition,
+                        throws: throws.unwrap_or_default(),
                         condition,
                         body: Some(body),
                         body_receiver,
@@ -1381,17 +1538,40 @@ pub(crate) fn ddd_repository_op<'src>(
             multiplicity: None,
             params: Vec::new(),
             is_protected: false,
+            throws: Vec::new(),
             condition: None,
             body: None,
             span: e.span(),
         },
     );
+    // A built-in takes no `throws` clause (DD7): its failures are structural,
+    // not declared. Consume the clause so recovery lands on the next member
+    // and name the refusal.
+    let builtin_throws_refusal = builtin_keyword
+        .then(ddd_throws())
+        .then_ignore(kw(Token::Other(';')).or_not())
+        .validate(|((keyword_span, builtin), throws_span), _e, emitter| {
+            let end = throws_span
+                .last()
+                .map(|name| name.span.end)
+                .unwrap_or(keyword_span.end);
+            emitter.emit(Rich::custom(
+                (keyword_span.start..end).into(),
+                format!(
+                    "built-in repository operation '{}' takes no `throws` clause; its \
+                     failures are structural, not declared (declare a signature to \
+                     declare errors)",
+                    builtin.keyword()
+                ),
+            ));
+        });
     // The body form (issue pherolang#178): `Type? name(params) when (...)? {
     // statements }`. Declared operations only — a builtin has no signature.
     let body = ddd_body_signature()
+        .then(ddd_throws().or_not())
         .then(ddd_guard_clause().or_not())
         .then(ddd_body(DddBodyKind::Repository))
-        .map_with(|((signature, condition), body), e| {
+        .map_with(|(((signature, throws), condition), body), e| {
             let (return_type, multiplicity, name, params) = signature;
             DddRepositoryOp {
                 name,
@@ -1400,22 +1580,25 @@ pub(crate) fn ddd_repository_op<'src>(
                 multiplicity,
                 params,
                 is_protected: false,
+                throws: throws.unwrap_or_default(),
                 condition,
                 body: Some(body),
                 span: e.span(),
             }
         });
     let declared = ddd_signature()
+        .then(ddd_throws().or_not())
         .then(ddd_guard_clause().or_not())
         .then_ignore(kw(Token::Other(';')))
         .map_with(
-            |((type_ref, multiplicity, name, params), condition), e| DddRepositoryOp {
+            |(((type_ref, multiplicity, name, params), throws), condition), e| DddRepositoryOp {
                 name,
                 builtin: None,
                 return_type: Some(type_ref),
                 multiplicity,
                 params,
                 is_protected: false,
+                throws: throws.unwrap_or_default(),
                 condition,
                 body: None,
                 span: e.span(),
@@ -1426,6 +1609,7 @@ pub(crate) fn ddd_repository_op<'src>(
         .then(
             builtin_body_refusal
                 .to(None)
+                .or(builtin_throws_refusal.to(None))
                 .or(builtin.map(Some))
                 .or(body.map(Some))
                 .or(declared.map(Some))
@@ -1995,6 +2179,7 @@ pub(crate) fn ddd_extend_decl<'src>(
 /// One member of a `module` body.
 #[derive(Clone)]
 pub(crate) enum DddModuleMember {
+    Error(DddErrorDecl),
     Service(DddService),
     Design(Box<DddDesign>),
     Search(DddSearch),
@@ -2021,6 +2206,7 @@ pub(crate) fn junk_ddd_module_member<'src>(
 pub(crate) fn ddd_module_member<'src>(
 ) -> impl Parser<'src, Tokens<'src>, Option<DddModuleMember>, MoxExtra<'src>> + Clone {
     choice((
+        ddd_error_decl().map(DddModuleMember::Error),
         ddd_service_decl().map(DddModuleMember::Service),
         ddd_design_decl().map(|design| DddModuleMember::Design(Box::new(design))),
         ddd_search_decl().map(DddModuleMember::Search),
@@ -2039,27 +2225,57 @@ pub(crate) fn ddd_module_decl<'src>(
         .then(ddd_module_member().repeated().collect::<Vec<_>>())
         .then_ignore(kw(Token::RBrace))
         .map_with(|(name, members), e| {
+            let mut errors = Vec::new();
             let mut services = Vec::new();
             let mut designs = Vec::new();
             let mut searches = Vec::new();
             let mut extends = Vec::new();
+            let mut problems = Vec::new();
+            let mut saw_member = false;
             for member in members {
                 match member {
-                    Some(DddModuleMember::Service(service)) => services.push(service),
-                    Some(DddModuleMember::Design(design)) => designs.push(*design),
-                    Some(DddModuleMember::Search(search)) => searches.push(search),
-                    Some(DddModuleMember::Extend(extend)) => extends.push(extend),
+                    Some(DddModuleMember::Error(decl)) if !saw_member => errors.push(decl),
+                    Some(DddModuleMember::Error(decl)) => problems.push((
+                        decl.span,
+                        "`error` declarations must precede the module's members".to_string(),
+                    )),
+                    Some(DddModuleMember::Service(service)) => {
+                        saw_member = true;
+                        services.push(service);
+                    }
+                    Some(DddModuleMember::Design(design)) => {
+                        saw_member = true;
+                        designs.push(*design);
+                    }
+                    Some(DddModuleMember::Search(search)) => {
+                        saw_member = true;
+                        searches.push(search);
+                    }
+                    Some(DddModuleMember::Extend(extend)) => {
+                        saw_member = true;
+                        extends.push(extend);
+                    }
                     None => {}
                 }
             }
-            DddModule {
-                name,
-                services,
-                designs,
-                searches,
-                extends,
-                span: e.span(),
+            (
+                DddModule {
+                    name,
+                    errors,
+                    services,
+                    designs,
+                    searches,
+                    extends,
+                    span: e.span(),
+                },
+                problems,
+            )
+        })
+        .validate(|(module, problems), _, emitter| {
+            for (span, message) in problems {
+                emitter.emit(Rich::custom(span, message));
             }
+            module
         })
 }
 
@@ -2078,6 +2294,7 @@ pub(crate) fn ddd_base_decl<'src>(
 #[derive(Clone)]
 pub(crate) enum DddApplicationItem {
     Base(DddBase),
+    Error(DddErrorDecl),
     Module(DddModule),
 }
 
@@ -2092,7 +2309,10 @@ pub(crate) fn junk_ddd_application_item<'src>(
     first
         .ignore_then(rest.repeated().ignored())
         .validate(|(), e, emitter| {
-            emitter.emit(Rich::custom(e.span(), "expected `base` or `module`"));
+            emitter.emit(Rich::custom(
+                e.span(),
+                "expected `base`, `error`, or `module`",
+            ));
         })
 }
 
@@ -2101,6 +2321,7 @@ pub(crate) fn ddd_application_item<'src>(
 ) -> impl Parser<'src, Tokens<'src>, Option<DddApplicationItem>, MoxExtra<'src>> + Clone {
     choice((
         ddd_base_decl().map(DddApplicationItem::Base),
+        ddd_error_decl().map(DddApplicationItem::Error),
         ddd_module_decl().map(DddApplicationItem::Module),
     ))
     .map(Some)
@@ -2108,7 +2329,8 @@ pub(crate) fn ddd_application_item<'src>(
 }
 
 /// The `application <name> { ... }` declaration: at most one `base` (which
-/// the grammar pins to the first member position) followed by modules.
+/// the grammar pins to the first member position), the application-scoped
+/// `error` declarations, then the modules.
 pub(crate) fn ddd_application_decl<'src>(
 ) -> impl Parser<'src, Tokens<'src>, DddApplication, MoxExtra<'src>> + Clone {
     ddd_keyword(ddd::APPLICATION)
@@ -2118,12 +2340,13 @@ pub(crate) fn ddd_application_decl<'src>(
         .then_ignore(kw(Token::RBrace))
         .map_with(|(name, items), e| {
             let mut base = None;
+            let mut errors = Vec::new();
             let mut modules = Vec::new();
             let mut problems = Vec::new();
             for item in items {
                 match item {
                     Some(DddApplicationItem::Base(decl))
-                        if base.is_none() && modules.is_empty() =>
+                        if base.is_none() && modules.is_empty() && errors.is_empty() =>
                     {
                         base = Some(decl);
                     }
@@ -2134,6 +2357,13 @@ pub(crate) fn ddd_application_decl<'src>(
                         decl.span,
                         "`base` must be the first member of the application".to_string(),
                     )),
+                    Some(DddApplicationItem::Error(decl)) if modules.is_empty() => {
+                        errors.push(decl);
+                    }
+                    Some(DddApplicationItem::Error(decl)) => problems.push((
+                        decl.span,
+                        "`error` declarations must precede the application's modules".to_string(),
+                    )),
                     Some(DddApplicationItem::Module(module)) => modules.push(module),
                     None => {}
                 }
@@ -2142,6 +2372,7 @@ pub(crate) fn ddd_application_decl<'src>(
                 DddApplication {
                     name,
                     base,
+                    errors,
                     modules,
                     span: e.span(),
                 },

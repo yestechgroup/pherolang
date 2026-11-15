@@ -4,19 +4,23 @@
 use std::collections::BTreeSet;
 
 use phero_diagnostics::ddd::{
-    E_TRANSITION_NOT_SAVE, E_TRANSITION_QUALIFIER_REQUIRED, E_UNKNOWN_TRANSITION_TRIGGER,
+    E_NARROWED_DELEGATION_THROWS, E_TRANSITION_NOT_SAVE, E_TRANSITION_QUALIFIER_REQUIRED,
+    E_UNKNOWN_TRANSITION_TRIGGER,
 };
 use phero_diagnostics::dmn::{
     E_AMBIGUOUS_SERVICE_VERSION, E_NO_USABLE_SERVICE_VERSION, E_PINNED_VERSION_NOT_AVAILABLE,
     E_UNKNOWN_INJECTED_SERVICE, E_UNKNOWN_INVOKED_SERVICE,
 };
-use phero_ir::ddd::{DddParam, DecisionPin, Delegation, Service, ServiceOperation, TransitionRef};
+use phero_ir::ddd::{
+    DddParam, DecisionPin, Delegation, ErrorRef, Service, ServiceOperation, TransitionRef,
+};
 use phero_ir::dmn::VersionPin;
 use phero_syntax::ast as dsl;
 
 use crate::diagnostic::Diagnostic;
 use crate::lower::DomainPackage;
 
+use super::errors::ErrorTable;
 use super::*;
 
 /// Rule 9 — every injected dependency names a service, repository, or
@@ -62,6 +66,7 @@ pub(crate) fn rule_8_resolve_delegations(
     services: &[(String, ServiceEntry)],
     repositories: &[(String, RepositoryEntry)],
     searches: &[(String, SearchEntry)],
+    error_table: &ErrorTable,
 ) -> Vec<Diagnostic> {
     let mut local: Vec<Diagnostic> = Vec::new();
     for check in delegation_checks {
@@ -73,6 +78,16 @@ pub(crate) fn rule_8_resolve_delegations(
                     format!("service '{target}' has no operation '{operation}'"),
                     Some(check.delegation.span),
                 ));
+            } else {
+                check_delegation_superset(
+                    check,
+                    &entry.module,
+                    &entry.op_throws,
+                    &target,
+                    operation,
+                    error_table,
+                    &mut local,
+                );
             }
         } else if let Some((_, entry)) = repositories.iter().find(|(name, _)| *name == target) {
             if entry.module != check.module {
@@ -89,6 +104,16 @@ pub(crate) fn rule_8_resolve_delegations(
                     format!("repository '{target}' has no operation '{operation}'"),
                     Some(check.delegation.span),
                 ));
+            } else {
+                check_delegation_superset(
+                    check,
+                    &entry.module,
+                    &entry.op_throws,
+                    &target,
+                    operation,
+                    error_table,
+                    &mut local,
+                );
             }
         } else if let Some((_, entry)) = searches.iter().find(|(name, _)| *name == target) {
             // A search projection exposes exactly one virtual operation,
@@ -123,6 +148,51 @@ pub(crate) fn rule_8_resolve_delegations(
     }
     local
 }
+/// Rule 8's contract-preserving half (DD7): a delegation's `throws` must be
+/// a superset of the delegated operation's. A missing entry is `E0377`,
+/// naming the error; when the target's error is module-private, the help
+/// line names the application-scope fix (the delegating module cannot name
+/// it any other way).
+fn check_delegation_superset(
+    check: &DelegationCheck<'_>,
+    target_module: &str,
+    target_throws: &[(String, Vec<String>)],
+    target_name: &str,
+    operation: &str,
+    error_table: &ErrorTable,
+    local: &mut Vec<Diagnostic>,
+) {
+    let Some((_, target_throws)) = target_throws.iter().find(|(name, _)| name == operation) else {
+        return;
+    };
+    for missing in target_throws
+        .iter()
+        .filter(|name| !check.throws.iter().any(|declared| declared == *name))
+    {
+        let mut diagnostic = Diagnostic::error(
+            format!(
+                "{E_NARROWED_DELEGATION_THROWS} delegation on {} narrows the throws of \
+                 '{target_name}.{operation}': missing '{missing}'",
+                check.context
+            ),
+            Some(check.delegation.span),
+        );
+        diagnostic = if error_table.is_private_to(missing, target_module) {
+            diagnostic.with_help(format!(
+                "error '{missing}' is private to module '{target_module}'; declare it at \
+                 application scope to use it across modules, then add it to this \
+                 delegation's `throws`"
+            ))
+        } else {
+            diagnostic.with_help(format!(
+                "add `{missing}` to this delegation's `throws` clause — a delegation is \
+                 contract-preserving, never narrower than its target"
+            ))
+        };
+        local.push(diagnostic);
+    }
+}
+
 /// Rule 17 — decision links: every decision-service reference (an
 /// operation's `invokes` name, a service's `inject decision` name) must
 /// exist in the union of the provided `.dmn` models' decision services.
@@ -718,6 +788,7 @@ pub(crate) fn lower_module_services<'a>(
     union: Option<&phero_ir::Model>,
     expr_context: Option<&phero_expr::TypeContext>,
     prep: &DesignPrep,
+    error_table: &ErrorTable,
     registries: &mut Registries<'a>,
 ) -> (Vec<Service>, Vec<Diagnostic>) {
     let mut local: Vec<Diagnostic> = Vec::new();
@@ -829,6 +900,20 @@ pub(crate) fn lower_module_services<'a>(
                     pin: name.pin.as_ref(),
                 });
             }
+            // The `throws` vocabulary (DD7): resolved against the error
+            // table — application scope, the module's private declarations,
+            // and the prelude.
+            let op_context = format!(
+                "operation '{}' of service '{}'",
+                op.name.text, service.name.text
+            );
+            let throws: Vec<ErrorRef> = op
+                .throws
+                .iter()
+                .filter_map(|name| {
+                    error_table.resolve_throw(name, &module.name.text, &op_context, &mut local)
+                })
+                .collect();
 
             if let Some(delegation) = &op.delegation {
                 // Delegated operations copy the target's signature
@@ -907,12 +992,18 @@ pub(crate) fn lower_module_services<'a>(
                     condition_paths,
                     transition,
                     child_scope: None,
+                    throws: throws.clone(),
                     bodies: Default::default(),
                     body_receiver: None,
                 });
                 registries.delegation_checks.push(DelegationCheck {
                     module: module.name.text.clone(),
+                    context: op_context,
                     delegation,
+                    throws: throws
+                        .iter()
+                        .map(|reference| reference.name.clone())
+                        .collect(),
                 });
             } else {
                 // Rule 7 — declared signatures type-check against the
@@ -1025,6 +1116,7 @@ pub(crate) fn lower_module_services<'a>(
                     condition_paths,
                     transition: None,
                     child_scope: None,
+                    throws,
                     bodies: Default::default(),
                     body_receiver: None,
                 });
@@ -1053,6 +1145,19 @@ pub(crate) fn lower_module_services<'a>(
                 ServiceEntry {
                     module: module.name.text.clone(),
                     ops,
+                    op_throws: operations
+                        .iter()
+                        .map(|operation| {
+                            (
+                                operation.name.clone(),
+                                operation
+                                    .throws
+                                    .iter()
+                                    .map(|reference| reference.name.clone())
+                                    .collect(),
+                            )
+                        })
+                        .collect(),
                 },
             ));
         }

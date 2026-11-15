@@ -242,9 +242,14 @@ and no literal adaptation. The `if` expression's type is that type.
 **Feature typing** (mirrors the resolver's IR):
 
 - `attribute`/`derived`: to-many (`is_many`) → `List(T)`; lower bound 0 →
-  `Option(T)`; otherwise `T` (the declared type).
+  `Option(T)`; otherwise `T` (the declared type). A **set** feature is
+  `List(T)` too: the expression language has one collection type, and
+  set-ness is a storage/equality contract (unordered, duplicate-free), so a
+  set receiver is a valid collection-algebra receiver but its iteration
+  order carries no meaning.
 - `contains`/`refers`: to-many → `List(Named)`; single-valued → `Named`
-  (never `Option` — a single containment/reference is always present).
+  (never `Option` — a single containment/reference is always present). A set
+  `contains`/`refers` also types as `List(Named)`.
 - `container`: always `Option(Named)`, whatever the declared multiplicity.
 - `op` call: the declared return type lifted by the operation's
   `return_multiplicity` (`0..*` → `List(T)`, `0..1` → `Option(T)`, unset →
@@ -357,7 +362,9 @@ yields `Option<T>`.
   in which case it evaluates to `b`. Its type is the inner type `T` of
   `Option<T>` (or the right-hand type when the left is the `null` literal).
 - A **to-many** `contains`/`refers` feature yields `List<T>` — the empty list
-  is a valid value; there is no `Option` around a collection.
+  is a valid value; there is no `Option` around a collection. This includes
+  a set end: it types as `List<T>`, but the caller must not depend on the
+  order of the elements.
 
 **Rust lowering.** `?.` over an optional receiver chains `and_then` (the
 lookup) with `map` (or a second `and_then` when the feature itself is
@@ -626,6 +633,24 @@ over an optional date propagates with `map`:
 (self.effective_date.plus_months(6i32))
 (self.maturity_date.map(|__phero_date| __phero_date.plus_days(1i32)))
 ```
+
+## Statement bodies
+
+`phero_expr::stmt` is the statement layer above this expression language
+(the `.ddd` executable body, issue #178; the orchestration-only posture and
+its declared raise vocabulary are DD7, issue #304). Every expression slot is
+source text typed by the same rules above; the statement layer adds scope
+threading, the aggregate feature-path assignment rule, and the raise
+contract. A raise names a `phero_expr::stmt::RaiseSignature` the caller
+supplies — the driver builds one per declared `.ddd` error plus the standard
+prelude (`NotFound(resource: string, key: string)`,
+`Conflict(detail: string)`) — and every argument type-checks **exactly**
+against the declared payload field (arity and type; rule R2's null-safe
+equality and rule R3's Option propagation apply to the argument expressions
+as usual). When the caller also supplies the operation's `throws` set, every
+raised name must be declared there: the contract is explicit and complete,
+never inferred. The statement layer is not a second expression grammar — it
+only names, scopes, and checks the slots this document defines.
 
 ## Scoping and evaluation shape
 

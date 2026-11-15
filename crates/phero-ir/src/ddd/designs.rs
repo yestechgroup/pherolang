@@ -2,7 +2,7 @@ use std::collections::BTreeMap;
 
 use serde::{Deserialize, Serialize};
 
-use crate::ddd::{DddParam, DddTypeRef, ServiceOperation};
+use crate::ddd::{DddParam, DddTypeRef, ErrorRef, ServiceOperation};
 use crate::wire::is_false;
 use crate::{Multiplicity, TypeRef};
 
@@ -569,6 +569,12 @@ pub struct RepositoryOperation {
     /// A built-in never carries one.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub condition: Option<String>,
+    /// The resolved error vocabulary the declared operation can raise (DD7,
+    /// issue pherolang#304). A built-in takes no clause (its failures are
+    /// structural, not declared), so the key never rides a built-in.
+    /// Additive; omitted when empty.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub throws: Vec<ErrorRef>,
     /// Checked executable bodies, keyed by target name (the
     /// [`crate::Operation::bodies`] discipline; issue pherolang#178). The
     /// `"stmt"` target holds the canonical JSON of the operation's
@@ -590,6 +596,7 @@ impl RepositoryOperation {
             params: Vec::new(),
             is_protected: false,
             condition: None,
+            throws: Vec::new(),
             bodies: BTreeMap::new(),
         }
     }
@@ -609,6 +616,7 @@ impl RepositoryOperation {
             params,
             is_protected: false,
             condition: None,
+            throws: Vec::new(),
             bodies: BTreeMap::new(),
         }
     }
@@ -628,6 +636,13 @@ impl RepositoryOperation {
     /// Chainable setter installing the `when (...)` condition's source text.
     pub fn with_condition(mut self, condition: Option<String>) -> Self {
         self.condition = condition;
+        self
+    }
+
+    /// Chainable setter for the resolved error vocabulary (DD7, issue
+    /// pherolang#304).
+    pub fn with_throws(mut self, throws: Vec<ErrorRef>) -> Self {
+        self.throws = throws;
         self
     }
 

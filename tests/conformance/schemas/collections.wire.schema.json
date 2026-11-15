@@ -1,0 +1,174 @@
+{
+  "$defs": {
+    "Line": {
+      "$comment": "omitted: container 'play' (reconstructed from nesting on load)",
+      "properties": {
+        "$id": {
+          "pattern": "^line/[0-9]+$",
+          "type": "string"
+        },
+        "$type": {
+          "const": "Line"
+        },
+        "sku": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "$id",
+        "$type",
+        "sku"
+      ],
+      "type": "object",
+      "unevaluatedProperties": false
+    },
+    "Person": {
+      "properties": {
+        "$id": {
+          "pattern": "^person/[0-9]+$",
+          "type": "string"
+        },
+        "$type": {
+          "const": "Person"
+        },
+        "name": {
+          "type": "string"
+        },
+        "plays": {
+          "items": {
+            "$ref": "#/$defs/PlayRef"
+          },
+          "type": "array",
+          "uniqueItems": true
+        }
+      },
+      "required": [
+        "$id",
+        "$type",
+        "name"
+      ],
+      "type": "object",
+      "unevaluatedProperties": false
+    },
+    "PersonRef": {
+      "properties": {
+        "$ref": {
+          "pattern": "^person/[0-9]+$",
+          "type": "string"
+        }
+      },
+      "required": [
+        "$ref"
+      ],
+      "type": "object",
+      "unevaluatedProperties": false
+    },
+    "Play": {
+      "$comment": "omitted: derived 'tags' (computed, not stored)",
+      "properties": {
+        "$id": {
+          "pattern": "^play/[0-9]+$",
+          "type": "string"
+        },
+        "$type": {
+          "const": "Play"
+        },
+        "acts": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array",
+          "uniqueItems": true
+        },
+        "labels": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array",
+          "uniqueItems": true
+        },
+        "lines": {
+          "items": {
+            "$ref": "#/$defs/Line"
+          },
+          "type": "array",
+          "uniqueItems": true
+        },
+        "notes": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "playedBy": {
+          "items": {
+            "$ref": "#/$defs/PersonRef"
+          },
+          "type": "array",
+          "uniqueItems": true
+        },
+        "title": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "$id",
+        "$type",
+        "lines",
+        "title"
+      ],
+      "type": "object",
+      "unevaluatedProperties": false
+    },
+    "PlayRef": {
+      "properties": {
+        "$ref": {
+          "pattern": "^play/[0-9]+$",
+          "type": "string"
+        }
+      },
+      "required": [
+        "$ref"
+      ],
+      "type": "object",
+      "unevaluatedProperties": false
+    }
+  },
+  "$id": "urn:phero:model:phero.conformance.collections:wire",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "properties": {
+    "$type": {
+      "const": "phero.instance"
+    },
+    "formatVersion": {
+      "const": 2
+    },
+    "model": {
+      "const": "phero.conformance.collections"
+    },
+    "objects": {
+      "items": {
+        "anyOf": [
+          {
+            "$ref": "#/$defs/Play"
+          },
+          {
+            "$ref": "#/$defs/Person"
+          },
+          {
+            "$ref": "#/$defs/Line"
+          }
+        ]
+      },
+      "type": "array"
+    }
+  },
+  "required": [
+    "$type",
+    "formatVersion",
+    "model",
+    "objects"
+  ],
+  "type": "object",
+  "unevaluatedProperties": false
+}

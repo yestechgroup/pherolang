@@ -727,6 +727,129 @@ fn golden_json_with_unique_constraint_pins_the_wire_format() {
 }
 
 #[test]
+fn golden_json_with_collection_set_pins_the_wire_format() {
+    // DD6 (issue #303): `collection` is sparse — absent for a list — and a
+    // set carries both `collection: "set"` and `constraints.unique: true`,
+    // so the semantic kind and the schema duplicate rule cannot diverge.
+    let mut package = Package::new("nz.example.demo");
+    let mut feature = Feature::new(
+        "playedBy",
+        FeatureKind::CrossReference,
+        class_ref("Person"),
+        Multiplicity::MANY,
+    );
+    feature.collection = Some(CollectionKind::Set);
+    feature.constraints = FeatureConstraints {
+        unique: true,
+        ..FeatureConstraints::default()
+    };
+    let mut list_feature = Feature::new(
+        "tags",
+        FeatureKind::Attribute,
+        TypeRef::Primitive(PrimitiveType::String),
+        Multiplicity::MANY,
+    );
+    list_feature.constraints = FeatureConstraints {
+        unique: true,
+        ..FeatureConstraints::default()
+    };
+    package
+        .classes
+        .push(ClassDef::new("Play", vec![], vec![feature, list_feature]));
+    let mut model = Model::new();
+    model.packages.push(package);
+
+    let expected = r#"{
+  "formatVersion": 2,
+  "pheroVersion": "0.1.0",
+  "packages": [
+    {
+      "name": "nz.example.demo",
+      "annotations": [],
+      "enums": [],
+      "datatypes": [],
+      "interfaces": [],
+      "classes": [
+        {
+          "name": "Play",
+          "extends": [],
+          "features": [
+            {
+              "id": 0,
+              "name": "playedBy",
+              "kind": "crossReference",
+              "type": {
+                "type": "class",
+                "value": {
+                  "package": "nz.example.library",
+                  "name": "Person"
+                }
+              },
+              "multiplicity": {
+                "lower": 0,
+                "upper": "unbounded"
+              },
+              "collection": "set",
+              "isDerived": false,
+              "isId": false,
+              "isReadOnly": false,
+              "constraints": {
+                "unique": true
+              }
+            },
+            {
+              "id": 1,
+              "name": "tags",
+              "kind": "attribute",
+              "type": {
+                "type": "primitive",
+                "value": "string"
+              },
+              "multiplicity": {
+                "lower": 0,
+                "upper": "unbounded"
+              },
+              "isDerived": false,
+              "isId": false,
+              "isReadOnly": false,
+              "constraints": {
+                "unique": true
+              }
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}"#
+    .replace("0.1.0", PHERO_VERSION);
+
+    assert_eq!(model.to_json_pretty().expect("serialize"), expected);
+    assert!(
+        expected.contains("\"collection\": \"set\""),
+        "the set marker is serialized"
+    );
+    let parsed = Model::from_json(&expected).expect("deserialize golden");
+    assert_eq!(model, parsed);
+    assert_eq!(
+        parsed.packages[0].classes[0].features[0].collection,
+        Some(CollectionKind::Set)
+    );
+    assert_eq!(
+        parsed.packages[0].classes[0].features[1].collection, None,
+        "a unique list stays a list"
+    );
+}
+
+#[test]
+fn collection_kind_serializes_as_the_bare_set_tag() {
+    assert_eq!(
+        serde_json::to_value(CollectionKind::Set).expect("serialize"),
+        serde_json::json!("set")
+    );
+}
+
+#[test]
 fn from_json_rejects_wrong_format_version() {
     let json = library_model().to_json_pretty().expect("serialize");
 

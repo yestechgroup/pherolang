@@ -7,7 +7,7 @@
 //! are omitted, and `if` renames its `else_` field to `else`.
 
 use phero_expr::body::BodyOutput;
-use phero_expr::stmt::{check_stmt_body, BodyRaise, Stmt, StmtBody, StmtReceiver};
+use phero_expr::stmt::{check_stmt_body, BodyRaise, RaiseSignature, Stmt, StmtBody, StmtReceiver};
 use phero_expr::DomainTypes;
 use phero_ir::{
     Feature, FeatureKind, Multiplicity, Operation, OperationParam, PrimitiveType, TypeRef,
@@ -160,7 +160,29 @@ fn trade_repository() -> StmtReceiver<'static> {
         name: "trades",
         package: "design",
         class: "TradeRepository",
+        is_primary: true,
     }
+}
+
+/// The pre-prelude-focused shorthand for the existing typing tests: the
+/// standard prelude raises are in scope and the `throws` subset check is
+/// disabled (`None`), which is exactly the crate's pre-DD7 behavior.
+fn check(
+    context: &DomainTypes,
+    params: &[OperationParam],
+    output: Option<BodyOutput<'_>>,
+    receivers: &[StmtReceiver<'_>],
+    body: &StmtBody,
+) -> Result<(), Vec<phero_expr::BodyError>> {
+    check_stmt_body(
+        context,
+        params,
+        output,
+        receivers,
+        &RaiseSignature::prelude(),
+        None,
+        body,
+    )
 }
 
 fn conflict(arg: &str) -> BodyRaise {
@@ -270,7 +292,7 @@ fn check_stmt_let_infers_and_threads_scope() {
         ],
     };
     assert_eq!(
-        check_stmt_body(
+        check(
             &fixture_context(),
             &[trade_param()],
             Some(double_output()),
@@ -294,7 +316,7 @@ fn check_stmt_let_infers_and_threads_scope() {
             return_of(Some("price")),
         ],
     };
-    let errors = check_stmt_body(
+    let errors = check(
         &fixture_context(),
         &[trade_param(), id_param()],
         Some(double_output()),
@@ -326,7 +348,7 @@ fn check_stmt_let_else_unwraps_option() {
         ],
     };
     assert_eq!(
-        check_stmt_body(
+        check(
             &fixture_context(),
             &[maybe_note_param(), id_param()],
             Some(string_output()),
@@ -349,7 +371,7 @@ fn check_stmt_let_else_requires_an_option_initializer() {
             return_of(Some("trade.price")),
         ],
     };
-    let errors = check_stmt_body(
+    let errors = check(
         &fixture_context(),
         &[trade_param(), id_param()],
         Some(double_output()),
@@ -383,7 +405,7 @@ fn check_stmt_assign_rejects_unknown_path_feature() {
             return_of(Some("trade.price")),
         ],
     };
-    let errors = check_stmt_body(
+    let errors = check(
         &fixture_context(),
         &[trade_param()],
         Some(double_output()),
@@ -421,7 +443,7 @@ fn check_stmt_assign_requires_a_local_root() {
             return_of(Some("trade.price")),
         ],
     };
-    let errors = check_stmt_body(
+    let errors = check(
         &fixture_context(),
         &[trade_param(), id_param()],
         Some(double_output()),
@@ -477,7 +499,7 @@ fn check_stmt_assign_types_the_target_slot() {
         ],
     };
     assert_eq!(
-        check_stmt_body(
+        check(
             &fixture_context(),
             &[trade_param()],
             Some(double_output()),
@@ -497,7 +519,7 @@ fn check_stmt_assign_types_the_target_slot() {
             return_of(Some("trade.price")),
         ],
     };
-    let errors = check_stmt_body(
+    let errors = check(
         &fixture_context(),
         &[trade_param()],
         Some(double_output()),
@@ -523,7 +545,7 @@ fn check_stmt_assign_types_the_target_slot() {
             return_of(Some("trade.price")),
         ],
     };
-    let errors = check_stmt_body(
+    let errors = check(
         &fixture_context(),
         &[trade_param()],
         Some(double_output()),
@@ -551,7 +573,7 @@ fn check_stmt_guard_requires_boolean() {
             return_of(Some("trade.price")),
         ],
     };
-    let errors = check_stmt_body(
+    let errors = check(
         &fixture_context(),
         &[trade_param()],
         Some(double_output()),
@@ -582,7 +604,7 @@ fn check_stmt_guard_rejects_unknown_error_variant() {
             return_of(Some("trade.price")),
         ],
     };
-    let errors = check_stmt_body(
+    let errors = check(
         &fixture_context(),
         &[trade_param()],
         Some(double_output()),
@@ -593,9 +615,12 @@ fn check_stmt_guard_rejects_unknown_error_variant() {
     assert_eq!(errors.len(), 1, "{errors:?}");
     assert_eq!(errors[0].slot, "guard 'trade.price > 0.0'");
     assert!(
-        errors[0]
-            .message
-            .contains("unknown error variant `Exploded`"),
+        errors[0].message.contains("unknown error `Exploded`"),
+        "{:?}",
+        errors[0].message
+    );
+    assert!(
+        errors[0].message.contains("declared: NotFound, Conflict"),
         "{:?}",
         errors[0].message
     );
@@ -619,7 +644,7 @@ fn check_stmt_guard_rejects_error_arity() {
             return_of(Some("trade.price")),
         ],
     };
-    let errors = check_stmt_body(
+    let errors = check(
         &fixture_context(),
         &[trade_param(), id_param()],
         Some(double_output()),
@@ -651,7 +676,7 @@ fn check_stmt_guard_rejects_non_scalar_error_arguments() {
             return_of(Some("trade.price")),
         ],
     };
-    let errors = check_stmt_body(
+    let errors = check(
         &fixture_context(),
         &[trade_param()],
         Some(double_output()),
@@ -661,12 +686,16 @@ fn check_stmt_guard_rejects_non_scalar_error_arguments() {
     .expect_err("class argument");
     assert_eq!(errors.len(), 1, "{errors:?}");
     assert!(
-        errors[0].message.contains("must be a scalar"),
+        errors[0]
+            .message
+            .contains("error argument `detail` types class `Trade`"),
         "{:?}",
         errors[0].message
     );
     assert!(
-        errors[0].message.contains("class `Trade`"),
+        errors[0]
+            .message
+            .contains("declared payload field is string"),
         "{:?}",
         errors[0].message
     );
@@ -692,7 +721,7 @@ fn check_stmt_if_branches_have_local_scope() {
             return_of(Some("local")),
         ],
     };
-    let errors = check_stmt_body(
+    let errors = check(
         &fixture_context(),
         &[trade_param()],
         Some(double_output()),
@@ -718,7 +747,7 @@ fn check_stmt_if_requires_boolean_condition() {
             else_: vec![return_of(Some("0.0"))],
         }],
     };
-    let errors = check_stmt_body(
+    let errors = check(
         &fixture_context(),
         &[trade_param()],
         Some(double_output()),
@@ -743,7 +772,7 @@ fn check_stmt_return_types_against_output_multiplicity() {
         stmts: vec![return_of(Some("tags"))],
     };
     assert_eq!(
-        check_stmt_body(
+        check(
             &fixture_context(),
             &[tags_param()],
             Some(many_string_output()),
@@ -756,7 +785,7 @@ fn check_stmt_return_types_against_output_multiplicity() {
     let element_return = StmtBody {
         stmts: vec![return_of(Some("id"))],
     };
-    let errors = check_stmt_body(
+    let errors = check(
         &fixture_context(),
         &[id_param()],
         Some(many_string_output()),
@@ -776,7 +805,7 @@ fn check_stmt_return_types_against_output_multiplicity() {
         stmts: vec![return_of(Some("maybeNote"))],
     };
     assert_eq!(
-        check_stmt_body(
+        check(
             &fixture_context(),
             &[maybe_note_param()],
             Some(optional_string_output()),
@@ -797,7 +826,7 @@ fn check_stmt_missing_return_is_an_error() {
             expr: "trade.price".to_string(),
         }],
     };
-    let errors = check_stmt_body(
+    let errors = check(
         &fixture_context(),
         &[trade_param()],
         Some(double_output()),
@@ -820,7 +849,7 @@ fn check_stmt_missing_return_is_an_error() {
             error: conflict("trade.note"),
         }],
     };
-    let errors = check_stmt_body(
+    let errors = check(
         &fixture_context(),
         &[trade_param()],
         Some(double_output()),
@@ -840,7 +869,7 @@ fn check_stmt_missing_return_is_an_error() {
             else_: vec![],
         }],
     };
-    let errors = check_stmt_body(
+    let errors = check(
         &fixture_context(),
         &[trade_param()],
         Some(double_output()),
@@ -860,7 +889,7 @@ fn check_stmt_missing_return_is_an_error() {
         }],
     };
     assert_eq!(
-        check_stmt_body(
+        check(
             &fixture_context(),
             &[trade_param()],
             Some(double_output()),
@@ -892,14 +921,14 @@ fn check_stmt_void_body_needs_no_return() {
         ],
     };
     assert_eq!(
-        check_stmt_body(&fixture_context(), &[trade_param()], None, &[], &body),
+        check(&fixture_context(), &[trade_param()], None, &[], &body),
         Ok(())
     );
 
     let returns_a_value = StmtBody {
         stmts: vec![return_of(Some("trade.price"))],
     };
-    let errors = check_stmt_body(
+    let errors = check(
         &fixture_context(),
         &[trade_param()],
         None,
@@ -931,7 +960,7 @@ fn check_stmt_binds_receivers_as_callable_classes() {
         ],
     };
     assert_eq!(
-        check_stmt_body(
+        check(
             &fixture_context(),
             &[id_param()],
             Some(double_output()),
@@ -952,7 +981,7 @@ fn check_stmt_binds_receivers_as_callable_classes() {
             return_of(Some("0.0")),
         ],
     };
-    let errors = check_stmt_body(
+    let errors = check(
         &fixture_context(),
         &[id_param()],
         Some(double_output()),
@@ -966,5 +995,426 @@ fn check_stmt_binds_receivers_as_callable_classes() {
         errors[0].message.contains("unknown operation"),
         "{:?}",
         errors[0].message
+    );
+}
+
+// --- declared raise vocabulary and the `throws` contract (DD7) ---------------
+
+/// A declared error's payload types exactly: arity and each field. A
+/// mismatch names the offending field and the declared shape.
+#[test]
+fn check_stmt_raise_checks_the_declared_payload() {
+    let raises = vec![
+        RaiseSignature::new(
+            "PaymentDeclined",
+            vec![
+                param("reference", TypeRef::Primitive(PrimitiveType::String), None),
+                param("amount", TypeRef::Primitive(PrimitiveType::Double), None),
+            ],
+        ),
+        RaiseSignature::new("Empty", Vec::new()),
+    ];
+    let body = StmtBody {
+        stmts: vec![
+            Stmt::Guard {
+                expr: "trade.price > 0.0".to_string(),
+                error: BodyRaise {
+                    variant: "PaymentDeclined".to_string(),
+                    args: vec!["trade.note".to_string(), "trade.price".to_string()],
+                },
+            },
+            Stmt::Guard {
+                expr: "trade.price > 0.0".to_string(),
+                error: BodyRaise {
+                    variant: "Empty".to_string(),
+                    args: Vec::new(),
+                },
+            },
+            return_of(Some("trade.price")),
+        ],
+    };
+    assert_eq!(
+        check_stmt_body(
+            &fixture_context(),
+            &[trade_param()],
+            Some(double_output()),
+            &[],
+            &raises,
+            None,
+            &body,
+        ),
+        Ok(())
+    );
+
+    let wrong = StmtBody {
+        stmts: vec![
+            Stmt::Guard {
+                expr: "trade.price > 0.0".to_string(),
+                error: BodyRaise {
+                    variant: "PaymentDeclined".to_string(),
+                    args: vec!["trade.note".to_string(), "trade.note".to_string()],
+                },
+            },
+            return_of(Some("trade.price")),
+        ],
+    };
+    let errors = check_stmt_body(
+        &fixture_context(),
+        &[trade_param()],
+        Some(double_output()),
+        &[],
+        &raises,
+        None,
+        &wrong,
+    )
+    .expect_err("payload type mismatch");
+    assert_eq!(errors.len(), 1, "{errors:?}");
+    assert!(
+        errors[0]
+            .message
+            .contains("error argument `amount` types string"),
+        "{:?}",
+        errors[0].message
+    );
+    assert!(
+        errors[0]
+            .message
+            .contains("PaymentDeclined(reference: string, amount: double)"),
+        "{:?}",
+        errors[0].message
+    );
+}
+
+/// The prelude's payloads are strings: `NotFound("Run", 1)` is refused by
+/// the declared payload, not a hand-written scalar rule.
+#[test]
+fn check_stmt_prelude_payloads_are_strings() {
+    let body = StmtBody {
+        stmts: vec![
+            Stmt::Guard {
+                expr: "trade.price > 0.0".to_string(),
+                error: not_found(&["trade.note", "1"]),
+            },
+            return_of(Some("trade.price")),
+        ],
+    };
+    let errors = check_stmt_body(
+        &fixture_context(),
+        &[trade_param()],
+        Some(double_output()),
+        &[],
+        &RaiseSignature::prelude(),
+        None,
+        &body,
+    )
+    .expect_err("int key");
+    assert_eq!(errors.len(), 1, "{errors:?}");
+    assert!(
+        errors[0].message.contains("error argument `key` types int"),
+        "{:?}",
+        errors[0].message
+    );
+}
+
+/// `throws` is explicit and complete: a raise outside it names the declared
+/// set; an empty set allows no raise; `None` disables the subset check and a
+/// declared-but-unraised entry stays legal.
+#[test]
+fn check_stmt_raises_must_be_declared_in_throws() {
+    let raise_conflict = || StmtBody {
+        stmts: vec![
+            Stmt::Guard {
+                expr: "trade.price > 0.0".to_string(),
+                error: conflict("trade.note"),
+            },
+            return_of(Some("trade.price")),
+        ],
+    };
+    let raises = RaiseSignature::prelude();
+    let declared = ["Conflict"];
+
+    assert_eq!(
+        check_stmt_body(
+            &fixture_context(),
+            &[trade_param()],
+            Some(double_output()),
+            &[],
+            &raises,
+            Some(&declared),
+            &raise_conflict(),
+        ),
+        Ok(())
+    );
+
+    let errors = check_stmt_body(
+        &fixture_context(),
+        &[trade_param()],
+        Some(double_output()),
+        &[],
+        &raises,
+        Some(&[]),
+        &raise_conflict(),
+    )
+    .expect_err("no throws clause");
+    assert_eq!(errors.len(), 1, "{errors:?}");
+    assert!(
+        errors[0]
+            .message
+            .contains("error `Conflict` is not declared in the operation's `throws`"),
+        "{:?}",
+        errors[0].message
+    );
+    assert!(
+        errors[0].message.contains("declares no `throws` clause"),
+        "{:?}",
+        errors[0].message
+    );
+
+    let not_declared = ["NotFound"];
+    let errors = check_stmt_body(
+        &fixture_context(),
+        &[trade_param()],
+        Some(double_output()),
+        &[],
+        &raises,
+        Some(&not_declared),
+        &raise_conflict(),
+    )
+    .expect_err("declared set misses Conflict");
+    assert!(
+        errors[0].message.contains("declared: NotFound"),
+        "{:?}",
+        errors[0].message
+    );
+
+    // A declared-but-unraised entry is an interface promise, not an error.
+    let unraised = ["Conflict", "NotFound", "PaymentDeclined"];
+    assert_eq!(
+        check_stmt_body(
+            &fixture_context(),
+            &[trade_param()],
+            Some(double_output()),
+            &[],
+            &raises,
+            Some(&unraised),
+            &raise_conflict(),
+        ),
+        Ok(())
+    );
+}
+
+/// The body is orchestration-only: a whole-local reassignment is refused
+/// (assignment targets an aggregate feature path).
+#[test]
+fn check_stmt_rejects_whole_local_reassignment() {
+    let body = StmtBody {
+        stmts: vec![
+            Stmt::Let {
+                name: "draft".to_string(),
+                expr: "trade".to_string(),
+            },
+            Stmt::Assign {
+                path: vec!["draft".to_string()],
+                expr: "trade".to_string(),
+            },
+            return_of(Some("trade.price")),
+        ],
+    };
+    let errors = check(
+        &fixture_context(),
+        &[trade_param()],
+        Some(double_output()),
+        &[],
+        &body,
+    )
+    .expect_err("whole-local assignment");
+    assert_eq!(errors.len(), 1, "{errors:?}");
+    assert_eq!(errors[0].slot, "assign 'draft'");
+    assert!(
+        errors[0]
+            .message
+            .contains("cannot reassign the local 'draft'"),
+        "{:?}",
+        errors[0].message
+    );
+    assert!(
+        errors[0].message.contains("orchestration-only"),
+        "{:?}",
+        errors[0].message
+    );
+}
+
+/// One body binds one primary repository: `findById`/`findAll` through a
+/// secondary receiver is a cross-aggregate load, while `save` and a call to
+/// the primary stay legal.
+#[test]
+fn check_stmt_rejects_cross_aggregate_loads() {
+    let mut context = fixture_context();
+    context.insert_class(
+        "design",
+        "AuditRepository",
+        vec![],
+        vec![],
+        vec![Operation::new(
+            "findById",
+            class_ref("Trade"),
+            vec![id_param()],
+        )],
+    );
+    let secondary = StmtReceiver {
+        name: "audit",
+        package: "design",
+        class: "AuditRepository",
+        is_primary: false,
+    };
+    let body = StmtBody {
+        stmts: vec![
+            Stmt::Let {
+                name: "trade".to_string(),
+                expr: "trades.findById(id)".to_string(),
+            },
+            Stmt::Let {
+                name: "other".to_string(),
+                expr: "audit.findById(id)".to_string(),
+            },
+            return_of(Some("trade.price")),
+        ],
+    };
+    let errors = check_stmt_body(
+        &context,
+        &[id_param()],
+        Some(double_output()),
+        &[trade_repository(), secondary],
+        &RaiseSignature::prelude(),
+        None,
+        &body,
+    )
+    .expect_err("cross-aggregate load");
+    assert_eq!(errors.len(), 1, "{errors:?}");
+    assert_eq!(errors[0].slot, "let 'other'");
+    assert!(
+        errors[0]
+            .message
+            .contains("`audit.findById` is a cross-aggregate load"),
+        "{:?}",
+        errors[0].message
+    );
+
+    // `findAll` through the same secondary receiver is refused too; `save`
+    // is not a load.
+    let refused = StmtBody {
+        stmts: vec![
+            Stmt::Let {
+                name: "all".to_string(),
+                expr: "audit.findAll()".to_string(),
+            },
+            return_of(Some("trade.price")),
+        ],
+    };
+    let errors = check_stmt_body(
+        &context,
+        &[id_param()],
+        Some(double_output()),
+        &[trade_repository(), secondary],
+        &RaiseSignature::prelude(),
+        None,
+        &refused,
+    )
+    .expect_err("findAll");
+    assert!(
+        errors[0].message.contains("cross-aggregate load"),
+        "{:?}",
+        errors[0].message
+    );
+
+    // Binding the secondary repository to a local does not launder the
+    // load: the binding carries the non-primary class.
+    let aliased = StmtBody {
+        stmts: vec![
+            Stmt::Let {
+                name: "repo".to_string(),
+                expr: "audit".to_string(),
+            },
+            Stmt::Let {
+                name: "other".to_string(),
+                expr: "repo.findById(id)".to_string(),
+            },
+            return_of(Some("id")),
+        ],
+    };
+    let errors = check_stmt_body(
+        &context,
+        &[id_param()],
+        Some(double_output()),
+        &[trade_repository(), secondary],
+        &RaiseSignature::prelude(),
+        None,
+        &aliased,
+    )
+    .expect_err("aliased load");
+    assert!(
+        errors[0].message.contains("cross-aggregate load"),
+        "{:?}",
+        errors[0].message
+    );
+}
+
+/// A domain `op` on a loaded local type-checks against the class's declared
+/// operations (DD7 DD7-06): `let submitted = trade.submit();`.
+#[test]
+fn check_stmt_calls_domain_ops_on_loaded_locals() {
+    let mut context = fixture_context();
+    context.insert_class(
+        "pricing",
+        "Trade",
+        vec![],
+        vec![
+            Feature::new(
+                "price",
+                FeatureKind::Attribute,
+                TypeRef::Primitive(PrimitiveType::Double),
+                Multiplicity::REQUIRED,
+            ),
+            Feature::new(
+                "note",
+                FeatureKind::Attribute,
+                TypeRef::Primitive(PrimitiveType::String),
+                Multiplicity::REQUIRED,
+            ),
+        ],
+        vec![Operation::new(
+            "submit",
+            TypeRef::Primitive(PrimitiveType::Boolean),
+            Vec::new(),
+        )],
+    );
+    let body = StmtBody {
+        stmts: vec![
+            Stmt::Let {
+                name: "trade".to_string(),
+                expr: "trades.findById(id)".to_string(),
+            },
+            Stmt::Let {
+                name: "submitted".to_string(),
+                expr: "trade.submit()".to_string(),
+            },
+            Stmt::Guard {
+                expr: "submitted".to_string(),
+                error: conflict("trade.note"),
+            },
+            return_of(Some("trade.price")),
+        ],
+    };
+    assert_eq!(
+        check_stmt_body(
+            &context,
+            &[id_param()],
+            Some(double_output()),
+            &[trade_repository()],
+            &RaiseSignature::prelude(),
+            Some(&["Conflict"]),
+            &body,
+        ),
+        Ok(())
     );
 }

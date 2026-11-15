@@ -57,6 +57,15 @@ pub fn ddd_index(source: &str) -> SurfaceIndex {
         application.name.span,
         application.span,
     );
+    // Application-scoped error declarations (DD7): `<App>.<Error>`.
+    for error in &application.errors {
+        index.push_definition(
+            kinds::ERROR,
+            ids::error_name(&application.name.text, &error.name.text),
+            error.name.span,
+            error.span,
+        );
+    }
     // The application's own name is the module-name prefix (the graph's
     // `designApplication` name is the declared `application <name>`).
     for module in &application.modules {
@@ -75,6 +84,15 @@ fn module_index(index: &mut SurfaceIndex, application: &DddApplication, module: 
         module.name.span,
         module.span,
     );
+    // Module-scoped error declarations (DD7): `<App>.<module>.<Error>`.
+    for error in &module.errors {
+        index.push_definition(
+            kinds::ERROR,
+            ids::error_name(&module_name, &error.name.text),
+            error.name.span,
+            error.span,
+        );
+    }
 
     for service in &module.services {
         let service_name = ids::service_name(&module_name, &service.name.text);
@@ -116,6 +134,14 @@ fn module_index(index: &mut SurfaceIndex, application: &DddApplication, module: 
                     binding.trigger.text.clone(),
                     binding.trigger.span,
                     ReferenceContext::Transition,
+                );
+            }
+            for error in &operation.throws {
+                index.push_reference(
+                    &[kinds::ERROR],
+                    error.text.clone(),
+                    error.span,
+                    ReferenceContext::Throws,
                 );
             }
             if let Some(receiver) = &operation.body_receiver {
@@ -199,6 +225,14 @@ fn module_index(index: &mut SurfaceIndex, application: &DddApplication, module: 
                     operation.name.span,
                     operation.span,
                 );
+                for error in &operation.throws {
+                    index.push_reference(
+                        &[kinds::ERROR],
+                        error.text.clone(),
+                        error.span,
+                        ReferenceContext::Throws,
+                    );
+                }
             }
         }
         if let Some(machine) = &design.machine {
@@ -527,6 +561,71 @@ application Support {
             .find(|reference| reference.context == ReferenceContext::SearchEntity)
             .expect("the search's entity");
         assert_eq!(entity.name, "Ticket");
+    }
+
+    #[test]
+    fn declared_errors_are_definitions_and_throws_is_a_reference() {
+        let (source, index) = support_index();
+        let definition = index
+            .definitions_of(kinds::ERROR, "SupportDesk.TicketAlreadyResolved")
+            .remove(0);
+        assert_eq!(
+            &source[definition.name_span.start..definition.name_span.end],
+            "TicketAlreadyResolved",
+            "an application-scoped error's definition span covers its name"
+        );
+        let reference = index
+            .references
+            .iter()
+            .find(|reference| {
+                reference.context == ReferenceContext::Throws
+                    && reference.name == "TicketAlreadyResolved"
+            })
+            .expect("updateTicket's throws clause");
+        assert_eq!(reference.name, "TicketAlreadyResolved");
+        assert_eq!(reference.target_kinds, &[kinds::ERROR]);
+        assert_eq!(
+            &source[reference.span.start..reference.span.end],
+            "TicketAlreadyResolved"
+        );
+        assert_eq!(
+            index
+                .references_to(kinds::ERROR, "SupportDesk.TicketAlreadyResolved")
+                .len(),
+            1
+        );
+    }
+
+    #[test]
+    fn module_scoped_errors_are_defined_under_their_module() {
+        let source = concat!(
+            "application Inline {\n",
+            "    module m {\n",
+            "        error InvoiceAlreadyIssued(String invoiceId);\n",
+            "        service S { boolean pay() throws InvoiceAlreadyIssued; }\n",
+            "    }\n",
+            "}\n",
+        );
+        let index = ddd_index(source);
+        let definition = index
+            .definitions_of(
+                kinds::ERROR,
+                &ids::error_name("Inline.m", "InvoiceAlreadyIssued"),
+            )
+            .remove(0);
+        assert_eq!(
+            &source[definition.name_span.start..definition.name_span.end],
+            "InvoiceAlreadyIssued"
+        );
+        assert!(
+            index
+                .definitions_of(
+                    kinds::ERROR,
+                    &ids::error_name("Inline", "InvoiceAlreadyIssued")
+                )
+                .is_empty(),
+            "a module error is not an application-scoped node"
+        );
     }
 
     #[test]

@@ -87,7 +87,7 @@ pub(crate) fn emit_datatypes(e: &mut String, unit: &Unit<'_>) {
                 e.push_str(&format!("/// - {target}: `{type_name}`\n"));
             }
         }
-        e.push_str("#[derive(Debug, Clone, PartialEq, Eq, Default, Hash)]\n");
+        e.push_str("#[derive(Debug, Clone, PartialEq, Eq, Default, Hash, PartialOrd, Ord)]\n");
         e.push_str(&format!(
             "pub struct {}(pub String);\n",
             rust_ident(&datatype.name)
@@ -121,7 +121,7 @@ pub(crate) fn emit_enums(e: &mut String, unit: &Unit<'_>) -> anyhow::Result<()> 
         }
         let name = rust_ident(&enum_def.name);
         e.push_str("/// Generated enum.\n");
-        e.push_str("#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]\n");
+        e.push_str("#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]\n");
         e.push_str("#[repr(i64)]\n");
         e.push_str(&format!("pub enum {name} {{\n"));
         for literal in &enum_def.literals {
@@ -335,7 +335,7 @@ pub(crate) fn emit_vocabularies(e: &mut String, unit: &Unit<'_>) -> anyhow::Resu
             },
             count = variants.len(),
         ));
-        e.push_str("#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]\n");
+        e.push_str("#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]\n");
         // `repr(transparent)` is rejected for enums with more than one
         // variant (E0731); `u8` keeps the same plain-value intent.
         e.push_str("#[repr(u8)]\n");

@@ -1,0 +1,267 @@
+{
+  "formatVersion": 2,
+  "pheroVersion": "0.3.0",
+  "application": {
+    "name": "Payments",
+    "base": "nz.example.payments"
+  },
+  "errors": [
+    {
+      "name": "PaymentDeclined",
+      "description": "The payment was refused by the provider.",
+      "fields": [
+        {
+          "name": "reason",
+          "type": {
+            "type": "enum",
+            "value": {
+              "package": "nz.example.payments",
+              "name": "DeclineReason"
+            }
+          }
+        },
+        {
+          "name": "reference",
+          "type": {
+            "type": "primitive",
+            "value": "string"
+          }
+        }
+      ]
+    },
+    {
+      "name": "OutOfStock",
+      "fields": [
+        {
+          "name": "sku",
+          "type": {
+            "type": "primitive",
+            "value": "string"
+          }
+        }
+      ]
+    }
+  ],
+  "modules": [
+    {
+      "name": "billing",
+      "errors": [
+        {
+          "name": "InvoiceAlreadyIssued",
+          "description": "The invoice for this order was already issued.",
+          "fields": [
+            {
+              "name": "invoiceId",
+              "type": {
+                "type": "primitive",
+                "value": "string"
+              }
+            }
+          ]
+        },
+        {
+          "name": "DeclinedDetail",
+          "fields": [
+            {
+              "name": "detail",
+              "type": {
+                "dto": "PaymentDetail"
+              }
+            }
+          ]
+        }
+      ],
+      "services": [
+        {
+          "name": "PaymentService",
+          "operations": [
+            {
+              "name": "pay",
+              "returnType": {
+                "type": "primitive",
+                "value": "boolean"
+              },
+              "params": [
+                {
+                  "name": "orderId",
+                  "type": {
+                    "type": "primitive",
+                    "value": "string"
+                  }
+                }
+              ],
+              "throws": [
+                {
+                  "name": "PaymentDeclined",
+                  "scope": "application"
+                },
+                {
+                  "name": "OutOfStock",
+                  "scope": "application"
+                },
+                {
+                  "name": "NotFound",
+                  "scope": "prelude"
+                },
+                {
+                  "name": "InvoiceAlreadyIssued",
+                  "scope": "module",
+                  "module": "billing"
+                }
+              ],
+              "bodies": {
+                "stmt": "{\"stmts\":[{\"kind\":\"letElse\",\"name\":\"order\",\"expr\":\"self.findById(orderId)\",\"error\":{\"variant\":\"NotFound\",\"args\":[\"\\\"Order\\\"\",\"orderId\"]}},{\"kind\":\"let\",\"name\":\"submitted\",\"expr\":\"order.submit()\"},{\"kind\":\"guard\",\"expr\":\"submitted\",\"error\":{\"variant\":\"PaymentDeclined\",\"args\":[\"DeclineReason.InsufficientFunds\",\"orderId\"]}},{\"kind\":\"guard\",\"expr\":\"order.label != \\\"issued\\\"\",\"error\":{\"variant\":\"InvoiceAlreadyIssued\",\"args\":[\"orderId\"]}},{\"kind\":\"return\",\"expr\":\"true\"}]}"
+              },
+              "bodyReceiver": "PaymentRepository"
+            }
+          ],
+          "dependencies": [
+            "PaymentRepository"
+          ],
+          "dependencyRefs": [
+            {
+              "kind": "repository",
+              "qualifiedName": "Payments.billing.PaymentRepository",
+              "module": "billing"
+            }
+          ]
+        },
+        {
+          "name": "PaymentGateway",
+          "operations": [
+            {
+              "name": "pay",
+              "delegation": {
+                "target": "PaymentService",
+                "targetRef": {
+                  "kind": "service",
+                  "qualifiedName": "Payments.billing.PaymentService",
+                  "module": "billing"
+                },
+                "operation": "pay"
+              },
+              "throws": [
+                {
+                  "name": "PaymentDeclined",
+                  "scope": "application"
+                },
+                {
+                  "name": "OutOfStock",
+                  "scope": "application"
+                },
+                {
+                  "name": "NotFound",
+                  "scope": "prelude"
+                },
+                {
+                  "name": "InvoiceAlreadyIssued",
+                  "scope": "module",
+                  "module": "billing"
+                }
+              ]
+            }
+          ],
+          "dependencies": [
+            "PaymentService"
+          ],
+          "dependencyRefs": [
+            {
+              "kind": "service",
+              "qualifiedName": "Payments.billing.PaymentService",
+              "module": "billing"
+            }
+          ]
+        }
+      ],
+      "designs": [
+        {
+          "stereotype": "dto",
+          "dtoShape": {
+            "name": "PaymentDetail",
+            "direction": "input",
+            "members": [
+              {
+                "name": "reference",
+                "kind": "declared",
+                "type": {
+                  "type": "primitive",
+                  "value": "string"
+                }
+              },
+              {
+                "name": "provider",
+                "kind": "declared",
+                "type": {
+                  "type": "primitive",
+                  "value": "string"
+                }
+              }
+            ]
+          }
+        },
+        {
+          "class": "Order",
+          "typeRef": {
+            "type": "class",
+            "value": {
+              "package": "nz.example.payments",
+              "name": "Order"
+            }
+          },
+          "stereotype": "entity",
+          "flags": {
+            "auditable": true,
+            "optimisticLocking": true
+          },
+          "repository": {
+            "name": "PaymentRepository",
+            "operations": [
+              {
+                "name": "findById",
+                "builtin": "findById"
+              },
+              {
+                "name": "save",
+                "builtin": "save"
+              },
+              {
+                "name": "capture",
+                "returnType": {
+                  "type": "primitive",
+                  "value": "int"
+                },
+                "params": [
+                  {
+                    "name": "orderId",
+                    "type": {
+                      "type": "primitive",
+                      "value": "string"
+                    }
+                  }
+                ],
+                "condition": "label != \"\"",
+                "throws": [
+                  {
+                    "name": "NotFound",
+                    "scope": "prelude"
+                  },
+                  {
+                    "name": "PaymentDeclined",
+                    "scope": "application"
+                  },
+                  {
+                    "name": "Conflict",
+                    "scope": "prelude"
+                  }
+                ],
+                "bodies": {
+                  "stmt": "{\"stmts\":[{\"kind\":\"letElse\",\"name\":\"order\",\"expr\":\"self.findById(orderId)\",\"error\":{\"variant\":\"NotFound\",\"args\":[\"\\\"Order\\\"\",\"orderId\"]}},{\"kind\":\"guard\",\"expr\":\"order.label != \\\"\\\"\",\"error\":{\"variant\":\"PaymentDeclined\",\"args\":[\"DeclineReason.ExpiredCard\",\"orderId\"]}},{\"kind\":\"return\",\"expr\":\"order.total\"}]}"
+                }
+              }
+            ]
+          }
+        }
+      ]
+    }
+  ]
+}

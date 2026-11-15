@@ -65,6 +65,7 @@ impl<'src> Formatter<'src> {
                 self.scan_multiplicity();
                 self.take_name();
                 self.scan_opposite();
+                self.scan_constraint_block();
             }
             Some(Token::Container) => {
                 self.advance();
@@ -84,9 +85,10 @@ impl<'src> Formatter<'src> {
                 self.scan_qname();
                 self.scan_multiplicity();
                 self.take_name();
-                // Tier 2: same body shapes as an `op` — target-tagged blocks
-                // (`{ expr { ... } }`) or the bare `{ ... }` a driver rejects.
-                self.scan_op_body();
+                // Tier 2 + DD6: a `{ ... }` tail resolves tagged body first,
+                // then constraint block, then bare body (which the driver
+                // rejects); a constraint block may follow the body.
+                self.scan_derived_tail();
             }
             Some(Token::Ident(_) | Token::IdentEscaped(_)) => {
                 self.scan_qname();

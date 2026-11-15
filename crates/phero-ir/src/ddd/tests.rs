@@ -37,6 +37,7 @@ fn sample_model() -> DddModel {
         })
         .module(Module {
             name: "catalogue".to_string(),
+            errors: Vec::new(),
             services: vec![Service {
                 name: "LoanService".to_string(),
                 description: Some("Manages loans".to_string()),
@@ -68,6 +69,7 @@ fn sample_model() -> DddModel {
                         condition_paths: Vec::new(),
                         transition: None,
                         child_scope: None,
+                        throws: Vec::new(),
                         bodies: BTreeMap::new(),
                         body_receiver: None,
                     },
@@ -97,6 +99,7 @@ fn sample_model() -> DddModel {
                         condition_paths: Vec::new(),
                         transition: None,
                         child_scope: None,
+                        throws: Vec::new(),
                         bodies: BTreeMap::new(),
                         body_receiver: None,
                     },
@@ -888,6 +891,7 @@ fn loose_reference_lists_are_omitted_when_empty_and_round_trip_when_set() {
 fn a_search_less_module_omits_the_searches_key() {
     let module = Module {
         name: "catalogue".to_string(),
+        errors: Vec::new(),
         services: vec![Service::new("LoanService")],
         designs: vec![Design::new("Money", Stereotype::Value)],
         searches: Vec::new(),
@@ -1321,5 +1325,121 @@ fn boost_orders_like_total_cmp() {
             f32::INFINITY.to_bits(),
             f32::NAN.to_bits(),
         ]
+    );
+}
+
+// -----------------------------------------------------------------------
+// Declared error vocabulary and `throws` (DD7, pherolang#304)
+// -----------------------------------------------------------------------
+
+/// An empty error declaration omits the description and fields keys; a
+/// populated one serializes them in declaration order.
+#[test]
+fn error_declarations_serialize_sparsely_and_round_trip() {
+    let empty = ErrorDecl::new("Empty");
+    assert_eq!(
+        serde_json::to_string(&empty).expect("serialize"),
+        r#"{"name":"Empty"}"#
+    );
+
+    let declined = ErrorDecl::new("PaymentDeclined")
+        .with_description(Some("The payment was refused.".to_string()))
+        .with_fields(vec![
+            param("reason", class_ref("DeclineReason")),
+            param("reference", TypeRef::Primitive(PrimitiveType::String)),
+        ]);
+    let json = serde_json::to_string(&declined).expect("serialize");
+    assert_eq!(
+        json,
+        r#"{"name":"PaymentDeclined","description":"The payment was refused.","fields":[{"name":"reason","type":{"type":"class","value":{"package":"nz.example.library","name":"DeclineReason"}}},{"name":"reference","type":{"type":"primitive","value":"string"}}]}"#
+    );
+    let round: ErrorDecl = serde_json::from_str(&json).expect("deserialize");
+    assert_eq!(round, declined);
+}
+
+/// A model carrying application-scoped errors emits the root `errors` key
+/// after `application`; a module's errors emit after its name; both are
+/// omitted entirely when empty (the additive-field discipline).
+#[test]
+fn error_declarations_ride_the_camel_case_wire_keys() {
+    let model = DddModel::new()
+        .application(Application::new("Payments"))
+        .with_errors(vec![ErrorDecl::new("OutOfStock")])
+        .module(Module::new("billing").with_errors(vec![ErrorDecl::new("InvoiceAlreadyIssued")]));
+    let json = serde_json::to_string(&model).expect("serialize");
+    assert!(
+        json.contains(
+            r#""application":{"name":"Payments"},"errors":[{"name":"OutOfStock"}],"modules":[{"name":"billing","errors":[{"name":"InvoiceAlreadyIssued"}]}]"#
+        ),
+        "{json}"
+    );
+    let round: DddModel = serde_json::from_str(&json).expect("deserialize");
+    assert_eq!(round, model);
+
+    let bare = DddModel::new();
+    assert_eq!(
+        serde_json::to_string(&bare).expect("serialize"),
+        empty_model_json()
+    );
+}
+
+/// A `throws` reference serializes the scope as a bare lowercase string and
+/// the declaring module only for the module scope.
+#[test]
+fn error_refs_serialize_their_scope() {
+    assert_eq!(
+        serde_json::to_string(&ErrorRef::application("PaymentDeclined")).expect("serialize"),
+        r#"{"name":"PaymentDeclined","scope":"application"}"#
+    );
+    assert_eq!(
+        serde_json::to_string(&ErrorRef::module("InvoiceAlreadyIssued", "billing"))
+            .expect("serialize"),
+        r#"{"name":"InvoiceAlreadyIssued","scope":"module","module":"billing"}"#
+    );
+    assert_eq!(
+        serde_json::to_string(&ErrorRef::prelude("NotFound")).expect("serialize"),
+        r#"{"name":"NotFound","scope":"prelude"}"#
+    );
+}
+
+/// Service and repository operations carry their resolved `throws`
+/// vocabulary additively: absent when empty, present in clause order
+/// otherwise.
+#[test]
+fn operation_throws_are_additive_and_round_trip() {
+    let service = ServiceOperation::new("pay").with_throws(vec![
+        ErrorRef::application("PaymentDeclined"),
+        ErrorRef::prelude("NotFound"),
+    ]);
+    let json = serde_json::to_string(&service).expect("serialize");
+    assert_eq!(
+        json,
+        r#"{"name":"pay","throws":[{"name":"PaymentDeclined","scope":"application"},{"name":"NotFound","scope":"prelude"}]}"#
+    );
+    let round: ServiceOperation = serde_json::from_str(&json).expect("deserialize");
+    assert_eq!(round, service);
+
+    let repository = RepositoryOperation::declared(
+        "capture",
+        Some(DddTypeRef::domain(TypeRef::Primitive(
+            PrimitiveType::Boolean,
+        ))),
+        Vec::new(),
+    )
+    .with_throws(vec![ErrorRef::module("InvoiceAlreadyIssued", "billing")]);
+    let json = serde_json::to_string(&repository).expect("serialize");
+    assert!(
+        json.contains(
+            r#""throws":[{"name":"InvoiceAlreadyIssued","scope":"module","module":"billing"}]"#
+        ),
+        "{json}"
+    );
+
+    let bare = RepositoryOperation::declared("noop", None, Vec::new());
+    assert!(
+        !serde_json::to_string(&bare)
+            .expect("serialize")
+            .contains("throws"),
+        "an operation with no clause omits the key"
     );
 }

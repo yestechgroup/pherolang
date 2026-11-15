@@ -16,7 +16,7 @@
       "formatVersion": 2,
       "kind": "dddDesign",
       "path": "support.ddd.json",
-      "sha256": "e8fee8dab097595e7912dd07d3700666167cf1fa15322917edff14896ffbb873"
+      "sha256": "915ba5e5f552562ec4ba587fba0772290996aae3ee08d54084b9fe3cfe60b7b4"
     },
     {
       "formatVersion": 2,
@@ -507,7 +507,7 @@
     },
     {
       "path": "examples/support/support.ddd",
-      "sha256": "79a140864837b751cfe4a28bee3717c49822d4f72c3de2982106b9708803b641"
+      "sha256": "0c8bcb5f6ecb4f54947af979e6e519059a29acd71beae1487a522dd09f41ceb6"
     },
     {
       "path": "examples/support/support.deploy",

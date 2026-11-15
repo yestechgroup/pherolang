@@ -9,6 +9,39 @@ policy in [docs/VERSIONING.md](docs/VERSIONING.md).
 
 ### Added
 
+- **Declared error vocabulary and a bounded executable-body contract in the
+  `.ddd` surface** (DD7, issue #304, epic #297): an application or module
+  now declares its domain errors with typed payloads
+  (`error PaymentDeclined(DeclineReason reason, String reference);`), and
+  declared, delegated, and body service operations plus declared repository
+  operations carry a `throws` clause naming exactly the errors they can
+  raise. `NotFound(resource, key)` and `Conflict(detail)` are the standard
+  prelude — always available, never emitted in the artifact, never
+  shadowable. Application-scoped errors are visible everywhere and are the
+  cross-module contract; module-scoped errors are private (a cross-module
+  reference is `E0375`, naming the fix); error names are application-wide
+  unique (`E0374`) with unique payload fields (`E0378`), and an error
+  payload may not embed a designed entity (`E0376`). `throws` is explicit
+  and complete — no inference: a body raise outside it is `E0360` naming the
+  declared set, a declared-but-unraised entry stays legal, and a
+  delegation's `throws` must be a superset of its target's (`E0377`). The
+  statement body is now stated as **orchestration-only**: a body may call a
+  domain `op` on a loaded local (`let submitted = run.submit();`), assign a
+  feature path, and raise declared errors, while loops, local reassignment,
+  compound assignment, collection mutation, `try`/`catch`, cross-aggregate
+  loads, and bare expression statements are named parse/compile errors. The
+  artifact gains sparse `errors` at the model root and on each module plus
+  resolved `throws` references (`{name, scope, module?}`), `formatVersion`
+  stays 2, and `phero-backend-ddd` / `pherolang artifact check` enforce the
+  vocabulary, the resolved references, the body-raise subset, and the
+  delegation-superset contract from the artifact alone. A declared error
+  node and its `throws` edge join the semantic graph, editor navigation,
+  highlighting, and the LSP symbol table. `docs/DDD.md` gains the error
+  vocabulary section, rules 21–23, the rewritten rule 19, and the
+  orchestration-only posture with its explicit "not yet" list;
+  `docs/BACKENDS.md`, `docs/GRAPH.md`, and `docs/EXPRESSIONS.md` carry the
+  wire, graph, and statement-layer contracts. `examples/support` migrates:
+  `updateTicket` raises the new application error `TicketAlreadyResolved`.
 - **Resolved identities and provenance in the `.ddd` artifact** (DD1, issue
   #298, epic #297): `DddModel` gains `pheroVersion` and a resolved companion
   for every reference a consumer acts on — `Design.typeRef`,
@@ -72,6 +105,31 @@ policy in [docs/VERSIONING.md](docs/VERSIONING.md).
   ordered members, resolvable DTO references, no output DTO as a
   parameter), and `docs/DDD.md` gains the section, the rules, the wire
   shapes, the consumer contract, and the Sculptor mapping update.
+- **Collection semantics in the `.mox` surface** (DD6, issue #303, epic
+  #297): a feature now carries a collection kind alongside its multiplicity.
+  The constraint block extends to many-valued attributes, `contains`,
+  `refers`, and `derived` features and gains the value-less contextual
+  `set`: `T[]` is an ordered list (duplicates allowed), `T[] { unique }` an
+  ordered distinct list, and `T[] { set }` an unordered, duplicate-free set
+  (`{ unique set }` is legal and formats to `{ set }`). The Core IR gains
+  the sparse `Feature.collection` (`"set"`, absent for a list) and a set
+  lowers `constraints.unique: true` at the same time, so the semantic kind
+  and the schema rule cannot diverge; list-only artifacts stay
+  byte-identical. `pherolang artifact check` rejects a set without `unique`,
+  a collection kind on a single-valued feature, or one on a `container`, and
+  value bounds stay attribute-only (a relationship/derived bound is an error
+  naming its family). The Rust backend emits `std::collections::BTreeSet<T>`
+  for sets (order-insensitive equality, deterministic serialization) and
+  rejects `float`/`double` set elements at generation time with the
+  documented ordered-unique-list fallback; enums, datatypes, and
+  vocabularies gain `PartialOrd, Ord`. JSON Schema keeps `uniqueItems: true`
+  and invents no unordered keyword, so the list/set distinction lives in the
+  artifact. `Map`, `Bag`, persistence ordering (`orderby`/`orderColumn`), and
+  generic `Collection<T>` are documented non-goals with workarounds, `.ddd`
+  signatures deliberately carry no collection kind, and the expression
+  language types a set as `List(T)` (order unspecified). The
+  `library` example gains `String[] tags { set }` with a dedup/order
+  behavioral assertion.
 
 ## [0.3.0] — Phero Lang (2026-11-14)
 

@@ -1,6 +1,6 @@
 use serde::{Deserialize, Serialize};
 
-use crate::ddd::{Design, SearchDef, Service};
+use crate::ddd::{Design, ErrorDecl, SearchDef, Service};
 
 /// The designed application.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -31,6 +31,11 @@ impl Application {
 pub struct Module {
     /// Module name.
     pub name: String,
+    /// Module-scoped error declarations (DD7), in declaration order. A
+    /// module error is private: visible only inside this module. Additive;
+    /// omitted when empty.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub errors: Vec<ErrorDecl>,
     /// Application services declared in this module, in declaration order.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub services: Vec<Service>,
@@ -47,9 +52,16 @@ impl Module {
     pub fn new(name: impl Into<String>) -> Self {
         Self {
             name: name.into(),
+            errors: Vec::new(),
             services: Vec::new(),
             designs: Vec::new(),
             searches: Vec::new(),
         }
+    }
+
+    /// Chainable setter for the module-scoped error declarations (DD7).
+    pub fn with_errors(mut self, errors: Vec<ErrorDecl>) -> Self {
+        self.errors = errors;
+        self
     }
 }

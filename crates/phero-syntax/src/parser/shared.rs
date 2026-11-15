@@ -255,16 +255,22 @@ pub(crate) fn params<'src>() -> impl Parser<'src, Tokens<'src>, Vec<Param>, MoxE
         .map(|list| list.unwrap_or_default())
 }
 
-/// The closed set of value-taking constraint keywords allowed inside an
-/// attribute's constraint block, plus the value-less `unique` (handled by
+/// The closed set of value-taking constraint keywords allowed inside a
+/// feature's constraint block, plus the value-less `unique`/`set` (handled by
 /// the flag arm below). They are contextual: ordinary identifiers everywhere
 /// else, matching the `create`/`convert` precedent.
 pub(crate) const VALUED_CONSTRAINT_KEYWORDS: [&str; 5] =
     ["pattern", "minLength", "maxLength", "minimum", "maximum"];
 
-/// One `keyword value` entry inside an attribute's constraint block.
-/// Value-less `unique` takes no value: a literal after it is a syntax error
-/// (with recovery that keeps the block parseable).
+/// The closed set of value-less constraint keywords: `unique` (an ordered
+/// list with pairwise-distinct elements) and `set` (an unordered collection,
+/// which implies `unique`). Both are contextual words, ordinary identifiers
+/// everywhere else — the same discipline as the valued keywords.
+pub(crate) const FLAG_CONSTRAINT_KEYWORDS: [&str; 2] = ["unique", "set"];
+
+/// One `keyword value` entry inside a feature's constraint block.
+/// Value-less `unique` and `set` take no value: a literal after either is a
+/// syntax error (with recovery that keeps the block parseable).
 pub(crate) fn constraint_entry<'src>(
 ) -> impl Parser<'src, Tokens<'src>, Constraint, MoxExtra<'src>> + Clone {
     let valued = select! {
@@ -290,22 +296,25 @@ pub(crate) fn constraint_entry<'src>(
         value,
         span: e.span(),
     });
-    let flag = select! { Token::Ident("unique") = e => e.span() }
+    let flag = select! { Token::Ident(text) = e if FLAG_CONSTRAINT_KEYWORDS.contains(&text) => (text, e.span()) }
         .then(
             string_lit()
                 .map_with(|_, e| e.span())
                 .or(int_lit().map_with(|_, e| e.span()))
                 .or_not(),
         )
-        .validate(|(name_span, value), _e, emitter| {
+        .validate(|((text, name_span), value), _e, emitter| {
             if let Some(span) = value {
-                emitter.emit(Rich::custom(span, "constraint `unique` takes no value"));
+                emitter.emit(Rich::custom(
+                    span,
+                    format!("constraint `{text}` takes no value"),
+                ));
             }
-            name_span
+            (text, name_span)
         })
-        .map_with(|name_span, e| Constraint {
+        .map_with(|(text, name_span), e| Constraint {
             name: Name {
-                text: "unique".to_string(),
+                text: text.to_string(),
                 span: name_span,
                 escaped: false,
             },
@@ -315,9 +324,10 @@ pub(crate) fn constraint_entry<'src>(
     valued.or(flag)
 }
 
-/// An attribute's optional `{ pattern "..." minLength 3 }` constraint block:
+/// A feature's optional `{ pattern "..." minLength 3 }` constraint block:
 /// a closed keyword set with literal values, each at most once (a repeat is
 /// a syntax error, mirroring the datatype `create`/`convert` duplicate rule).
+/// `unique` and `set` are the value-less entries.
 pub(crate) fn constraint_block<'src>(
 ) -> impl Parser<'src, Tokens<'src>, Vec<Constraint>, MoxExtra<'src>> + Clone {
     kw(Token::LBrace)

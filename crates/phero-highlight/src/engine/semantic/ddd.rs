@@ -2,9 +2,9 @@
 //! repositories, machines, searches, and executable statement bodies.
 
 use phero_syntax::ast::{
-    DddApplication, DddBody, DddChildOp, DddDecisionRef, DddDesign, DddFile, DddModule,
-    DddProjectionMember, DddRepositoryOp, DddSearch, DddSearchField, DddService, DddServiceOp,
-    DddStmt,
+    DddApplication, DddBody, DddChildOp, DddDecisionRef, DddDesign, DddErrorDecl, DddFile,
+    DddModule, DddProjectionMember, DddRepositoryOp, DddSearch, DddSearchField, DddService,
+    DddServiceOp, DddStmt,
 };
 
 use crate::class::{HighlightClass, HighlightModifier, HighlightModifiers};
@@ -22,13 +22,29 @@ fn walk_application(ctx: &mut Ctx, application: &DddApplication) {
     if let Some(base) = &application.base {
         ctx.qualified(&base.package, HighlightClass::Namespace);
     }
+    for error in &application.errors {
+        walk_error_decl(ctx, error);
+    }
     for module in &application.modules {
         walk_module(ctx, module);
     }
 }
 
+/// One `error <Name>(<fields>);` declaration (DD7): the name is a declared
+/// type, the payload fields are parameters (`walk_param` gives them the
+/// declaration modifier), and their types are type references.
+fn walk_error_decl(ctx: &mut Ctx, error: &DddErrorDecl) {
+    ctx.decl_name(&error.name, HighlightClass::Type);
+    for field in &error.fields {
+        walk_param(ctx, field);
+    }
+}
+
 fn walk_module(ctx: &mut Ctx, module: &DddModule) {
     ctx.decl_name(&module.name, HighlightClass::Namespace);
+    for error in &module.errors {
+        walk_error_decl(ctx, error);
+    }
     for service in &module.services {
         walk_service(ctx, service);
     }
@@ -83,6 +99,9 @@ fn walk_service_op(ctx: &mut Ctx, operation: &DddServiceOp) {
     }
     for event in &operation.emits {
         ctx.push(event.span, HighlightClass::Type);
+    }
+    for error in &operation.throws {
+        ctx.push(error.span, HighlightClass::Type);
     }
     if let Some(transition) = &operation.transition {
         if let Some(machine) = &transition.machine {
@@ -199,6 +218,9 @@ fn walk_repository_op(ctx: &mut Ctx, operation: &DddRepositoryOp) {
     ctx.decl_name(&operation.name, HighlightClass::Function);
     for param in &operation.params {
         walk_param(ctx, param);
+    }
+    for error in &operation.throws {
+        ctx.push(error.span, HighlightClass::Type);
     }
     if let Some(condition) = operation.condition {
         ctx.expression(condition);

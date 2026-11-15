@@ -15,6 +15,7 @@ use crate::diagnostic::Diagnostic;
 use crate::lower::{self, DomainPackage};
 
 use super::dtos::{DesignPrep, DtoForm};
+use super::errors::ErrorTable;
 use super::machines::{class_operations, MachineScopes};
 use super::*;
 
@@ -34,6 +35,7 @@ pub(crate) fn lower_module_designs(
     machines: &MachineScopes,
     expr_context: Option<&phero_expr::TypeContext>,
     prep: &DesignPrep,
+    error_table: &ErrorTable,
     registries: &mut Registries<'_>,
 ) -> (Vec<Design>, Vec<Diagnostic>) {
     let mut local: Vec<Diagnostic> = Vec::new();
@@ -211,6 +213,7 @@ pub(crate) fn lower_module_designs(
                 expr_context,
                 design_source,
                 prep,
+                error_table,
                 registries,
             );
             local.extend(stage_diags);
@@ -462,6 +465,7 @@ fn lower_design_repository(
     expr_context: Option<&phero_expr::TypeContext>,
     design_source: &str,
     prep: &DesignPrep,
+    error_table: &ErrorTable,
     registries: &mut Registries<'_>,
 ) -> (Option<Repository>, Vec<Diagnostic>) {
     let mut local: Vec<Diagnostic> = Vec::new();
@@ -514,6 +518,7 @@ fn lower_design_repository(
         machines,
         expr_context,
         &prep.dto_names,
+        error_table,
         registries,
     );
     if !registries
@@ -529,6 +534,19 @@ fn lower_design_repository(
                     .operations
                     .iter()
                     .map(|op| op.name.text.clone())
+                    .collect(),
+                op_throws: operations
+                    .iter()
+                    .map(|operation| {
+                        (
+                            operation.name.clone(),
+                            operation
+                                .throws
+                                .iter()
+                                .map(|reference| reference.name.clone())
+                                .collect(),
+                        )
+                    })
                     .collect(),
             },
         ));
@@ -654,6 +672,7 @@ fn lower_repository_ops(
     machines: &MachineScopes,
     context: Option<&phero_expr::TypeContext>,
     dto_names: &[String],
+    error_table: &ErrorTable,
     registries: &mut Registries<'_>,
 ) -> Vec<RepositoryOperation> {
     let mut ops: Vec<String> = Vec::new();
@@ -731,6 +750,20 @@ fn lower_repository_ops(
                     DddParam::new(param.name.text.clone(), type_).with_multiplicity(multiplicity)
                 })
                 .collect();
+            // The declared operation's `throws` vocabulary (DD7): resolved
+            // against the application's error table and the module's private
+            // declarations. Built-ins take no clause (the parser refuses it).
+            let op_context = format!(
+                "operation '{}' of repository '{}'",
+                op.name.text, repository.name.text
+            );
+            let throws: Vec<phero_ir::ddd::ErrorRef> = op
+                .throws
+                .iter()
+                .filter_map(|name| {
+                    error_table.resolve_throw(name, &module.name.text, &op_context, local)
+                })
+                .collect();
             operations.push(
                 RepositoryOperation::declared(op.name.text.clone(), return_type, params)
                     .with_return_multiplicity(return_multiplicity)
@@ -738,7 +771,8 @@ fn lower_repository_ops(
                     .with_condition(
                         op.condition
                             .map(|span| crate::conditions::when_interior(source, span).to_string()),
-                    ),
+                    )
+                    .with_throws(throws),
             );
             if let Some(condition) = op.condition {
                 check_condition(

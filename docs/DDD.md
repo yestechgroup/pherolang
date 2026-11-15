@@ -118,6 +118,20 @@ docs):
   A consumer reads the block; it never infers the four properties from
   `"stereotype": "value"`. `pherolang artifact check` requires the block on
   every value design and refuses it on an entity or dto.
+- **Declared error vocabulary and `throws`** (DD7, issue
+  [#304](https://github.com/yestechgroup/pherolang/issues/304)): the model
+  root carries the application-scoped `errors`, each module its private
+  `errors`, and a declared/delegated/body service operation or a declared
+  repository operation carries its resolved `throws` references. An
+  `ErrorDecl` is `{name, description?, fields?}` with the payload fields as
+  `DddParam` (the signature slot rule); an `ErrorRef` is
+  `{name, scope, module?}` where `scope` is the bare lowercase
+  `"application" | "module" | "prelude"` and `module` is present exactly
+  for the module scope. All three keys are sparse: a vocabulary-less
+  artifact and an operation with no `throws` clause stay byte-identical,
+  and `formatVersion` stays 2. The prelude (`NotFound`, `Conflict`) is
+  **implicit** — never emitted in `errors` and always referencable with
+  `"scope":"prelude"`.
 - Executable operation bodies (issue [#178](https://github.com/yestechgroup/pherolang/issues/178))
   ride the same additive fields: a service or repository operation's
   `bodies` map holds the checked body under the `"stmt"` target — the
@@ -197,10 +211,13 @@ Lexical and structural rules:
   repository operations carry no capabilities, invocations, emissions, or
   transition bindings, so accepting one would silently drop data). A
   service operation's clauses are fixed in the canonical order
-  `capability? invokes? emits? transition? when?` — the order the
+  `capability? invokes? emits? transition? throws? when?` — the order the
   formatter emits, so a source writing `when` before `emits` (or
-  `transition` anywhere but between `emits` and `when`) is a syntax error,
-  not a formatting opportunity. A service body may also declare decision
+  `transition` anywhere but between `emits` and `throws`) is a syntax
+  error, not a formatting opportunity. A declared repository operation
+  takes `throws? when?` after its signature; a built-in operation takes no
+  `throws` (its failures are structural, not declared — a named syntax
+  error). A service body may also declare decision
   dependencies with `inject decision <qualified-name>;` — the second
   `inject` form, alongside the plain `inject <name>;` dependency form
   (`decision` is contextual: special only right after `inject`,
@@ -291,12 +308,17 @@ Lexical and structural rules:
   dependency name. A declared repository operation takes the same block
   after its optional `when` guard (`Type? name(params) when? { ... }`) and
   binds its own design's repository as `self`; a built-in repository
-  operation takes no body (a named syntax error). The statement subset is
-  closed — `let`, `let … else error …`, assignment to a local's feature
-  path, `guard … else error …`, `if`/`else`, and `return` — and every other
-  statement is a parse error naming the construct. The raise vocabulary is
-  `NotFound` (two arguments) and `Conflict` (one argument); a value-returning
-  body must return on every successful path.
+  operation takes no body (a named syntax error). The body is
+  **orchestration-only** (see [The executable-body posture](#the-executable-body-posture)):
+  the statement subset is closed — `let`, `let … else error …`,
+  assignment to a local's feature path, `guard … else error …`,
+  `if`/`else`, and `return` — and every other statement is a parse error
+  naming the construct. A raise names an error of the declared vocabulary
+  (application- and module-scoped declarations plus the standard prelude),
+  and its arguments type-check exactly against the declared payload; a
+  value-returning body must return on every successful path. A body may
+  call a domain `op` on a loaded local (`run.submit()`), which is the one
+  widening the orchestration posture rests on.
 - The repository built-ins are `findById`, `findAll`, `findByExample`,
   `findByKeys`, `save`, and `delete` — the consumer knows their signatures.
   A body's receiver-call surface synthesizes only `findById` (an
@@ -449,6 +471,16 @@ ignore it for compatibility.
   may be output. Join a `DddTypeRef` domain form to the domain `Model` by
   `(package, name)`, and its `{"dto": name}` form to the design whose
   `dtoShape.name` matches.
+- **Errors** — emit one error type per `ErrorDecl` with exactly the
+  declared payload fields, in order: `errors` at the model root, each
+  module's `errors` beside its services. A raised error propagates with its
+  payload unchanged. `throws` is **exhaustive**: a consumer may rely on it
+  for exhaustiveness checking, status mapping, or documentation. A
+  reference whose `scope` is `"prelude"` names the fixed standard shape
+  (`NotFound(resource, key)`, `Conflict(detail)`) — never redefine it, and
+  never expect a prelude declaration in `errors`. A `"module"` reference
+  names its declaring module; such a private error never crosses the
+  module boundary in a well-formed artifact.
 - **Flags** — `Design.flags` already carries the effective value (`auditable`
   and `optimisticLocking` are on for a plain entity design), so never
   re-apply the source defaults.
@@ -471,8 +503,12 @@ combinations are legal, every value design carries its `semantics` block
 kinds — `select` carries a `path`, `derive` an `expression`, `declared`
 neither, and output names are unique — every DTO reference resolves to a
 `dtoShape` name in the
-artifact, no output DTO fills a parameter slot, and `pheroVersion` is
-present and well-formed. A hand-edited or truncated artifact that drops a
+artifact, no output DTO fills a parameter slot, every error name/scope
+resolves with no prelude shadow and every payload field name unique, every
+`throws` reference resolves to a declared error or the prelude with a
+consistent scope/module, every body raise appears in its operation's
+`throws`, every delegation's `throws` is a superset of its target's, and
+`pheroVersion` is present and well-formed. A hand-edited or truncated artifact that drops a
 companion, a `semantics` block, or a `dtoShape`, or invents an illegal
 combination fails with a diagnostic naming the design or reference. It does
 not re-typecheck against the domain — that needs the paired `Model` — and it
@@ -646,40 +682,29 @@ classes, nor the DTO member typing, which reads the source class.
     (same major = compatible — see the `.dmn` surface's Versioning
     section).
     ignores them outright.
-18. **Child operations** (`extend`) — the target class must resolve to a
-    domain class with an **entity design in the same module** that is an
-    aggregate root (a repository-bearing entity — rule 6's root predicate);
-    an unresolved class, a missing design, and a design without a
-    repository are all `E0358 unknown extend target`. The child feature must
-    exist on the target class (the `extends` chain included) and be a
-    containment or cross reference (`E0355`); the action must be one of
-    `add`, `remove`, `save` (`E0357`), with `add`/`remove` requiring a
-    many-valued feature (`E0356`). A child operation's `when` guard is
-    typed with the operation's declared parameters in scope **and** the
-    child feature's target class as `self` — `line.quantity` reads a
-    parameter, a bare `quantity` reads the child's feature, and the root's
-    own features are out of scope. A resolved guard lowers verbatim as
-    `condition` and carries no `conditionPaths` (the resolved-path lowering
-    belongs to service operations). The lowered operation rides the target
-    design's `childOperations` with its `childScope`.
 19. **Executable operation bodies** — a body is typed against the
     operation's declared parameters and output (absent for a void
     operation) and the repository receivers described above. The statement
-    subset is closed; every expression slot is phero-expr source checked under
-    the same typing rules as a `when` guard. The failure contract is hard:
-    an unknown feature or operation, a type mismatch, a non-boolean `guard`
-    or `if` condition, an unknown raise variant or arity, and a
-    value-returning path that does not `return` are all `E0360`
-    (`invalid service body in operation '<op>': <slot>: <detail>`,
-    repository bodies worded the same way). An unresolved `=>` receiver is
-    `E0359` (`unknown body receiver '<name>' on operation '<op>' of service
-    '<s>'`) — the name must be a repository designed in the operation's
-    module that the service injects, written as a single (unqualified)
-    repository name. The checked body lowers to `bodies["stmt"]`; nothing is
-    attached when any diagnostic fired. Unlike the sigil-lowered Rune
-    bodies' generate-time deferral, the `.ddd` compiler never attaches an
-    unchecked body. `NotFound` and `Conflict` are the reserved raise
-    variants.
+    subset is closed and **orchestration-only** (see
+    [The executable-body posture](#the-executable-body-posture)); every
+    expression slot is phero-expr source checked under the same typing rules
+    as a `when` guard. The failure contract is hard: an unknown feature or
+    operation, a type mismatch, a non-boolean `guard` or `if` condition,
+    an unknown raise (a name outside the declared vocabulary), a raise whose
+    arguments do not match the declared payload (arity or type), a raise the
+    operation's `throws` does not declare, a whole-local reassignment, a
+    cross-aggregate load, and a value-returning path that does not `return`
+    are all `E0360` (`invalid service body in operation '<op>': <slot>:
+    <detail>`, repository bodies worded the same way). An unresolved `=>`
+    receiver is `E0359` (`unknown body receiver '<name>' on operation '<op>'
+    of service '<s>'`) — the name must be a repository designed in the
+    operation's module that the service injects, written as a single
+    (unqualified) repository name. The checked body lowers to
+    `bodies["stmt"]`; nothing is attached when any diagnostic fired. Unlike
+    the sigil-lowered Rune bodies' generate-time deferral, the `.ddd`
+    compiler never attaches an unchecked body. The raise vocabulary is
+    **declared**, never hardcoded: rules 21–22 own the declarations, the
+    prelude, and the `throws` subset/propagation contract.
 20. **DTO boundaries** — a `dto` design is checked as a transport shape
     (DD3, issue
     [#300](https://github.com/yestechgroup/pherolang/issues/300); the
@@ -708,6 +733,110 @@ classes, nor the DTO member typing, which reads the source class.
       otherwise `input`; an output DTO in a parameter slot is `E0370`,
       while a return type may be output. A projection over a
       behavior-rich source is legal (rule 15's error is the mirror's).
+
+21. **Declared error vocabulary** — `error <Name>(<payload>);` declares
+    one error at application or module scope (DD7, issue
+    [#304](https://github.com/yestechgroup/pherolang/issues/304)). The
+    payload fields reuse the operation-parameter production and resolve like
+    signature types: the domain union and the application's DTO boundaries
+    are the universe (a DTO payload is data, and an *output* DTO is legal in
+    a payload — an error crosses a boundary outbound). Rules:
+    - **Uniqueness** — error names are application-wide unique (like
+      service names): a duplicate is `E0374`, and the first declaration keeps
+      resolving.
+    - **No prelude shadowing** — `NotFound(resource: string, key: string)`
+      and `Conflict(detail: string)` are the standard prelude: always
+      available, never emitted in `errors`, and a user declaration with
+      either name is `E0374`.
+    - **Payload** — a field name is unique per declaration (`E0378`), and a
+      field may not carry a class designed as an `entity` in the same
+      application (`E0376`): an error payload is serializable data, so refer
+      to an entity by id, embed a `value`, or carry a DTO.
+    - **Visibility** — application-scoped errors are visible everywhere; a
+      module-scoped error is private to its module, and naming one from
+      another module is `E0375`, whose message names the owning module and
+      the application-scope fix. Application-scoped errors are the
+      cross-module contract.
+    - **Artifact** — the declarations lower to the model root's `errors`
+      (application scope) and each module's `errors` (module scope), with the
+      doc comment as `description`; the prelude lowers nothing.
+22. **`throws`** — a declared, delegated, or body service operation and a
+    declared repository operation may carry `throws <Error>, …`; the clause
+    is fixed between `transition` and `when` on a service operation and
+    directly after the signature on a repository operation (rule 19's
+    boundaries). The contract:
+    - **Resolution** — a bare name resolves against the prelude, the
+      application-wide declarations, and the operation's own module
+      declarations (`E0373` names the in-scope vocabulary; `E0375` names a
+      foreign module's private error). The artifact carries the resolved
+      `ErrorRef` (`scope`, and the declaring module for a module-scoped
+      error).
+    - **Explicit and complete** — every raise in a body must appear in the
+      operation's `throws`; an undeclared raise is `E0360` naming the
+      declared set. There is **no inference**: a `throws` entry with no
+      reachable raise stays legal (an interface promise), and a body with
+      no `throws` clause raises nothing. A prelude error is declared in
+      `throws` like any other — no implicit propagation.
+    - **Delegation is contract-preserving** — a delegation's `throws` must
+      be a **superset** of the delegated operation's (`E0377`, naming each
+      missing error). A target whose missing error is module-private names
+      the application-scope fix: the private error cannot be part of a
+      cross-module contract.
+    - **Built-ins** — a built-in repository operation takes no `throws`; its
+      failures are structural, not declared.
+23. **Child operations** (`extend`) — the target class must resolve to a
+    domain class with an **entity design in the same module** that is an
+    aggregate root (a repository-bearing entity — rule 6's root predicate);
+    an unresolved class, a missing design, and a design without a
+    repository are all `E0358 unknown extend target`. The child feature must
+    exist on the target class (the `extends` chain included) and be a
+    containment or cross reference (`E0355`); the action must be one of
+    `add`, `remove`, `save` (`E0357`), with `add`/`remove` requiring a
+    many-valued feature (`E0356`). A child operation's `when` guard is
+    typed with the operation's declared parameters in scope **and** the
+    child feature's target class as `self` — `line.quantity` reads a
+    parameter, a bare `quantity` reads the child's feature, and the root's
+    own features are out of scope. A resolved guard lowers verbatim as
+    `condition` and carries no `conditionPaths` (the resolved-path lowering
+    belongs to service operations). The lowered operation rides the target
+    design's `childOperations` with its `childScope`.
+
+## The executable-body posture
+
+The `.ddd` statement body is **orchestration-only**, and that is a permanent
+posture, not a temporary gap: it orchestrates one aggregate and calls domain
+behaviour; it does not implement algorithms.
+
+What a body may do:
+
+- load the primary aggregate (`self.findById`/`self.findAll` on the `=>`
+  receiver, or the operation's own repository for a repository body);
+- validate with `guard`/`let … else error` and raise a declared error;
+- bind values with `let`, branch with `if`/`else`, and return;
+- assign an aggregate **feature path** (`run.total = units;`); and
+- call a domain `op` on a loaded local (`run.submit()`), typed against the
+  class's operations, return multiplicity included.
+
+What a body may not do — each is a compile-time rejection naming the
+construct, because widening the body later is additive while narrowing it is
+not:
+
+- **loops** (`for`, `while`) — move the iteration into a domain `op`;
+- **local reassignment** (`x = …` with a one-segment path) and **compound
+  assignment** (`+=`, `-=`, …) — assign a feature path instead;
+- **collection mutation** (`push`, `remove`, `clear`) — move it into a
+  domain `op`;
+- **`try`/`catch`** — a body raises an error, it never catches one
+  (`throws` is the failure contract);
+- **cross-aggregate loads** — one body binds one primary repository, so
+  `findById`/`findAll` through any other injected repository is refused;
+- **expression statements** — bind the call's result (`let x = …;`);
+- **lambdas** beyond what the expression language already supports.
+
+Not yet (deliberately out of scope, not accidental omissions): compensation
+and saga orchestration, retry policies, and compiler-generated error
+hierarchies. A domain error hierarchy is a consumer concern over the flat
+declared vocabulary; the body never catches.
 
 ## State machines
 
@@ -1037,7 +1166,7 @@ source's ops — and the escape hatch for behavior is the aggregate-owned
 `op` or a service operation, never a body on a DTO. A body-less `op` on a
 mirror DTO's class is an error too: the DTO *is* the class's shape.
 
-**Child-scoped operations** (`extend`, rule 18) are the root-side slice of
+**Child-scoped operations** (`extend`, rule 23) are the root-side slice of
 the same heuristic: `boolean addLine(PayRunLineDraft line) => lines.add;`
 declares, on the root's design, an operation that reaches the aggregate's
 contained child through the root — no outside cross reference to a
@@ -1282,9 +1411,10 @@ rationale for each divergence is in [Deliberate divergences](#deliberate-diverge
 | DTO | `dto` design in three forms: mirror (`dto User`), projection (`dto BookSummary from Book { ... }`), standalone (`dto CreateBookRequest { ... }`) | real parity, shaped differently: a projection selects (`name;`), renames a path (`name = path;`), or derives (`name = expr;`, source class as `self`); no identity, aggregate membership, repository, machine, invariants, or behavior; `input`/`output` is derived from the member set, and an output boundary is not a parameter; a standalone DTO has no domain class |
 | `findByQuery` / `findByCondition` finders | `search` projection (intent only: text fields with boosts, filters, sorts, ranking, pagination, document projections) — the backend chooses the engine (Postgres FTS, Tantivy, OpenSearch, ...) | no query language and no engine-specific ordering; the engine is the consumer's choice |
 | generated `GET /things/search?q=` endpoints | consumer concern — the artifact is backend-independent | — |
-| `Set` / `List` / `Bag` / `ordered` collections | multiplicity only (`String[]`, `Book[0,3]`) | absent as declarations: no collection kind and no ordering metadata; declaration order is retained (DD6) |
-| `Map` | — | absent everywhere, and not yet declared a non-goal (DD6) |
-| `fetch` / `cascade` / `orderColumn` | — | absent: persistence behavior belongs to the backend that owns the storage |
+| `Set` / `List` collections | `.mox` collection kinds on a multiplicity: `T[]` is an ordered list, `T[] { unique }` an ordered distinct list, `T[] { set }` an unordered distinct set (DD6); an operation **signature** carries only the multiplicity | no collection kind on a signature slot: the kind belongs to the feature, and a signature is the callee's contract. `Collection<T>`/`List<T>`/`Set<T>` are spelled by multiplicity + collection constraint, never as generic types |
+| `Bag` / `ordered` collections | — | absent: a multiset is a storage need, and declaration/insertion order is the only semantic order (DD6) |
+| `Map` | — | deliberate non-goal (DD6): no JSON Schema map type, unspecified key order, and no in-tree backend need. Workaround: a pair class + `contains` when the map is a domain concept, an opaque datatype wrapping a platform map for an implementation detail, or `refers` to an entity keyed by the map key |
+| `fetch` / `cascade` / `orderby` / `orderColumn` | — | absent: persistence behavior belongs to the backend that owns the storage |
 | Traits | interface `extends` in the `.mox` domain model (signature-sharing half) | absent as a composition feature |
 | Gap classes | body-less `.mox` `op` as the hand-written hook | absent: whole-file generation, no generated-base/subclass split |
 | Composite natural keys | several `id` features on one class | no composite-key declaration; the `id` set is the key |
@@ -1313,10 +1443,25 @@ rationale.
   multiplicity annotation (`String[1..10] tags`), which the JSON Schema
   backend already lowers to `minItems`/`maxItems`; a constraint-block
   spelling would duplicate it.
-- **Ordered collections (`orderby` / `orderColumn`, Set/List/Bag)** —
-  persistence-engine metadata (JPA `@OrderBy`/`@OrderColumn`); Phero Lang
-  features keep declaration order, and a backend that needs a different
-  ordering derives it from its own configuration, not from the artifact.
+- **Collection kinds in signatures (`Set` / `List` / `Bag` / `Map`)** — the
+  `.mox` domain model carries the semantic collection kind on the *feature*
+  (`T[]` list, `T[] { unique }` ordered distinct list, `T[] { set }`
+  unordered distinct set — DD6, issue
+  [#303](https://github.com/yestechgroup/pherolang/issues/303)); the `.ddd`
+  signature grammar carries multiplicity only. A signature's collection kind
+  is the callee's contract: if a set is needed in a return, return a
+  DTO/value with a set feature rather than growing the signature grammar.
+  `Bag` is out (a multiset is a storage need), and `Map` is a deliberate
+  non-goal: JSON Schema has no map type, key ordering is unspecified, and no
+  in-tree backend needs one — model a domain map as a pair class plus
+  `contains`, an implementation detail as an opaque datatype, or a keyed
+  entity lookup as `refers` (see `docs/LANGUAGE.md`, *Collections*).
+- **Persistence ordering (`orderby` / `orderColumn`)** — JPA
+  `@OrderBy`/`@OrderColumn` metadata, a storage knob, not a domain fact. A
+  list's order is declaration/insertion order; a user-controlled order is an
+  explicit ordinal feature (`int position`) plus a list, and a set has no
+  semantic order. A backend that needs a different storage ordering derives
+  it from its own configuration, not from the artifact.
 - **Fetch / cascade** — JPA persistence knobs with aggregate-derived
   defaults in Sculptor's generator; the artifact is backend-independent,
   so persistence behavior belongs to the backend that owns the storage.
@@ -1524,14 +1669,28 @@ boundary in the artifact, and an output DTO in a parameter slot — from the
 serialized artifact alone.
 
 The executable-body pair `bodies.mox`/`bodies.ddd` (formatter-canonical)
-is the pherolang#178 fixture: a void service body over the full statement
-subset (let-else, guard, assignment, `sum`/`size`/`any`/`all` reductions,
-`self.findById`/`self.save`, and a bare-name injected-repository call), a
-value-returning `if`/`else` body with `capability`/`when` clauses, a
-repository-operation body guarded by `when`, and an injected secondary
-repository. Its committed golden `bodies.ddd.json` carries each operation's
-`bodies` `"stmt"` target and the service bodies' `bodyReceiver`; the
-acceptance and failure rules are pinned by
+is the pherolang#178/#304 fixture: a void service body over the full
+statement subset (let-else, guard, assignment, `sum`/`size`/`any`/`all`
+reductions, `self.findById`/`self.save`, a bare-name injected-repository
+call, and a domain `op` call on the loaded aggregate), a value-returning
+`if`/`else` body with `capability`/`when` clauses, a repository-operation
+body guarded by `when`, and an injected secondary repository. Its committed
+golden `bodies.ddd.json` carries each operation's `bodies` `"stmt"` target,
+the service bodies' `bodyReceiver`, the application `errors`, and every
+operation's resolved `throws`; the acceptance and failure rules are pinned
+by `crates/phero-driver/tests/ddd_bodies.rs`.
+
+The declared-error pair `errors.mox`/`errors.ddd` (formatter-canonical) is
+the DD7 fixture (issue pherolang#304): an application error with a typed
+enum payload, a module-private error, a DTO payload, a body raising the
+prelude and a declared error, a domain `op` call on a loaded local, and a
+delegation whose `throws` is a superset of its target's. Its committed
+golden `errors.ddd.json` carries the root and module `errors` lists and the
+resolved `throws` references (application, module, and prelude scopes); the
+negative matrix — unknown error, duplicate/prelude-shadowed declaration,
+foreign private error, entity payload, duplicate field, narrowed delegation,
+undeclared body raise, payload mismatch, and the orchestration-only
+exclusions — is pinned by `crates/phero-driver/tests/ddd/errors.rs` and
 `crates/phero-driver/tests/ddd_bodies.rs`.
 
 The `examples/` side ships `support.ddd` (entity/value/dto designs,

@@ -395,6 +395,13 @@
       "application": "library/library.mox"
     },
     {
+      "id": "feature:library/library.mox#nz.example.library.Book.tags",
+      "kind": "feature",
+      "name": "nz.example.library.Book.tags",
+      "file": "library/library.mox",
+      "application": "library/library.mox"
+    },
+    {
       "id": "feature:library/library.mox#nz.example.library.Book.title",
       "kind": "feature",
       "name": "nz.example.library.Book.title",
@@ -1504,6 +1511,13 @@
       "id": "dto:support/support.ddd#SupportDesk.desk.TicketSummary",
       "kind": "dto",
       "name": "SupportDesk.desk.TicketSummary",
+      "file": "support/support.ddd",
+      "application": "support/cli.ifml"
+    },
+    {
+      "id": "error:support/support.ddd#SupportDesk.TicketAlreadyResolved",
+      "kind": "error",
+      "name": "SupportDesk.TicketAlreadyResolved",
       "file": "support/support.ddd",
       "application": "support/cli.ifml"
     },
@@ -3155,6 +3169,11 @@
       "kind": "memberOf"
     },
     {
+      "from": "error:support/support.ddd#SupportDesk.TicketAlreadyResolved",
+      "to": "designApplication:support/support.ddd#SupportDesk",
+      "kind": "memberOf"
+    },
+    {
       "from": "event:support/support.evt#support.TicketRaised",
       "to": "enum:support/support.mox#nz.example.support.TicketState",
       "kind": "typeOf",
@@ -3328,6 +3347,11 @@
     },
     {
       "from": "feature:library/library.mox#nz.example.library.Book.pages",
+      "to": "class:library/library.mox#nz.example.library.Book",
+      "kind": "memberOf"
+    },
+    {
+      "from": "feature:library/library.mox#nz.example.library.Book.tags",
       "to": "class:library/library.mox#nz.example.library.Book",
       "kind": "memberOf"
     },
@@ -4892,6 +4916,11 @@
       "from": "serviceOperation:support/support.ddd#SupportDesk.desk.TicketService.updateTicket",
       "to": "service:support/support.ddd#SupportDesk.desk.TicketService",
       "kind": "memberOf"
+    },
+    {
+      "from": "serviceOperation:support/support.ddd#SupportDesk.desk.TicketService.updateTicket",
+      "to": "error:support/support.ddd#SupportDesk.TicketAlreadyResolved",
+      "kind": "throws"
     },
     {
       "from": "subscription:shop/ecommerce.evt#ecommerce.billing",

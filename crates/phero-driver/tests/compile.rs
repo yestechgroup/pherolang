@@ -1245,11 +1245,23 @@ fn constraints_on_a_model_without_them_stay_absent() {
     let model = compilation.model.expect("a model on success");
     for class in &model.packages[0].classes {
         for feature in &class.features {
-            assert!(
-                feature.constraints.is_empty(),
-                "unexpected constraints on {}",
-                feature.name
-            );
+            // The library example declares exactly one constrained feature:
+            // `Book.tags` is a set (DD6). Everything else stays sparse.
+            if feature.name == "tags" {
+                assert!(feature.constraints.unique);
+                assert_eq!(feature.collection, Some(phero_ir::CollectionKind::Set));
+            } else {
+                assert!(
+                    feature.constraints.is_empty(),
+                    "unexpected constraints on {}",
+                    feature.name
+                );
+                assert!(
+                    feature.collection.is_none(),
+                    "unexpected collection kind on {}",
+                    feature.name
+                );
+            }
             assert!(feature.description.is_none());
         }
     }

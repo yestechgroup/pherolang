@@ -311,6 +311,10 @@ pub mod kinds {
     pub const STATE_MACHINE: &str = "stateMachine";
     /// Node: a `.ddd` state-machine transition.
     pub const TRANSITION: &str = "transition";
+    /// Node: a declared `.ddd` error — application-scoped (`<App>.<Error>`)
+    /// or module-scoped (`<App>.<module>.<Error>`). The standard prelude
+    /// (`NotFound`, `Conflict`) is implicit in the artifact and has no node.
+    pub const ERROR: &str = "error";
     /// Node: a `.dmn` decision model.
     pub const DECISION_MODEL: &str = "decisionModel";
     /// Node: a `.dmn` decision.
@@ -437,6 +441,10 @@ pub mod kinds {
     pub const INJECTS: &str = "injects";
     /// Edge: workflow operation → state-machine transition it triggers.
     pub const TRIGGERS: &str = "triggers";
+    /// Edge: service/repository operation → declared error it can raise
+    /// (the resolved `throws` clause). Prelude references emit no edge — the
+    /// prelude is implicit and has no node.
+    pub const THROWS: &str = "throws";
     /// Edge: plan item → assigned case role.
     pub const ASSIGNED_TO: &str = "assignedTo";
     /// Edge: decision service → provided decision.

@@ -244,13 +244,15 @@ pub enum FeatureDecl {
         name: Name,
         /// Default value, if any.
         default: Option<DefaultValue>,
-        /// Constraint block entries, in source order. Only attributes carry
-        /// a constraint block; ops and derived features have bodies instead.
+        /// Constraint block entries, in source order: value bounds for an
+        /// attribute, and the collection constraints (`unique`, `set`) on any
+        /// many-valued feature kind. Ops have bodies instead.
         constraints: Vec<Constraint>,
         /// Span of the whole feature, modifiers included.
         span: Span,
     },
-    /// `(modifier)* contains type_ref multiplicity? name ("opposite" name)?`
+    /// `(modifier)* contains type_ref multiplicity? name ("opposite" name)?
+    /// constraint_block?`
     Containment {
         /// Declared `id`/`readonly` modifiers.
         modifiers: Modifiers,
@@ -264,10 +266,15 @@ pub enum FeatureDecl {
         name: Name,
         /// Opposite end name, if any.
         opposite: Option<Name>,
+        /// Constraint block entries, in source order. Only the collection
+        /// constraints (`unique`, `set`) apply to a relationship; the driver
+        /// rejects value bounds here (DD6, issue #303).
+        constraints: Vec<Constraint>,
         /// Span of the whole feature, modifiers included.
         span: Span,
     },
-    /// `(modifier)* refers type_ref multiplicity? name ("opposite" name)?`
+    /// `(modifier)* refers type_ref multiplicity? name ("opposite" name)?
+    /// constraint_block?`
     Reference {
         /// Declared `id`/`readonly` modifiers.
         modifiers: Modifiers,
@@ -281,6 +288,10 @@ pub enum FeatureDecl {
         name: Name,
         /// Opposite end name, if any.
         opposite: Option<Name>,
+        /// Constraint block entries, in source order. Only the collection
+        /// constraints (`unique`, `set`) apply to a relationship; the driver
+        /// rejects value bounds here (DD6, issue #303).
+        constraints: Vec<Constraint>,
         /// Span of the whole feature, modifiers included.
         span: Span,
     },
@@ -321,7 +332,8 @@ pub enum FeatureDecl {
         /// Span of the whole feature, modifiers included.
         span: Span,
     },
-    /// `(modifier)* derived type_ref multiplicity? name op_body?`
+    /// `(modifier)* derived type_ref multiplicity? name op_body?
+    /// constraint_block?`
     Derived {
         /// Declared `id`/`readonly` modifiers.
         modifiers: Modifiers,
@@ -342,6 +354,13 @@ pub enum FeatureDecl {
         /// block. Tier 2: derived features carry their neutral expression
         /// in a single `expr { ... }` block.
         bodies: Vec<TargetBody>,
+        /// Constraint block entries, in source order. A `{ ... }` block after
+        /// the name is resolved tagged-body-first, then constraint block, then
+        /// bare body (which the driver rejects); a constraint block may follow
+        /// a tagged body (`{ expr { ... } } { set }`). Only the collection
+        /// constraints (`unique`, `set`) apply; the driver rejects value
+        /// bounds here (DD6, issue #303).
+        constraints: Vec<Constraint>,
         /// Span of the whole feature, modifiers included.
         span: Span,
     },

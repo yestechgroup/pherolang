@@ -89,6 +89,15 @@
 //!   contained children, each naming the child feature, its resolved
 //!   class, and the validated action through
 //!   [`ServiceOperation::child_scope`] ([`ChildRef`]).
+//! - **Error vocabulary (DD7).** A design declares its domain errors —
+//!   [`ErrorDecl`] at application scope ([`DddModel::errors`]) or module
+//!   scope ([`Module::errors`], private to that module), never shadowing
+//!   the implicit prelude (`NotFound`, `Conflict`). A declared, delegated,
+//!   or body service operation and a declared repository operation carry
+//!   the resolved [`ErrorRef`]s of their `throws` clause
+//!   ([`ServiceOperation::throws`] / [`RepositoryOperation::throws`]): the
+//!   explicit, complete set of errors it can raise. All sparse — a
+//!   vocabulary-less artifact is byte-identical.
 //! - **Executable bodies.** An operation may carry a checked statement body
 //!   (issue pherolang#178): the [`ServiceOperation::bodies`] /
 //!   [`RepositoryOperation::bodies`] map's `"stmt"` target holds the
@@ -134,6 +143,7 @@ use serde::{Deserialize, Serialize};
 
 mod application;
 mod designs;
+mod errors;
 mod references;
 mod searches;
 mod services;
@@ -144,6 +154,7 @@ pub use designs::{
     EqualityPolicy, IdentityPolicy, Repository, RepositoryOperation, StateMachine, Stereotype,
     Transition, ValueSemantics,
 };
+pub use errors::{ErrorDecl, ErrorRef, ErrorScope};
 pub use references::{CapabilityRef, DecisionRef, EventRef, TargetKind, TargetRef};
 pub use searches::{
     Boost, DocumentField, Pagination, RankingStrategy, SearchDef, SearchField, SearchFilter,
@@ -188,6 +199,11 @@ pub struct DddModel {
     /// The designed application, when the artifact declares one.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub application: Option<Application>,
+    /// Application-scoped error declarations (DD7, issue pherolang#304), in
+    /// declaration order: visible to every module. Additive; a
+    /// vocabulary-less design omits the key.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub errors: Vec<ErrorDecl>,
     /// Modules in declaration order.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub modules: Vec<Module>,
@@ -202,6 +218,7 @@ impl DddModel {
             format_version: DDD_MODEL_FORMAT_VERSION,
             phero_version: Some(env!("CARGO_PKG_VERSION").to_string()),
             application: None,
+            errors: Vec::new(),
             modules: Vec::new(),
         }
     }
@@ -209,6 +226,12 @@ impl DddModel {
     /// Chainable setter installing the application.
     pub fn application(mut self, application: Application) -> Self {
         self.application = Some(application);
+        self
+    }
+
+    /// Chainable setter for the application-scoped error declarations.
+    pub fn with_errors(mut self, errors: Vec<ErrorDecl>) -> Self {
+        self.errors = errors;
         self
     }
 

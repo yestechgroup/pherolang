@@ -170,6 +170,15 @@
 //!     entity classes in the marker alone: the same stable-ID contract,
 //!     the same class-level rules, and every backend treats them as
 //!     ordinary classes.
+//! 17. **Collection kinds (additive, DD6).** [`Feature::collection`] carries
+//!     the collection kind of a many-valued feature: [`CollectionKind::Set`]
+//!     for an unordered, duplicate-free collection, absent for an ordered
+//!     list (the default). A set always carries
+//!     [`FeatureConstraints::unique`] as well, so the semantic kind and the
+//!     schema's `uniqueItems` cannot diverge — `pherolang artifact check`
+//!     enforces the agreement from the artifact alone. The field is
+//!     `#[serde(default)]` and omitted when `None`, so list-only artifacts
+//!     remain byte-identical to earlier output.
 //!
 //! # Version markers
 //!
@@ -230,8 +239,8 @@ pub use actors::{
     GrantEffect, GrantEntry, NeverBothDef, SessionKind, ACTOR_MODEL_FORMAT_VERSION,
 };
 pub use class::{
-    ClassDef, ClassKind, DatatypeDef, EnumDef, EnumLiteral, Feature, FeatureConstraints,
-    FeatureKind, InterfaceDef, Operation, OperationParam,
+    ClassDef, ClassKind, CollectionKind, DatatypeDef, EnumDef, EnumLiteral, Feature,
+    FeatureConstraints, FeatureKind, InterfaceDef, Operation, OperationParam,
 };
 pub use error::IrError;
 pub use graph::{GraphApplication, GraphEdge, GraphModel, GraphNode};

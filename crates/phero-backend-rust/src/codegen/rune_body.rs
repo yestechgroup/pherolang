@@ -48,7 +48,7 @@ use phero_ir::{Feature, FeatureKind, Model, Multiplicity, Operation, PrimitiveTy
 use crate::expr_lower::LowerCtx;
 use crate::naming::{rust_ident, snake_case};
 
-use super::types::is_reference;
+use super::types::{is_reference, is_set};
 use super::values::variant_ident;
 use super::{fn_return_type, Unit};
 
@@ -1039,6 +1039,16 @@ fn emit_path_step(
             format!("Some({code})")
         }
     };
+    // A whole-collection assignment into a set feature converts the checked
+    // `Vec<T>` expression into the stored `BTreeSet<T>` (DD6).
+    let collection_assignment = |code: &str| -> String {
+        if is_set(&feature) {
+            format!("{code}.into_iter().collect()")
+        } else {
+            code.to_string()
+        }
+    };
+    let add_verb = if is_set(&feature) { "insert" } else { "push" };
     match (&feature.kind, feature.multiplicity.is_many(), kind) {
         (FeatureKind::Container, _, _) => bail!(
             "function '{}' \"rune\" slot {slot} assigns a container feature, which is \
@@ -1046,10 +1056,13 @@ fn emit_path_step(
             function.name
         ),
         (FeatureKind::Attribute, _, "set") => {
-            lines.push(format!("{accessor}.{field} = {code};"));
+            lines.push(format!(
+                "{accessor}.{field} = {};",
+                collection_assignment(code)
+            ));
         }
         (FeatureKind::Attribute, true, "add") => {
-            lines.push(format!("{accessor}.{field}.push({code});"));
+            lines.push(format!("{accessor}.{field}.{add_verb}({code});"));
         }
         (FeatureKind::Attribute, false, "add") => bail!(
             "function '{}' \"rune\" slot {slot} appends to a single-valued attribute",
@@ -1062,8 +1075,11 @@ fn emit_path_step(
         ),
         (_, true, "set") => {
             // An unpaired relation (no opposite feature on the target
-            // class): plain list storage, no maintenance to preserve.
-            lines.push(format!("{accessor}.{field} = {code};"));
+            // class): plain collection storage, no maintenance to preserve.
+            lines.push(format!(
+                "{accessor}.{field} = {};",
+                collection_assignment(code)
+            ));
         }
         (_, true, "add") => {
             if paired || feature.kind == FeatureKind::Containment {
@@ -1075,7 +1091,7 @@ fn emit_path_step(
                     field
                 ));
             } else {
-                lines.push(format!("{accessor}.{field}.push({code});"));
+                lines.push(format!("{accessor}.{field}.{add_verb}({code});"));
             }
         }
         (_, false, "set") => {

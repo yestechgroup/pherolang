@@ -1,0 +1,30 @@
+package phero.conformance.collections
+
+// DD6 (issue #303): the collection-kind conformance model. It exercises the
+// constraint block on every feature kind it is admitted on and pins the two
+// collection kinds side by side:
+//
+// - `acts` is a set attribute, `notes` a plain list;
+// - `labels` is a unique list (ordered, duplicates rejected);
+// - `playedBy` is a set cross reference with an opposite (`Person.plays`);
+// - `lines` is a set of contained children with a container opposite;
+// - `derived tags` is a derived set.
+class Play {
+    String title
+    String[] acts { set }
+    String[] labels { unique }
+    String[] notes
+    refers Person[] playedBy opposite plays { set }
+    contains Line[] lines opposite play { set }
+    derived String[] tags { set }
+}
+
+class Person {
+    String name
+    refers Play[] plays opposite playedBy { set }
+}
+
+class Line {
+    String sku
+    container Play play opposite lines
+}

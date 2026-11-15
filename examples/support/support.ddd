@@ -8,6 +8,8 @@ import "support.mox";
 
 application SupportDesk {
     base nz.example.support
+    /// The ticket is already resolved, so the requested transition cannot run.
+    error TicketAlreadyResolved(String ticketNo);
     module desk {
         /// Triages and resolves support tickets.
         service TicketService {
@@ -25,9 +27,9 @@ application SupportDesk {
             boolean assign(String ticketNo, User assignee) capability UpdateTicket;
             boolean approve(String ticketNo) capability ResolveTicket;
             boolean reject(String ticketNo) capability UpdateTicket;
-            boolean updateTicket(String ticketNo) capability UpdateTicket => TicketRepository {
+            boolean updateTicket(String ticketNo) capability UpdateTicket throws NotFound, TicketAlreadyResolved => TicketRepository {
                 let ticket = self.findById(ticketNo) else error NotFound("Ticket", ticketNo);
-                guard ticket.state != TicketState.Resolved else error Conflict("already resolved");
+                guard ticket.state != TicketState.Resolved else error TicketAlreadyResolved(ticketNo);
                 ticket.internal = false;
                 let saved = self.save(ticket);
                 return true;

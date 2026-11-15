@@ -1,0 +1,41 @@
+import "errors.mox";
+
+application Payments {
+    base nz.example.payments
+    /// The payment was refused by the provider.
+    error PaymentDeclined(DeclineReason reason, String reference);
+    error OutOfStock(String sku);
+    module billing {
+        /// The invoice for this order was already issued.
+        error InvoiceAlreadyIssued(String invoiceId);
+        error DeclinedDetail(PaymentDetail detail);
+        dto PaymentDetail {
+            String reference;
+            String provider;
+        }
+
+        service PaymentService {
+            inject PaymentRepository;
+            boolean pay(String orderId) throws PaymentDeclined, OutOfStock, NotFound, InvoiceAlreadyIssued => PaymentRepository {
+                let order = self.findById(orderId) else error NotFound("Order", orderId);
+                let submitted = order.submit();
+                guard submitted else error PaymentDeclined(DeclineReason.InsufficientFunds, orderId);
+                guard order.label != "issued" else error InvoiceAlreadyIssued(orderId);
+                return true;
+            }
+        }
+        service PaymentGateway {
+            inject PaymentService;
+            pay => PaymentService.pay throws PaymentDeclined, OutOfStock, NotFound, InvoiceAlreadyIssued;
+        }
+        entity Order repository PaymentRepository {
+            findById;
+            save;
+            int capture(String orderId) throws NotFound, PaymentDeclined, Conflict when (label != "") {
+                let order = self.findById(orderId) else error NotFound("Order", orderId);
+                guard order.label != "" else error PaymentDeclined(DeclineReason.ExpiredCard, orderId);
+                return order.total;
+            }
+        }
+    }
+}

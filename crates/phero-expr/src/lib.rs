@@ -60,5 +60,5 @@ pub use checker::{
 };
 pub use error::{ExprError, ParseResult};
 pub use parser::parse;
-pub use stmt::{check_stmt_body, BodyRaise, Stmt, StmtBody, StmtReceiver};
+pub use stmt::{check_stmt_body, BodyRaise, RaiseSignature, Stmt, StmtBody, StmtReceiver};
 pub use types::{NamedKind, Ty};

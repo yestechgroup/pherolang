@@ -28,10 +28,21 @@
 //!   mismatches are all `PheroError::InvalidInstance`.
 //! - Round-trip identity: `from_instance_json(&x.to_instance_json()) == x`.
 
-use phero_ir::{Feature, FeatureKind, PrimitiveType, TypeRef};
+use phero_ir::{CollectionKind, Feature, FeatureKind, PrimitiveType, TypeRef};
 
 use crate::codegen::{ClassCtx, Unit};
 use crate::naming::rust_ident;
+
+/// The mutator verb appending one element to a feature's stored collection:
+/// `insert` for a set (DD6), `push` for a list. A set exposes deterministic
+/// iteration order by construction.
+fn collection_verb(feature: &Feature) -> &'static str {
+    if feature.collection == Some(CollectionKind::Set) {
+        "insert"
+    } else {
+        "push"
+    }
+}
 
 /// The JSON key a feature serializes under: the declared `.mox` feature name,
 /// verbatim (the cross-language contract keys on declared names).
@@ -532,14 +543,21 @@ fn emit_class_fill(e: &mut String, unit: &Unit<'_>, class: &ClassCtx<'_>) -> any
             FeatureKind::Attribute => {
                 let load = |v: &str| load_expr(&feature.type_, v, &format!("{struct_name}.{key}"));
                 if feature.multiplicity.is_many() {
+                    // A set collects into a `BTreeSet` (deduplicating and
+                    // sorting on load); a list preserves document order.
+                    let (init, verb) = if feature.collection == Some(CollectionKind::Set) {
+                        ("std::collections::BTreeSet::new()", "insert")
+                    } else {
+                        ("Vec::with_capacity(array.len())", "push")
+                    };
                     e.push_str(&format!(
                         "                {key:?} => {{\n\
                          \x20                   let array = value\n\
                          \x20                       .as_array()\n\
                          \x20                       .ok_or_else(|| instance_error(format!(\"{struct_name}.{key} must be an array\")))?;\n\
-                         \x20                   let mut parsed = Vec::with_capacity(array.len());\n\
+                         \x20                   let mut parsed = {init};\n\
                          \x20                   for element in array {{\n\
-                         \x20                       parsed.push({});\n\
+                         \x20                       parsed.{verb}({});\n\
                          \x20                   }}\n\
                          \x20                   if let Some(obj) = resource.{}.get_mut(key) {{\n\
                          \x20                       obj.{field} = parsed;\n\
@@ -583,6 +601,7 @@ fn emit_class_fill(e: &mut String, unit: &Unit<'_>, class: &ClassCtx<'_>) -> any
                 let container_field =
                     container_field_of(target_ctx, class, feature.opposite.as_ref())?;
                 if feature.multiplicity.is_many() {
+                    let verb = collection_verb(feature);
                     let mut block = format!(
                         "                {key:?} => {{\n\
                          \x20                   let array = value\n\
@@ -592,7 +611,7 @@ fn emit_class_fill(e: &mut String, unit: &Unit<'_>, class: &ClassCtx<'_>) -> any
                          \x20                       let child = Self::{target_single}_id_of(element, registry)?;\n\
                          \x20                       if let Some(obj) = resource.{slot}.get_mut(key) {{\n\
                          \x20                           if !obj.{field}.contains(&child) {{\n\
-                         \x20                               obj.{field}.push(child);\n\
+                         \x20                               obj.{field}.{verb}(child);\n\
                          \x20                           }}\n\
                          \x20                       }}\n",
                         slot = class.slot_field,
@@ -636,6 +655,7 @@ fn emit_class_fill(e: &mut String, unit: &Unit<'_>, class: &ClassCtx<'_>) -> any
                 // Both ends of a cross reference are serialized; each side is
                 // filled from its own JSON (documented contract).
                 if feature.multiplicity.is_many() {
+                    let verb = collection_verb(feature);
                     e.push_str(&format!(
                         "                {key:?} => {{\n\
                          \x20                   let array = value\n\
@@ -645,7 +665,7 @@ fn emit_class_fill(e: &mut String, unit: &Unit<'_>, class: &ClassCtx<'_>) -> any
                          \x20                       let target = Self::{target_single}_id_of(element, registry)?;\n\
                          \x20                       if let Some(obj) = resource.{slot}.get_mut(key) {{\n\
                          \x20                           if !obj.{field}.contains(&target) {{\n\
-                         \x20                               obj.{field}.push(target);\n\
+                         \x20                               obj.{field}.{verb}(target);\n\
                          \x20                           }}\n\
                          \x20                       }}\n\
                          \x20                   }}\n\

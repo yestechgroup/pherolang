@@ -17,9 +17,10 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::fmt;
 
 use phero_ir::ddd::{
-    DddModel, DddParam, DddTypeRef, DecisionRef, Design, DtoDirection, DtoMember, DtoMemberKind,
-    DtoShape, EqualityPolicy, EventRef, IdentityPolicy, Repository, RepositoryOperation, SearchDef,
-    Service, ServiceOperation, Stereotype, TargetKind, TargetRef, DDD_MODEL_FORMAT_VERSION,
+    DddModel, DddParam, DddTypeRef, DecisionRef, Delegation, Design, DtoDirection, DtoMember,
+    DtoMemberKind, DtoShape, EqualityPolicy, ErrorDecl, ErrorRef, ErrorScope, EventRef,
+    IdentityPolicy, Repository, RepositoryOperation, SearchDef, Service, ServiceOperation,
+    Stereotype, TargetKind, TargetRef, DDD_MODEL_FORMAT_VERSION,
 };
 use phero_ir::TypeRef;
 
@@ -92,8 +93,100 @@ pub fn check_contract(model: &DddModel) -> Vec<Violation> {
     };
 
     let registry = Registry::build(model);
+    validate_error_vocabulary(model, &registry, &mut violations);
     validate_modules(model, application_name, &registry, &mut violations);
     violations
+}
+
+/// The standard prelude's fixed error names (DD7). The prelude is implicit
+/// in the artifact: it is never emitted in an `errors` list, is always
+/// available, and cannot be shadowed. Its payload shapes are part of the
+/// consumer contract (`NotFound(resource, key)`,
+/// `Conflict(detail)`), so the artifact-only check keys on the names.
+const PRELUDE_ERROR_NAMES: [&str; 2] = ["NotFound", "Conflict"];
+
+fn is_prelude_error(name: &str) -> bool {
+    PRELUDE_ERROR_NAMES.contains(&name)
+}
+
+/// Validates the declared error vocabulary (DD7): application-wide unique
+/// names, no prelude shadowing, unique payload field names, and every
+/// DTO-typed payload slot resolving to a boundary declared in this artifact.
+/// Duplicate names are reported at the later declaration.
+fn validate_error_vocabulary(
+    model: &DddModel,
+    registry: &Registry<'_>,
+    violations: &mut Vec<Violation>,
+) {
+    let mut declared: BTreeMap<String, String> = BTreeMap::new();
+    for (index, error) in model.errors.iter().enumerate() {
+        check_error_decl(
+            error,
+            &format!("errors[{index}]"),
+            &mut declared,
+            registry,
+            violations,
+        );
+    }
+    for (module_index, module) in model.modules.iter().enumerate() {
+        for (index, error) in module.errors.iter().enumerate() {
+            check_error_decl(
+                error,
+                &format!("modules[{module_index}].errors[{index}]"),
+                &mut declared,
+                registry,
+                violations,
+            );
+        }
+    }
+}
+
+/// One declaration's checks: no prelude shadow, application-wide unique
+/// name, unique payload fields, and every DTO payload slot resolving.
+fn check_error_decl(
+    error: &ErrorDecl,
+    path: &str,
+    declared: &mut BTreeMap<String, String>,
+    registry: &Registry<'_>,
+    violations: &mut Vec<Violation>,
+) {
+    if is_prelude_error(&error.name) {
+        violations.push(Violation::new(
+            format!("{path}.name"),
+            format!(
+                "shadows the standard prelude error '{}'; the prelude is implicit and \
+                 cannot be redeclared",
+                error.name
+            ),
+        ));
+    } else if let Some(previous) = declared.insert(error.name.clone(), path.to_string()) {
+        violations.push(Violation::new(
+            format!("{path}.name"),
+            format!(
+                "duplicate error '{}' in the application; error names are \
+                 application-wide unique (already declared at {previous})",
+                error.name
+            ),
+        ));
+    }
+    let mut fields: BTreeSet<&str> = BTreeSet::new();
+    for (index, field) in error.fields.iter().enumerate() {
+        if !fields.insert(field.name.as_str()) {
+            violations.push(Violation::new(
+                format!("{path}.fields[{index}].name"),
+                format!(
+                    "duplicate payload field '{}' in error '{}'",
+                    field.name, error.name
+                ),
+            ));
+        }
+        check_ddd_type_ref(
+            violations,
+            &format!("{path}.fields[{index}].type"),
+            &field.type_,
+            registry,
+        );
+    }
 }
 
 /// Every declared service, repository, and search, by name, with the module
@@ -110,16 +203,39 @@ struct Registry<'a> {
     searches: BTreeMap<&'a str, &'a str>,
     dtos: BTreeMap<&'a str, &'a DtoShape>,
     designed_classes: BTreeSet<&'a str>,
+    /// Every declared error, by name, with its declaring module (`None` for
+    /// application scope). The prelude is implicit and never enters here.
+    errors: BTreeMap<&'a str, (&'a ErrorDecl, Option<&'a str>)>,
+    /// The resolved `throws` sets of every service operation and repository
+    /// operation, keyed by `(owner name, operation name)` — the delegation
+    /// superset check reads them.
+    service_throws: BTreeMap<(&'a str, &'a str), &'a [ErrorRef]>,
+    repository_throws: BTreeMap<(&'a str, &'a str), &'a [ErrorRef]>,
 }
 
 impl<'a> Registry<'a> {
     fn build(model: &'a DddModel) -> Self {
         let mut registry = Self::default();
+        for error in &model.errors {
+            registry.errors.insert(error.name.as_str(), (error, None));
+        }
         for module in &model.modules {
+            for error in &module.errors {
+                registry
+                    .errors
+                    .entry(error.name.as_str())
+                    .or_insert((error, Some(module.name.as_str())));
+            }
             for service in &module.services {
                 registry
                     .services
                     .insert(service.name.as_str(), module.name.as_str());
+                for operation in &service.operations {
+                    registry.service_throws.insert(
+                        (service.name.as_str(), operation.name.as_str()),
+                        &operation.throws,
+                    );
+                }
             }
             for design in &module.designs {
                 // Every design that targets a class contributes its name to
@@ -139,6 +255,12 @@ impl<'a> Registry<'a> {
                     registry
                         .repositories
                         .insert(repository.name.as_str(), module.name.as_str());
+                    for operation in &repository.operations {
+                        registry.repository_throws.insert(
+                            (repository.name.as_str(), operation.name.as_str()),
+                            &operation.throws,
+                        );
+                    }
                 }
             }
             for search in &module.searches {
@@ -172,6 +294,22 @@ impl<'a> Registry<'a> {
     /// `true` when a design targets a class with this name.
     fn class_is_designed(&self, name: &str) -> bool {
         self.designed_classes.contains(name)
+    }
+
+    /// The declared error `name`, with its declaring module (`None` for
+    /// application scope).
+    fn error(&self, name: &str) -> Option<(&'a ErrorDecl, Option<&'a str>)> {
+        self.errors.get(name).copied()
+    }
+
+    /// The resolved `throws` set of one operation of a service or
+    /// repository (the delegation superset check).
+    fn throws_of(&self, kind: TargetKind, owner: &str, operation: &str) -> Option<&'a [ErrorRef]> {
+        match kind {
+            TargetKind::Service => self.service_throws.get(&(owner, operation)).copied(),
+            TargetKind::Repository => self.repository_throws.get(&(owner, operation)).copied(),
+            TargetKind::Search => None,
+        }
     }
 
     /// Resolves a dependency or delegation target with the compiler's
@@ -226,7 +364,14 @@ fn validate_modules(
                     format!("duplicate service '{}' in the application", service.name),
                 ));
             }
-            validate_service(service, &service_path, registry, application, violations);
+            validate_service(
+                service,
+                &service_path,
+                &module.name,
+                registry,
+                application,
+                violations,
+            );
         }
 
         for (design_index, design) in module.designs.iter().enumerate() {
@@ -259,6 +404,7 @@ fn validate_modules(
             validate_design(
                 design,
                 &design_path,
+                &module.name,
                 registry,
                 application,
                 &mut dto_declarations,
@@ -282,6 +428,7 @@ fn validate_modules(
 fn validate_service(
     service: &Service,
     path: &str,
+    module: &str,
     registry: &Registry<'_>,
     application: Option<&str>,
     violations: &mut Vec<Violation>,
@@ -353,6 +500,7 @@ fn validate_service(
         validate_operation(
             operation,
             &operation_path,
+            module,
             registry,
             application,
             false,
@@ -371,6 +519,7 @@ fn validate_service(
 fn validate_design(
     design: &Design,
     path: &str,
+    module: &str,
     registry: &Registry<'_>,
     application: Option<&str>,
     dto_declarations: &mut BTreeMap<String, String>,
@@ -465,6 +614,7 @@ fn validate_design(
         validate_repository(
             repository,
             &format!("{path}.repository"),
+            module,
             registry,
             violations,
         );
@@ -474,6 +624,7 @@ fn validate_design(
         validate_operation(
             operation,
             &format!("{path}.childOperations[{index}]"),
+            module,
             registry,
             application,
             true,
@@ -834,6 +985,7 @@ fn type_ref_label(type_ref: &TypeRef) -> String {
 fn validate_repository(
     repository: &Repository,
     path: &str,
+    module: &str,
     registry: &Registry<'_>,
     violations: &mut Vec<Violation>,
 ) {
@@ -849,13 +1001,14 @@ fn validate_repository(
                 ),
             ));
         }
-        validate_repository_operation(operation, &operation_path, registry, violations);
+        validate_repository_operation(operation, &operation_path, module, registry, violations);
     }
 }
 
 fn validate_repository_operation(
     operation: &RepositoryOperation,
     path: &str,
+    module: &str,
     registry: &Registry<'_>,
     violations: &mut Vec<Violation>,
 ) {
@@ -905,11 +1058,32 @@ fn validate_repository_operation(
             "a builtin repository operation cannot carry a body",
         ));
     }
+    if operation.builtin.is_some() && !operation.throws.is_empty() {
+        violations.push(Violation::new(
+            format!("{path}.throws"),
+            "a builtin repository operation takes no `throws` clause; its failures are \
+             structural, not declared",
+        ));
+    }
+    validate_throws(
+        &operation.throws,
+        module,
+        &format!("{path}.throws"),
+        registry,
+        violations,
+    );
+    validate_body_raises(
+        &operation.bodies,
+        &operation.throws,
+        &format!("{path}.bodies.stmt"),
+        violations,
+    );
 }
 
 fn validate_operation(
     operation: &ServiceOperation,
     path: &str,
+    module: &str,
     registry: &Registry<'_>,
     application: Option<&str>,
     is_child: bool,
@@ -1014,6 +1188,23 @@ fn validate_operation(
         ));
     }
 
+    validate_throws(
+        &operation.throws,
+        module,
+        &format!("{path}.throws"),
+        registry,
+        violations,
+    );
+    validate_body_raises(
+        &operation.bodies,
+        &operation.throws,
+        &format!("{path}.bodies.stmt"),
+        violations,
+    );
+    if let Some(delegation) = &operation.delegation {
+        validate_delegation_throws(operation, delegation, path, registry, violations);
+    }
+
     if operation.capabilities.len() != operation.capability_refs.len() {
         violations.push(Violation::new(
             format!("{path}.capabilityRefs"),
@@ -1100,6 +1291,203 @@ fn validate_operation(
                 authored,
                 resolved,
             );
+        }
+    }
+}
+
+/// Resolves every `throws` reference against the artifact's declared
+/// vocabulary (DD7): an application-scoped reference names an error declared
+/// at the root, a module-scoped reference names an error declared in exactly
+/// the named module, and a prelude reference names a prelude error.
+fn validate_throws(
+    throws: &[ErrorRef],
+    module: &str,
+    path: &str,
+    registry: &Registry<'_>,
+    violations: &mut Vec<Violation>,
+) {
+    for (index, reference) in throws.iter().enumerate() {
+        let ref_path = format!("{path}[{index}]");
+        match reference.scope {
+            ErrorScope::Prelude => {
+                if !is_prelude_error(&reference.name) {
+                    violations.push(Violation::new(
+                        format!("{ref_path}.name"),
+                        format!(
+                            "declares the prelude scope but '{}' is not a prelude error \
+                             (`NotFound`, `Conflict`)",
+                            reference.name
+                        ),
+                    ));
+                }
+                if reference.module.is_some() {
+                    violations.push(Violation::new(
+                        format!("{ref_path}.module"),
+                        "a prelude error reference carries no module",
+                    ));
+                }
+            }
+            ErrorScope::Application => match registry.error(&reference.name) {
+                Some((_, None)) => {
+                    if reference.module.is_some() {
+                        violations.push(Violation::new(
+                            format!("{ref_path}.module"),
+                            "an application-scoped error reference carries no module",
+                        ));
+                    }
+                }
+                Some((_, Some(declaring))) => violations.push(Violation::new(
+                    format!("{ref_path}.scope"),
+                    format!(
+                        "declares the application scope but '{}' is declared in module \
+                         '{declaring}'",
+                        reference.name
+                    ),
+                )),
+                None => violations.push(Violation::new(
+                    format!("{ref_path}.name"),
+                    format!(
+                        "'{}' resolves to no declared error and is not a prelude error",
+                        reference.name
+                    ),
+                )),
+            },
+            ErrorScope::Module => match registry.error(&reference.name) {
+                Some((_, Some(declaring))) => {
+                    if reference.module.as_deref() != Some(declaring) {
+                        violations.push(Violation::new(
+                            format!("{ref_path}.module"),
+                            format!(
+                                "declares module '{}' but '{}' is private to module \
+                                 '{declaring}'",
+                                reference.module.as_deref().unwrap_or("<absent>"),
+                                reference.name
+                            ),
+                        ));
+                    }
+                }
+                Some((_, None)) => violations.push(Violation::new(
+                    format!("{ref_path}.scope"),
+                    format!(
+                        "declares the module scope but '{}' is application-scoped",
+                        reference.name
+                    ),
+                )),
+                None => violations.push(Violation::new(
+                    format!("{ref_path}.name"),
+                    format!(
+                        "'{}' resolves to no declared error and is not a prelude error",
+                        reference.name
+                    ),
+                )),
+            },
+        }
+        let _ = module;
+    }
+}
+
+/// The artifact-only subset rule (DD7): every raise the checked statement
+/// body carries (`bodies["stmt"]`, canonical [`crate::ddd`] statement JSON)
+/// must appear in the operation's `throws`. The body is typed statements,
+/// never source text — the walk reads the `variant` of every raise node.
+fn validate_body_raises(
+    bodies: &BTreeMap<String, String>,
+    throws: &[ErrorRef],
+    path: &str,
+    violations: &mut Vec<Violation>,
+) {
+    let Some(body) = bodies.get("stmt") else {
+        return;
+    };
+    let Ok(value) = serde_json::from_str::<serde_json::Value>(body) else {
+        violations.push(Violation::new(
+            path,
+            "the statement body is not canonical StmtBody JSON",
+        ));
+        return;
+    };
+    let mut raised = Vec::new();
+    collect_raise_variants(&value, &mut raised);
+    for name in raised {
+        if !throws.iter().any(|reference| reference.name == name) {
+            let declared: Vec<&str> = throws
+                .iter()
+                .map(|reference| reference.name.as_str())
+                .collect();
+            violations.push(Violation::new(
+                path,
+                if declared.is_empty() {
+                    format!(
+                        "the body raises '{name}' but the operation declares no `throws` \
+                         clause"
+                    )
+                } else {
+                    format!(
+                        "the body raises '{name}' but the operation's throws declares: {}",
+                        declared.join(", ")
+                    )
+                },
+            ));
+        }
+    }
+}
+
+/// Collects the `error.variant` names of every raise node in one statement
+/// body, recursing through `if` branches (the wire shape's `then`/`else`
+/// arrays).
+fn collect_raise_variants(value: &serde_json::Value, out: &mut Vec<String>) {
+    match value {
+        serde_json::Value::Object(map) => {
+            if let Some(serde_json::Value::Object(error)) = map.get("error") {
+                if let Some(serde_json::Value::String(variant)) = error.get("variant") {
+                    out.push(variant.clone());
+                }
+            }
+            for nested in map.values() {
+                collect_raise_variants(nested, out);
+            }
+        }
+        serde_json::Value::Array(items) => {
+            for item in items {
+                collect_raise_variants(item, out);
+            }
+        }
+        _ => {}
+    }
+}
+
+/// A delegation is contract-preserving (DD7): its `throws` must be a
+/// superset of the delegated operation's. The target's set comes from the
+/// same artifact (the registry indexes every service and repository
+/// operation).
+fn validate_delegation_throws(
+    operation: &ServiceOperation,
+    delegation: &Delegation,
+    path: &str,
+    registry: &Registry<'_>,
+    violations: &mut Vec<Violation>,
+) {
+    let name = last_segment(&delegation.target);
+    let Some((kind, _)) = registry.lookup(name) else {
+        return;
+    };
+    let Some(target_throws) = registry.throws_of(kind, name, &delegation.operation) else {
+        return;
+    };
+    for reference in target_throws {
+        if !operation
+            .throws
+            .iter()
+            .any(|declared| declared.name == reference.name)
+        {
+            violations.push(Violation::new(
+                format!("{path}.throws"),
+                format!(
+                    "the delegation to '{name}.{}' narrows the target's throws: missing \
+                     '{}'",
+                    delegation.operation, reference.name
+                ),
+            ));
         }
     }
 }

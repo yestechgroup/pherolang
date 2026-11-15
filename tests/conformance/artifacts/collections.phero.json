@@ -1,0 +1,268 @@
+{
+  "formatVersion": 2,
+  "pheroVersion": "0.3.0",
+  "packages": [
+    {
+      "name": "phero.conformance.collections",
+      "annotations": [],
+      "enums": [],
+      "datatypes": [],
+      "interfaces": [],
+      "classes": [
+        {
+          "name": "Play",
+          "extends": [],
+          "features": [
+            {
+              "id": 0,
+              "name": "title",
+              "kind": "attribute",
+              "type": {
+                "type": "primitive",
+                "value": "string"
+              },
+              "multiplicity": {
+                "lower": 1,
+                "upper": {
+                  "finite": 1
+                }
+              },
+              "isDerived": false,
+              "isId": false,
+              "isReadOnly": false
+            },
+            {
+              "id": 1,
+              "name": "acts",
+              "kind": "attribute",
+              "type": {
+                "type": "primitive",
+                "value": "string"
+              },
+              "multiplicity": {
+                "lower": 0,
+                "upper": "unbounded"
+              },
+              "collection": "set",
+              "isDerived": false,
+              "isId": false,
+              "isReadOnly": false,
+              "constraints": {
+                "unique": true
+              }
+            },
+            {
+              "id": 2,
+              "name": "labels",
+              "kind": "attribute",
+              "type": {
+                "type": "primitive",
+                "value": "string"
+              },
+              "multiplicity": {
+                "lower": 0,
+                "upper": "unbounded"
+              },
+              "isDerived": false,
+              "isId": false,
+              "isReadOnly": false,
+              "constraints": {
+                "unique": true
+              }
+            },
+            {
+              "id": 3,
+              "name": "notes",
+              "kind": "attribute",
+              "type": {
+                "type": "primitive",
+                "value": "string"
+              },
+              "multiplicity": {
+                "lower": 0,
+                "upper": "unbounded"
+              },
+              "isDerived": false,
+              "isId": false,
+              "isReadOnly": false
+            },
+            {
+              "id": 4,
+              "name": "playedBy",
+              "kind": "crossReference",
+              "type": {
+                "type": "class",
+                "value": {
+                  "package": "phero.conformance.collections",
+                  "name": "Person"
+                }
+              },
+              "multiplicity": {
+                "lower": 0,
+                "upper": "unbounded"
+              },
+              "collection": "set",
+              "opposite": {
+                "class": "Person",
+                "feature": "plays"
+              },
+              "isDerived": false,
+              "isId": false,
+              "isReadOnly": false,
+              "constraints": {
+                "unique": true
+              }
+            },
+            {
+              "id": 5,
+              "name": "lines",
+              "kind": "containment",
+              "type": {
+                "type": "class",
+                "value": {
+                  "package": "phero.conformance.collections",
+                  "name": "Line"
+                }
+              },
+              "multiplicity": {
+                "lower": 0,
+                "upper": "unbounded"
+              },
+              "collection": "set",
+              "opposite": {
+                "class": "Line",
+                "feature": "play"
+              },
+              "isDerived": false,
+              "isId": false,
+              "isReadOnly": false,
+              "constraints": {
+                "unique": true
+              }
+            },
+            {
+              "id": 6,
+              "name": "tags",
+              "kind": "attribute",
+              "type": {
+                "type": "primitive",
+                "value": "string"
+              },
+              "multiplicity": {
+                "lower": 0,
+                "upper": "unbounded"
+              },
+              "collection": "set",
+              "isDerived": true,
+              "isId": false,
+              "isReadOnly": false,
+              "constraints": {
+                "unique": true
+              }
+            }
+          ]
+        },
+        {
+          "name": "Person",
+          "extends": [],
+          "features": [
+            {
+              "id": 0,
+              "name": "name",
+              "kind": "attribute",
+              "type": {
+                "type": "primitive",
+                "value": "string"
+              },
+              "multiplicity": {
+                "lower": 1,
+                "upper": {
+                  "finite": 1
+                }
+              },
+              "isDerived": false,
+              "isId": false,
+              "isReadOnly": false
+            },
+            {
+              "id": 1,
+              "name": "plays",
+              "kind": "crossReference",
+              "type": {
+                "type": "class",
+                "value": {
+                  "package": "phero.conformance.collections",
+                  "name": "Play"
+                }
+              },
+              "multiplicity": {
+                "lower": 0,
+                "upper": "unbounded"
+              },
+              "collection": "set",
+              "opposite": {
+                "class": "Play",
+                "feature": "playedBy"
+              },
+              "isDerived": false,
+              "isId": false,
+              "isReadOnly": false,
+              "constraints": {
+                "unique": true
+              }
+            }
+          ]
+        },
+        {
+          "name": "Line",
+          "extends": [],
+          "features": [
+            {
+              "id": 0,
+              "name": "sku",
+              "kind": "attribute",
+              "type": {
+                "type": "primitive",
+                "value": "string"
+              },
+              "multiplicity": {
+                "lower": 1,
+                "upper": {
+                  "finite": 1
+                }
+              },
+              "isDerived": false,
+              "isId": false,
+              "isReadOnly": false
+            },
+            {
+              "id": 1,
+              "name": "play",
+              "kind": "container",
+              "type": {
+                "type": "class",
+                "value": {
+                  "package": "phero.conformance.collections",
+                  "name": "Play"
+                }
+              },
+              "multiplicity": {
+                "lower": 0,
+                "upper": {
+                  "finite": 1
+                }
+              },
+              "opposite": {
+                "class": "Play",
+                "feature": "lines"
+              },
+              "isDerived": false,
+              "isId": false,
+              "isReadOnly": false
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}
