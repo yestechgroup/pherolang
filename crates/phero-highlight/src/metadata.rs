@@ -440,29 +440,38 @@ pub fn class_scope(class: HighlightClass) -> &'static str {
     }
 }
 
-/// The standard LSP semantic-token type for a class.
+/// The standard LSP semantic-token type for a class, if one exists.
+///
+/// Only the standard LSP semantic-token vocabulary is emitted: a legend built
+/// from this mapping is deployable against any standard client without the
+/// server having to negotiate a custom token type.
 ///
 /// Both [`HighlightClass::String`] and [`HighlightClass::Escape`] map to
 /// `"string"`: the LSP vocabulary has no escape type of its own.
+///
+/// [`HighlightClass::Punctuation`] and [`HighlightClass::Error`] have no
+/// standard LSP type, so they return `None` and are **omitted** from LSP
+/// semantic tokens: punctuation is the editor grammar's job, and lexical
+/// errors are reported as diagnostics rather than as coloured tokens.
 #[must_use]
-pub fn lsp_token_type(class: HighlightClass) -> &'static str {
+pub fn lsp_token_type(class: HighlightClass) -> Option<&'static str> {
     match class {
-        HighlightClass::Keyword => "keyword",
-        HighlightClass::Type => "type",
-        HighlightClass::Function => "function",
-        HighlightClass::Namespace => "namespace",
-        HighlightClass::Variable => "variable",
-        HighlightClass::Parameter => "parameter",
-        HighlightClass::Property => "property",
-        HighlightClass::String => "string",
-        HighlightClass::Number => "number",
-        HighlightClass::Comment => "comment",
-        HighlightClass::Operator => "operator",
-        HighlightClass::Punctuation => "punctuation",
-        HighlightClass::Annotation => "decorator",
-        HighlightClass::Constant => "enumMember",
-        HighlightClass::Escape => "string",
-        HighlightClass::Error => "invalid",
+        HighlightClass::Keyword => Some("keyword"),
+        HighlightClass::Type => Some("type"),
+        HighlightClass::Function => Some("function"),
+        HighlightClass::Namespace => Some("namespace"),
+        HighlightClass::Variable => Some("variable"),
+        HighlightClass::Parameter => Some("parameter"),
+        HighlightClass::Property => Some("property"),
+        HighlightClass::String => Some("string"),
+        HighlightClass::Number => Some("number"),
+        HighlightClass::Comment => Some("comment"),
+        HighlightClass::Operator => Some("operator"),
+        HighlightClass::Punctuation => None,
+        HighlightClass::Annotation => Some("decorator"),
+        HighlightClass::Constant => Some("enumMember"),
+        HighlightClass::Escape => Some("string"),
+        HighlightClass::Error => None,
     }
 }
 
@@ -637,7 +646,16 @@ mod tests {
             assert_eq!(base, class_scope(class));
             assert!(base.ends_with(".pherolang"), "scope {base}");
             let token = lsp_token_type(class);
-            assert!(!token.is_empty());
+            if matches!(class, HighlightClass::Punctuation | HighlightClass::Error) {
+                assert!(token.is_none(), "{class} has no standard LSP type");
+            } else {
+                let token = token.unwrap_or_else(|| panic!("{class} has no LSP type"));
+                assert!(!token.is_empty());
+                assert!(
+                    token.chars().all(|c| c.is_ascii_alphanumeric()),
+                    "`{token}` is not a standard LSP token type name"
+                );
+            }
             for modifier in HighlightModifier::ALL {
                 let scope = scope_for(class, Some(modifier));
                 assert!(scope.ends_with(".pherolang"), "scope {scope}");

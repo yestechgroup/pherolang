@@ -6,7 +6,7 @@ use std::path::PathBuf;
 use std::sync::atomic::AtomicUsize;
 use std::sync::{Arc, Mutex};
 
-use phero_driver::navigation::Lookup;
+use phero_driver::navigation::{Lookup, SymbolKind};
 use phero_driver::{Database, SourceFile, SurfaceKind};
 use salsa::Setter as _;
 use tower_lsp_server::ls_types::*;
@@ -18,6 +18,7 @@ mod graph;
 mod ifml;
 mod mox;
 mod pipeline;
+mod semantic_tokens;
 #[cfg(test)]
 mod tests;
 
@@ -57,6 +58,18 @@ fn surface_for(uri: &Uri) -> Surface {
     let path = uri.path().decode().to_string_lossy().into_owned();
     SurfaceKind::of_path(std::path::Path::new(&path)).map_or(Surface::Other, Surface::Known)
 }
+
+/// The short file label a hover provenance footer names (the file name of
+/// the document's URI).
+fn file_label(uri: &Uri) -> String {
+    uri.to_file_path()
+        .and_then(|path| {
+            path.file_name()
+                .map(|name| name.to_string_lossy().into_owned())
+        })
+        .unwrap_or_else(|| uri.as_str().to_string())
+}
+
 /// One open document as the server sees it.
 #[derive(Clone)]
 struct Document {
@@ -94,6 +107,11 @@ pub struct PheroBackend {
     /// misses only). Tests observe it to prove incremental invalidation;
     /// it is otherwise inert.
     compile_count: Arc<AtomicUsize>,
+    /// The semantic-token answer per document, keyed by URI and stamped with
+    /// the document version it was encoded from. Every open/change/close
+    /// clears the entry, so a stale answer is never served; the version check
+    /// is the second guard (and makes a repeated request cheap).
+    semantic_cache: Mutex<HashMap<Uri, (i32, SemanticTokens)>>,
 }
 
 impl PheroBackend {
@@ -117,6 +135,7 @@ impl PheroBackend {
             graph_cache: Mutex::new(None),
             graph_memo: Mutex::new(graph::GraphMemo::default()),
             compile_count,
+            semantic_cache: Mutex::new(HashMap::new()),
         }
     }
 
@@ -145,6 +164,14 @@ fn capabilities() -> ServerCapabilities {
         references_provider: Some(OneOf::Left(true)),
         rename_provider: Some(OneOf::Left(true)),
         document_formatting_provider: Some(OneOf::Left(true)),
+        semantic_tokens_provider: Some(SemanticTokensServerCapabilities::SemanticTokensOptions(
+            SemanticTokensOptions {
+                legend: semantic_tokens::legend(),
+                full: Some(SemanticTokensFullOptions::Bool(true)),
+                range: None,
+                work_done_progress_options: WorkDoneProgressOptions::default(),
+            },
+        )),
         ..ServerCapabilities::default()
     }
 }
@@ -180,6 +207,7 @@ impl LanguageServer for PheroBackend {
             _ => None,
         };
         self.invalidate_graph();
+        self.semantic_cache.lock().unwrap().remove(&uri);
         self.documents.lock().unwrap().insert(
             uri.clone(),
             Document {
@@ -211,11 +239,16 @@ impl LanguageServer for PheroBackend {
             }
         }
         self.invalidate_graph();
+        self.semantic_cache.lock().unwrap().remove(&uri);
         self.publish(&uri, Some(params.text_document.version)).await;
     }
 
     async fn did_close(&self, params: DidCloseTextDocumentParams) {
         self.documents
+            .lock()
+            .unwrap()
+            .remove(&params.text_document.uri);
+        self.semantic_cache
             .lock()
             .unwrap()
             .remove(&params.text_document.uri);
@@ -275,6 +308,49 @@ impl LanguageServer for PheroBackend {
         }]))
     }
 
+    /// The whole document's semantic tokens, projected from the same
+    /// compiler-backed highlighter every other rendering uses.
+    ///
+    /// The document snapshot is taken under the lock, the encoding runs
+    /// outside it, and the answer is cached per `(uri, version)` until the
+    /// next open/change/close clears it.
+    async fn semantic_tokens_full(
+        &self,
+        params: SemanticTokensParams,
+    ) -> tower_lsp_server::jsonrpc::Result<Option<SemanticTokensResult>> {
+        let uri = params.text_document.uri;
+        let Some((surface, text, version)) = ({
+            let documents = self.documents.lock().unwrap();
+            documents
+                .get(&uri)
+                .map(|document| (document.surface, document.text.clone(), document.version))
+        }) else {
+            return Ok(None);
+        };
+        if surface == Surface::Other {
+            return Ok(None);
+        }
+        if let Some((cached_version, tokens)) = self.semantic_cache.lock().unwrap().get(&uri) {
+            if *cached_version == version {
+                return Ok(Some(SemanticTokensResult::Tokens(tokens.clone())));
+            }
+        }
+        let Some(surface) = semantic_tokens::surface_of_uri(&uri) else {
+            return Ok(None);
+        };
+        let result = phero_highlight::highlight(
+            &text,
+            surface,
+            phero_highlight::HighlightOptions::default(),
+        );
+        let tokens = semantic_tokens::encode(&text, &result.spans);
+        self.semantic_cache
+            .lock()
+            .unwrap()
+            .insert(uri, (version, tokens.clone()));
+        Ok(Some(SemanticTokensResult::Tokens(tokens)))
+    }
+
     async fn goto_definition(
         &self,
         params: GotoDefinitionParams,
@@ -321,20 +397,52 @@ impl LanguageServer for PheroBackend {
         let uri = params.text_document_position_params.text_document.uri;
         let position = params.text_document_position_params.position;
         if surface_for(&uri) == Surface::Known(SurfaceKind::Mox) {
-            let hover = self.with_navigation(&uri, |map, index| {
+            let label = file_label(&uri);
+            // An `actors { … }` member is a graph node (`actor`,
+            // `capability`); the navigation index only knows it as a
+            // generic feature, so prefer the graph hover when the snapshot
+            // has one. Every other `.mox` definition keeps its rich
+            // navigation rendering (signature, modifiers, doc comment).
+            let found = self.with_navigation(&uri, |map, index| {
                 let offset = map.offset_for(position);
                 match index.at(offset) {
-                    Lookup::Definition(def_id, _) => Some(Hover {
-                        contents: HoverContents::Markup(MarkupContent {
-                            kind: MarkupKind::Markdown,
-                            value: crate::hover::hover_markdown(index, def_id),
-                        }),
-                        range: None,
-                    }),
+                    Lookup::Definition(def_id, definition) => {
+                        let actor_member = definition.owner.is_some_and(|owner| {
+                            index.definition(owner).kind == SymbolKind::Actors
+                        });
+                        Some((
+                            actor_member,
+                            crate::hover::hover_markdown_with(
+                                index,
+                                def_id,
+                                crate::hover::HoverProvenance {
+                                    surface: phero_highlight::Surface::Mox,
+                                    file: &label,
+                                },
+                            ),
+                        ))
+                    }
                     _ => None,
                 }
             });
-            return Ok(hover);
+            let Some((actor_member, markdown)) = found else {
+                return Ok(None);
+            };
+            if actor_member {
+                if let Some(hover) = self
+                    .graph_snapshot(&uri)
+                    .and_then(|snapshot| graph_hover(&snapshot, &uri, position))
+                {
+                    return Ok(Some(hover));
+                }
+            }
+            return Ok(Some(Hover {
+                contents: HoverContents::Markup(MarkupContent {
+                    kind: MarkupKind::Markdown,
+                    value: markdown,
+                }),
+                range: None,
+            }));
         }
         // `.ifml`'s own hover (the module signature, the declaration kind)
         // wins where it has an answer; the graph enriches the rest.

@@ -22,9 +22,10 @@ use serde::{Deserialize, Deserializer, Serialize, Serializer};
 /// The semantic class of a highlighted source range.
 ///
 /// The vocabulary mirrors the standard editor token taxonomy: a language
-/// server maps each class onto one LSP semantic-token type
-/// ([`crate::lsp_token_type`]) and each class onto a TextMate scope
-/// ([`crate::scope_for`]).
+/// server maps each class onto one standard LSP semantic-token type
+/// ([`crate::lsp_token_type`]), omitting the classes that have none
+/// ([`HighlightClass::Punctuation`], [`HighlightClass::Error`]), and each class
+/// onto a TextMate scope ([`crate::scope_for`]).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
 #[non_exhaustive]

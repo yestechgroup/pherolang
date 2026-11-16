@@ -160,9 +160,18 @@ pub(super) fn ifml_hover(snapshot: &IfmlSnapshot, position: Position) -> Option<
         phero_ifml::AtSite::Named(site) => site.name_span,
         phero_ifml::AtSite::Use(site) => site.name_span,
     };
+    // A declaration's own hover covers its *name*, not its whole body: the
+    // index returns the enclosing view/container for any offset inside its
+    // span, so a nested component (or any other construct) must fall
+    // through to the graph hover instead of answering with its parent.
+    if !(name_span.0 <= offset && offset < name_span.1) {
+        return None;
+    }
     let range = map_range(map.clone(), name_span);
-    let value = match site {
-        phero_ifml::AtSite::ModuleDecl(site) => module_markdown(site),
+    let (value, file) = match site {
+        phero_ifml::AtSite::ModuleDecl(site) => {
+            (module_markdown(site), index_file_path(index, site.file))
+        }
         phero_ifml::AtSite::Named(site) => {
             let kind = if index.views.iter().any(|view| std::ptr::eq(view, site)) {
                 "view"
@@ -181,27 +190,39 @@ pub(super) fn ifml_hover(snapshot: &IfmlSnapshot, position: Position) -> Option<
             } else {
                 "actor"
             };
-            format!("**{kind} \"{name}\"**", name = site.name)
+            (
+                format!("**{kind} \"{name}\"**", name = site.name),
+                index_file_path(index, site.file),
+            )
         }
         phero_ifml::AtSite::Use(site) => {
             let resolved = site
                 .resolved_module
                 .and_then(|reference| index.module_decl(reference));
             match resolved {
-                Some(decl) => format!(
-                    "use **module \"{}\"**\n\n{}",
-                    site.target,
-                    module_markdown(decl)
+                Some(decl) => (
+                    format!(
+                        "use **module \"{}\"**\n\n{}",
+                        site.target,
+                        module_markdown(decl)
+                    ),
+                    index_file_path(index, decl.file),
                 ),
-                None => {
+                None => (
                     format!(
                         "use **module \"{target}\"** (unresolved)",
                         target = site.target
-                    )
-                }
+                    ),
+                    index_file_path(index, site.file),
+                ),
             }
         }
     };
+    let mut value = value;
+    value.push_str(&crate::hover::provenance_footer(
+        phero_highlight::Surface::Ifml,
+        short_file_label(file),
+    ));
     Some(Hover {
         contents: HoverContents::Markup(MarkupContent {
             kind: MarkupKind::Markdown,
@@ -209,6 +230,28 @@ pub(super) fn ifml_hover(snapshot: &IfmlSnapshot, position: Position) -> Option<
         }),
         range: Some(range),
     })
+}
+
+/// The indexed path of the file at `file`, or the empty string when the index
+/// is out of bounds (never in practice — every site carries a valid index).
+fn index_file_path(index: &phero_ifml::IfmlIndex, file: usize) -> &str {
+    index
+        .files
+        .get(file)
+        .map(|file| file.path.as_str())
+        .unwrap_or_default()
+}
+
+/// The short label a hover footer shows for a file: the last path segment
+/// (either separator), extension kept. Falls back to the whole path when no
+/// segment remains.
+fn short_file_label(path: &str) -> &str {
+    let name = path.rsplit(['/', '\\']).next().unwrap_or(path);
+    if name.is_empty() {
+        path
+    } else {
+        name
+    }
 }
 
 /// `.ifml` completions, by cursor context:

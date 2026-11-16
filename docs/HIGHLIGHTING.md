@@ -14,10 +14,10 @@ the lexer/parser wins; change both in the same commit.
 
 > **Status.** This slice of epic SH (#286) covers the metadata registry
 > (SH1, #287), the engine (SH2, #288), the CLI/wire format (SH3, #289), the
-> generated editor grammars (SH5, #291), and the static site integration
-> (SH4, #290). LSP tokens (SH6), the interactive editor (SH7), and the
-> remaining release gates (SH8) are **not** implemented here; see
-> [Out of scope](#out-of-scope).
+> generated editor grammars (SH5, #291), the static site integration
+> (SH4, #290), and LSP semantic tokens plus hover (SH6, #292). The
+> interactive editor (SH7) and the remaining release gates (SH8) are **not**
+> implemented here; see [Out of scope](#out-of-scope).
 
 ## Purpose
 
@@ -92,9 +92,11 @@ classes prefix them with `hl-`.
 | `escape` | `Escape` | An escape sequence inside a string literal; a surface that lexes the literal atomically reports it as part of `string` |
 | `error` | `Error` | An invalid or unrecognized region; still bounded and non-overlapping |
 
-Classes track the LSP semantic-token vocabulary closely so SH6 is a mapping,
-not a second taxonomy. A surface that has no construct for a class simply
-never emits it; that is not an error.
+Classes track the LSP semantic-token vocabulary closely so the LSP adapter
+is a mapping, not a second taxonomy
+([LSP semantic tokens](#lsp-semantic-tokens)); `punctuation` and `error` have
+no standard LSP type and are omitted there. A surface that has no construct
+for a class simply never emits it; that is not an error.
 
 ## Modifiers
 
@@ -315,6 +317,67 @@ Leaving a node lexical is not a parse failure and does not set `degraded`.
 2. Parser declaration/reference spans override lexical guesses.
 3. Adjacent equal spans merge.
 4. Everything else falls back to the lexical class from the registry.
+
+## LSP semantic tokens
+
+`phero-lsp` answers `textDocument/semanticTokens/full` from the same
+`phero_highlight::highlight` result the CLI renders: an open document of any
+of the nine surfaces is highlighted once per version and its spans are
+converted for the protocol. There is no separate grammar, span stream, or
+editor-side classification, so lexical classes (comments, strings, numbers,
+keywords, operators) and the semantic
+declaration/reference/type/function/namespace classes all arrive through the
+one span stream.
+
+### Legend derivation
+
+The legend is **derived, never hand-listed**. `phero_highlight::lsp_token_type`
+maps each `HighlightClass` to its standard LSP token type (returning `None`
+where none exists), and `phero_highlight::lsp_modifier` is the identity
+spelling of each `HighlightModifier`; both are public API exercised against
+the taxonomy, so the legend and the span vocabulary cannot drift apart.
+
+| Legend token types (stable order, 13) | From `lsp_token_type` |
+|---|---|
+| `keyword` `type` `function` `namespace` `variable` `parameter` `property` `string` `number` `comment` `operator` `decorator` `enumMember` | `annotation` → `decorator`, `constant` → `enumMember`, `string` and `escape` → `string` |
+
+| Legend modifiers (stable order, 6) | From `lsp_modifier` |
+|---|---|
+| `declaration` `definition` `readonly` `deprecated` `documentation` `defaultLibrary` | the span's modifier set, in canonical order |
+
+**Standard-only.** The server advertises no custom token type; a legend a
+standard client cannot render is not worth negotiating. `punctuation` and
+`error` have no standard LSP type, so `lsp_token_type` returns `None` and
+those spans are **omitted by decision** — punctuation is the editor grammar's
+job (SH5), and lexical errors are reported as diagnostics, not coloured
+tokens. Every other class maps to exactly one type.
+
+### Encoding and scope
+
+- **One conversion.** The adapter calls `to_utf16` once over the engine's
+  byte spans; every later calculation is in UTF-16 code units, the protocol's
+  unit. The engine's byte spans stay the source of truth.
+- **Split at line boundaries.** An LSP token cannot span lines, so a
+  multi-line span (a block comment, a string) becomes one token per line,
+  each bounded by that line's content.
+- **Delta encoding.** Tokens are emitted in document order as `deltaLine`,
+  `deltaStart` (relative to the previous token when `deltaLine` is `0`, else
+  the token's start column), `length`, `tokenType` (its legend index), and
+  `tokenModifiers` (a bit set in legend order). An empty source returns an
+  empty `data` array.
+- **Full only.** This slice implements `textDocument/semanticTokens/full`
+  only — no range request and no delta. The server declares exactly that
+  capability; range/delta are a later additive step.
+- **Per-version cache.** The token vector is cached per document and document
+  version, so a repeated request or a version-bumping no-op change does no
+  highlighting work; a new version invalidates the entry.
+- **Parse-only for `.ifml`.** Every surface goes through its own registry
+  entry; `.ifml` uses the parse-only path (`parse_ifml_syntax_recovering`), so
+  tokens need no domain union or import bundle and a flow highlights while
+  its imports or bindings are unresolved.
+- **Never fatal.** A malformed, partial, or fragment document yields the
+  lexical spans the engine could recover. The adapter never panics, never
+  fails the request, and never emits a token outside the document's bounds.
 
 ## JSON wire format (v1)
 
@@ -841,18 +904,20 @@ PHERO_UPDATE_FIXTURES=1 cargo test -p phero-cli --test cli highlight
 
 ## Out of scope
 
-These are later issues in the epic and are **not** part of this slice:
+Epic status: SH6 is **implemented**; SH7 and SH8 are **not** part of this
+slice.
 
 | Issue | Scope |
 |---|---|
-| SH6 (#292) | LSP semantic tokens, hover, definitions, and diagnostics |
+| SH6 (#292) | LSP semantic tokens, hover, definitions, and diagnostics — **implemented** in `phero-lsp` (full semantic tokens and hover provenance); see [LSP semantic tokens](#lsp-semantic-tokens) |
 | SH7 (#293) | Interactive browser hover/editor surface |
 | SH8 (#294) | Release gates, accessibility/contrast measurements, and documentation beyond this slice |
 
 Also out of scope: a second lexer or parser, a watch mode, publishing a
-standalone schema package, publishing a VS Code extension to the marketplace,
-semantic tokens or hover inside VS Code, and any client-side JavaScript on
-static pages.
+standalone schema package, publishing a VS Code extension to the marketplace
+(the LSP serves tokens and hover, but no VS Code client ships),
+`textDocument/semanticTokens/range` and delta tokens, and any client-side
+JavaScript on static pages.
 
 ## References
 

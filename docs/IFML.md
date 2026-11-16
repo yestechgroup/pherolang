@@ -437,9 +437,13 @@ decision data included —
 the code table is
 [docs/DIAGNOSTICS.md](DIAGNOSTICS.md), rendered by `pherolang explain`),
 document symbols, hover
-(module signatures), go-to-definition on `use` sites (cross-file), and
-`textDocument/formatting` backed by the canonical formatter. Imports fetch
-from open editor buffers first, disk second.
+(module signatures), go-to-definition on `use` sites (cross-file), semantic
+tokens (`textDocument/semanticTokens/full`), and
+`textDocument/formatting` backed by the canonical formatter. Semantic tokens
+come from the parse-only highlighting path
+(`parse_ifml_syntax_recovering`): they need no domain union or import
+resolution, so a flow highlights while its imports or bindings are
+unresolved. Imports fetch from open editor buffers first, disk second.
 
 The `IfmlModel` artifact is the integration boundary. Consumers `parse_ifml_file` (or deserialize a serialized artifact with `IfmlModel::from_json`) and walk the model to build applications. codegraph, the primary consumer today, projects the artifact into its graph (ViewContainer/ViewComponent/Event/Action/ParameterDefinition/DataBinding/ModuleDefinition nodes, NavigationFlow/DataFlow/HasParameter/... edges) and generates behavior-wired UI plus Playwright tests from it.
 

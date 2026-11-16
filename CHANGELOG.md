@@ -9,6 +9,22 @@ policy in [docs/VERSIONING.md](docs/VERSIONING.md).
 
 ### Added
 
+- **LSP semantic tokens and hover provenance** (SH6, issue
+  [#292](https://github.com/yestechgroup/pherolang/issues/292), epic #286):
+  `phero-lsp` now answers `textDocument/semanticTokens/full` from the same
+  `phero-highlight` span stream as the CLI and the site, with a stable,
+  standard-only legend (13 token types, 6 modifiers) derived from
+  `HighlightClass`/`HighlightModifier` rather than a second mapping. Tokens
+  are converted to UTF-16 once, split at line boundaries, delta-encoded, and
+  cached per document version; all nine surfaces are covered (`.ifml` uses
+  its parse-only path, needing no domain or import resolution), and
+  `Punctuation`/`Error` are omitted by decision — punctuation belongs to the
+  editor grammar, and lexical errors are diagnostics. Hover on every surface
+  keeps its existing kind/signature/doc-comment content and appends a
+  provenance footer naming the surface, the file, and the surface's
+  documentation link; an unresolved reference still yields no hover. Tests
+  cover the legend, multi-line splitting, delta encoding, the per-version
+  cache, and hover footers; `docs/HIGHLIGHTING.md` documents the contract.
 - **Typed repository queries in the `.ddd` surface** (DD9, issue
   [#306](https://github.com/yestechgroup/pherolang/issues/306), epic #297): a
   declared repository operation may now be a **finder** — a `where`
