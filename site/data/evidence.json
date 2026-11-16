@@ -7,12 +7,36 @@
   },
   "counts": {
     "surfaces": 9,
-    "nodes": 305,
-    "edges": 463,
+    "nodes": 312,
+    "edges": 476,
     "applications": 8,
-    "crates": 23
+    "crates": 24
   },
   "applications": [
+    {
+      "id": "Orders",
+      "files": [
+        "shop/ecommerce.evt",
+        "shop/ecommerce.ifml",
+        "shop/ecommerce.mox",
+        "shop/orders.ddd"
+      ]
+    },
+    {
+      "id": "SupportDesk",
+      "files": [
+        "support/cli.ifml",
+        "support/support.actor",
+        "support/support.cmmn",
+        "support/support.ddd",
+        "support/support.deploy",
+        "support/support.dmn",
+        "support/support.evt",
+        "support/support.ifml",
+        "support/support.mox",
+        "support/support.uc"
+      ]
+    },
     {
       "id": "iot/iot.mox",
       "files": [
@@ -48,30 +72,6 @@
       "files": [
         "shapes/shapes.mox"
       ]
-    },
-    {
-      "id": "shop/ecommerce.evt",
-      "files": [
-        "shop/ecommerce.evt",
-        "shop/ecommerce.ifml",
-        "shop/ecommerce.mox",
-        "shop/orders.ddd"
-      ]
-    },
-    {
-      "id": "support/cli.ifml",
-      "files": [
-        "support/cli.ifml",
-        "support/support.actor",
-        "support/support.cmmn",
-        "support/support.ddd",
-        "support/support.deploy",
-        "support/support.dmn",
-        "support/support.evt",
-        "support/support.ifml",
-        "support/support.mox",
-        "support/support.uc"
-      ]
     }
   ],
   "kinds": {
@@ -96,9 +96,11 @@
       "deployProfile": 2,
       "deployment": 2,
       "designApplication": 2,
+      "dto": 2,
       "enum": 3,
+      "error": 1,
       "event": 7,
-      "feature": 65,
+      "feature": 66,
       "file": 20,
       "flow": 3,
       "inputData": 11,
@@ -107,10 +109,10 @@
       "operation": 6,
       "planItem": 8,
       "repository": 4,
-      "repositoryOperation": 22,
+      "repositoryOperation": 24,
       "search": 2,
       "service": 3,
-      "serviceOperation": 28,
+      "serviceOperation": 29,
       "subscription": 4,
       "useCase": 6,
       "view": 11
@@ -126,7 +128,7 @@
       "data": 6,
       "delivers": 2,
       "deploys": 2,
-      "designs": 6,
+      "designs": 7,
       "emits": 8,
       "excludes": 2,
       "executes": 1,
@@ -137,7 +139,7 @@
       "injects": 3,
       "invokesAction": 6,
       "invokesDecision": 1,
-      "memberOf": 206,
+      "memberOf": 213,
       "navigates": 4,
       "on": 5,
       "opaqueGrant": 1,
@@ -150,7 +152,8 @@
       "refers": 10,
       "requires": 6,
       "subscribes": 8,
-      "typeOf": 55,
+      "throws": 1,
+      "typeOf": 59,
       "usesProfile": 2
     }
   },
@@ -158,6 +161,7 @@
     "phero-backend-cedar",
     "phero-backend-cmmn",
     "phero-backend-common",
+    "phero-backend-ddd",
     "phero-backend-dmn",
     "phero-backend-jsonschema",
     "phero-backend-rust",
@@ -187,17 +191,17 @@
       "docs": {
         "path": "docs/LANGUAGE.md",
         "exists": true,
-        "bytes": 39969
+        "bytes": 44889
       },
       "example": {
         "path": "examples/support/support.mox",
         "exists": true,
-        "bytes": 832
+        "bytes": 948
       },
       "conformance": {
         "path": "tests/conformance/models",
         "exists": true,
-        "files": 18
+        "files": 19
       },
       "golden": null,
       "backends": [
@@ -223,22 +227,22 @@
       "docs": {
         "path": "docs/DDD.md",
         "exists": true,
-        "bytes": 58851
+        "bytes": 128575
       },
       "example": {
         "path": "examples/support/support.ddd",
         "exists": true,
-        "bytes": 3268
+        "bytes": 4195
       },
       "conformance": {
         "path": "tests/conformance/ddd",
         "exists": true,
-        "files": 14
+        "files": 25
       },
       "golden": {
         "path": "examples/artifacts/support.ddd.json",
         "exists": true,
-        "bytes": 12946
+        "bytes": 23055
       },
       "backends": [],
       "status": "validated"
@@ -250,7 +254,7 @@
       "docs": {
         "path": "docs/LANGUAGE.md",
         "exists": true,
-        "bytes": 39969
+        "bytes": 44889
       },
       "example": {
         "path": "examples/support/support.actor",
@@ -260,7 +264,7 @@
       "conformance": {
         "path": "tests/conformance/models",
         "exists": true,
-        "files": 18
+        "files": 19
       },
       "golden": {
         "path": "examples/artifacts/support.actor.json",

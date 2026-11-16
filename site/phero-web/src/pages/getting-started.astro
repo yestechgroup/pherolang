@@ -7,6 +7,7 @@ import CodeBlock from '@ui/CodeBlock.astro';
 import Button from '@ui/Button.astro';
 import Card from '@ui/Card.astro';
 import commands from '../data/commands.json';
+import { loadExcerpt } from '../../../packages/highlighting/src/excerpts.mjs';
 
 /**
  * Every shell string on this page is read from `src/data/commands.json`, the
@@ -33,41 +34,15 @@ const shell = (...ids: string[]) => ids.map((id) => command(id).run).join('\n');
 const prints = (id: string) => command(id).expectStdout ?? '';
 
 const repo = 'https://github.com/yestechgroup/pherolang';
-const sourceFile = 'examples/support/support.mox';
 
-/** Lines 1–32 of `examples/support/support.mox`, verbatim — package through the Ticket class. */
-const domain = `package nz.example.support
-
-enum TicketState {
-    Open as "open" = 0
-    InProgress as "in_progress" = 1
-    Resolved as "resolved" = 2
-}
-
-class User {
-    id readonly String userId
-    String name
-    boolean active
-    refers Ticket[] assignedTickets opposite assignee
-}
-
-class Ticket {
-    id readonly String ticketNo
-    String title
-    boolean internal
-    int refundCents
-    TicketState state
-    refers User[0..1] assignee opposite assignedTickets
-    derived boolean needsRefund {
-        expr { refundCents > 0 }
-    }
-    op boolean raiseRefund(int cents) {
-        expr { refundCents + cents <= 5000 }
-    }
-    op boolean approveRefund(int cents) {
-        expr { refundCents + cents <= 100000 }
-    }
-}`;
+/**
+ * The domain block this page quotes, from
+ * `site/packages/highlighting/excerpts.json` — the one manifest the highlight
+ * artifact is hashed from, so the block below is highlighted by its exact
+ * bytes instead of a second, hand-maintained copy of the source.
+ */
+const domain = loadExcerpt('getting-started.domain');
+const sourceFile = domain.source;
 
 /** The first lines of the artifact `pherolang ir` writes for the excerpt above. */
 const artifactHead = `{
@@ -132,12 +107,16 @@ const artifactHead = `{
 
       <Prose class="mt-8">
         <p>
-          This is lines 1–32 of
+          This is lines {domain.start}–{domain.end} of
           <a href={`${repo}/blob/main/${sourceFile}`} rel="noopener"><code>{sourceFile}</code></a>,
           unchanged:
         </p>
       </Prose>
-      <CodeBlock lang="mox" filename={`${sourceFile} · lines 1–32`} code={domain} />
+      <CodeBlock
+        lang="mox"
+        filename={`${sourceFile} · lines ${domain.start}–${domain.end}`}
+        code={domain.text}
+      />
 
       <Prose class="mt-6">
         <p>Three lines in that excerpt do most of the work:</p>

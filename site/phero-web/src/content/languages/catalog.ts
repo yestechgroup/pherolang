@@ -21,6 +21,7 @@
 
 import docsManifest from '@data/docs-manifest.json';
 import surfacesJson from '@data/surfaces.json';
+import excerptManifestJson from '../../../../packages/highlighting/excerpts.json';
 
 /** The two status words `site/data/status.json` defines. */
 export type SurfaceStatus = 'implemented' | 'validated';
@@ -60,8 +61,10 @@ export interface LanguageEntry {
   related: string[];
   /**
    * The exact lines of `surface.example` the page quotes, 1-based and
-   * inclusive. Verified at build time against the file: the range must end on
-   * a closing brace and balance every brace, bracket and parenthesis.
+   * inclusive. The range comes from `site/packages/highlighting/excerpts.json`
+   * (the one manifest `sync-highlight.mjs` hashes); the note is authored here.
+   * Verified at build time against the file: the range must be inside it, end
+   * on a closing brace, and balance every brace, bracket and parenthesis.
    */
   excerpt: { start: number; end: number; note: string };
   /**
@@ -76,6 +79,48 @@ export interface LanguageEntry {
 
 /** Where the generated docs live. The paths come from docs-manifest.json. */
 export const DOCS_ORIGIN = 'https://docs.pherolang.com';
+
+/**
+ * One quoted range in `site/packages/highlighting/excerpts.json`.
+ *
+ * That manifest is the single source of every range the site quotes: the
+ * language pages, both marketing walkthroughs and `scripts/sync-highlight.mjs`
+ * read it, so the bytes a page renders are exactly the bytes the artifact was
+ * hashed over. It is JSON, so the import is narrowed here once.
+ */
+interface ExcerptSpec {
+  /** The Phero surface the bytes are highlighted as. */
+  surface: string;
+  /** Repository-relative source path. */
+  source: string;
+  /** 1-based, inclusive. */
+  start: number;
+  /** 1-based, inclusive. */
+  end: number;
+}
+
+interface ExcerptManifest {
+  language: Record<string, ExcerptSpec>;
+  pages: Record<string, ExcerptSpec>;
+}
+
+const excerptManifest = excerptManifestJson as unknown as ExcerptManifest;
+
+/**
+ * The manifest's range for one surface, with this catalogue's note.
+ *
+ * Throws at import time when the row is absent, so a surface cannot render a
+ * page whose example range nothing highlights.
+ */
+function languageExcerpt(id: string, note: string): LanguageEntry['excerpt'] {
+  const spec = excerptManifest.language[id];
+  if (!spec) {
+    throw new Error(
+      `languages: site/packages/highlighting/excerpts.json has no language excerpt '${id}'`,
+    );
+  }
+  return { start: spec.start, end: spec.end, note };
+}
 
 const STATUSES: readonly string[] = ['implemented', 'validated'];
 
@@ -148,10 +193,12 @@ export function inlineCode(text: string): Run[] {
 /**
  * The catalogue. One entry per surface, in `surfaces.json` order.
  *
- * The `excerpt` ranges are quoted verbatim by the page and checked at build
- * time; the `artifactLines` values stop at a closing delimiter in the committed
- * artifact. Both are re-verified on every build, so a source edit that shifts a
- * block fails the build instead of silently quoting the wrong lines.
+ * The `excerpt` ranges come from `site/packages/highlighting/excerpts.json`
+ * (the manifest the highlighter hashes), are quoted verbatim by the page, and
+ * are checked at build time; the `artifactLines` values stop at a closing
+ * delimiter in the committed artifact. Both are re-verified on every build, so
+ * a source edit that shifts a block fails the build instead of silently
+ * quoting the wrong lines.
  */
 const entries: LanguageEntry[] = [
   {
@@ -204,11 +251,10 @@ const entries: LanguageEntry[] = [
     relations:
       'Everything else in the stack reads this surface. `.ddd` designs reference its classes, `.actor` capabilities bind to them and type-check their `when` conditions against them, and the payload fields, inputs, participants, case-file items and `data:` bindings of `.evt`, `.dmn`, `.uc`, `.cmmn` and `.ifml` all resolve against the same union namespace.',
     related: ['ddd', 'actor', 'evt', 'dmn', 'uc', 'cmmn', 'ifml'],
-    excerpt: {
-      start: 16,
-      end: 32,
-      note: 'One class: attributes, an enum-typed feature, a relation with its opposite, a derived feature, and two operations with checked expression bodies.',
-    },
+    excerpt: languageExcerpt(
+      'mox',
+      'One class: attributes, an enum-typed feature, a relation with its opposite, a derived feature, and two operations with checked expression bodies.',
+    ),
     artifactLines: 54,
     artifactSummary:
       'One `Model` for the whole package: enums, datatypes, interfaces, classes and their features, with a stable feature `id` per class.',
@@ -263,12 +309,11 @@ const entries: LanguageEntry[] = [
     relations:
       'The design is the hinge between the domain and everything built on it: it reads `.mox`, names `.actor` capabilities from its service operations, links an operation to a `.dmn` decision service (`invokes`, or `inject decision` on the module), and its operation emissions are checked against `.evt` names. `.uc` `realizes` its service operations, `.cmmn` executes them, and `.deploy` binds a component to one of its modules by path.',
     related: ['mox', 'actor', 'dmn', 'evt', 'uc', 'cmmn', 'deploy'],
-    excerpt: {
-      start: 12,
-      end: 36,
-      note: 'One service: injected dependencies, operations that name capabilities and emissions, an operation with a checked statement body, and two delegations — `close` to the repository, `findTickets` to the search projection.',
-    },
-    artifactLines: 43,
+    excerpt: languageExcerpt(
+      'ddd',
+      'One service: injected dependencies, operations that name capabilities and emissions, an operation with a checked statement body, and two delegations — `close` to the repository, `findTickets` to the search projection.',
+    ),
+    artifactLines: 47,
     artifactSummary:
       'One `DddModel`: the application, and per module the services, designs, repositories, searches and machines.',
   },
@@ -326,11 +371,10 @@ const entries: LanguageEntry[] = [
     relations:
       'A `.actor` file is a policy dimension over imported domains, not a second model of them. `.ddd` service operations name these capabilities by name only, `.uc` checks `requires:` against the permits held by the participating actors (and refuses a `never_both` pair), `.cmmn` roles bind to actor names, and `.ifml` resolves `requires:` and `roles:` against the capability and actor tables union-wide.',
     related: ['mox', 'ddd', 'uc', 'cmmn', 'ifml'],
-    excerpt: {
-      start: 9,
-      end: 25,
-      note: 'Five capabilities on `Ticket`, two declared obligations, and the `Customer` and `Agent` grants: an unconditional permit, a guarded one, and one that attaches both obligations.',
-    },
+    excerpt: languageExcerpt(
+      'actor',
+      'Five capabilities on `Ticket`, two declared obligations, and the `Customer` and `Agent` grants: an unconditional permit, a guarded one, and one that attaches both obligations.',
+    ),
     artifactLines: 21,
     artifactSummary:
       'One `ActorModel`: the block with its actors, capabilities, grants, obligations and `neverBoth` pairs — the artifact the Cedar backend consumes.',
@@ -384,11 +428,10 @@ const entries: LanguageEntry[] = [
     relations:
       'A decision model consumes domain types and declared events — never a design or policy artifact: `.mox` supplies the types, `.evt` the contracts it may emit to. The link is one-way. `.ddd` service operations point at a decision service (`invokes`, or `inject decision` on the module, optionally version-pinned), and `.cmmn` decision tasks invoke a service such as `RefundDecisions.AssessRefund` as case work. A decision model imports neither.',
     related: ['mox', 'evt', 'ddd', 'cmmn'],
-    excerpt: {
-      start: 34,
-      end: 46,
-      note: 'Two decisions: one whose logic is a FEEL expression, one whose logic is an external markdown decision table. The third, `RefundAssessment`, composes them with an `invoke` and emits `RefundApproved`.',
-    },
+    excerpt: languageExcerpt(
+      'dmn',
+      'Two decisions: one whose logic is a FEEL expression, one whose logic is an external markdown decision table. The third, `RefundAssessment`, composes them with an `invoke` and emits `RefundApproved`.',
+    ),
     artifactLines: 40,
     artifactSummary:
       'One `DmnModel`: inputs, knowledge sources, business knowledge models, decisions, the three requirement groups, services and views — the shape the DMN backend lowers into its engine model.',
@@ -444,11 +487,10 @@ const entries: LanguageEntry[] = [
     relations:
       'Events are contracts over the domain, not a model of it: payloads resolve against `.mox`, and `.dmn` decisions publish to them with `emits` — the edge is one-way, so an `.evt` file never references a decision model. `.uc` uses an event only as a message payload type; its occurrences are scenario-local lifetime points, never events. In `.cmmn`, a case reacts to case-file transitions, so the event contracts stay the wider integration vocabulary.',
     related: ['mox', 'dmn', 'uc', 'cmmn'],
-    excerpt: {
-      start: 14,
-      end: 42,
-      note: 'Two versioned events, the two channels that publish them, and one of the two subscriptions — the refund desk consumer. The same file declares `TicketRaised`, `TicketResolved` and an analytics subscription.',
-    },
+    excerpt: languageExcerpt(
+      'evt',
+      'Two versioned events, the two channels that publish them, and one of the two subscriptions — the refund desk consumer. The same file declares `TicketRaised`, `TicketResolved` and an analytics subscription.',
+    ),
     artifactLines: 40,
     artifactSummary:
       'One `EventModel`: the events with their payload fields and governance lines, the channels, and the subscriptions with their consumers.',
@@ -504,11 +546,10 @@ const entries: LanguageEntry[] = [
     relations:
       'Four imports, four checks: `.mox` types the participants and payloads, `.ddd` supplies the service operations `realizes` names, `.actor` supplies the actor principals and the permits `requires:` is checked against, and `.evt` supplies message payload types only. A scenario that needs both halves of a declared `never_both` pair is refused.',
     related: ['mox', 'ddd', 'actor', 'evt'],
-    excerpt: {
-      start: 45,
-      end: 62,
-      note: 'The `RaiseRefund` scenario: a subject step bound to a design operation with a required capability, actor occurrences, two messages (one carrying an event payload), a succession chain from `start` to `done`, and the `realizes` link.',
-    },
+    excerpt: languageExcerpt(
+      'uc',
+      'The `RaiseRefund` scenario: a subject step bound to a design operation with a required capability, actor occurrences, two messages (one carrying an event payload), a succession chain from `start` to `done`, and the `realizes` link.',
+    ),
     artifactLines: 16,
     artifactSummary:
       'One `UseCaseModel`: each use case with its subject, participants, occurrences, messages, successions and realized operations.',
@@ -560,11 +601,10 @@ const entries: LanguageEntry[] = [
     relations:
       'A case coordinates work over the other surfaces: `.mox` types the case file, `.actor` names the role principals, `.ddd` supplies the operations a `service` item executes, `.dmn` supplies the decision service a `decision` item invokes, and `.evt` stays the wider integration vocabulary — the case reacts to case-file transitions, not to events. The CMMN backend lowers the artifact to the engine’s `CaseDefinition` JSON.',
     related: ['mox', 'actor', 'ddd', 'dmn', 'evt'],
-    excerpt: {
-      start: 42,
-      end: 57,
-      note: 'The automated half of the assessment stage: a `service` item bound to a designed operation, a `decision` item invoking the sibling decision model’s `AssessRefund` service, and the discretionary finance approval.',
-    },
+    excerpt: languageExcerpt(
+      'cmmn',
+      'The automated half of the assessment stage: a `service` item bound to a designed operation, a `decision` item invoking the sibling decision model’s `AssessRefund` service, and the discretionary finance approval.',
+    ),
     artifactLines: 56,
     artifactSummary:
       'One `CmmnModel`: cases with their roles, case file, plan items and sentries — the shape the CMMN backend lowers into a `CaseDefinition`.',
@@ -623,11 +663,10 @@ const entries: LanguageEntry[] = [
     relations:
       'Flows are checked against the rest of the stack: `.mox` types the data bindings, `.actor` supplies the capabilities and actors that `requires:` and `roles:` resolve against (an empty policy set skips the authorization pass entirely), and `.dmn` decision services supply data a details component can bind. `.deploy` binds a `frontend` component to a flow by path, and the control and route manifest is derived from the checked model.',
     related: ['mox', 'actor', 'dmn', 'deploy'],
-    excerpt: {
-      start: 12,
-      end: 29,
-      note: 'The `Inbox` view: parameters bound to the domain, a `use` of the library’s Inbox module, and a list component whose `select` event navigates to the queue with a row binding.',
-    },
+    excerpt: languageExcerpt(
+      'ifml',
+      'The `Inbox` view: parameters bound to the domain, a `use` of the library’s Inbox module, and a list component whose `select` event navigates to the queue with a row binding.',
+    ),
     artifactLines: 30,
     artifactSummary:
       'One `IfmlModel`: views with their containers, components, events and navigation, plus the declared actions, commands and module imports.',
@@ -687,11 +726,10 @@ const entries: LanguageEntry[] = [
     relations:
       'A deployment model composes the other artifacts: it imports pre-compiled `.ddd` designs and `.ifml` flows and binds components to them by path. The `.mox` domain and `.actor` policy reach it only through the design it projects — the model carries authored intent only, never containers, manifests or clouds.',
     related: ['ddd', 'ifml'],
-    excerpt: {
-      start: 10,
-      end: 30,
-      note: 'The logical application: an `api` component bound to the `desk` design module, a `frontend` bound to the flow, a managed database, and the `connects` that wire them.',
-    },
+    excerpt: languageExcerpt(
+      'deploy',
+      'The logical application: an `api` component bound to the `desk` design module, a `frontend` bound to the flow, a managed database, and the `connects` that wire them.',
+    ),
     artifactLines: 56,
     artifactSummary:
       'One `DeployModel`: applications with their components and connections, the profiles, and the deployments that project them.',
@@ -717,6 +755,46 @@ function validate(list: LanguageEntry[]): LanguageEntry[] {
     if (!Number.isInteger(start) || !Number.isInteger(end) || start < 1 || end < start) {
       throw new Error(`languages: catalogue entry '${entry.id}' has an invalid excerpt range`);
     }
+
+    // The range must be the manifest's, not a second copy: the page quotes
+    // these bytes and `sync-highlight.mjs` hashes the manifest's, so the two
+    // can only agree if there is one row.
+    const surface = surfaceById(entry.id);
+    const spec = excerptManifest.language[entry.id];
+    if (!spec) {
+      throw new Error(
+        `languages: site/packages/highlighting/excerpts.json has no language excerpt '${entry.id}'`,
+      );
+    }
+    if (spec.surface !== entry.id) {
+      throw new Error(
+        `languages: excerpt '${entry.id}' is highlighted as surface '${spec.surface}', expected '${entry.id}'`,
+      );
+    }
+    if (spec.source !== surface.example) {
+      throw new Error(
+        `languages: excerpt '${entry.id}' cites '${spec.source}', but ` +
+          `site/data/surfaces.json names '${surface.example}' — one of them is stale`,
+      );
+    }
+    if (
+      !Number.isInteger(spec.start) ||
+      !Number.isInteger(spec.end) ||
+      spec.start < 1 ||
+      spec.end < spec.start
+    ) {
+      throw new Error(
+        `languages: excerpt '${entry.id}' has an invalid range ${spec.start}–${spec.end} ` +
+          'in site/packages/highlighting/excerpts.json',
+      );
+    }
+    if (start !== spec.start || end !== spec.end) {
+      throw new Error(
+        `languages: catalogue entry '${entry.id}' quotes lines ${start}–${end}, but ` +
+          `site/packages/highlighting/excerpts.json says ${spec.start}–${spec.end}`,
+      );
+    }
+
     if (!Number.isInteger(entry.artifactLines) || entry.artifactLines < 1) {
       throw new Error(`languages: catalogue entry '${entry.id}' has an invalid artifact line count`);
     }

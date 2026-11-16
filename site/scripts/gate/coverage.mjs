@@ -21,7 +21,8 @@
 
 import { join } from 'node:path';
 
-import { APPS, COMMANDS, DATA, SITE } from './paths.mjs';
+import { resolveSiteBinary } from '../highlighting/runner.mjs';
+import { APPS, COMMANDS, DATA, REPO, SITE } from './paths.mjs';
 import { resolveInTree } from './links.mjs';
 import { isFile, plural, readJson, sh, tail } from './util.mjs';
 
@@ -122,12 +123,25 @@ export const check = {
         );
       }
 
-      if (!isFile(join(SITE, '.bin', process.platform === 'win32' ? 'pherolang.exe' : 'pherolang'))) {
-        problems.push(
-          'no released binary at site/.bin/pherolang — run `node scripts/fetch-pherolang.mjs` (the executor runs the printed commands against it)',
+      let siteBinary;
+      try {
+        siteBinary = resolveSiteBinary(REPO, SITE, {
+          requireHighlight: false,
+          log: (message) => lines.push(`     note: ${message}`),
+        });
+      } catch (error) {
+        problems.push(`no usable pherolang binary: ${error.message}`);
+      }
+
+      if (siteBinary) {
+        lines.push(
+          `ok   commands: executor binary is ${siteBinary.kind} (${siteBinary.binary})`,
         );
-      } else {
-        const executed = sh('node', [COMMANDS.script], { cwd: SITE, timeout: 600_000 });
+        const executed = sh('node', [COMMANDS.script], {
+          cwd: SITE,
+          timeout: 600_000,
+          env: { ...process.env, PHEROLANG_BIN: siteBinary.binary },
+        });
         const summary = executed.stdout.trim().split('\n').filter((line) => line !== '');
         const totals = summary[summary.length - 1] ?? '';
         if (executed.status !== 0) {

@@ -305,6 +305,7 @@
             {
               "id": 0,
               "name": "decisionId",
+              "description": "The reference recorded with the decision: stored state, not identity\n(a value object has no identity).",
               "kind": "attribute",
               "type": {
                 "type": "primitive",
@@ -317,7 +318,7 @@
                 }
               },
               "isDerived": false,
-              "isId": true,
+              "isId": false,
               "isReadOnly": true
             },
             {

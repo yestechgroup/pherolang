@@ -31,6 +31,8 @@ import CodeBlock from '@ui/CodeBlock.astro';
 import Card from '@ui/Card.astro';
 import StatusPill from '@ui/StatusPill.astro';
 
+import { loadExcerpt } from '../../../packages/highlighting/src/excerpts.mjs';
+
 import {
   inlineCode,
   surfaceById,
@@ -97,11 +99,13 @@ function readRepositoryFile(relative: string) {
 // ---------------------------------------------------------------------------
 // 1. The example excerpt.
 //
-// The catalogue names a 1-based, inclusive line range. Everything below is an
-// assertion on that range: it must be inside the file, it must end on a closing
+// The range is the one `site/packages/highlighting/excerpts.json` declares —
+// the same row `scripts/sync-highlight.mjs` hashes — and `loadExcerpt` re-reads
+// the source from the repository root and rejects a range outside the file.
+// Everything below is an assertion on that range: it must end on a closing
 // brace, and its braces, brackets and parentheses must balance. Together those
-// three checks mean the cited range is a complete block of the real source, not
-// a fragment that happens to start and stop somewhere.
+// checks mean the cited range is a complete block of the real source, not a
+// fragment that happens to start and stop somewhere.
 // ---------------------------------------------------------------------------
 function delimitersBalance(source: string): number {
   const stripped = source
@@ -117,18 +121,24 @@ function delimitersBalance(source: string): number {
   return balance;
 }
 
-const exampleLines = readRepositoryFile(surface.example).toString('utf8').split(/\r?\n/);
 const { start, end, note } = entry.excerpt;
+const quoted = loadExcerpt(surface.id, repositoryRoot);
 
-if (start < 1 || end < start || end > exampleLines.length) {
+if (quoted.source !== surface.example) {
   throw new Error(
-    `LanguagePage: ${surface.id} cites ${surface.example} lines ${start}–${end}, ` +
-      `but the file has ${exampleLines.length} lines.`,
+    `LanguagePage: ${surface.id} quotes '${quoted.source}', but surfaces.json names ` +
+      `'${surface.example}' — one of them is stale.`,
+  );
+}
+if (quoted.start !== start || quoted.end !== end) {
+  throw new Error(
+    `LanguagePage: ${surface.id} quotes lines ${start}–${end}, but ` +
+      `site/packages/highlighting/excerpts.json says ${quoted.start}–${quoted.end}.`,
   );
 }
 
-const excerptLines = exampleLines.slice(start - 1, end);
-const excerpt = excerptLines.join('\n');
+const excerpt = quoted.text;
+const excerptLines = excerpt.split('\n');
 const excerptLastLine = excerptLines[excerptLines.length - 1]?.trim() ?? '';
 
 if (excerptLastLine !== '}') {

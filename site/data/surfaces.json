@@ -17,7 +17,7 @@
       ],
       "artifact": "artifacts/mox.json",
       "counts": {
-        "conformanceFiles": 18
+        "conformanceFiles": 19
       }
     },
     {
@@ -32,7 +32,7 @@
       "backends": [],
       "artifact": "artifacts/ddd.json",
       "counts": {
-        "conformanceFiles": 14
+        "conformanceFiles": 25
       }
     },
     {
@@ -49,7 +49,7 @@
       ],
       "artifact": "artifacts/actor.json",
       "counts": {
-        "conformanceFiles": 18
+        "conformanceFiles": 19
       }
     },
     {

@@ -1,25 +1,37 @@
 /**
- * Check 8 — freshness: the committed model data is what the pinned released
- * binary produces.
+ * Check 9 — freshness: the committed `site/data` is what the pinned/released
+ * toolchain produces.
  *
  * `site/data/**` is generated (see `site/data/CONTRACT.md`) and committed. The
  * only thing that makes the site's claims about the toolchain honest is that
- * regenerating with the same inputs and the same released binary is a no-op.
- * So this check regenerates and then asks git.
+ * regenerating with the same inputs and the same binary is a no-op. Two
+ * scripts own that data:
+ *
+ *   - `node scripts/sync-model.mjs` regenerates the model artifacts;
+ *   - `node scripts/sync-highlight.mjs` regenerates the compiler-backed
+ *     highlight artifact.
+ *
+ * Each uses the resolved site binary: the sha256-verified release when it can
+ * check the current examples and provides the capabilities the script needs,
+ * otherwise a source build of this checkout. The release v0.3.0 predates both
+ * the DD9 examples and `pherolang highlight`, so the fallback is the documented
+ * temporary exception — never released-binary freshness (`docs/HIGHLIGHTING.md`).
+ *
+ * So this check runs both and then asks git.
  *
  * It restores nothing on failure. A dirty tree *is* the finding: reverting it
  * would delete the evidence the integrator needs, and `git diff` is already the
  * report.
  *
- * Never a workspace `cargo build`: the binary is the sha256-verified released
- * asset at `site/.bin/pherolang` (`scripts/fetch-pherolang.mjs`), matching what
- * CI downloads.
+ * A source build is only used when the release cannot do the job, and the
+ * report says so.
  */
 
 import { join } from 'node:path';
 
-import { PHEROLANG_BIN, REPO, SITE } from './paths.mjs';
-import { isFile, plural, sh, tail } from './util.mjs';
+import { resolveSiteBinary } from '../highlighting/runner.mjs';
+import { REPO, SITE } from './paths.mjs';
+import { plural, sh, tail } from './util.mjs';
 
 const NAME = 'freshness';
 
@@ -34,16 +46,32 @@ function dataStatus() {
 
 export const check = {
   name: NAME,
-  title: 'node scripts/sync-model.mjs is a no-op against the committed site/data',
+  title: 'sync-model.mjs and sync-highlight.mjs are no-ops against the committed site/data',
 
   run() {
     const lines = [];
 
-    if (!isFile(PHEROLANG_BIN)) {
-      lines.push(`FAIL no released compiler at ${PHEROLANG_BIN}`);
-      lines.push('     fetch it with: node scripts/fetch-pherolang.mjs   (the sha256-verified release asset CI uses)');
+    let modelBinary;
+    let highlightBinary;
+    try {
+      modelBinary = resolveSiteBinary(REPO, SITE, {
+        requireHighlight: false,
+        log: (message) => lines.push(`     note: ${message}`),
+      });
+      highlightBinary = resolveSiteBinary(REPO, SITE, {
+        requireHighlight: true,
+        log: (message) => lines.push(`     note: ${message}`),
+      });
+    } catch (error) {
+      lines.push(`FAIL no usable pherolang binary: ${error.message}`);
+      lines.push('     fetch the release with: node scripts/fetch-pherolang.mjs, or set PHEROLANG_BIN');
       return { status: 'fail', lines };
     }
+
+    lines.push(
+      `     model binary: ${modelBinary.kind} (${modelBinary.binary})`,
+      `     highlight binary: ${highlightBinary.kind} (${highlightBinary.binary})`,
+    );
 
     const before = dataStatus();
     if (before === null) {
@@ -57,18 +85,45 @@ export const check = {
       for (const line of before.slice(0, 10)) lines.push(`     before ${line}`);
     }
 
-    const started = process.hrtime.bigint();
-    const sync = sh('node', [join(SITE, 'scripts', 'sync-model.mjs')], {
-      cwd: SITE,
-      timeout: 900_000,
-    });
-    const seconds = Number(process.hrtime.bigint() - started) / 1e9;
+    const runScript = (script, binary) => {
+      const started = process.hrtime.bigint();
+      const result = sh('node', [join(SITE, 'scripts', script)], {
+        cwd: SITE,
+        timeout: 900_000,
+        env: { ...process.env, PHEROLANG_BIN: binary.binary },
+      });
+      return { ...result, elapsed: Number(process.hrtime.bigint() - started) / 1e9 };
+    };
 
-    if (sync.status !== 0) {
-      lines.push(`FAIL node scripts/sync-model.mjs exited ${sync.status} after ${seconds.toFixed(1)}s`);
-      if (sync.stdout.trim()) lines.push(tail(sync.stdout, 20).replace(/^/gm, '     | '));
-      if (sync.stderr.trim()) lines.push(tail(sync.stderr, 20).replace(/^/gm, '     | '));
-      return { status: 'fail', lines };
+    const scripts = [
+      { script: 'sync-model.mjs', binary: modelBinary },
+      { script: 'sync-highlight.mjs', binary: highlightBinary },
+    ].map(({ script, binary }) => ({
+      script,
+      ...runScript(script, binary),
+    }));
+    const seconds = scripts.reduce((total, result) => total + result.elapsed, 0);
+
+    for (const result of scripts) {
+      if (result.status !== 0) {
+        lines.push(
+          `FAIL node scripts/${result.script} exited ${result.status} after ${result.elapsed.toFixed(1)}s`,
+        );
+        if (result.stdout.trim()) lines.push(tail(result.stdout, 20).replace(/^/gm, '     | '));
+        if (result.stderr.trim()) lines.push(tail(result.stderr, 20).replace(/^/gm, '     | '));
+        return { status: 'fail', lines };
+      }
+    }
+
+    if (modelBinary.kind === 'source-build') {
+      lines.push(
+        'note: model data was regenerated from a source build because the latest release predates the current examples',
+      );
+    }
+    if (highlightBinary.kind === 'source-build') {
+      lines.push(
+        'note: the highlight artifact was generated from a source build because the latest release predates `pherolang highlight`',
+      );
     }
 
     // The plan's sentence is `git diff --exit-code -- site/data`; that exit code
@@ -90,7 +145,7 @@ export const check = {
     }
 
     lines.push(
-      `FAIL regeneration changed the committed model data (${plural(after.length, 'path')}) — ` +
+      `FAIL regeneration changed the committed site data (${plural(after.length, 'path')}) — ` +
         `git diff --exit-code -- site/data exited ${diff.status}`,
     );
     for (const line of after) lines.push(`     ${line}`);

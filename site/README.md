@@ -35,11 +35,37 @@ current `docs/` tree.
 ### Regenerate the model data
 
 ```sh
-node scripts/sync-model.mjs  # site/data/**, from examples/ + docs/ + crates/
+node scripts/sync-model.mjs      # graph, artifacts, evidence, docs inventory
+node scripts/sync-highlight.mjs  # site/data/highlighting/spans.json
 ```
 
-The output is committed. `git diff --exit-code site/data` after a sync must be
-empty — that is the same check CI runs against the released binary.
+Both outputs are committed. `git diff --exit-code site/data` after a sync must
+be empty — that is the same check CI runs.
+
+`sync-highlight` writes one content-addressed entry per `(surface, exact source
+bytes)` pair, covering every Phero fence in `docs/**/*.md`, every
+`examples/support/support.*` model, and every excerpt declared in
+`site/packages/highlighting/excerpts.json`. Both apps read the same artifact
+through `site/packages/highlighting/src/`; no app runs the compiler at build
+time and nothing is generated per request.
+
+**Release-binary status:** the latest release, v0.3.0, predates both
+`pherolang highlight` and the DD9 examples. The site script resolver
+(`scripts/highlighting/runner.mjs`) refuses a binary that cannot check
+`examples/support/support.ddd` or lacks the command
+(`PHEROLANG_BIN` first, then the fetched `.bin`, then `PATH`) and otherwise
+builds the CLI from the checkout (`cargo build -q -p phero-cli`). One resolved
+binary produces the model data, the highlight artifact, and the commands the
+gate executes. This is a temporary exception, not released-binary freshness;
+the `Site` workflow installs Rust for the freshness/drift jobs and warns when
+the fallback runs. Regenerate with the first release that matches the tree.
+Details: [`docs/HIGHLIGHTING.md`](../docs/HIGHLIGHTING.md#release-binary-status).
+
+The docs app integration is an Expressive Code plugin
+(`site/phero-docs/ec.config.mjs`) that adds the compiler's `hl-*` classes inside
+Expressive Code's own line ASTs, so copy buttons, line numbers, theme switching
+and a11y are untouched. The chosen path and its trade-offs are recorded in
+[`docs/HIGHLIGHTING.md`](../docs/HIGHLIGHTING.md#docs-app--the-chosen-integration).
 
 ### Validate the generated editor grammars
 
@@ -66,10 +92,16 @@ grammar; there is no second copy.
 
 ```sh
 node scripts/gate.mjs        # build, links, html, contrast, a11y, budget,
-                             # coverage, freshness, rebrand
+                             # coverage, highlighting, freshness, rebrand
 node scripts/gate.mjs --list # the checks, in order
 node scripts/gate.mjs --only=links,a11y --no-build
 ```
+
+`highlighting` proves every Phero block in both built apps carries compiler
+classes, no raw Phero block remains, every docs fence language is covered or
+explicitly exempt, and the committed artifact covers exactly the current
+sources. `freshness` reruns both sync scripts and fails on any `site/data`
+diff. The code-token colours are part of `contrast`/`a11y` in both modes.
 
 `a11y` uses axe over the built output through Playwright. If the browser is
 missing, the gate fails with the install command rather than skipping:

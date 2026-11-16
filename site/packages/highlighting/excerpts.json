@@ -1,0 +1,28 @@
+{
+  "//": "The exact source ranges the sites quote. Both scripts/sync-highlight.mjs and the marketing pages read this file, so the bytes hashed are the bytes rendered. `language.*` is one entry per surface (rendered by /languages/<id>/); `pages.*` is any other quoted block. Ranges are 1-based, inclusive, and joined with a single LF, matching the pages' slice.",
+  "language": {
+    "mox": { "surface": "mox", "source": "examples/support/support.mox", "start": 16, "end": 32 },
+    "ddd": { "surface": "ddd", "source": "examples/support/support.ddd", "start": 14, "end": 40 },
+    "actor": { "surface": "actor", "source": "examples/support/support.actor", "start": 9, "end": 25 },
+    "dmn": { "surface": "dmn", "source": "examples/support/support.dmn", "start": 34, "end": 46 },
+    "evt": { "surface": "evt", "source": "examples/support/support.evt", "start": 14, "end": 42 },
+    "uc": { "surface": "uc", "source": "examples/support/support.uc", "start": 45, "end": 62 },
+    "cmmn": { "surface": "cmmn", "source": "examples/support/support.cmmn", "start": 42, "end": 57 },
+    "ifml": { "surface": "ifml", "source": "examples/support/support.ifml", "start": 12, "end": 29 },
+    "deploy": { "surface": "deploy", "source": "examples/support/support.deploy", "start": 10, "end": 30 }
+  },
+  "pages": {
+    "getting-started.domain": {
+      "surface": "mox",
+      "source": "examples/support/support.mox",
+      "start": 1,
+      "end": 32
+    },
+    "how-it-works.domain": {
+      "surface": "mox",
+      "source": "examples/support/support.mox",
+      "start": 3,
+      "end": 32
+    }
+  }
+}

@@ -102,6 +102,8 @@ const PERSPECTIVES = [
       'module',
       'designApplication',
       'search',
+      'dto',
+      'error',
     ],
   },
   {
@@ -158,6 +160,8 @@ const KIND_NOUN = {
   module: 'a module',
   designApplication: 'a design application',
   search: 'a search',
+  dto: 'a data-transfer object',
+  error: 'a declared error',
   actor: 'an actor',
   capability: 'a capability',
   flow: 'an interaction flow',

@@ -418,7 +418,7 @@ two roots declaring the same application name. In a directory batch those
 five tree-level failures are **spanned diagnostics** anchored at the import
 declaration that causes them (the fragment's first module for an orphan),
 with stable codes `E0390`–`E0395` (see
-[DIAGNOSTICS.md](DIAGNOSTICS.md#band-driverddd-e0350e0399)).
+[DIAGNOSTICS.md](DIAGNOSTICS.md#band-driverddd-e0350e0449)).
 
 Modules may **reopen** across fragments: a `module core { ... }` block in the
 root and another in a fragment are one module in the artifact, and their

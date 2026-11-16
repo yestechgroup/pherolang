@@ -16,6 +16,7 @@
 @import "@fontsource/ibm-plex-mono/400.css";
 @import "@fontsource/ibm-plex-mono/500.css";
 @import "../../../packages/tokens/src/tokens.css";
+@import "../../../packages/highlighting/src/highlight.css";
 
 /* ---------------------------------------------------------------------------
  * 1. Starlight's variable surface, mapped onto the palette.
@@ -64,10 +65,12 @@
   --sl-text-code: 0.875rem;
   --docs-measure: 68ch;
 
-  /* Expressive Code. The syntax hues stay the theme's (a full token palette is
-   * a bigger decision than this stylesheet); the surface, the rules and the
-   * focus ring are ours, so a code block reads as part of the page. */
-  --ec-codeBg: color-mix(in oklab, var(--palette-graphite) 4%, var(--palette-warm-white));
+  /* Expressive Code. The syntax hues and the block surface are the measured
+   * token layer (packages/tokens), shared with the marketing site through
+   * packages/highlighting/src/highlight.css; the rules and the focus ring are
+   * ours, so a code block reads as part of the page. The background is the
+   * token, never a Shiki theme's own background. */
+  --ec-codeBg: var(--code-bg);
   --ec-codeFg: var(--palette-graphite);
   --ec-codeSelBg: color-mix(in oklab, var(--palette-lime) 45%, transparent);
   --ec-brdCol: color-mix(in oklab, var(--palette-graphite) 14%, transparent);
@@ -110,7 +113,7 @@
   --sl-color-gray-6: color-mix(in oklab, var(--palette-silver) 18%, var(--palette-graphite));
   --sl-color-gray-7: color-mix(in oklab, var(--palette-silver) 10%, var(--palette-graphite));
 
-  --ec-codeBg: color-mix(in oklab, var(--palette-warm-white) 6%, var(--palette-graphite));
+  --ec-codeBg: var(--code-bg);
   --ec-codeFg: var(--palette-warm-white);
   --ec-brdCol: color-mix(in oklab, var(--palette-silver) 26%, transparent);
   --ec-focusBrd: var(--palette-lime);
