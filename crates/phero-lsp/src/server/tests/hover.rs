@@ -67,6 +67,9 @@ fn hover_pos(needle: &str, nth: usize) -> (u32, u32) {
     (position.line, position.character)
 }
 
+/// The provenance footer every `.mox` hover appends for the test URI.
+const MOX_FOOTER: &str = "\n\n`.mox` · `shelf.mox` · [Domain model](https://github.com/yestechgroup/pherolang/blob/main/docs/LANGUAGE.md)";
+
 #[tokio::test]
 async fn hover_renders_definitions_as_markdown() {
     let (mut service, _socket) = initialized_service().await;
@@ -76,14 +79,16 @@ async fn hover_renders_definitions_as_markdown() {
     let (line, character) = hover_pos("Library", 0);
     assert_eq!(
         hover_at(&mut service, line, character).await,
-        Some("**class Library**".to_string())
+        Some(format!("**class Library**{MOX_FOOTER}"))
     );
 
     // The containment feature `books`.
     let (line, character) = hover_pos("books", 0);
     assert_eq!(
         hover_at(&mut service, line, character).await,
-        Some("**books**: Book[]\ncontains — opposite: `library`".to_string())
+        Some(format!(
+            "**books**: Book[]\ncontains — opposite: `library`{MOX_FOOTER}"
+        ))
     );
 
     // The opposite mention `library` is a *reference*; hover resolves
@@ -96,8 +101,49 @@ async fn hover_renders_definitions_as_markdown() {
     let (line, character) = hover_pos("Happy", 0);
     assert_eq!(
         hover_at(&mut service, line, character).await,
-        Some("**Happy** = 0 (Mood)".to_string())
+        Some(format!("**Happy** = 0 (Mood){MOX_FOOTER}"))
     );
+}
+
+#[tokio::test]
+async fn hover_on_an_inline_actors_member_uses_the_graph() {
+    const INLINE: &str = "package demo.inline\n\n\
+        class Doc {\n\
+        \x20   String title\n\
+        }\n\n\
+        actors Inline {\n\
+        \x20   actor Reader\n\
+        \x20   capability ReadDoc on Doc\n\n\
+        \x20   grant Reader {\n\
+        \x20       permit ReadDoc\n\
+        \x20   }\n\
+        }\n";
+    let (mut service, _socket) = initialized_service().await;
+    open(&mut service, INLINE).await;
+
+    let (line, character) = hover_pos_in(INLINE, "capability ReadDoc");
+    let (line, character) = (line, character + "capability ".len() as u32);
+    let markdown = hover_at(&mut service, line, character)
+        .await
+        .expect("the inline capability hovers");
+    assert!(
+        markdown.contains("capability Inline.ReadDoc"),
+        "the graph node kind and name: {markdown}"
+    );
+    assert!(markdown.contains("on `"), "its granted class: {markdown}");
+    assert!(markdown.contains("permitted to"), "its holders: {markdown}");
+    assert!(markdown.contains(".mox"), "provenance: {markdown}");
+}
+
+/// Position of `needle`'s start in an arbitrary source text.
+fn hover_pos_in(source: &str, needle: &str) -> (u32, u32) {
+    let map = PositionMap::new(source);
+    let (offset, _) = source
+        .match_indices(needle)
+        .next()
+        .unwrap_or_else(|| panic!("no occurrence of '{needle}'"));
+    let position = map.position_for(offset);
+    (position.line, position.character)
 }
 
 #[tokio::test]

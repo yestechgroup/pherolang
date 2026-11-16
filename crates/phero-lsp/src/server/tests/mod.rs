@@ -19,4 +19,5 @@ mod hover;
 mod ifml;
 mod references;
 mod rename;
+mod semantic_tokens;
 mod symbol;

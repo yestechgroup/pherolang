@@ -763,6 +763,212 @@ async fn hover_on_a_capability_names_its_class_and_holders() {
         markdown.contains("App.Agent"),
         "its grant holders: {markdown}"
     );
+    assert!(
+        markdown.contains("`.actor` · `app.actor`"),
+        "its surface and file: {markdown}"
+    );
+    assert!(
+        markdown.contains("docs/LANGUAGE.md"),
+        "its normative docs page: {markdown}"
+    );
+}
+
+#[tokio::test]
+async fn hover_on_a_decision_names_its_kind_and_provenance() {
+    let fixture = Fixture::new("decision-hover");
+    let (mut service, mut socket) = initialized_service().await;
+    open_file(&mut service, &mut socket, &fixture, "app.dmn").await;
+
+    let text = fixture.text("app.dmn");
+    let markdown = hover(
+        &mut service,
+        &fixture.uri("app.dmn"),
+        position(&text, "decision RefundEligibility", 0, "decision ".len()),
+    )
+    .await
+    .expect("the decision hovers");
+    assert!(
+        markdown.contains("decision GraphDecisions.RefundEligibility"),
+        "the node's kind and qualified name: {markdown}"
+    );
+    assert!(
+        markdown.contains("`.dmn` · `app.dmn`"),
+        "its surface and file: {markdown}"
+    );
+    assert!(
+        markdown.contains("docs/DMN.md"),
+        "its normative docs page: {markdown}"
+    );
+}
+
+#[tokio::test]
+async fn hover_on_an_event_names_its_payload() {
+    let fixture = Fixture::new("event-hover");
+    let (mut service, mut socket) = initialized_service().await;
+    open_file(&mut service, &mut socket, &fixture, "app.evt").await;
+
+    let text = fixture.text("app.evt");
+    let markdown = hover(
+        &mut service,
+        &fixture.uri("app.evt"),
+        position(&text, "event TicketRaised", 0, "event ".len()),
+    )
+    .await
+    .expect("the event hovers");
+    assert!(
+        markdown.contains("event app.TicketRaised"),
+        "the node's kind and qualified name: {markdown}"
+    );
+    assert!(markdown.contains("payload"), "its payload: {markdown}");
+    assert!(markdown.contains("`state`"), "its typed field: {markdown}");
+    assert!(
+        markdown.contains("`.evt` · `app.evt`"),
+        "its surface and file: {markdown}"
+    );
+    assert!(
+        markdown.contains("docs/EVENTS.md"),
+        "its normative docs page: {markdown}"
+    );
+}
+
+#[tokio::test]
+async fn hover_on_a_case_file_item_names_its_case() {
+    let fixture = Fixture::new("case-item-hover");
+    let (mut service, mut socket) = initialized_service().await;
+    open_file(&mut service, &mut socket, &fixture, "app.cmmn").await;
+
+    let text = fixture.text("app.cmmn");
+    let markdown = hover(
+        &mut service,
+        &fixture.uri("app.cmmn"),
+        position(&text, "ticket;", 0, 0),
+    )
+    .await
+    .expect("the case-file item hovers");
+    assert!(
+        markdown.contains("caseFileItem RefundDesk.ticket"),
+        "the node's kind and qualified name: {markdown}"
+    );
+    assert!(
+        markdown.contains("`.cmmn` · `app.cmmn`"),
+        "its surface and file: {markdown}"
+    );
+}
+
+#[tokio::test]
+async fn hover_on_a_use_case_participant_type_resolves_to_its_class() {
+    let fixture = Fixture::new("uc-participant-hover");
+    let (mut service, mut socket) = initialized_service().await;
+    open_file(&mut service, &mut socket, &fixture, "app.uc").await;
+
+    let text = fixture.text("app.uc");
+    // `subject Ticket: Ticket { … }`: the type after the colon is the
+    // graph reference; the participant's own name is not a node.
+    let markdown = hover(
+        &mut service,
+        &fixture.uri("app.uc"),
+        position(&text, "subject Ticket: Ticket", 0, "subject Ticket: ".len()),
+    )
+    .await
+    .expect("the participant's type hovers");
+    assert!(
+        markdown.contains("class nz.example.graph.Ticket"),
+        "the resolved domain class: {markdown}"
+    );
+    assert!(
+        markdown.contains("`.mox` · `app.mox`"),
+        "the declaration's surface and file: {markdown}"
+    );
+}
+
+#[tokio::test]
+async fn hover_on_a_view_and_component_names_their_surfaces() {
+    let fixture = Fixture::new("ifml-hover");
+    let (mut service, mut socket) = initialized_service().await;
+    open_file(&mut service, &mut socket, &fixture, "app.ifml").await;
+
+    let text = fixture.text("app.ifml");
+    let uri = fixture.uri("app.ifml");
+
+    let view = hover(
+        &mut service,
+        &uri,
+        position(&text, "view \"Inbox\"", 0, "view \"".len()),
+    )
+    .await
+    .expect("the view hovers");
+    assert!(
+        view.contains("view \"Inbox\""),
+        "the declaration kind and name: {view}"
+    );
+    assert!(
+        view.contains("`.ifml` · `app.ifml`"),
+        "its surface and file: {view}"
+    );
+    assert!(
+        view.contains("docs/IFML.md"),
+        "its normative docs page: {view}"
+    );
+
+    let component = hover(
+        &mut service,
+        &uri,
+        position(&text, "component \"queue\"", 0, "component \"".len()),
+    )
+    .await
+    .expect("the component hovers");
+    assert!(
+        component.contains("component") && component.contains("queue"),
+        "the component's kind and name: {component}"
+    );
+    assert!(
+        component.contains("`.ifml` · `app.ifml`"),
+        "its surface and file: {component}"
+    );
+}
+
+#[tokio::test]
+async fn hover_on_an_ifml_action_names_the_action() {
+    let fixture = Fixture::new("ifml-action-hover");
+    let (mut service, mut socket) = initialized_service().await;
+    open_file(&mut service, &mut socket, &fixture, "app.ifml").await;
+
+    let text = fixture.text("app.ifml");
+    let markdown = hover(
+        &mut service,
+        &fixture.uri("app.ifml"),
+        position(&text, "action \"RaiseRefund\"", 0, "action \"".len()),
+    )
+    .await
+    .expect("the action hovers");
+    assert!(
+        markdown.contains("action \"RaiseRefund\""),
+        "the declaration kind and name: {markdown}"
+    );
+    assert!(
+        markdown.contains("`.ifml` · `app.ifml`"),
+        "its surface and file: {markdown}"
+    );
+}
+
+#[tokio::test]
+async fn hover_on_an_unresolved_reference_is_null() {
+    let fixture = Fixture::new("unresolved-hover");
+    let text = "application Broken {\n    base demo\n    module desk {\n        service BrokenService {\n            boolean run() capability Missing;\n        }\n    }\n}\n";
+    std::fs::write(fixture.path("broken.ddd"), text).expect("write broken.ddd");
+    let (mut service, mut socket) = initialized_service().await;
+    open_file(&mut service, &mut socket, &fixture, "broken.ddd").await;
+
+    assert!(
+        hover(
+            &mut service,
+            &fixture.uri("broken.ddd"),
+            position(text, "capability Missing", 0, "capability ".len()),
+        )
+        .await
+        .is_none(),
+        "an unresolved capability reference has no hover and no error"
+    );
 }
 
 #[tokio::test]

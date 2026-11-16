@@ -201,9 +201,27 @@ fn scopes_and_lsp_mappings_are_total() {
         assert_eq!(scope, class_scope(class));
         assert!(scope.ends_with(".pherolang"), "scope `{scope}`");
         scopes.insert(scope);
-        assert!(!lsp_token_type(class).is_empty());
-        lsp_types.insert(lsp_token_type(class));
+        // Only standard LSP types are emitted: `Punctuation` and `Error` have
+        // none and are omitted (the editor grammar owns punctuation; lexical
+        // errors are diagnostics).
+        if let Some(token) = lsp_token_type(class) {
+            assert!(!token.is_empty());
+            lsp_types.insert(token);
+        } else {
+            assert!(
+                matches!(class, HighlightClass::Punctuation | HighlightClass::Error),
+                "{class} has no standard LSP type"
+            );
+        }
     }
+    assert!(
+        lsp_token_type(HighlightClass::Punctuation).is_none(),
+        "punctuation is left to the editor grammar"
+    );
+    assert!(
+        lsp_token_type(HighlightClass::Error).is_none(),
+        "errors are reported as diagnostics"
+    );
     assert_eq!(scopes.len(), 16, "every class has its own base scope");
     for class in HighlightClass::ALL {
         for modifier in HighlightModifier::ALL {
@@ -213,7 +231,11 @@ fn scopes_and_lsp_mappings_are_total() {
             assert_eq!(lsp_modifier(modifier), modifier.as_str());
         }
     }
-    assert_eq!(lsp_types.len(), 15, "string and escape share `string`");
+    assert_eq!(
+        lsp_types.len(),
+        13,
+        "string and escape share `string`; punctuation and error are omitted"
+    );
 }
 
 #[test]

@@ -12,6 +12,7 @@ workspace = true
 [dependencies]
 phero-driver = { workspace = true }
 phero-expr = { workspace = true }
+phero-highlight = { workspace = true }
 phero-ifml = { workspace = true }
 phero-ir = { workspace = true }
 phero-syntax = { workspace = true }

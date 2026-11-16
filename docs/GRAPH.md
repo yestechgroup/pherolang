@@ -755,6 +755,19 @@ key, pinned by the anti-drift test in
 `crates/phero-driver/tests/navigation.rs`. Spans are per surface; resolution
 is the graph's.
 
+Semantic tokens come from the same highlighter taxonomy. `phero-lsp` builds
+them from `phero_highlight::highlight` over the open document — the same
+`HighlightSpan` stream the CLI JSON/HTML and the generated editor grammars
+derive from, never a second mapping — and serves a stable, standard-only
+legend with full-token responses; comments, strings, numbers, and keywords
+arrive lexically, and declarations, references, types, functions, and
+namespaces semantically
+([contract](HIGHLIGHTING.md#lsp-semantic-tokens)). Hover keeps a
+graph/navigation node's facts and appends a provenance footer naming the
+surface, the file, and the surface's documentation link. An unresolved
+reference still yields no hover and no location: the artifact's
+"unresolved ⇒ no edge" discipline, applied to the editor.
+
 Dispatch is by URI extension through `SurfaceKind` (`surface_for`,
 `crates/phero-lsp/src/server/mod.rs`): `.mox` drives the salsa session and its
 own `NavigationIndex`, `.ifml` the phero-ifml one-shot compile (resolver +

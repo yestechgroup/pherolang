@@ -41,6 +41,34 @@ async fn initialize_declares_exactly_the_pherolang_capabilities() {
             "referencesProvider": true,
             "renameProvider": true,
             "documentFormattingProvider": true,
+            "semanticTokensProvider": {
+                "legend": {
+                    "tokenTypes": [
+                        "keyword",
+                        "type",
+                        "function",
+                        "namespace",
+                        "variable",
+                        "parameter",
+                        "property",
+                        "string",
+                        "number",
+                        "comment",
+                        "operator",
+                        "decorator",
+                        "enumMember",
+                    ],
+                    "tokenModifiers": [
+                        "declaration",
+                        "definition",
+                        "readonly",
+                        "deprecated",
+                        "documentation",
+                        "defaultLibrary",
+                    ],
+                },
+                "full": true,
+            },
         }),
         "capabilities must match the pherolang feature set exactly"
     );

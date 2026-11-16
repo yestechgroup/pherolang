@@ -2,6 +2,20 @@
 //! [`Definition`](phero_driver::navigation::Definition) into markdown.
 
 use phero_driver::navigation::{DefId, FeatureSymbolKind, NavigationIndex, SymbolKind};
+use phero_highlight::{metadata_for, Surface};
+
+/// The repository-relative URL prefix every provenance footer links into.
+const DOCS_URL_PREFIX: &str = "https://github.com/yestechgroup/pherolang/blob/main/";
+
+/// Where a hover's definition lives: its surface and the file it was
+/// declared in.
+#[derive(Debug, Clone, Copy)]
+pub struct HoverProvenance<'a> {
+    /// The surface the definition belongs to (selects the docs page).
+    pub surface: Surface,
+    /// The declaring file, as the editor should show it.
+    pub file: &'a str,
+}
 
 /// Renders the hover markdown for the definition `def_id` of `index`.
 /// Shapes (see the tests for the exact contract):
@@ -21,13 +35,55 @@ use phero_driver::navigation::{DefId, FeatureSymbolKind, NavigationIndex, Symbol
 /// * enum literals: `**Mystery** = 0 (BookCategory)`
 /// * a declaration carrying a doc comment appends its description as a
 ///   final paragraph: `\n\n<description>`
+///
+/// No provenance footer: this is the surface-agnostic rendering. See
+/// [`hover_markdown_with`].
 pub fn hover_markdown(index: &NavigationIndex, def_id: DefId) -> String {
+    render_hover(index, def_id, None)
+}
+
+/// Renders [`hover_markdown`]'s markdown plus the provenance footer naming
+/// the definition's surface, file, and documentation page:
+///
+/// `` \n\n`.actor` · `app.actor` · [Authorisation](<docs URL>) ``
+pub fn hover_markdown_with(
+    index: &NavigationIndex,
+    def_id: DefId,
+    provenance: HoverProvenance<'_>,
+) -> String {
+    render_hover(index, def_id, Some(provenance))
+}
+
+/// The one renderer: the base shape, the doc paragraph when present, and —
+/// only when the caller knows where the definition lives — the provenance
+/// footer.
+fn render_hover(
+    index: &NavigationIndex,
+    def_id: DefId,
+    provenance: Option<HoverProvenance<'_>>,
+) -> String {
     let definition = index.definition(def_id);
     let base = hover_base_markdown(index, definition);
-    match &definition.doc {
+    let mut out = match &definition.doc {
         Some(doc) => format!("{base}\n\n{doc}"),
         None => base,
+    };
+    if let Some(provenance) = provenance {
+        out.push_str(&provenance_footer(provenance.surface, provenance.file));
     }
+    out
+}
+
+/// The provenance footer appended to a hover: the surface id, the file, and
+/// a link to the surface's documentation page.
+pub(crate) fn provenance_footer(surface: Surface, file: &str) -> String {
+    let metadata = metadata_for(surface);
+    format!(
+        "\n\n`.{id}` · `{file}` · [{display}]({DOCS_URL_PREFIX}{documentation})",
+        id = metadata.id,
+        display = metadata.display_name,
+        documentation = metadata.documentation,
+    )
 }
 
 /// The signature/kind rendering, without the doc-comment paragraph.
@@ -336,6 +392,57 @@ mod tests {
         // Descriptions are absent when no doc comment exists — the existing
         // shapes above stay byte-identical.
         assert!(!hover_of("package demo\n\nclass Book {}", "Book").contains('\n'));
+    }
+
+    #[test]
+    fn hover_markdown_without_provenance_carries_no_footer() {
+        // The surface-agnostic rendering stays byte-for-byte what it was:
+        // no file context, no docs link.
+        let value = hover_of("package demo\n\n/// A book.\nclass Book {}", "Book");
+        assert_eq!(value, "**class Book**\n\nA book.");
+        assert!(!value.contains("github.com/yestechgroup/pherolang"));
+
+        let index = NavigationIndex::build_or_empty("package demo\n\nclass Book {}");
+        let value = hover_markdown(&index, def_id_of(&index, "Book"));
+        assert_eq!(value, "**class Book**");
+    }
+
+    #[test]
+    fn hover_markdown_with_provenance_appends_the_footer() {
+        let index = NavigationIndex::build_or_empty("package demo\n\n/// A book.\nclass Book {}");
+        let value = hover_markdown_with(
+            &index,
+            def_id_of(&index, "Book"),
+            HoverProvenance {
+                surface: Surface::Actor,
+                file: "app.actor",
+            },
+        );
+        assert_eq!(
+            value,
+            "**class Book**\n\nA book.\n\n`.actor` · `app.actor` · \
+             [Authorisation](https://github.com/yestechgroup/pherolang/blob/main/docs/LANGUAGE.md)"
+        );
+        assert!(value.ends_with(&provenance_footer(Surface::Actor, "app.actor")));
+    }
+
+    #[test]
+    fn provenance_footer_names_the_surface_file_and_docs_page() {
+        assert_eq!(
+            provenance_footer(Surface::Ifml, "lib/checkout.ifml"),
+            "\n\n`.ifml` · `lib/checkout.ifml` · \
+             [Interaction flow](https://github.com/yestechgroup/pherolang/blob/main/docs/IFML.md)"
+        );
+        // Every surface has a docs page, so no footer can render a dead link.
+        for surface in Surface::ALL {
+            let footer = provenance_footer(surface, "model.file");
+            assert!(
+                footer.contains("](https://github.com/yestechgroup/pherolang/blob/main/docs/"),
+                "footers are markdown links: {footer}"
+            );
+            assert!(footer.contains(metadata_for(surface).documentation));
+            assert!(footer.contains(surface.display_name()));
+        }
     }
 
     #[test]

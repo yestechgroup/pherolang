@@ -2501,6 +2501,7 @@ dependencies = [
  "futures",
  "phero-driver",
  "phero-expr",
+ "phero-highlight",
  "phero-ifml",
  "phero-ir",
  "phero-syntax",

@@ -1185,16 +1185,33 @@ pub(super) fn graph_hover(
     let node = match file.index.at(offset) {
         SurfaceLookup::Definition(definition) => {
             // A declaration the graph does not model as a node still hovers
-            // with its kind and name.
+            // with its kind and name, plus the open file's provenance footer.
             return Some(match snapshot.node_of(&index, file, definition) {
                 Some(node) => node_hover(&index, node),
-                None => simple_hover(definition),
+                None => with_provenance_footer(simple_hover(definition), &file.display),
             });
         }
         SurfaceLookup::Reference(reference) => resolve(&index, file, reference)?,
         SurfaceLookup::None => return None,
     };
     Some(node_hover(&index, node))
+}
+
+/// Appends the provenance footer for `file` to an already-rendered hover.
+///
+/// The surface is the file extension's; a file whose extension names no
+/// surface keeps the hover exactly as it was (there is no docs page to
+/// link).
+fn with_provenance_footer(mut hover: Hover, file: &str) -> Hover {
+    let Some(surface) = phero_highlight::Surface::from_path(Path::new(file)) else {
+        return hover;
+    };
+    if let HoverContents::Markup(markup) = &mut hover.contents {
+        markup
+            .value
+            .push_str(&crate::hover::provenance_footer(surface, file));
+    }
+    hover
 }
 
 /// The markdown hover of one graph node.
@@ -1220,7 +1237,8 @@ fn simple_hover(definition: &IndexedDefinition) -> Hover {
 }
 
 /// Renders one graph node's hover markdown: the kind and name, then the
-/// edges that make the node interesting to a reader.
+/// edges that make the node interesting to a reader, then — when the node's
+/// file names a known surface — the provenance footer.
 fn hover_markdown(index: &GraphIndex<'_>, node: &GraphNode) -> String {
     let mut lines = vec![format!("**{} {}**", node.kind, node.name)];
     let outgoing = index.edges_from(&node.id);
@@ -1309,7 +1327,11 @@ fn hover_markdown(index: &GraphIndex<'_>, node: &GraphNode) -> String {
         }
         _ => {}
     }
-    lines.join("\n")
+    let mut markdown = lines.join("\n");
+    if let Some(surface) = phero_highlight::Surface::from_path(Path::new(&node.file)) {
+        markdown.push_str(&crate::hover::provenance_footer(surface, &node.file));
+    }
+    markdown
 }
 
 /// Document symbols for a file the snapshot covers, straight from its
