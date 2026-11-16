@@ -25,14 +25,18 @@ import { execFileSync } from 'node:child_process';
 const VERSION = process.env.PHEROLANG_VERSION ?? '0.3.0';
 const REPO = 'yestechgroup/pherolang';
 const BIN_DIR = join(dirname(dirname(fileURLToPath(import.meta.url))), '.bin');
-const BIN = join(BIN_DIR, process.platform === 'win32' ? 'pherolang.exe' : 'pherolang');
+const BIN = join(BIN_DIR, 'pherolang');
 const MARKER = join(BIN_DIR, 'VERSION');
 
-/** The release assets v0.3.0 actually publishes. */
+/**
+ * The release assets v0.3.0 actually publishes. Linux only, x86_64 and
+ * aarch64 (docs/adr/0002-supported-platforms-linux-only.md): there is no
+ * darwin or windows archive to name here, so an unsupported host gets the
+ * build-from-source fence below instead of a 404.
+ */
 const TARGETS = {
-  'linux-x64': { asset: `pherolang-${VERSION}-x86_64-unknown-linux-gnu.tar.gz`, kind: 'tar' },
-  'linux-arm64': { asset: `pherolang-${VERSION}-aarch64-unknown-linux-gnu.tar.gz`, kind: 'tar' },
-  'win32-x64': { asset: `pherolang-${VERSION}-x86_64-pc-windows-msvc.zip`, kind: 'zip' },
+  'linux-x64': { asset: `pherolang-${VERSION}-x86_64-unknown-linux-gnu.tar.gz` },
+  'linux-arm64': { asset: `pherolang-${VERSION}-aarch64-unknown-linux-gnu.tar.gz` },
 };
 
 const checkOnly = process.argv.includes('--check');
@@ -106,12 +110,8 @@ async function verifyAndInstall() {
     const extract = join(work, 'unpacked');
     await mkdir(extract, { recursive: true });
 
-    if (target.kind === 'tar') {
-      execFileSync('tar', ['-xzf', archivePath, '-C', extract], { stdio: 'inherit' });
-    } else {
-      // Windows ships a .zip; `tar` on Windows 10+ is bsdtar and reads zip.
-      execFileSync('tar', ['-xf', archivePath, '-C', extract], { stdio: 'inherit' });
-    }
+    // Every supported asset is a gzipped tar with the binary at its root.
+    execFileSync('tar', ['-xzf', archivePath, '-C', extract], { stdio: 'inherit' });
 
     const found = findBinary(extract);
     if (!found) fail(`${target.asset} does not contain a 'pherolang' binary`);
@@ -135,7 +135,7 @@ function findBinary(root) {
     for (const entry of readdirSync(dir, { withFileTypes: true })) {
       const full = join(dir, entry.name);
       if (entry.isDirectory()) stack.push(full);
-      else if (entry.name === 'pherolang' || entry.name === 'pherolang.exe') return full;
+      else if (entry.name === 'pherolang') return full;
     }
   }
   return null;
