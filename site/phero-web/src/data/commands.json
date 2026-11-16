@@ -129,69 +129,6 @@
       "run": "cargo install --git https://github.com/yestechgroup/pherolang --tag v0.4.0 --locked phero-cli",
       "expectExit": 0,
       "network": true
-    },
-    {
-      "id": "install-windows-setup",
-      "label": "Download step (PowerShell): name the release asset",
-      "run": "$Version = '0.4.0'",
-      "expectExit": 0,
-      "network": true
-    },
-    {
-      "id": "install-windows-asset",
-      "label": "Download step (PowerShell): derive the archive and base URL",
-      "run": "$Asset = \"pherolang-$Version-x86_64-pc-windows-msvc.zip\"",
-      "expectExit": 0,
-      "network": true
-    },
-    {
-      "id": "install-windows-base",
-      "label": "Download step (PowerShell): derive the release URL",
-      "run": "$Base = \"https://github.com/yestechgroup/pherolang/releases/download/v$Version\"",
-      "expectExit": 0,
-      "network": true
-    },
-    {
-      "id": "install-windows-fetch-asset",
-      "label": "Download step (PowerShell): fetch the archive",
-      "run": "Invoke-WebRequest \"$Base/$Asset\" -OutFile $Asset",
-      "expectExit": 0,
-      "network": true
-    },
-    {
-      "id": "install-windows-fetch-sums",
-      "label": "Download step (PowerShell): fetch the checksum manifest",
-      "run": "Invoke-WebRequest \"$Base/SHA256SUMS\" -OutFile SHA256SUMS",
-      "expectExit": 0,
-      "network": true
-    },
-    {
-      "id": "install-windows-expected",
-      "label": "Download step (PowerShell): read the expected hash",
-      "run": "$Expected = (Select-String -Path SHA256SUMS -SimpleMatch $Asset).Line.Split()[0]",
-      "expectExit": 0,
-      "network": true
-    },
-    {
-      "id": "install-windows-verify",
-      "label": "Download step (PowerShell): compare the hashes",
-      "run": "if ((Get-FileHash $Asset -Algorithm SHA256).Hash -ne $Expected) { throw \"checksum mismatch: $Asset\" }",
-      "expectExit": 0,
-      "network": true
-    },
-    {
-      "id": "install-windows-extract",
-      "label": "Download step (PowerShell): extract the binary",
-      "run": "Expand-Archive $Asset -DestinationPath \"$env:USERPROFILE\\.pherolang\" -Force",
-      "expectExit": 0,
-      "network": true
-    },
-    {
-      "id": "install-windows-path",
-      "label": "Download step (PowerShell): add the directory to your user PATH",
-      "run": "[Environment]::SetEnvironmentVariable('Path', \"$env:USERPROFILE\\.pherolang;\" + [Environment]::GetEnvironmentVariable('Path', 'User'), 'User')",
-      "expectExit": 0,
-      "network": true
     }
   ]
 }
