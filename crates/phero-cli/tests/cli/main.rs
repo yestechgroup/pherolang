@@ -19,6 +19,7 @@ mod fmt;
 mod gen;
 mod gen_cedar;
 mod gen_tools;
+mod grammar;
 mod graph;
 mod highlight;
 mod ifml;

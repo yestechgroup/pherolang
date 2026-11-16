@@ -30,8 +30,9 @@
 //! [`HighlightArtifact`] is the versioned JSON artifact
 //! ([`HIGHLIGHT_FORMAT_VERSION`]); [`to_html`] renders a deterministic fragment
 //! with no theme colours; [`crate::metadata`] carries the TextMate scopes and
-//! LSP token/modifier mappings. `docs/HIGHLIGHTING.md` owns the normative wire
-//! contract.
+//! LSP token/modifier mappings; [`crate::grammar`] generates the editor-facing
+//! TextMate grammars and language configurations from the same registry.
+//! `docs/HIGHLIGHTING.md` owns the normative wire contract.
 //!
 //! # Example
 //!
@@ -51,6 +52,7 @@
 
 pub mod class;
 pub mod engine;
+pub mod grammar;
 pub mod hash;
 pub mod html;
 pub mod json;
@@ -61,6 +63,12 @@ pub mod utf16;
 pub use class::{HighlightClass, HighlightModifier, HighlightModifiers, HighlightSpan};
 pub use engine::{
     highlight, HighlightDiagnostic, HighlightMode, HighlightOptions, HighlightResult,
+};
+pub use grammar::{
+    check_grammars, configuration_path, generate_grammars, grammar_path, write_grammars,
+    GeneratedFile, GrammarProblem, GrammarProblemKind, CONFIGURATION_SUFFIX, GENERATED_HEADER,
+    GRAMMARS_DIR, GRAMMAR_FORMAT_VERSION, GRAMMAR_SUFFIX, LANGUAGE_CONFIGURATIONS_DIR,
+    PACKAGE_MANIFEST,
 };
 pub use hash::sha256_source_hash;
 pub use html::{modifier_class, to_html};
