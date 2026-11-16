@@ -9,6 +9,22 @@ policy in [docs/VERSIONING.md](docs/VERSIONING.md).
 
 ### Added
 
+- **Static hover reference panels on the site** (SH7, issue
+  [#293](https://github.com/yestechgroup/pherolang/issues/293), epic #286):
+  `/demo/hover` adds a compiler-backed hover surface with no editor and no
+  client JavaScript. Spans come from the committed SH4 artifact and symbol
+  identities from the semantic graph; a small authored index
+  (`site/packages/highlighting/hover.json`) names each node, span class and
+  signature, and the documentation link is derived from the surface and docs
+  manifest. A CSS-only `:has()` card previews the symbol while a permanent
+  reference panel always carries the signature, summary and real docs link;
+  the card is `aria-hidden`, so nothing is hover-only. A missing or invalid
+  entry falls back to plain highlighted code and fails the local hover gate.
+  Measured: 0 bytes of client JavaScript, 1,235 bytes gzip of hover CSS, and
+  8,440 bytes gzip for the built page. Monaco/CodeMirror plus a browser LSP
+  bridge (Option B) is deferred;
+  [`docs/adr/0002`](docs/adr/0002-static-hover-reference-panels.md) records
+  the decision and the estimated costs.
 - **LSP semantic tokens and hover provenance** (SH6, issue
   [#292](https://github.com/yestechgroup/pherolang/issues/292), epic #286):
   `phero-lsp` now answers `textDocument/semanticTokens/full` from the same

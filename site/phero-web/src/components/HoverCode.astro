@@ -1,0 +1,209 @@
+---
+/**
+ * HoverCode — one SH7 annotated example.
+ *
+ * The code is the same SH4 span stream the rest of the site renders; the only
+ * addition is an ordinary anchor around an annotated symbol. A floating card
+ * (CSS-only, `:has()`) previews the symbol on hover/focus, and the permanent
+ * reference panel below the code always carries the full signature, summary
+ * and documentation link. That panel is the accessibility contract: the card
+ * is a visual duplicate (`aria-hidden`, no focusable content), so nothing is
+ * hover-only and no focus trap is possible.
+ *
+ * Failure is deliberately boring: a missing/malformed index, graph node, or
+ * artifact entry renders the plain highlighted block and sets
+ * `data-hover-fallback`. The page still builds; the `hover` site gate fails on
+ * that marker so the prototype cannot silently disappear.
+ */
+import { findRepoRoot, keyFor, loadArtifact } from '../../../packages/highlighting/src/artifact.mjs';
+import { loadExcerpt } from '../../../packages/highlighting/src/excerpts.mjs';
+import {
+  buildHoverSample,
+  loadHoverIndex,
+} from '../../../packages/highlighting/src/hover.mjs';
+import { renderAnnotatedInlineHtml } from '../../../packages/highlighting/src/render.mjs';
+import '../../../packages/highlighting/src/hover.css';
+
+import graphJson from '@data/graph.json';
+import surfacesJson from '@data/surfaces.json';
+import docsManifestJson from '@data/docs-manifest.json';
+import CodeBlock from '@ui/CodeBlock.astro';
+
+interface Props {
+  /** The id in `site/packages/highlighting/hover.json`. */
+  exampleId: string;
+  /** The surface/extension, repeated here so a broken index still falls back. */
+  surface: string;
+  /** The `excerpts.json` key the index entry points at. */
+  excerptKey: string;
+}
+
+const { exampleId, surface, excerptKey } = Astro.props;
+
+const root = findRepoRoot(process.cwd());
+if (!root) {
+  throw new Error(
+    'HoverCode: cannot find the repository root; this component reads the committed highlight artifact and symbol index.',
+  );
+}
+
+const excerpt = loadExcerpt(excerptKey, root);
+if (excerpt.surface !== surface) {
+  throw new Error(
+    `HoverCode: excerpt '${excerptKey}' is ${excerpt.surface}, expected ${surface}; sources and the page disagree.`,
+  );
+}
+
+const { artifact } = loadArtifact(root);
+const graph = graphJson as {
+  nodes: Array<{ id: string; kind: string; name: string; file: string; application: string }>;
+};
+const surfaces = surfacesJson as {
+  surfaces: Array<{
+    id: string;
+    extension: string;
+    name: string;
+    docs: string;
+  }>;
+};
+const docsManifest = docsManifestJson as {
+  generated: Array<{ source: string; url: string }>;
+};
+
+let index: { examples?: Array<Record<string, unknown>> } | null = null;
+let indexError: string | null = null;
+try {
+  index = loadHoverIndex(root);
+} catch (error) {
+  indexError = String((error as Error)?.message ?? error);
+}
+
+const authoredExamples = Array.isArray(index?.examples) ? index.examples : [];
+const example = authoredExamples.find((entry) => String(entry.id) === exampleId) ?? null;
+const result = example
+  ? buildHoverSample(example as any, {
+      artifact,
+      excerpt,
+      graph,
+      surfaces,
+      docsManifest,
+    })
+  : {
+      ok: false,
+      errors: [indexError ?? `hover.json has no example '${exampleId}'`],
+      annotations: [],
+      excerpt,
+    };
+
+const annotations = result.ok ? result.annotations : [];
+const artifactKey = keyFor(surface, excerpt.text);
+const spans = artifact?.entries?.[artifactKey]?.spans ?? [];
+
+/** The per-symbol `:has()` rules. Keys are validated by `buildHoverSample`. */
+const activeRules = annotations
+  .map((annotation) => {
+    const scope = `.pherolang-hover[data-hover-sample="${exampleId}"]`;
+    const symbol = `.pherolang-hover__symbol[data-symbol="${annotation.key}"]`;
+    const card = `.pherolang-hover__card[data-preview="${annotation.key}"]`;
+    const entry = `.pherolang-hover__entry[data-reference="${annotation.key}"]`;
+    const active = `${scope}:has(${symbol}:is(:hover,:focus), ${card}:hover, ${card}:focus-within)`;
+    return (
+      `${active} ${card} { display: block; }\n` +
+      `${active} ${entry} { border-color: var(--link); background: var(--surface-raised); }`
+    );
+  })
+  .join('\n');
+---
+
+{
+  result.ok ? (
+    <figure
+      class="pherolang-hover rounded-md border border-[var(--border)] bg-[var(--code-bg)]"
+      data-hover-sample={exampleId}
+    >
+      <figcaption class="flex items-center justify-between border-b border-[var(--border)] px-4 py-2 font-mono text-xs uppercase tracking-[0.12em] text-[var(--text-muted)]">
+        <span>
+          {excerpt.source} · lines {excerpt.start}–{excerpt.end}
+        </span>
+        <span class="normal-case tracking-normal">hover prototype</span>
+      </figcaption>
+      <div class="pherolang-hover__stage">
+        <pre
+          tabindex="0"
+          class="overflow-x-auto border-b border-[var(--border)] bg-[var(--code-bg)] p-4 font-mono text-[0.8125rem] leading-[1.65] text-[var(--text)]"
+        ><code
+            class={`language-${surface}`}
+            data-phero-highlight={surface}
+            set:html={renderAnnotatedInlineHtml(excerpt.text, spans as never, annotations)}></code></pre>
+        <div class="pherolang-hover__cards">
+          {annotations.map((annotation) => (
+            <div
+              class="pherolang-hover__card"
+              data-preview={annotation.key}
+              aria-hidden="true"
+            >
+              <p class="pherolang-hover__kind">{annotation.kindLabel}</p>
+              <p class="pherolang-hover__signature"><code>{annotation.signature}</code></p>
+              <p class="pherolang-hover__summary">{annotation.summary}</p>
+              <p class="pherolang-hover__reference-label">
+                Reference: {annotation.docsLabel}
+              </p>
+            </div>
+          ))}
+        </div>
+      </div>
+      <section
+        class="pherolang-hover__reference"
+        aria-labelledby={`reference-${exampleId}`}
+      >
+        <h3 id={`reference-${exampleId}`} class="pherolang-hover__reference-title">
+          Symbols in this .{surface} example
+        </h3>
+        <p class="pherolang-hover__hint">
+          Hover or focus a symbol in the code; its entry is marked here. Every entry is always
+          visible, and the symbol is a link to its entry.
+        </p>
+        <ol class="pherolang-hover__list">
+          {annotations.map((annotation) => (
+            <li
+              id={annotation.targetId}
+              tabindex="-1"
+              class="pherolang-hover__entry"
+              data-reference={annotation.key}
+            >
+              <p class="pherolang-hover__kind pherolang-hover__entry-kind">
+                {annotation.kindLabel}
+              </p>
+              <h4 class="pherolang-hover__entry-name">{annotation.name}</h4>
+              <p class="pherolang-hover__entry-signature">
+                <code>{annotation.signature}</code>
+              </p>
+              <p class="pherolang-hover__entry-summary">{annotation.summary}</p>
+              {annotation.docsUrl && (
+                <a class="pherolang-hover__entry-link" href={annotation.docsUrl}>
+                  {annotation.docsLabel}
+                </a>
+              )}
+              <p id={annotation.descriptionId} class="sr-only">
+                {annotation.kindLabel}. {annotation.signature}. {annotation.summary}
+              </p>
+            </li>
+          ))}
+        </ol>
+      </section>
+    </figure>
+  ) : (
+    <div data-hover-fallback={exampleId} class="my-6">
+      <CodeBlock
+        lang={surface}
+        filename={`${excerpt.source} · lines ${excerpt.start}–${excerpt.end}`}
+        code={excerpt.text}
+      />
+      <p class="mt-2 text-sm leading-[1.6] text-[var(--text-muted)]">
+        The symbol index could not be resolved, so this example is shown as static highlighted
+        code. The hover gate reports the broken entry.
+      </p>
+    </div>
+  )
+}
+<style is:inline set:html={activeRules}></style>

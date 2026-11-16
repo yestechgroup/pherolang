@@ -70,6 +70,7 @@ const BLOCKING = new Set(['serious', 'critical']);
 const ROUTES = [
   { app: 'web', path: '/', label: 'marketing /' },
   { app: 'web', path: '/demo', label: 'marketing /demo' },
+  { app: 'web', path: '/demo/hover', label: 'marketing /demo/hover' },
   { app: 'web', path: '/getting-started', label: 'marketing /getting-started' },
   { app: 'web', path: '/languages/mox', label: 'marketing /languages/mox' },
   { app: 'web', path: '/architecture', label: 'marketing /architecture' },
@@ -84,6 +85,7 @@ const ROUTES = [
 const DARK_ROUTES = [
   { app: 'web', path: '/languages/mox', label: 'marketing /languages/mox' },
   { app: 'web', path: '/getting-started', label: 'marketing /getting-started' },
+  { app: 'web', path: '/demo/hover', label: 'marketing /demo/hover' },
   { app: 'docs', path: '/reference/language/', label: 'docs /reference/language/' },
 ];
 
@@ -394,7 +396,7 @@ async function analyzeRoute(page, route, { url, dark }) {
 
 export const check = {
   name: NAME,
-  title: 'axe (serious+critical) and document invariants on 7 built routes, light and dark',
+  title: 'axe (serious+critical) and document invariants on 8 built routes, light and dark',
 
   async run() {
     const lines = [];

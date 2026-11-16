@@ -88,11 +88,27 @@ lexical scopes with the committed compiler-backed artifacts. The Rust test
 edit fails even without Node. The site may use these files as the fallback
 grammar; there is no second copy.
 
+### The hover prototype (SH7)
+
+`/demo/hover` is the SH7 decision surface: compiler-backed spans, a small
+authored symbol index (`site/packages/highlighting/hover.json`) keyed to graph
+node ids, and a CSS-only preview card over a permanent reference panel. The
+page ships no client JavaScript. The decision and its costs are recorded in
+[ADR 0002](../docs/adr/0002-static-hover-reference-panels.md).
+
+```sh
+node scripts/gate.mjs --only=hover   # index, zero-script, budget, keyboard, axe
+```
+
+`a11y` also covers `/demo/hover` in light and dark. The browser checks are
+local-only; `pnpm test` includes the pure committed-index validation that CI's
+`Site verify` job runs.
+
 ### The gate (this is the merge condition)
 
 ```sh
 node scripts/gate.mjs        # build, links, html, contrast, a11y, budget,
-                             # coverage, highlighting, freshness, rebrand
+                             # coverage, highlighting, hover, freshness, rebrand
 node scripts/gate.mjs --list # the checks, in order
 node scripts/gate.mjs --only=links,a11y --no-build
 ```
@@ -100,7 +116,9 @@ node scripts/gate.mjs --only=links,a11y --no-build
 `highlighting` proves every Phero block in both built apps carries compiler
 classes, no raw Phero block remains, every docs fence language is covered or
 explicitly exempt, and the committed artifact covers exactly the current
-sources. `freshness` reruns both sync scripts and fails on any `site/data`
+sources. `hover` proves the prototype's index resolves, its page emits no
+`<script>`, its stylesheet stays under 8 KiB gzip, and hover/focus/Enter work
+in a browser. `freshness` reruns both sync scripts and fails on any `site/data`
 diff. The code-token colours are part of `contrast`/`a11y` in both modes.
 
 `a11y` uses axe over the built output through Playwright. If the browser is
@@ -128,7 +146,7 @@ site/
   brand/                  the identity assets (mark, lockup, favicons, social card)
   packages/tokens/        the ONLY place a colour, font or radius is defined
   packages/ui/            shared primitives (nav, footer, button, prose, …)
-  packages/highlighting/  GENERATED TextMate grammars + language configurations
+  packages/highlighting/  GENERATED grammars/configs + authored excerpts/hover indexes
   data/                   GENERATED model data + CONTRACT.md (read it)
   scripts/                fetch, sync, render, ingest, check, gate
   phero-web/              the marketing app

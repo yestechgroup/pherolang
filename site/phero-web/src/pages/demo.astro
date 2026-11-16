@@ -362,4 +362,32 @@ const regeneration = [
       </div>
     </div>
   </section>
+
+  <section id="hover" class="border-t border-[var(--border)] py-16">
+    <SectionHeader
+      eyebrow="Also on this site"
+      title="The same spans, with symbol docs."
+      lede="The graph is one reading of the compiled model. The hover prototype is another: the compiler's own spans plus a small symbol index, with no editor and no client JavaScript."
+    />
+
+    <div class="mt-8 grid gap-8 md:grid-cols-[minmax(0,1fr)_auto] md:items-end">
+      <Prose>
+        <p>
+          Hover or focus a class, an operation or a capability and a CSS-only card previews its
+          signature and docs. Every card is also a permanent reference entry below the code, so the
+          information never depends on hover. The route ships <strong>0 KB of client JavaScript</strong>.
+        </p>
+        <p>
+          The decision record compares this static surface with the deferred Monaco/CodeMirror +
+          LSP option, including bundle, hosting and accessibility costs.
+        </p>
+      </Prose>
+      <a
+        href="/demo/hover"
+        class="inline-flex items-center justify-center rounded-xs border border-[var(--border-strong)] px-4 py-3 font-mono text-xs uppercase tracking-[0.1em] text-[var(--text)] no-underline transition-colors hover:bg-[var(--surface-raised)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--focus)]"
+      >
+        Open the hover prototype
+      </a>
+    </div>
+  </section>
 </Base>

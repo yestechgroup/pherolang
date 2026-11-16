@@ -1,0 +1,179 @@
+/*
+ * SH7 static hover surface.
+ *
+ * Zero client JavaScript. The floating card and the permanent reference
+ * entry are both rendered at build time; `:has()` only chooses which card is
+ * visible and marks the matching entry. Everything the card says is also in
+ * the permanent panel, so an unsupported `:has()` loses the preview, never
+ * the information.
+ *
+ * Colours come from `packages/tokens` only. No animation or transition is
+ * introduced (the global `prefers-reduced-motion` rule stays the only motion
+ * policy); the card appears as an instant state change.
+ */
+
+.pherolang-hover {
+  margin-block: 1.5rem;
+}
+
+.pherolang-hover__stage {
+  position: relative;
+}
+
+.pherolang-hover__cards {
+  position: absolute;
+  inset-block-start: 0.75rem;
+  inset-inline-end: 0.75rem;
+  z-index: 20;
+  width: min(23rem, calc(100% - 1.5rem));
+  pointer-events: none;
+}
+
+.pherolang-hover__card {
+  display: none;
+  pointer-events: auto;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--palette-radius-md);
+  background: var(--surface-raised);
+  color: var(--text);
+  padding: 0.9rem 1rem 1rem;
+  box-shadow: 0 18px 48px color-mix(in oklab, var(--palette-graphite) 22%, transparent);
+}
+
+.pherolang-hover__kind,
+.pherolang-hover__entry-kind {
+  margin: 0;
+  font-family: var(--palette-font-mono);
+  font-size: 0.6875rem;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+
+.pherolang-hover__signature,
+.pherolang-hover__entry-signature {
+  margin: 0.35rem 0 0;
+  font-family: var(--palette-font-mono);
+  font-size: 0.8125rem;
+  line-height: 1.5;
+  color: var(--text);
+  overflow-wrap: anywhere;
+}
+
+.pherolang-hover__summary,
+.pherolang-hover__entry-summary {
+  margin: 0.55rem 0 0;
+  font-size: 0.875rem;
+  line-height: 1.55;
+  color: var(--text-muted);
+}
+
+.pherolang-hover__reference-label {
+  margin: 0.7rem 0 0;
+  font-size: 0.8125rem;
+  color: var(--text-muted);
+}
+
+.pherolang-hover__symbol {
+  border-radius: var(--palette-radius-xs);
+  text-decoration: underline dotted var(--border-strong);
+  text-decoration-thickness: 1px;
+  text-underline-offset: 0.18em;
+}
+
+.pherolang-hover__symbol:hover {
+  outline: 2px solid var(--link);
+  outline-offset: 1px;
+}
+
+.pherolang-hover__symbol:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 2px;
+}
+
+.pherolang-hover__reference {
+  margin-block-start: 1rem;
+  border: 1px solid var(--border);
+  border-radius: var(--palette-radius-md);
+  background: var(--surface);
+  padding: 1rem;
+}
+
+.pherolang-hover__reference-title {
+  margin: 0;
+  font-family: var(--palette-font-display);
+  font-size: 1.125rem;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+
+.pherolang-hover__hint {
+  margin: 0.35rem 0 0;
+  font-size: 0.8125rem;
+  line-height: 1.5;
+  color: var(--text-muted);
+}
+
+.pherolang-hover__list {
+  display: grid;
+  gap: 0.75rem;
+  margin: 0.9rem 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.pherolang-hover__entry {
+  border: 1px solid var(--border);
+  border-radius: var(--palette-radius-sm);
+  background: var(--surface);
+  padding: 0.8rem 0.9rem;
+  outline: 2px solid transparent;
+  outline-offset: 2px;
+  scroll-margin-top: 6rem;
+}
+
+.pherolang-hover__entry-name {
+  margin: 0.15rem 0 0;
+  font-family: var(--palette-font-mono);
+  font-size: 0.9375rem;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.pherolang-hover__entry-link {
+  display: inline-block;
+  margin-block-start: 0.55rem;
+  border-radius: var(--palette-radius-xs);
+  color: var(--link);
+  font-size: 0.875rem;
+  text-decoration: underline;
+  text-decoration-color: color-mix(in oklab, var(--link) 45%, transparent);
+  text-underline-offset: 0.2em;
+}
+
+.pherolang-hover__entry-link:hover {
+  text-decoration-color: var(--link);
+}
+
+.pherolang-hover__entry-link:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 2px;
+}
+
+.pherolang-hover__entry:target,
+.pherolang-hover__entry:focus {
+  border-color: var(--link);
+  background: var(--surface-raised);
+}
+
+@media (max-width: 63.999rem) {
+  .pherolang-hover__cards {
+    position: static;
+    width: auto;
+    margin-block-start: 0.75rem;
+  }
+
+  .pherolang-hover__card {
+    box-shadow: none;
+  }
+}
