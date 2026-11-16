@@ -101,6 +101,30 @@
   --link: var(--palette-link);
   --focus: var(--palette-link);
   --diagram: var(--palette-deep-blue);
+
+  /*
+   * Code highlighting. These are measured semantic code colours, not brand
+   * palette entries: the names are the shared `.hl-*` taxonomy and every value
+   * is a pair in `contrast.json` against `--code-bg` (light and dark), so the
+   * gate measures them instead of trusting a hand-picked hex.
+   */
+  --code-bg: #ffffff;
+  --code-keyword: #3f51b5;
+  --code-type: #00695c;
+  --code-function: #8c4a00;
+  --code-namespace: #5b3fa8;
+  --code-variable: #111318;
+  --code-parameter: #111318;
+  --code-property: #1f4e79;
+  --code-string: #2e6b2e;
+  --code-number: #7a3e9d;
+  --code-comment: #5a616b;
+  --code-operator: #111318;
+  --code-punctuation: #111318;
+  --code-annotation: #8a1c5b;
+  --code-constant: #6b4e00;
+  --code-escape: #8c4a00;
+  --code-error: #b00020;
 }
 
 /* Dark surfaces: graphite ground, charcoal raised, warm white ink. */
@@ -125,6 +149,25 @@
     --link: var(--palette-link-inverse);
     --focus: var(--palette-lime);
     --diagram: var(--palette-deep-blue);
+
+    /* Code highlighting — the same measured semantic set on the charcoal ground. */
+    --code-bg: #1c2028;
+    --code-keyword: #8b9af5;
+    --code-type: #7fdbca;
+    --code-function: #f4b860;
+    --code-namespace: #c9a7f5;
+    --code-variable: #f5f4f0;
+    --code-parameter: #f5f4f0;
+    --code-property: #9cc7f0;
+    --code-string: #a5d6a7;
+    --code-number: #c9a7f5;
+    --code-comment: #a7adb7;
+    --code-operator: #f5f4f0;
+    --code-punctuation: #f5f4f0;
+    --code-annotation: #f2a6ce;
+    --code-constant: #e6d27a;
+    --code-escape: #f4b860;
+    --code-error: #ff8a95;
   }
 }
 
@@ -144,6 +187,24 @@
   --link: var(--palette-link);
   --focus: var(--palette-link);
   --diagram: var(--palette-deep-blue);
+  /* Code tokens — measured semantic colours, light ground (see the note above). */
+  --code-bg: #ffffff;
+  --code-keyword: #3f51b5;
+  --code-type: #00695c;
+  --code-function: #8c4a00;
+  --code-namespace: #5b3fa8;
+  --code-variable: #111318;
+  --code-parameter: #111318;
+  --code-property: #1f4e79;
+  --code-string: #2e6b2e;
+  --code-number: #7a3e9d;
+  --code-comment: #5a616b;
+  --code-operator: #111318;
+  --code-punctuation: #111318;
+  --code-annotation: #8a1c5b;
+  --code-constant: #6b4e00;
+  --code-escape: #8c4a00;
+  --code-error: #b00020;
 }
 
 [data-theme="dark"] {
@@ -161,4 +222,22 @@
   --link: var(--palette-link-inverse);
   --focus: var(--palette-lime);
   --diagram: var(--palette-deep-blue);
+  /* Code tokens — measured semantic colours, dark ground (see the note above). */
+  --code-bg: #1c2028;
+  --code-keyword: #8b9af5;
+  --code-type: #7fdbca;
+  --code-function: #f4b860;
+  --code-namespace: #c9a7f5;
+  --code-variable: #f5f4f0;
+  --code-parameter: #f5f4f0;
+  --code-property: #9cc7f0;
+  --code-string: #a5d6a7;
+  --code-number: #c9a7f5;
+  --code-comment: #a7adb7;
+  --code-operator: #f5f4f0;
+  --code-punctuation: #f5f4f0;
+  --code-annotation: #f2a6ce;
+  --code-constant: #e6d27a;
+  --code-escape: #f4b860;
+  --code-error: #ff8a95;
 }

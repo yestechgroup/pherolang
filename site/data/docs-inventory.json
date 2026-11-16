@@ -7,8 +7,8 @@
       "slug": "backends",
       "title": "Writing a backend for Phero Lang",
       "description": "Phero Lang is a DSL for **modelling**. Backends are consumers of the Core IR —",
-      "bytes": 12857,
-      "lines": 220
+      "bytes": 20116,
+      "lines": 318
     },
     {
       "path": "docs/CMMN.md",
@@ -25,8 +25,8 @@
       "slug": "ddd",
       "title": "DDD design DSL (.ddd)",
       "description": "A Sculptor-style domain-driven-design layer over `.mox` domain models. The",
-      "bytes": 58851,
-      "lines": 1078
+      "bytes": 128575,
+      "lines": 2173
     },
     {
       "path": "docs/DEPLOY.md",
@@ -43,8 +43,8 @@
       "slug": "diagnostics",
       "title": "Diagnostic codes",
       "description": "Every diagnostic a pherolang surface emits carries a stable string code. The codes live in one place — the `phero-diagnostics` crate — and this page is generated from that registry: a new code is a table row in `phero-diagnostics`, never a local constant. Two schemes are registered side by side: the numeric bands (`E####` errors, `W####` warnings, `X####` cross-surface integrity) are surface-local, human-facing codes the CLI prints, while the driver's camelCase names are payload-carrying LSP diagnostic codes (`phero_driver::DiagnosticCode`); both are first-class registry entries, cross-referenced by band. To allocate a code, claim (or find) your band in the ledger and add the constant plus its entry to the band module. Run `pherolang explain <code>` for one entry, or `pherolang explain --list` for everything.",
-      "bytes": 32864,
-      "lines": 128
+      "bytes": 48833,
+      "lines": 167
     },
     {
       "path": "docs/DMN.md",
@@ -70,8 +70,8 @@
       "slug": "expressions",
       "title": "The Phero Lang expression language (Tier 2)",
       "description": "Phero Lang's expression sublanguage is the deliberate replacement for Eclipse",
-      "bytes": 33815,
-      "lines": 648
+      "bytes": 35363,
+      "lines": 673
     },
     {
       "path": "docs/GRAPH.md",
@@ -79,8 +79,8 @@
       "slug": "graph",
       "title": "The unified semantic graph",
       "description": "`pherolang graph build` compiles a tree of model files into **one queryable,",
-      "bytes": 58329,
-      "lines": 948
+      "bytes": 61334,
+      "lines": 979
     },
     {
       "path": "docs/HIGHLIGHTING.md",
@@ -88,8 +88,8 @@
       "slug": "highlighting",
       "title": "Compiler-backed syntax highlighting",
       "description": "Phero Lang source is highlighted by the compiler, not by a hand-written",
-      "bytes": 26650,
-      "lines": 546
+      "bytes": 42887,
+      "lines": 875
     },
     {
       "path": "docs/IFML.md",
@@ -106,8 +106,8 @@
       "slug": "language",
       "title": "The .mox language reference",
       "description": "Phero Lang compiles `.mox` modeling sources (inspired by Eclipse Xcore) into",
-      "bytes": 39969,
-      "lines": 742
+      "bytes": 44889,
+      "lines": 806
     },
     {
       "path": "docs/NAMING.md",
@@ -160,7 +160,7 @@
       "slug": "rune-bodies",
       "title": "Rune body translation — design (RFC)",
       "description": "Status: **landed** — all three implementation stages shipped. This doc",
-      "bytes": 11390,
+      "bytes": 11388,
       "lines": 214
     },
     {

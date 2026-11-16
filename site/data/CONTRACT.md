@@ -1,17 +1,25 @@
 # `site/data` — the interface between the toolchain and the site
 
-Everything in this directory is **generated** by `node scripts/sync-model.mjs`
-and committed. Nothing here is written by hand, and nothing here may be edited
-by hand: change the source (`examples/`, `docs/`, `crates/`, `tests/`) and rerun
-the script.
+Everything in this directory is **generated** and committed. Nothing here is
+written by hand, and nothing here may be edited by hand: change the source
+(`examples/`, `docs/`, `crates/`, `tests/`) and rerun the owning script.
 
-The CI `Site` workflow downloads the released `pherolang` asset, runs the same
-script, and fails if `git diff` is non-empty. That is the entire honesty
-mechanism: if the site says something the toolchain does not do, the build breaks.
+`node scripts/sync-model.mjs` owns the model data; `node
+scripts/sync-highlight.mjs` owns `highlighting/`. The CI `Site` workflow runs
+both, and fails if `git diff` is non-empty. That is the entire honesty
+mechanism: if the site says something the toolchain does not do, the build
+breaks.
+
+Both scripts resolve one site binary: the verified release when it can check
+the current examples and provides `pherolang highlight`, otherwise a source
+build of this checkout. The v0.3.0 release predates both, so the source build
+is a documented temporary exception (`docs/HIGHLIGHTING.md`), never a claim of
+released-binary freshness. The gate reports which binary produced the data.
 
 ```
 node scripts/fetch-pherolang.mjs     # once: released v0.3.0 binary, sha256-verified
-node scripts/sync-model.mjs          # regenerate this directory
+node scripts/sync-model.mjs          # graph, artifacts, evidence, docs inventory
+node scripts/sync-highlight.mjs      # highlighting/spans.json
 ```
 
 ---
@@ -28,13 +36,16 @@ node scripts/sync-model.mjs          # regenerate this directory
 | `register.json` | `docs/verification/register.json`, copied | copy | lane 2/5 (proof-obligation ladder) |
 | `docs-inventory.json` | `{ formatVersion, docs[] }` — title, slug, size, lines | sync-model | `ingest-docs.mjs` |
 | `docs-manifest.json` | `{ formatVersion, generated[] }` — `{ source, slug, collection, target, url }` per page, ADRs included | `ingest-docs.mjs` | gate (docs coverage), lane 3 (doc URLs) |
+| `highlighting/spans.json` | `{ formatVersion, generator, entries }` — one `{ surface, sourceHash, degraded, spans[] }` per `sha256(surface + "\0" + exact source bytes)` key | `scripts/sync-highlight.mjs` | both apps' renderer, `gate/highlighting.mjs` |
 | `support-model.json` | **lane 5's contract**, below | `scripts/render-graph.mjs` | lane 6 (island) |
 
 ### `support-model.json` — the demo projection (lane 5 → lane 6)
 
 Baked layout, so the first paint is static SVG and JavaScript only enhances.
-`provenance` is **base-relative** (`support/support.mox`), exactly as the graph
-artifact writes it — not repo-relative. `meta` carries the application id, the
+`application` is the authored application name when the component has exactly
+one `.ddd` root (DD8) — here `SupportDesk` — otherwise the graph's file-based
+id. `provenance` is **base-relative** (`support/support.mox`), exactly as the
+graph artifact writes it — not repo-relative. `meta` carries the application id, the
 source artifact, the graph totals and the per-perspective counts; each
 perspective also carries a `viewport` (`width`/`height`) and a `groups[]` array
 of cluster header boxes. Lane 6 needs only `nodes`/`edges`.
@@ -42,7 +53,7 @@ of cluster header boxes. Lane 6 needs only `nodes`/`edges`.
 ```jsonc
 {
   "formatVersion": 1,
-  "application": "support/support.mox",
+  "application": "SupportDesk",
   "perspectives": [
     {
       "id": "domain",                  // domain | decisions | events | workflows |

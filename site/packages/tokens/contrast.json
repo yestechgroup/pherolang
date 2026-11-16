@@ -80,6 +80,262 @@
       "min": 7,
       "use": "body text on raised light surfaces",
       "verdict": "AAA"
+    },
+    {
+      "name": "code-keyword-on-light",
+      "fg": "#3F51B5",
+      "bg": "#FFFFFF",
+      "min": 4.5,
+      "use": "keyword token on the light code surface",
+      "verdict": "AA"
+    },
+    {
+      "name": "code-type-on-light",
+      "fg": "#00695C",
+      "bg": "#FFFFFF",
+      "min": 4.5,
+      "use": "type token on the light code surface",
+      "verdict": "AA"
+    },
+    {
+      "name": "code-function-on-light",
+      "fg": "#8C4A00",
+      "bg": "#FFFFFF",
+      "min": 4.5,
+      "use": "function token on the light code surface",
+      "verdict": "AA"
+    },
+    {
+      "name": "code-namespace-on-light",
+      "fg": "#5B3FA8",
+      "bg": "#FFFFFF",
+      "min": 4.5,
+      "use": "namespace token on the light code surface",
+      "verdict": "AA"
+    },
+    {
+      "name": "code-variable-on-light",
+      "fg": "#111318",
+      "bg": "#FFFFFF",
+      "min": 4.5,
+      "use": "variable token on the light code surface",
+      "verdict": "AA"
+    },
+    {
+      "name": "code-parameter-on-light",
+      "fg": "#111318",
+      "bg": "#FFFFFF",
+      "min": 4.5,
+      "use": "parameter token on the light code surface",
+      "verdict": "AA"
+    },
+    {
+      "name": "code-property-on-light",
+      "fg": "#1F4E79",
+      "bg": "#FFFFFF",
+      "min": 4.5,
+      "use": "property token on the light code surface",
+      "verdict": "AA"
+    },
+    {
+      "name": "code-string-on-light",
+      "fg": "#2E6B2E",
+      "bg": "#FFFFFF",
+      "min": 4.5,
+      "use": "string token on the light code surface",
+      "verdict": "AA"
+    },
+    {
+      "name": "code-number-on-light",
+      "fg": "#7A3E9D",
+      "bg": "#FFFFFF",
+      "min": 4.5,
+      "use": "number token on the light code surface",
+      "verdict": "AA"
+    },
+    {
+      "name": "code-comment-on-light",
+      "fg": "#5A616B",
+      "bg": "#FFFFFF",
+      "min": 4.5,
+      "use": "comment token on the light code surface",
+      "verdict": "AA"
+    },
+    {
+      "name": "code-operator-on-light",
+      "fg": "#111318",
+      "bg": "#FFFFFF",
+      "min": 4.5,
+      "use": "operator token on the light code surface",
+      "verdict": "AA"
+    },
+    {
+      "name": "code-punctuation-on-light",
+      "fg": "#111318",
+      "bg": "#FFFFFF",
+      "min": 4.5,
+      "use": "punctuation token on the light code surface",
+      "verdict": "AA"
+    },
+    {
+      "name": "code-annotation-on-light",
+      "fg": "#8A1C5B",
+      "bg": "#FFFFFF",
+      "min": 4.5,
+      "use": "annotation token on the light code surface",
+      "verdict": "AA"
+    },
+    {
+      "name": "code-constant-on-light",
+      "fg": "#6B4E00",
+      "bg": "#FFFFFF",
+      "min": 4.5,
+      "use": "constant token on the light code surface",
+      "verdict": "AA"
+    },
+    {
+      "name": "code-escape-on-light",
+      "fg": "#8C4A00",
+      "bg": "#FFFFFF",
+      "min": 4.5,
+      "use": "escape token on the light code surface",
+      "verdict": "AA"
+    },
+    {
+      "name": "code-error-on-light",
+      "fg": "#B00020",
+      "bg": "#FFFFFF",
+      "min": 4.5,
+      "use": "error token on the light code surface",
+      "verdict": "AA"
+    },
+    {
+      "name": "code-keyword-on-dark",
+      "fg": "#8B9AF5",
+      "bg": "#1C2028",
+      "min": 4.5,
+      "use": "keyword token on the dark code surface",
+      "verdict": "AA"
+    },
+    {
+      "name": "code-type-on-dark",
+      "fg": "#7FDBCA",
+      "bg": "#1C2028",
+      "min": 4.5,
+      "use": "type token on the dark code surface",
+      "verdict": "AA"
+    },
+    {
+      "name": "code-function-on-dark",
+      "fg": "#F4B860",
+      "bg": "#1C2028",
+      "min": 4.5,
+      "use": "function token on the dark code surface",
+      "verdict": "AA"
+    },
+    {
+      "name": "code-namespace-on-dark",
+      "fg": "#C9A7F5",
+      "bg": "#1C2028",
+      "min": 4.5,
+      "use": "namespace token on the dark code surface",
+      "verdict": "AA"
+    },
+    {
+      "name": "code-variable-on-dark",
+      "fg": "#F5F4F0",
+      "bg": "#1C2028",
+      "min": 4.5,
+      "use": "variable token on the dark code surface",
+      "verdict": "AA"
+    },
+    {
+      "name": "code-parameter-on-dark",
+      "fg": "#F5F4F0",
+      "bg": "#1C2028",
+      "min": 4.5,
+      "use": "parameter token on the dark code surface",
+      "verdict": "AA"
+    },
+    {
+      "name": "code-property-on-dark",
+      "fg": "#9CC7F0",
+      "bg": "#1C2028",
+      "min": 4.5,
+      "use": "property token on the dark code surface",
+      "verdict": "AA"
+    },
+    {
+      "name": "code-string-on-dark",
+      "fg": "#A5D6A7",
+      "bg": "#1C2028",
+      "min": 4.5,
+      "use": "string token on the dark code surface",
+      "verdict": "AA"
+    },
+    {
+      "name": "code-number-on-dark",
+      "fg": "#C9A7F5",
+      "bg": "#1C2028",
+      "min": 4.5,
+      "use": "number token on the dark code surface",
+      "verdict": "AA"
+    },
+    {
+      "name": "code-comment-on-dark",
+      "fg": "#A7ADB7",
+      "bg": "#1C2028",
+      "min": 4.5,
+      "use": "comment token on the dark code surface",
+      "verdict": "AA"
+    },
+    {
+      "name": "code-operator-on-dark",
+      "fg": "#F5F4F0",
+      "bg": "#1C2028",
+      "min": 4.5,
+      "use": "operator token on the dark code surface",
+      "verdict": "AA"
+    },
+    {
+      "name": "code-punctuation-on-dark",
+      "fg": "#F5F4F0",
+      "bg": "#1C2028",
+      "min": 4.5,
+      "use": "punctuation token on the dark code surface",
+      "verdict": "AA"
+    },
+    {
+      "name": "code-annotation-on-dark",
+      "fg": "#F2A6CE",
+      "bg": "#1C2028",
+      "min": 4.5,
+      "use": "annotation token on the dark code surface",
+      "verdict": "AA"
+    },
+    {
+      "name": "code-constant-on-dark",
+      "fg": "#E6D27A",
+      "bg": "#1C2028",
+      "min": 4.5,
+      "use": "constant token on the dark code surface",
+      "verdict": "AA"
+    },
+    {
+      "name": "code-escape-on-dark",
+      "fg": "#F4B860",
+      "bg": "#1C2028",
+      "min": 4.5,
+      "use": "escape token on the dark code surface",
+      "verdict": "AA"
+    },
+    {
+      "name": "code-error-on-dark",
+      "fg": "#FF8A95",
+      "bg": "#1C2028",
+      "min": 4.5,
+      "use": "error token on the dark code surface",
+      "verdict": "AA"
     }
   ],
   "forbidden": [

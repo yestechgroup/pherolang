@@ -1,9 +1,25 @@
 {
   "formatVersion": 2,
+  "pheroVersion": "0.3.0",
   "application": {
     "name": "SupportDesk",
     "base": "nz.example.support"
   },
+  "errors": [
+    {
+      "name": "TicketAlreadyResolved",
+      "description": "The ticket is already resolved, so the requested transition cannot run.",
+      "fields": [
+        {
+          "name": "ticketNo",
+          "type": {
+            "type": "primitive",
+            "value": "string"
+          }
+        }
+      ]
+    }
+  ],
   "modules": [
     {
       "name": "desk",
@@ -23,22 +39,19 @@
               },
               "params": [
                 {
-                  "name": "title",
+                  "name": "draft",
                   "type": {
-                    "type": "primitive",
-                    "value": "string"
-                  }
-                },
-                {
-                  "name": "internal",
-                  "type": {
-                    "type": "primitive",
-                    "value": "boolean"
+                    "dto": "NewTicket"
                   }
                 }
               ],
               "emits": [
                 "TicketRaised"
+              ],
+              "emittedRefs": [
+                {
+                  "name": "TicketRaised"
+                }
               ]
             },
             {
@@ -66,8 +79,18 @@
               "capabilities": [
                 "RaiseRefund"
               ],
+              "capabilityRefs": [
+                {
+                  "name": "RaiseRefund"
+                }
+              ],
               "emits": [
                 "RefundRequested"
+              ],
+              "emittedRefs": [
+                {
+                  "name": "RefundRequested"
+                }
               ]
             },
             {
@@ -105,8 +128,18 @@
               "capabilities": [
                 "ApproveRefund"
               ],
+              "capabilityRefs": [
+                {
+                  "name": "ApproveRefund"
+                }
+              ],
               "emits": [
                 "RefundApproved"
+              ],
+              "emittedRefs": [
+                {
+                  "name": "RefundApproved"
+                }
               ]
             },
             {
@@ -131,6 +164,21 @@
                   "package": "nz.example.support",
                   "name": "Ticket"
                 }
+              },
+              "params": [
+                {
+                  "name": "ticketNo",
+                  "type": {
+                    "type": "primitive",
+                    "value": "string"
+                  }
+                }
+              ]
+            },
+            {
+              "name": "summarizeTicket",
+              "returnType": {
+                "dto": "TicketSummary"
               },
               "params": [
                 {
@@ -208,6 +256,11 @@
               ],
               "capabilities": [
                 "ReadTicket"
+              ],
+              "capabilityRefs": [
+                {
+                  "name": "ReadTicket"
+                }
               ]
             },
             {
@@ -237,6 +290,11 @@
               ],
               "capabilities": [
                 "UpdateTicket"
+              ],
+              "capabilityRefs": [
+                {
+                  "name": "UpdateTicket"
+                }
               ]
             },
             {
@@ -256,6 +314,11 @@
               ],
               "capabilities": [
                 "ResolveTicket"
+              ],
+              "capabilityRefs": [
+                {
+                  "name": "ResolveTicket"
+                }
               ]
             },
             {
@@ -275,6 +338,11 @@
               ],
               "capabilities": [
                 "UpdateTicket"
+              ],
+              "capabilityRefs": [
+                {
+                  "name": "UpdateTicket"
+                }
               ]
             },
             {
@@ -295,8 +363,23 @@
               "capabilities": [
                 "UpdateTicket"
               ],
+              "capabilityRefs": [
+                {
+                  "name": "UpdateTicket"
+                }
+              ],
+              "throws": [
+                {
+                  "name": "NotFound",
+                  "scope": "prelude"
+                },
+                {
+                  "name": "TicketAlreadyResolved",
+                  "scope": "application"
+                }
+              ],
               "bodies": {
-                "stmt": "{\"stmts\":[{\"kind\":\"letElse\",\"name\":\"ticket\",\"expr\":\"self.findById(ticketNo)\",\"error\":{\"variant\":\"NotFound\",\"args\":[\"\\\"Ticket\\\"\",\"ticketNo\"]}},{\"kind\":\"guard\",\"expr\":\"ticket.state != TicketState.Resolved\",\"error\":{\"variant\":\"Conflict\",\"args\":[\"\\\"already resolved\\\"\"]}},{\"kind\":\"assign\",\"path\":[\"ticket\",\"internal\"],\"expr\":\"false\"},{\"kind\":\"let\",\"name\":\"saved\",\"expr\":\"self.save(ticket)\"},{\"kind\":\"return\",\"expr\":\"true\"}]}"
+                "stmt": "{\"stmts\":[{\"kind\":\"letElse\",\"name\":\"ticket\",\"expr\":\"self.findById(ticketNo)\",\"error\":{\"variant\":\"NotFound\",\"args\":[\"\\\"Ticket\\\"\",\"ticketNo\"]}},{\"kind\":\"guard\",\"expr\":\"ticket.state != TicketState.Resolved\",\"error\":{\"variant\":\"TicketAlreadyResolved\",\"args\":[\"ticketNo\"]}},{\"kind\":\"assign\",\"path\":[\"ticket\",\"internal\"],\"expr\":\"false\"},{\"kind\":\"let\",\"name\":\"saved\",\"expr\":\"self.save(ticket)\"},{\"kind\":\"return\",\"expr\":\"true\"}]}"
               },
               "bodyReceiver": "TicketRepository"
             },
@@ -318,14 +401,29 @@
               "capabilities": [
                 "ResolveTicket"
               ],
+              "capabilityRefs": [
+                {
+                  "name": "ResolveTicket"
+                }
+              ],
               "emits": [
                 "TicketResolved"
+              ],
+              "emittedRefs": [
+                {
+                  "name": "TicketResolved"
+                }
               ]
             },
             {
               "name": "close",
               "delegation": {
                 "target": "TicketRepository",
+                "targetRef": {
+                  "kind": "repository",
+                  "qualifiedName": "SupportDesk.desk.TicketRepository",
+                  "module": "desk"
+                },
                 "operation": "delete"
               },
               "isProtected": true
@@ -334,6 +432,11 @@
               "name": "findTickets",
               "delegation": {
                 "target": "TicketSearch",
+                "targetRef": {
+                  "kind": "search",
+                  "qualifiedName": "SupportDesk.desk.TicketSearch",
+                  "module": "desk"
+                },
                 "operation": "search"
               }
             }
@@ -341,12 +444,31 @@
           "dependencies": [
             "TicketRepository",
             "TicketSearch"
+          ],
+          "dependencyRefs": [
+            {
+              "kind": "repository",
+              "qualifiedName": "SupportDesk.desk.TicketRepository",
+              "module": "desk"
+            },
+            {
+              "kind": "search",
+              "qualifiedName": "SupportDesk.desk.TicketSearch",
+              "module": "desk"
+            }
           ]
         }
       ],
       "designs": [
         {
           "class": "Ticket",
+          "typeRef": {
+            "type": "class",
+            "value": {
+              "package": "nz.example.support",
+              "name": "Ticket"
+            }
+          },
           "stereotype": "entity",
           "flags": {
             "scaffold": true,
@@ -354,6 +476,12 @@
             "optimisticLocking": true,
             "cache": true
           },
+          "isAggregateRoot": true,
+          "invariants": [
+            {
+              "expression": "refundCents >= 0"
+            }
+          ],
           "repository": {
             "name": "TicketRepository",
             "operations": [
@@ -406,9 +534,139 @@
         },
         {
           "class": "RefundDecision",
+          "typeRef": {
+            "type": "class",
+            "value": {
+              "package": "nz.example.support",
+              "name": "RefundDecision"
+            }
+          },
           "stereotype": "value",
           "flags": {
             "nonPersistent": true
+          },
+          "semantics": {
+            "identity": "none",
+            "immutable": true,
+            "deepImmutable": true,
+            "equality": "structural"
+          },
+          "invariants": [
+            {
+              "expression": "cents >= 0"
+            }
+          ]
+        },
+        {
+          "stereotype": "dto",
+          "dtoShape": {
+            "name": "NewTicket",
+            "direction": "input",
+            "members": [
+              {
+                "name": "title",
+                "kind": "declared",
+                "type": {
+                  "type": "primitive",
+                  "value": "string"
+                }
+              },
+              {
+                "name": "internal",
+                "kind": "declared",
+                "type": {
+                  "type": "primitive",
+                  "value": "boolean"
+                }
+              }
+            ]
+          }
+        },
+        {
+          "class": "Ticket",
+          "typeRef": {
+            "type": "class",
+            "value": {
+              "package": "nz.example.support",
+              "name": "Ticket"
+            }
+          },
+          "stereotype": "dto",
+          "dtoShape": {
+            "name": "TicketSummary",
+            "source": {
+              "type": "class",
+              "value": {
+                "package": "nz.example.support",
+                "name": "Ticket"
+              }
+            },
+            "direction": "output",
+            "members": [
+              {
+                "name": "ticketNo",
+                "kind": "select",
+                "type": {
+                  "type": "primitive",
+                  "value": "string"
+                },
+                "multiplicity": {
+                  "lower": 1,
+                  "upper": {
+                    "finite": 1
+                  }
+                },
+                "path": [
+                  "ticketNo"
+                ]
+              },
+              {
+                "name": "title",
+                "kind": "select",
+                "type": {
+                  "type": "primitive",
+                  "value": "string"
+                },
+                "multiplicity": {
+                  "lower": 1,
+                  "upper": {
+                    "finite": 1
+                  }
+                },
+                "path": [
+                  "title"
+                ]
+              },
+              {
+                "name": "state",
+                "kind": "select",
+                "type": {
+                  "type": "enum",
+                  "value": {
+                    "package": "nz.example.support",
+                    "name": "TicketState"
+                  }
+                },
+                "multiplicity": {
+                  "lower": 1,
+                  "upper": {
+                    "finite": 1
+                  }
+                },
+                "path": [
+                  "state"
+                ]
+              },
+              {
+                "name": "refundable",
+                "kind": "derive",
+                "type": {
+                  "type": "primitive",
+                  "value": "boolean"
+                },
+                "expression": "refundCents > 0"
+              }
+            ]
           }
         }
       ],
@@ -417,23 +675,49 @@
           "name": "TicketSearch",
           "description": "Full-text search over the ticket queue.",
           "entity": "Ticket",
+          "entityRef": {
+            "type": "class",
+            "value": {
+              "package": "nz.example.support",
+              "name": "Ticket"
+            }
+          },
           "text": [
             {
               "property": "title",
+              "typeRef": {
+                "type": "primitive",
+                "value": "string"
+              },
               "boost": 3.0
             }
           ],
           "filters": [
             {
-              "property": "state"
+              "property": "state",
+              "typeRef": {
+                "type": "enum",
+                "value": {
+                  "package": "nz.example.support",
+                  "name": "TicketState"
+                }
+              }
             },
             {
-              "property": "internal"
+              "property": "internal",
+              "typeRef": {
+                "type": "primitive",
+                "value": "boolean"
+              }
             }
           ],
           "sort": [
             {
-              "property": "title"
+              "property": "title",
+              "typeRef": {
+                "type": "primitive",
+                "value": "string"
+              }
             }
           ],
           "document": [
@@ -457,6 +741,11 @@
           },
           "capabilities": [
             "ReadTicket"
+          ],
+          "capabilityRefs": [
+            {
+              "name": "ReadTicket"
+            }
           ]
         }
       ]
@@ -466,9 +755,98 @@
       "designs": [
         {
           "class": "User",
+          "typeRef": {
+            "type": "class",
+            "value": {
+              "package": "nz.example.support",
+              "name": "User"
+            }
+          },
           "stereotype": "dto",
           "flags": {
             "nonPersistent": true
+          },
+          "dtoShape": {
+            "name": "User",
+            "source": {
+              "type": "class",
+              "value": {
+                "package": "nz.example.support",
+                "name": "User"
+              }
+            },
+            "direction": "input",
+            "members": [
+              {
+                "name": "userId",
+                "kind": "select",
+                "type": {
+                  "type": "primitive",
+                  "value": "string"
+                },
+                "multiplicity": {
+                  "lower": 1,
+                  "upper": {
+                    "finite": 1
+                  }
+                },
+                "path": [
+                  "userId"
+                ]
+              },
+              {
+                "name": "name",
+                "kind": "select",
+                "type": {
+                  "type": "primitive",
+                  "value": "string"
+                },
+                "multiplicity": {
+                  "lower": 1,
+                  "upper": {
+                    "finite": 1
+                  }
+                },
+                "path": [
+                  "name"
+                ]
+              },
+              {
+                "name": "active",
+                "kind": "select",
+                "type": {
+                  "type": "primitive",
+                  "value": "boolean"
+                },
+                "multiplicity": {
+                  "lower": 1,
+                  "upper": {
+                    "finite": 1
+                  }
+                },
+                "path": [
+                  "active"
+                ]
+              },
+              {
+                "name": "assignedTickets",
+                "kind": "select",
+                "type": {
+                  "type": "class",
+                  "value": {
+                    "package": "nz.example.support",
+                    "name": "Ticket"
+                  }
+                },
+                "multiplicity": {
+                  "lower": 0,
+                  "upper": "unbounded"
+                },
+                "path": [
+                  "assignedTickets"
+                ]
+              }
+            ]
           }
         }
       ]

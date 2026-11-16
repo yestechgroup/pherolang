@@ -1,0 +1,17 @@
+<code class="language-mox" data-phero-highlight="mox"><span class="hl-keyword">class</span> <span class="hl-type hl-declaration">Ticket</span> <span class="hl-punctuation">{</span>
+    <span class="hl-keyword">id</span> <span class="hl-keyword">readonly</span> <span class="hl-type hl-default-library">String</span> <span class="hl-property hl-declaration hl-readonly">ticketNo</span>
+    <span class="hl-type hl-default-library">String</span> <span class="hl-property hl-declaration">title</span>
+    <span class="hl-type hl-default-library">boolean</span> <span class="hl-property hl-declaration">internal</span>
+    <span class="hl-type hl-default-library">int</span> <span class="hl-property hl-declaration">refundCents</span>
+    <span class="hl-type">TicketState</span> <span class="hl-property hl-declaration">state</span>
+    <span class="hl-keyword">refers</span> <span class="hl-type">User</span><span class="hl-punctuation">[</span><span class="hl-number">0</span><span class="hl-punctuation">..</span><span class="hl-number">1</span><span class="hl-punctuation">]</span> <span class="hl-property hl-declaration">assignee</span> <span class="hl-keyword">opposite</span> <span class="hl-property">assignedTickets</span>
+    <span class="hl-keyword">derived</span> <span class="hl-type hl-default-library">boolean</span> <span class="hl-property hl-declaration">needsRefund</span> <span class="hl-punctuation">{</span>
+        <span class="hl-annotation">expr</span> <span class="hl-punctuation">{</span> <span class="hl-variable">refundCents</span> <span class="hl-operator">&gt;</span> <span class="hl-number">0</span> <span class="hl-punctuation">}</span>
+    <span class="hl-punctuation">}</span>
+    <span class="hl-keyword">op</span> <span class="hl-type hl-default-library">boolean</span> <span class="hl-function hl-declaration">raiseRefund</span><span class="hl-punctuation">(</span><span class="hl-type hl-default-library">int</span> <span class="hl-parameter hl-declaration">cents</span><span class="hl-punctuation">)</span> <span class="hl-punctuation">{</span>
+        <span class="hl-annotation">expr</span> <span class="hl-punctuation">{</span> <span class="hl-variable">refundCents</span> <span class="hl-operator">+</span> <span class="hl-variable">cents</span> <span class="hl-operator">&lt;=</span> <span class="hl-number">5000</span> <span class="hl-punctuation">}</span>
+    <span class="hl-punctuation">}</span>
+    <span class="hl-keyword">op</span> <span class="hl-type hl-default-library">boolean</span> <span class="hl-function hl-declaration">approveRefund</span><span class="hl-punctuation">(</span><span class="hl-type hl-default-library">int</span> <span class="hl-parameter hl-declaration">cents</span><span class="hl-punctuation">)</span> <span class="hl-punctuation">{</span>
+        <span class="hl-annotation">expr</span> <span class="hl-punctuation">{</span> <span class="hl-variable">refundCents</span> <span class="hl-operator">+</span> <span class="hl-variable">cents</span> <span class="hl-operator">&lt;=</span> <span class="hl-number">100000</span> <span class="hl-punctuation">}</span>
+    <span class="hl-punctuation">}</span>
+<span class="hl-punctuation">}</span></code>

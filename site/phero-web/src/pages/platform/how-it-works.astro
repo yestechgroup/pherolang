@@ -24,10 +24,10 @@ import Button from '@ui/Button.astro';
 import surfaces from '@data/surfaces.json';
 import coreIr from '@data/artifacts/mox.json';
 import commands from '../../data/commands.json';
+import { loadExcerpt } from '../../../../packages/highlighting/src/excerpts.mjs';
 
 const docs = 'https://docs.pherolang.com';
 const repo = 'https://github.com/yestechgroup/pherolang';
-const sourceFile = 'examples/support/support.mox';
 
 // ---------------------------------------------------------------------------
 // Commands — the gate's list, looked up by id.
@@ -86,40 +86,14 @@ const backendRows = [...new Set(surfaces.surfaces.flatMap((surface) => surface.b
   });
 
 /**
- * Lines 3–32 of the example, verbatim: the state enum, the two classes it
- * relates, and the derived predicate and operations that make the file a
- * *model* and not a schema.
+ * The example's opening block, from
+ * `site/packages/highlighting/excerpts.json` — the manifest
+ * `scripts/sync-highlight.mjs` hashes, so the code block is highlighted by
+ * its exact bytes: the state enum, the two classes it relates, and the derived
+ * predicate and operations that make the file a *model* and not a schema.
  */
-const domainExcerpt = `enum TicketState {
-    Open as "open" = 0
-    InProgress as "in_progress" = 1
-    Resolved as "resolved" = 2
-}
-
-class User {
-    id readonly String userId
-    String name
-    boolean active
-    refers Ticket[] assignedTickets opposite assignee
-}
-
-class Ticket {
-    id readonly String ticketNo
-    String title
-    boolean internal
-    int refundCents
-    TicketState state
-    refers User[0..1] assignee opposite assignedTickets
-    derived boolean needsRefund {
-        expr { refundCents > 0 }
-    }
-    op boolean raiseRefund(int cents) {
-        expr { refundCents + cents <= 5000 }
-    }
-    op boolean approveRefund(int cents) {
-        expr { refundCents + cents <= 100000 }
-    }
-}`;
+const domain = loadExcerpt('how-it-works.domain');
+const sourceFile = domain.source;
 ---
 
 <Base
@@ -157,10 +131,14 @@ class Ticket {
     <Prose class="mt-8">
       <p>
         This is <a href={`${repo}/blob/main/${sourceFile}`} rel="noopener"><code>{sourceFile}</code></a
-        >, lines 3–32, unchanged:
+        >, lines {domain.start}–{domain.end}, unchanged:
       </p>
     </Prose>
-    <CodeBlock lang="mox" filename={`${sourceFile} · lines 3–32`} code={domainExcerpt} />
+    <CodeBlock
+      lang="mox"
+      filename={`${sourceFile} · lines ${domain.start}–${domain.end}`}
+      code={domain.text}
+    />
 
     <Prose class="mt-6">
       <p>Four lines carry the design decisions:</p>

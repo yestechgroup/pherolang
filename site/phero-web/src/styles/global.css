@@ -3,6 +3,7 @@
 @import "@fontsource/ibm-plex-mono/500.css";
 @import "tailwindcss";
 @import "../../../packages/tokens/src/tokens.css";
+@import "../../../packages/highlighting/src/highlight.css";
 
 /*
  * Tailwind's automatic content detection only walks this app's `src/`. The

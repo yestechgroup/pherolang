@@ -6,8 +6,11 @@
  * `phero-web/src/data/commands.json`; both pages render their code blocks from
  * that file, so a printed command and an executed command cannot drift apart.
  * This script is the executor: it runs each entry from the repository root with
- * `site/.bin` in front of `PATH`, so what is verified is the *released* binary
- * (fetched by `scripts/fetch-pherolang.mjs`), not a local `cargo build`.
+ * the resolved binary's directory in front of `PATH`. By default that is the
+ * *released* binary at `site/.bin` (fetched by
+ * `scripts/fetch-pherolang.mjs`). `PHEROLANG_BIN` overrides it; the site gate
+ * passes a source build while the release predates the current examples
+ * (documented temporary exception — docs/HIGHLIGHTING.md).
  *
  * Usage:
  *   node scripts/check-commands.mjs           # run everything the gate can run
@@ -40,7 +43,11 @@ const SITE = resolve(HERE, '..');
 const REPO = resolve(SITE, '..');
 const BIN_DIR = join(SITE, '.bin');
 const DATA = join(SITE, 'phero-web', 'src', 'data', 'commands.json');
-const BINARY = join(BIN_DIR, process.platform === 'win32' ? 'pherolang.exe' : 'pherolang');
+const OVERRIDE = process.env.PHEROLANG_BIN;
+const BINARY = OVERRIDE
+  ? resolve(OVERRIDE)
+  : join(BIN_DIR, process.platform === 'win32' ? 'pherolang.exe' : 'pherolang');
+const BINARY_DIR = dirname(BINARY);
 const TIMEOUT_MS = 180_000;
 
 const listOnly = process.argv.includes('--list');
@@ -52,7 +59,11 @@ function fail(message) {
 
 if (!existsSync(DATA)) fail(`missing ${DATA}`);
 if (!listOnly && !existsSync(BINARY)) {
-  fail(`no binary at ${BINARY} — run \`node site/scripts/fetch-pherolang.mjs\` first`);
+  fail(
+    OVERRIDE
+      ? `PHEROLANG_BIN points at missing ${BINARY}`
+      : `no binary at ${BINARY} — run \`node site/scripts/fetch-pherolang.mjs\` first`,
+  );
 }
 
 const manifest = JSON.parse(readFileSync(DATA, 'utf8'));
@@ -63,10 +74,10 @@ if (!Array.isArray(manifest.commands) || manifest.commands.length === 0) {
   fail('commands.json has no commands');
 }
 
-/** `PATH` with the released binary first, so the gate never picks up a cargo build. */
+/** `PATH` with the resolved binary first, so every printed command runs it. */
 const env = {
   ...process.env,
-  PATH: [BIN_DIR, process.env.PATH ?? '']
+  PATH: [BINARY_DIR, process.env.PATH ?? '']
     .filter(Boolean)
     .join(process.platform === 'win32' ? ';' : ':'),
 };

@@ -2,7 +2,7 @@
 /**
  * The local merge gate for the Phero Lang web presence.
  *
- * One entry point, nine checks, one verdict:
+ * One entry point, ten checks, one verdict:
  *
  *   node site/scripts/gate.mjs                 # everything, building both apps
  *   node site/scripts/gate.mjs --no-build      # reuse dist/client if it exists
@@ -39,6 +39,7 @@ import { check as build } from './gate/build.mjs';
 import { check as contrast } from './gate/contrast.mjs';
 import { check as coverage } from './gate/coverage.mjs';
 import { check as freshness } from './gate/freshness.mjs';
+import { check as highlighting } from './gate/highlighting.mjs';
 import { check as html } from './gate/html.mjs';
 import { check as links } from './gate/links.mjs';
 import { REPORT_DIR } from './gate/paths.mjs';
@@ -47,7 +48,7 @@ import { check as rebrand } from './gate/rebrand.mjs';
 /** Stable order: build first (it produces what the rest read), then the
  *  static checks from cheapest to most expensive, then the ones that touch the
  *  worktree or another process. */
-const CHECKS = [build, links, html, contrast, a11y, budget, coverage, freshness, rebrand];
+const CHECKS = [build, links, html, contrast, a11y, budget, coverage, highlighting, freshness, rebrand];
 
 const USAGE = `usage: node site/scripts/gate.mjs [--only=<name>]... [--no-build] [--list]
 
@@ -97,7 +98,7 @@ async function main() {
   }
   if (options.list) {
     console.log(`gate: ${CHECKS.length} checks, run in this order\n`);
-    for (const entry of CHECKS) console.log(`  ${entry.name.padEnd(10)}${entry.title}`);
+    for (const entry of CHECKS) console.log(`  ${entry.name.padEnd(13)}${entry.title}`);
     return 0;
   }
 

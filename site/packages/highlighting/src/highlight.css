@@ -1,0 +1,32 @@
+/*
+ * Semantic highlighting, shared by pherolang.com and docs.pherolang.com.
+ *
+ * These are the stable `hl-*` class names from docs/HIGHLIGHTING.md. Colours
+ * live in packages/tokens only; nothing here is a literal, so both themes and
+ * both origins read the same measured token layer. Modifiers refine a class
+ * with a non-colour cue, never colour alone.
+ */
+
+.hl-keyword { color: var(--code-keyword); }
+.hl-type { color: var(--code-type); }
+.hl-function { color: var(--code-function); }
+.hl-namespace { color: var(--code-namespace); }
+.hl-variable { color: var(--code-variable); }
+.hl-parameter { color: var(--code-parameter); }
+.hl-property { color: var(--code-property); }
+.hl-string { color: var(--code-string); }
+.hl-number { color: var(--code-number); }
+.hl-comment { color: var(--code-comment); }
+.hl-operator { color: var(--code-operator); }
+.hl-punctuation { color: var(--code-punctuation); }
+.hl-annotation { color: var(--code-annotation); }
+.hl-constant { color: var(--code-constant); }
+.hl-escape { color: var(--code-escape); }
+.hl-error { color: var(--code-error); }
+
+.hl-declaration { font-weight: 600; }
+.hl-definition { text-decoration: underline; text-underline-offset: 0.12em; }
+.hl-readonly { font-style: italic; }
+.hl-deprecated { text-decoration: line-through; }
+.hl-documentation { font-style: italic; }
+.hl-default-library { }

@@ -124,6 +124,32 @@ substitutes, and these are measured:
 Derive the rest of the ramp from these rather than inventing new hues; if a new
 colour is needed, measure it before it enters `packages/tokens`.
 
+### Code highlighting tokens
+
+Code is coloured by a measured semantic set, not by the brand palette: the
+`--code-*` tokens in `packages/tokens/src/tokens.css` map one-to-one onto the
+shared `.hl-*` taxonomy, on `--code-bg` (`#FFFFFF` light, `#1C2028` dark).
+
+| Token | Light | Dark |
+|---|---|---|
+| `--code-keyword` | `#3F51B5` | `#8B9AF5` |
+| `--code-type` | `#00695C` | `#7FDBCA` |
+| `--code-function` | `#8C4A00` | `#F4B860` |
+| `--code-namespace` | `#5B3FA8` | `#C9A7F5` |
+| `--code-variable` / `--code-parameter` / `--code-operator` / `--code-punctuation` | `#111318` | `#F5F4F0` |
+| `--code-property` | `#1F4E79` | `#9CC7F0` |
+| `--code-string` | `#2E6B2E` | `#A5D6A7` |
+| `--code-number` | `#7A3E9D` | `#C9A7F5` |
+| `--code-comment` | `#5A616B` | `#A7ADB7` |
+| `--code-annotation` | `#8A1C5B` | `#F2A6CE` |
+| `--code-constant` | `#6B4E00` | `#E6D27A` |
+| `--code-escape` | `#8C4A00` | `#F4B860` |
+| `--code-error` | `#B00020` | `#FF8A95` |
+
+Every one of these is a pair in `packages/tokens/contrast.json` — light on
+`#FFFFFF`, dark on `#1C2028`, all AA or better — and the gate fails any
+`--code-*` declaration that no pair measures.
+
 ## Type
 
 - **UI**: Geist, falling back to Inter. Self-host, subset, `font-display: swap`.

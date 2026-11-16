@@ -8,6 +8,10 @@
  * stylesheet without re-measuring the pair, or a pair "measured" against a
  * colour the stylesheet no longer has, is a failure.
  *
+ * The brand palette is not the only measured set: every declared `--code-*`
+ * semantic token must have its own pair too, so a new highlighting colour
+ * cannot enter the stylesheet unmeasured.
+ *
  * The formula is WCAG 2.2 §1.4.3 / §1.4.6, implemented here so the check has
  * no dependency and no browser: sRGB channel -> linear light -> relative
  * luminance (0.2126 R + 0.7152 G + 0.0722 B) -> (Lmax + 0.05) / (Lmin + 0.05).
@@ -23,6 +27,7 @@ const LEVEL_THRESHOLD = { AA: 4.5, AAA: 7 };
 
 const HEX = /^#([0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/;
 const PALETTE_DECLARATION = /--palette-([a-z0-9-]+)\s*:\s*(#[0-9a-fA-F]{3,6})\s*;/g;
+const CODE_DECLARATION = /--code-([a-z0-9-]+)\s*:\s*(#[0-9a-fA-F]{3,6})\s*;/g;
 const ANY_HEX = /#[0-9a-fA-F]{3,8}\b/g;
 
 /** Hex -> {r,g,b} in 0..255. Returns null when the literal is not a colour. */
@@ -91,6 +96,13 @@ export const check = {
     }
     if (palette.size === 0) {
       problems.push(`no --palette-* colour declarations found in ${TOKENS.css}`);
+    }
+
+    // Code colours are a second measured set: the `.hl-*` semantic tokens are
+    // not palette entries, so each declaration must have its own pair.
+    const code = new Map();
+    for (const match of css.matchAll(CODE_DECLARATION)) {
+      code.set(match[1], match[2].toLowerCase());
     }
 
     const cssHexes = new Set([...css.matchAll(ANY_HEX)].map((match) => normalise(match[0])).filter(Boolean));
@@ -166,6 +178,21 @@ export const check = {
         );
       }
     }
+
+    // --- every declared code colour must be measured --------------------
+    for (const [name, hex] of [...code].sort()) {
+      if (!measured.has(normalise(hex))) {
+        problems.push(
+          `--code-${name}: ${hex} is declared in tokens.css but no pair in contrast.json measures it`,
+        );
+      }
+    }
+    lines.push(
+      `     code: ${plural(
+        [...code.keys()].filter((name) => name !== 'bg').length,
+        'code colour',
+      )} plus --code-bg, each measured for light and dark`,
+    );
 
     // Values outside the palette block are still worth seeing, but they are
     // surfaces (raised/sunken) rather than the palette this contract pins.

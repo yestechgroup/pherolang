@@ -62,6 +62,7 @@ export const DATA = {
   surfaces: join(SITE, 'data', 'surfaces.json'),
   evidence: join(SITE, 'data', 'evidence.json'),
   docsManifest: join(SITE, 'data', 'docs-manifest.json'),
+  highlight: join(SITE, 'data', 'highlighting', 'spans.json'),
   dataDir: join(SITE, 'data'),
 };
 

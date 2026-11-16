@@ -1,8 +1,8 @@
 {
   "formatVersion": 1,
-  "application": "support/cli.ifml",
+  "application": "SupportDesk",
   "meta": {
-    "application": "support/cli.ifml",
+    "application": "SupportDesk",
     "files": [
       "support/cli.ifml",
       "support/support.actor",
@@ -18,8 +18,8 @@
     "source": "site/data/graph.json",
     "generator": "site/scripts/render-graph.mjs",
     "graph": {
-      "nodes": 305,
-      "edges": 463,
+      "nodes": 312,
+      "edges": 476,
       "applications": 8
     },
     "excludedKinds": [
@@ -53,8 +53,8 @@
         "groups": 1
       },
       "workflows": {
-        "nodes": 28,
-        "edges": 29,
+        "nodes": 32,
+        "edges": 36,
         "groups": 4
       },
       "authorisation": {
@@ -861,7 +861,7 @@
           "y": 20,
           "w": 364,
           "h": 138,
-          "count": 3
+          "count": 4
         },
         {
           "key": "SupportDesk.desk",
@@ -869,8 +869,8 @@
           "x": 424,
           "y": 20,
           "w": 364,
-          "h": 138,
-          "count": 3
+          "h": 196,
+          "count": 5
         },
         {
           "key": "SupportDesk.desk.TicketRepository",
@@ -888,7 +888,7 @@
           "y": 20,
           "w": 364,
           "h": 486,
-          "count": 15
+          "count": 16
         }
       ],
       "nodes": [
@@ -901,7 +901,7 @@
           "y": 54,
           "w": 176,
           "h": 46,
-          "detail": "desk is a module declared in support/support.ddd, with 4 connections shown in this view.",
+          "detail": "desk is a module declared in support/support.ddd, with 6 connections shown in this view.",
           "provenance": "support/support.ddd"
         },
         {
@@ -925,7 +925,19 @@
           "y": 112,
           "w": 176,
           "h": 46,
-          "detail": "SupportDesk is a design application declared in support/support.ddd, with 2 connections shown in this view.",
+          "detail": "SupportDesk is a design application declared in support/support.ddd, with 3 connections shown in this view.",
+          "provenance": "support/support.ddd"
+        },
+        {
+          "id": "error:support/support.ddd#SupportDesk.TicketAlreadyResolved",
+          "kind": "error",
+          "label": "TicketAlreadyResolved",
+          "group": "SupportDesk",
+          "x": 208,
+          "y": 112,
+          "w": 176,
+          "h": 46,
+          "detail": "TicketAlreadyResolved is a declared error declared in support/support.ddd, with 2 connections shown in this view.",
           "provenance": "support/support.ddd"
         },
         {
@@ -937,7 +949,7 @@
           "y": 54,
           "w": 176,
           "h": 46,
-          "detail": "TicketService is a service declared in support/support.ddd, with 17 connections shown in this view.",
+          "detail": "TicketService is a service declared in support/support.ddd, with 18 connections shown in this view.",
           "provenance": "support/support.ddd"
         },
         {
@@ -962,6 +974,30 @@
           "w": 176,
           "h": 46,
           "detail": "TicketSearch is a search declared in support/support.ddd, with one connection shown in this view.",
+          "provenance": "support/support.ddd"
+        },
+        {
+          "id": "dto:support/support.ddd#SupportDesk.desk.NewTicket",
+          "kind": "dto",
+          "label": "NewTicket",
+          "group": "SupportDesk.desk",
+          "x": 612,
+          "y": 112,
+          "w": 176,
+          "h": 46,
+          "detail": "NewTicket is a data-transfer object declared in support/support.ddd, with 2 connections shown in this view.",
+          "provenance": "support/support.ddd"
+        },
+        {
+          "id": "dto:support/support.ddd#SupportDesk.desk.TicketSummary",
+          "kind": "dto",
+          "label": "TicketSummary",
+          "group": "SupportDesk.desk",
+          "x": 424,
+          "y": 170,
+          "w": 176,
+          "h": 46,
+          "detail": "TicketSummary is a data-transfer object declared in support/support.ddd, with 2 connections shown in this view.",
           "provenance": "support/support.ddd"
         },
         {
@@ -1165,7 +1201,7 @@
           "y": 286,
           "w": 176,
           "h": 46,
-          "detail": "raise is a service operation declared in support/support.ddd, with one connection shown in this view.",
+          "detail": "raise is a service operation declared in support/support.ddd, with 2 connections shown in this view.",
           "provenance": "support/support.ddd"
         },
         {
@@ -1217,19 +1253,46 @@
           "provenance": "support/support.ddd"
         },
         {
-          "id": "serviceOperation:support/support.ddd#SupportDesk.desk.TicketService.updateTicket",
+          "id": "serviceOperation:support/support.ddd#SupportDesk.desk.TicketService.summarizeTicket",
           "kind": "serviceOperation",
-          "label": "updateTicket",
+          "label": "summarizeTicket",
           "group": "SupportDesk.desk.TicketService",
           "x": 1232,
           "y": 460,
           "w": 176,
           "h": 46,
-          "detail": "updateTicket is a service operation declared in support/support.ddd, with one connection shown in this view.",
+          "detail": "summarizeTicket is a service operation declared in support/support.ddd, with 2 connections shown in this view.",
+          "provenance": "support/support.ddd"
+        },
+        {
+          "id": "serviceOperation:support/support.ddd#SupportDesk.desk.TicketService.updateTicket",
+          "kind": "serviceOperation",
+          "label": "updateTicket",
+          "group": "SupportDesk.desk.TicketService",
+          "x": 1420,
+          "y": 460,
+          "w": 176,
+          "h": 46,
+          "detail": "updateTicket is a service operation declared in support/support.ddd, with 2 connections shown in this view.",
           "provenance": "support/support.ddd"
         }
       ],
       "edges": [
+        {
+          "from": "dto:support/support.ddd#SupportDesk.desk.NewTicket",
+          "to": "module:support/support.ddd#SupportDesk.desk",
+          "kind": "memberOf"
+        },
+        {
+          "from": "dto:support/support.ddd#SupportDesk.desk.TicketSummary",
+          "to": "module:support/support.ddd#SupportDesk.desk",
+          "kind": "memberOf"
+        },
+        {
+          "from": "error:support/support.ddd#SupportDesk.TicketAlreadyResolved",
+          "to": "designApplication:support/support.ddd#SupportDesk",
+          "kind": "memberOf"
+        },
         {
           "from": "module:support/support.ddd#SupportDesk.desk",
           "to": "designApplication:support/support.ddd#SupportDesk",
@@ -1347,6 +1410,11 @@
         },
         {
           "from": "serviceOperation:support/support.ddd#SupportDesk.desk.TicketService.raise",
+          "to": "dto:support/support.ddd#SupportDesk.desk.NewTicket",
+          "kind": "typeOf"
+        },
+        {
+          "from": "serviceOperation:support/support.ddd#SupportDesk.desk.TicketService.raise",
           "to": "service:support/support.ddd#SupportDesk.desk.TicketService",
           "kind": "memberOf"
         },
@@ -1369,6 +1437,21 @@
           "from": "serviceOperation:support/support.ddd#SupportDesk.desk.TicketService.resolveTicket",
           "to": "service:support/support.ddd#SupportDesk.desk.TicketService",
           "kind": "memberOf"
+        },
+        {
+          "from": "serviceOperation:support/support.ddd#SupportDesk.desk.TicketService.summarizeTicket",
+          "to": "dto:support/support.ddd#SupportDesk.desk.TicketSummary",
+          "kind": "typeOf"
+        },
+        {
+          "from": "serviceOperation:support/support.ddd#SupportDesk.desk.TicketService.summarizeTicket",
+          "to": "service:support/support.ddd#SupportDesk.desk.TicketService",
+          "kind": "memberOf"
+        },
+        {
+          "from": "serviceOperation:support/support.ddd#SupportDesk.desk.TicketService.updateTicket",
+          "to": "error:support/support.ddd#SupportDesk.TicketAlreadyResolved",
+          "kind": "throws"
         },
         {
           "from": "serviceOperation:support/support.ddd#SupportDesk.desk.TicketService.updateTicket",
