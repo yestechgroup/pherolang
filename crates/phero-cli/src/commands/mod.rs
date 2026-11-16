@@ -7,6 +7,7 @@ pub(crate) mod completions;
 pub(crate) mod explain;
 pub(crate) mod fmt;
 pub(crate) mod gen;
+pub(crate) mod grammar;
 pub(crate) mod graph;
 pub(crate) mod highlight;
 pub(crate) mod integrity;

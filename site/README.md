@@ -41,6 +41,27 @@ node scripts/sync-model.mjs  # site/data/**, from examples/ + docs/ + crates/
 The output is committed. `git diff --exit-code site/data` after a sync must be
 empty — that is the same check CI runs against the released binary.
 
+### Validate the generated editor grammars
+
+The TextMate grammars and language configurations under
+`site/packages/highlighting/` are generated from the highlighter metadata (never
+hand-edited):
+
+```sh
+# from the repository root
+cargo run -q -p phero-cli -- grammar --out site/packages/highlighting
+cargo run -q -p phero-cli -- grammar --check site/packages/highlighting
+node site/scripts/check-grammars.mjs   # Shiki load + tokenization + scope pins
+```
+
+`node site/scripts/check-grammars.mjs` is also
+`pnpm -C site run check:grammars`. It loads every grammar in Shiki, tokenizes
+`examples/support/support.*`, pins the representative scopes, and compares the
+lexical scopes with the committed compiler-backed artifacts. The Rust test
+`cargo test -p phero-highlight` byte-compares the committed package, so a hand
+edit fails even without Node. The site may use these files as the fallback
+grammar; there is no second copy.
+
 ### The gate (this is the merge condition)
 
 ```sh
@@ -75,6 +96,7 @@ site/
   brand/                  the identity assets (mark, lockup, favicons, social card)
   packages/tokens/        the ONLY place a colour, font or radius is defined
   packages/ui/            shared primitives (nav, footer, button, prose, …)
+  packages/highlighting/  GENERATED TextMate grammars + language configurations
   data/                   GENERATED model data + CONTRACT.md (read it)
   scripts/                fetch, sync, render, ingest, check, gate
   phero-web/              the marketing app

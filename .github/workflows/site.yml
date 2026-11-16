@@ -177,6 +177,12 @@ jobs:
       - name: Install site dependencies
         run: pnpm install --frozen-lockfile
         working-directory: site
+      # The generated editor grammar package (SH5): load all nine grammars in
+      # Shiki, tokenize the support corpus, pin the scopes, and compare the
+      # lexical stream with the compiler-backed artifacts. The Rust gate also
+      # byte-compares the committed package; this step proves it is *usable*.
+      - name: Check generated editor grammars
+        run: node site/scripts/check-grammars.mjs
       - name: Build site/phero-web
         run: pnpm -C site/phero-web build
       - name: Build site/phero-docs

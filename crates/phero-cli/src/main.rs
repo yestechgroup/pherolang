@@ -57,6 +57,11 @@
 //!   expand like `check`; `-` reads stdin (with `--surface`). Highlighting
 //!   never fails: a fragment or a parse error yields a degraded best-effort
 //!   result, never an error page. See docs/HIGHLIGHTING.md.
+//! * `pherolang grammar --out <dir> | --check <dir>` — generate the
+//!   editor-facing TextMate grammars and language configurations from the
+//!   highlighter metadata (canonical location
+//!   `site/packages/highlighting`), or byte-check a committed package; a
+//!   hand edit fails `--check`. See docs/HIGHLIGHTING.md.
 //! * `pherolang verify <files>... -o <receipt.json>` — compile the surfaces
 //!   and emit a **verification receipt**: one canonical, versioned JSON
 //!   document recording the hash of every source file the compile read
@@ -225,6 +230,19 @@ enum Command {
         /// Write to this file (one input) or directory (several inputs).
         #[arg(short, long, value_name = "PATH")]
         output: Option<PathBuf>,
+    },
+    /// Generate the editor-facing TextMate grammars and language
+    /// configurations from the highlighter metadata, or check a committed
+    /// package byte for byte. The canonical package lives at
+    /// `site/packages/highlighting`; a hand edit fails `--check`.
+    Grammar {
+        /// Write the generated package into this directory.
+        #[arg(long, value_name = "DIR")]
+        out: Option<PathBuf>,
+        /// Check the committed package instead of writing: exits `1` on a
+        /// missing, stale, or unexpected generated file.
+        #[arg(long, value_name = "DIR")]
+        check: Option<PathBuf>,
     },
     /// Emit a verification receipt for the given model surfaces: one
     /// canonical, versioned JSON document recording every source file the
@@ -422,6 +440,7 @@ fn run(cli: Cli) -> anyhow::Result<ExitCode> {
             surface,
             output,
         } => commands::highlight::run(files, format, mode, surface, output),
+        Command::Grammar { out, check } => commands::grammar::run(out, check),
         Command::Verify {
             files,
             out,
