@@ -156,6 +156,13 @@
       "url": "/migration/release-030/"
     },
     {
+      "source": "docs/RELEASE-0.4.0.md",
+      "slug": "release-0.4.0",
+      "collection": "migration",
+      "target": "migration/release-040.md",
+      "url": "/migration/release-040/"
+    },
+    {
       "source": "docs/adr/README.md",
       "slug": "adr",
       "collection": "adr",
@@ -175,6 +182,13 @@
       "collection": "adr",
       "target": "adr/0002-static-hover-reference-panels.md",
       "url": "/adr/0002-static-hover-reference-panels/"
+    },
+    {
+      "source": "docs/adr/0003-compiler-backed-highlighting-is-the-source-of-truth.md",
+      "slug": "0003-compiler-backed-highlighting-is-the-source-of-truth",
+      "collection": "adr",
+      "target": "adr/0003-compiler-backed-highlighting-is-the-source-of-truth.md",
+      "url": "/adr/0003-compiler-backed-highlighting-is-the-source-of-truth/"
     }
   ]
 }

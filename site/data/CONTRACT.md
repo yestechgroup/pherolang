@@ -10,17 +10,49 @@ both, and fails if `git diff` is non-empty. That is the entire honesty
 mechanism: if the site says something the toolchain does not do, the build
 breaks.
 
-Both scripts resolve one site binary: the verified release when it can check
-the current examples and provides `pherolang highlight`, otherwise a source
-build of this checkout. The v0.3.0 release predates both, so the source build
-is a documented temporary exception (`docs/HIGHLIGHTING.md`), never a claim of
+Both scripts resolve one site binary through
+`site/scripts/highlighting/runner.mjs`: a release that can check the current
+examples **and** provides `pherolang highlight`, otherwise a source build of
+this checkout. The v0.3.0 release predates both, so the source build is a
+documented temporary exception (`docs/HIGHLIGHTING.md`), never a claim of
 released-binary freshness. The gate reports which binary produced the data.
 
 ```
-node scripts/fetch-pherolang.mjs     # once: released v0.3.0 binary, sha256-verified
+PHEROLANG_VERSION=0.4.0 node scripts/fetch-pherolang.mjs  # pinned, sha256-verified; falls back to the latest published release while 0.4.0 is untagged
 node scripts/sync-model.mjs          # graph, artifacts, evidence, docs inventory
 node scripts/sync-highlight.mjs      # highlighting/spans.json
+node scripts/sync-highlight.mjs --check  # fresh? no write
 ```
+
+The pinned `0.4.0` is the first release with `pherolang highlight`. Until it is
+tagged, `deploy` in `site.yml` refuses to run because the latest release
+version does not equal the workspace version; previews still run. The operator
+sequence is `docs/RELEASE-0.4.0.md`.
+
+### `highlighting/spans.json` — the compiler-backed span artifact
+
+The key is `sha256(surface + "\0" + exact source bytes)`; the entry carries the
+CLI artifact's own `sourceHash` (over the source alone), `degraded`, and the
+`spans[]` byte offsets/classes/modifiers. The inputs are exactly three buckets:
+
+1. every Phero Lang fence in `docs/**/*.md` — normalized exactly as Expressive
+   Code renders it (trailing whitespace trimmed, leading/trailing blank lines
+   dropped); the script fails with the file and line on a mismatch;
+2. every `examples/support/support.*` model;
+3. every excerpt declared in `site/packages/highlighting/excerpts.json`.
+
+There are no paths, filenames, timestamps, colours, or environment data in the
+file. `formatVersion` is the site artifact's own gate (currently `1`); a
+mismatch makes both renderers fall back to plaintext **and** mark the block, and
+`gate/highlighting.mjs` fails. `generator.version` is provenance only: it must
+equal the workspace version, enforced by `scripts/test/release.test.mjs`.
+Regeneration is a no-op against the committed bytes when the source and binary
+agree; a diff means stale data, not noise.
+
+Both apps render the spans statically (the marketing `CodeBlock.astro` and the
+docs Expressive Code plugin) and add no client JavaScript. `gate/budget.mjs`
+proves every marketing page except the documented graph island on `/demo` is
+zero-JS.
 
 ---
 

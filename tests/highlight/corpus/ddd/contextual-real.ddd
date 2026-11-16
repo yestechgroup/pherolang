@@ -1,0 +1,10 @@
+import "demo.mox"
+
+application Demo {
+    module Core {
+        service Books {
+            inject decision Approve;
+        }
+        abstract entity Book
+    }
+}

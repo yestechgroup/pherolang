@@ -3,53 +3,15 @@
 //! respect the span invariants, and stay inside a coarse performance budget.
 
 use std::fs;
-use std::path::{Path, PathBuf};
 use std::time::Instant;
 
 use phero_highlight::{
     highlight, HighlightClass, HighlightModifier, HighlightOptions, HighlightSpan, Surface,
 };
 
-fn repository_root() -> PathBuf {
-    Path::new(env!("CARGO_MANIFEST_DIR"))
-        .join("..")
-        .join("..")
-        .canonicalize()
-        .expect("repository root")
-}
+mod common;
 
-fn assert_invariants(source: &str, spans: &[HighlightSpan]) {
-    let mut previous_end = 0;
-    for span in spans {
-        assert!(span.start < span.end, "empty span in {source:?}");
-        assert!(span.end <= source.len(), "out-of-bounds span");
-        assert!(
-            span.start >= previous_end,
-            "overlapping or unsorted spans at {}..{}",
-            span.start,
-            span.end
-        );
-        assert!(source.is_char_boundary(span.start));
-        assert!(source.is_char_boundary(span.end));
-        previous_end = span.end;
-    }
-}
-
-fn example_files() -> Vec<(Surface, PathBuf)> {
-    let directory = repository_root().join("examples/support");
-    let mut files = Vec::new();
-    for entry in fs::read_dir(&directory).expect("examples/support") {
-        let path = entry.expect("directory entry").path();
-        if !path.is_file() {
-            continue;
-        }
-        if let Some(surface) = Surface::from_path(&path) {
-            files.push((surface, path));
-        }
-    }
-    files.sort_by(|left, right| left.1.cmp(&right.1));
-    files
-}
+use common::{assert_invariants, documentation_fences, example_files, repository_root};
 
 #[test]
 fn every_surface_example_highlights_and_holds_invariants() {
@@ -124,82 +86,27 @@ fn every_surface_example_has_semantic_declaration_spans() {
     }
 }
 
-/// Collects every fenced block in `docs/**/*.md` whose info string is a
-/// surface id.
-fn documentation_fences() -> Vec<(Surface, String, String)> {
-    let root = repository_root();
-    let mut fences = Vec::new();
-    let mut stack = vec![root.join("docs")];
-    while let Some(directory) = stack.pop() {
-        let mut entries: Vec<PathBuf> = fs::read_dir(&directory)
-            .expect("docs directory")
-            .map(|entry| entry.expect("directory entry").path())
-            .collect();
-        entries.sort();
-        for path in entries {
-            if path.is_dir() {
-                stack.push(path);
-                continue;
-            }
-            if path.extension().and_then(|extension| extension.to_str()) != Some("md") {
-                continue;
-            }
-            let text = fs::read_to_string(&path).expect("read markdown");
-            let label = path
-                .strip_prefix(&root)
-                .unwrap_or(&path)
-                .display()
-                .to_string();
-            let mut current: Option<(Surface, String)> = None;
-            for line in text.lines() {
-                let trimmed = line.trim_start();
-                if trimmed.starts_with("```") {
-                    match current.take() {
-                        Some((surface, content)) => {
-                            fences.push((surface, content, label.clone()));
-                        }
-                        None => {
-                            let info = trimmed.trim_start_matches('`').trim();
-                            let word = info.split_whitespace().next().unwrap_or("");
-                            if let Some(surface) = Surface::ALL
-                                .into_iter()
-                                .find(|surface| surface.id() == word)
-                            {
-                                current = Some((surface, String::new()));
-                            }
-                        }
-                    }
-                    continue;
-                }
-                if let Some((_, content)) = current.as_mut() {
-                    content.push_str(line);
-                    content.push('\n');
-                }
-            }
-        }
-    }
-    fences
-}
-
 #[test]
 fn documentation_fences_highlight_within_the_performance_budget() {
     let started = Instant::now();
     let fences = documentation_fences();
     assert!(!fences.is_empty(), "docs should contain surface fences");
 
-    for (surface, content, label) in &fences {
-        let result = highlight(content, *surface, HighlightOptions::default());
-        assert_invariants(content, &result.spans);
+    for fence in &fences {
+        let result = highlight(&fence.source, fence.surface, HighlightOptions::default());
+        assert_invariants(&fence.source, &result.spans);
         assert!(result.diagnostics.is_empty());
         // A fence may be a deliberately partial snippet; degraded is allowed,
         // but it must never be silent corruption: spans stay in bounds. The
         // epic's success measure is a fence with more than one semantic class.
-        if content.trim().len() > 20 {
+        if fence.source.trim().len() > 20 {
             let classes: std::collections::BTreeSet<_> =
                 result.spans.iter().map(|span| span.class).collect();
             assert!(
                 classes.len() > 1,
-                "{label} fence has only one highlight class ({classes:?})"
+                "{}:{} fence has only one highlight class ({classes:?})",
+                fence.file,
+                fence.line
             );
         }
     }

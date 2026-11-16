@@ -120,6 +120,42 @@ jobs:
           test -f "$bin" || { echo "::error::expected binary missing: $bin"; exit 1; }
           ls -l "$bin"
 
+      # The released binary is the contract the site consumes. Prove the two
+      # commands SH4/SH5 rely on are present and usable *in the archive this
+      # release will publish*, not merely in a debug build of the same commit:
+      # `highlight` must emit the v1 JSON artifact, and the generated grammar
+      # package must round-trip through `--out`/`--check`.
+      - name: Verify the highlight contract (unix)
+        if: runner.os != 'Windows'
+        shell: bash
+        run: |
+          set -euo pipefail
+          bin="target/${{ matrix.target }}/release/pherolang"
+          json="$(printf 'class A { }\n' | "$bin" highlight --surface mox --format json -)"
+          printf '%s\n' "$json" | grep -q '"formatVersion": 1'
+          printf '%s\n' "$json" | grep -q '"surface": "mox"'
+          grammars="$(mktemp -d)"
+          "$bin" grammar --out "$grammars" >/dev/null
+          "$bin" grammar --check "$grammars" >/dev/null
+          echo "highlight + grammar contract verified in $bin"
+
+      - name: Verify the highlight contract (windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $bin = "target/${{ matrix.target }}/release/pherolang.exe"
+          $json = 'class A { }' | & $bin highlight --surface mox --format json -
+          if ($json -notmatch '"formatVersion": 1') { throw 'highlight output has no formatVersion 1' }
+          if ($json -notmatch '"surface": "mox"') { throw 'highlight output has no mox surface' }
+          $grammars = Join-Path $env:RUNNER_TEMP 'grammar-contract'
+          New-Item -ItemType Directory -Force -Path $grammars | Out-Null
+          & $bin grammar --out $grammars | Out-Null
+          if ($LASTEXITCODE -ne 0) { throw 'grammar --out failed' }
+          & $bin grammar --check $grammars | Out-Null
+          if ($LASTEXITCODE -ne 0) { throw 'grammar --check failed' }
+          Write-Host "highlight + grammar contract verified in $bin"
+
       - name: Package archive (unix)
         if: runner.os != 'Windows'
         shell: bash

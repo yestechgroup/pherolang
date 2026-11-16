@@ -7,3 +7,4 @@ file per decision, `NNNN-kebab-case-title.md`; the status line is the index.
 |---|---|---|---|
 | [0001](0001-rebrand-to-phero-lang.md) | Rebrand rexlang to Phero Lang | Accepted | 2026-11-14 |
 | [0002](0002-static-hover-reference-panels.md) | Static hover reference panels, not a browser IDE | Accepted | 2026-11-16 |
+| [0003](0003-compiler-backed-highlighting-is-the-source-of-truth.md) | Compiler-backed highlighting is the source of truth | Accepted | 2026-11-17 |

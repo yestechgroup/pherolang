@@ -1,0 +1,9 @@
+import "demo.mox"
+
+event BookAdded version "1.0.0" {
+    book: Book;
+}
+
+channel books {
+    publishes BookAdded;
+}

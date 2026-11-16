@@ -2,8 +2,8 @@
   "formatVersion": 1,
   "generator": {
     "binary": "pherolang",
-    "version": "0.3.0",
-    "reported": "pherolang 0.3.0 (x86_64-unknown-linux-gnu)"
+    "version": "0.4.0",
+    "reported": "pherolang 0.4.0 (x86_64-unknown-linux-gnu)"
   },
   "counts": {
     "surfaces": 9,

@@ -16,7 +16,7 @@
       "formatVersion": 2,
       "kind": "dddDesign",
       "path": "support.ddd.json",
-      "sha256": "84c0e6797e908ea52118247b0991a520339e394b6850c86e2d635785231ca487"
+      "sha256": "e163f6f86a9ffb485a0b2541e1a4202abe3bea1a5f0edb4132ff2088e0cd756e"
     },
     {
       "formatVersion": 2,
@@ -46,7 +46,7 @@
       "formatVersion": 2,
       "kind": "irModel",
       "path": null,
-      "sha256": "43211678630cdf954b65f28dba62749d901e392b4bd23935cbb96b217cc8ce8c"
+      "sha256": "d883f1dd07303329ef1ffd6ebb39ac521cf8d9d82f6c476e36607caf4fae511e"
     },
     {
       "formatVersion": 2,
@@ -58,7 +58,7 @@
   "formatVersion": 1,
   "generator": {
     "name": "pherolang",
-    "version": "0.3.0"
+    "version": "0.4.0"
   },
   "inputs": [
     "examples/support/support.actor",

@@ -1,0 +1,5 @@
+package demo
+
+class Book {
+    String title = "a\"b\\c\td\u{1F600}"
+}

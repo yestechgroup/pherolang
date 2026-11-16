@@ -1,0 +1,4 @@
+import "demo.mox"
+
+actors demo {
+    grant Customer {

@@ -1,0 +1,403 @@
+{
+  "formatVersion": 1,
+  "fences": [
+    {
+      "file": "docs/CMMN.md",
+      "line": 34,
+      "surface": "cmmn",
+      "degraded": false,
+      "spans": 141,
+      "classes": {
+        "comment": 2,
+        "function": 8,
+        "keyword": 36,
+        "namespace": 3,
+        "number": 3,
+        "operator": 1,
+        "property": 2,
+        "punctuation": 55,
+        "string": 4,
+        "type": 16,
+        "variable": 11
+      }
+    },
+    {
+      "file": "docs/CMMN.md",
+      "line": 177,
+      "surface": "cmmn",
+      "degraded": false,
+      "spans": 77,
+      "classes": {
+        "comment": 2,
+        "function": 4,
+        "keyword": 18,
+        "namespace": 2,
+        "number": 4,
+        "property": 4,
+        "punctuation": 32,
+        "string": 2,
+        "type": 6,
+        "variable": 3
+      }
+    },
+    {
+      "file": "docs/DDD.md",
+      "line": 997,
+      "surface": "ddd",
+      "degraded": false,
+      "spans": 118,
+      "classes": {
+        "comment": 3,
+        "function": 5,
+        "keyword": 14,
+        "namespace": 4,
+        "number": 6,
+        "operator": 5,
+        "parameter": 4,
+        "property": 3,
+        "punctuation": 39,
+        "string": 1,
+        "type": 12,
+        "variable": 22
+      }
+    },
+    {
+      "file": "docs/DDD.md",
+      "line": 1919,
+      "surface": "ddd",
+      "degraded": false,
+      "spans": 270,
+      "classes": {
+        "annotation": 4,
+        "comment": 3,
+        "constant": 2,
+        "function": 37,
+        "keyword": 39,
+        "namespace": 6,
+        "number": 2,
+        "operator": 10,
+        "parameter": 7,
+        "property": 13,
+        "punctuation": 92,
+        "string": 4,
+        "type": 40,
+        "variable": 11
+      }
+    },
+    {
+      "file": "docs/DEPLOY.md",
+      "line": 56,
+      "surface": "deploy",
+      "degraded": false,
+      "spans": 146,
+      "classes": {
+        "constant": 13,
+        "function": 2,
+        "keyword": 25,
+        "namespace": 7,
+        "number": 5,
+        "operator": 8,
+        "property": 8,
+        "punctuation": 52,
+        "string": 7,
+        "type": 10,
+        "variable": 9
+      }
+    },
+    {
+      "file": "docs/DMN.md",
+      "line": 40,
+      "surface": "dmn",
+      "degraded": false,
+      "spans": 36,
+      "classes": {
+        "comment": 1,
+        "function": 1,
+        "keyword": 8,
+        "namespace": 3,
+        "property": 2,
+        "punctuation": 16,
+        "string": 1,
+        "type": 4
+      }
+    },
+    {
+      "file": "docs/EVENTS.md",
+      "line": 392,
+      "surface": "evt",
+      "degraded": false,
+      "spans": 121,
+      "classes": {
+        "constant": 2,
+        "function": 2,
+        "keyword": 31,
+        "number": 4,
+        "operator": 2,
+        "property": 6,
+        "punctuation": 44,
+        "string": 8,
+        "type": 14,
+        "variable": 8
+      }
+    },
+    {
+      "file": "docs/HIGHLIGHTING.md",
+      "line": 170,
+      "surface": "actor",
+      "degraded": false,
+      "spans": 18,
+      "classes": {
+        "function": 2,
+        "keyword": 7,
+        "namespace": 1,
+        "punctuation": 4,
+        "string": 1,
+        "type": 3
+      }
+    },
+    {
+      "file": "docs/HIGHLIGHTING.md",
+      "line": 448,
+      "surface": "mox",
+      "degraded": false,
+      "spans": 8,
+      "classes": {
+        "keyword": 2,
+        "namespace": 1,
+        "property": 1,
+        "punctuation": 2,
+        "type": 2
+      }
+    },
+    {
+      "file": "docs/IFML.md",
+      "line": 54,
+      "surface": "ifml",
+      "degraded": false,
+      "spans": 155,
+      "classes": {
+        "function": 1,
+        "keyword": 22,
+        "operator": 6,
+        "parameter": 4,
+        "property": 15,
+        "punctuation": 72,
+        "string": 2,
+        "type": 18,
+        "variable": 15
+      }
+    },
+    {
+      "file": "docs/IFML.md",
+      "line": 107,
+      "surface": "ifml",
+      "degraded": false,
+      "spans": 129,
+      "classes": {
+        "constant": 2,
+        "function": 1,
+        "keyword": 15,
+        "operator": 4,
+        "parameter": 2,
+        "property": 17,
+        "punctuation": 61,
+        "type": 14,
+        "variable": 13
+      }
+    },
+    {
+      "file": "docs/IFML.md",
+      "line": 153,
+      "surface": "ifml",
+      "degraded": false,
+      "spans": 69,
+      "classes": {
+        "function": 1,
+        "keyword": 5,
+        "number": 1,
+        "operator": 3,
+        "property": 9,
+        "punctuation": 32,
+        "string": 1,
+        "type": 5,
+        "variable": 12
+      }
+    },
+    {
+      "file": "docs/IFML.md",
+      "line": 176,
+      "surface": "ifml",
+      "degraded": false,
+      "spans": 79,
+      "classes": {
+        "keyword": 7,
+        "operator": 3,
+        "parameter": 2,
+        "property": 11,
+        "punctuation": 38,
+        "type": 7,
+        "variable": 11
+      }
+    },
+    {
+      "file": "docs/IFML.md",
+      "line": 202,
+      "surface": "ifml",
+      "degraded": false,
+      "spans": 51,
+      "classes": {
+        "constant": 1,
+        "function": 1,
+        "keyword": 10,
+        "operator": 4,
+        "parameter": 1,
+        "property": 3,
+        "punctuation": 21,
+        "type": 8,
+        "variable": 2
+      }
+    },
+    {
+      "file": "docs/IFML.md",
+      "line": 226,
+      "surface": "ifml",
+      "degraded": false,
+      "spans": 74,
+      "classes": {
+        "comment": 9,
+        "constant": 2,
+        "keyword": 6,
+        "number": 1,
+        "property": 9,
+        "punctuation": 34,
+        "string": 1,
+        "type": 4,
+        "variable": 8
+      }
+    },
+    {
+      "file": "docs/IFML.md",
+      "line": 271,
+      "surface": "ifml",
+      "degraded": false,
+      "spans": 96,
+      "classes": {
+        "constant": 3,
+        "function": 6,
+        "keyword": 16,
+        "number": 2,
+        "operator": 7,
+        "parameter": 5,
+        "property": 5,
+        "punctuation": 37,
+        "string": 2,
+        "type": 7,
+        "variable": 6
+      }
+    },
+    {
+      "file": "docs/LANGUAGE.md",
+      "line": 94,
+      "surface": "mox",
+      "degraded": false,
+      "spans": 62,
+      "classes": {
+        "function": 6,
+        "keyword": 17,
+        "namespace": 4,
+        "number": 2,
+        "operator": 3,
+        "property": 3,
+        "punctuation": 15,
+        "type": 10,
+        "variable": 2
+      }
+    },
+    {
+      "file": "docs/LANGUAGE.md",
+      "line": 150,
+      "surface": "mox",
+      "degraded": false,
+      "spans": 26,
+      "classes": {
+        "comment": 1,
+        "keyword": 9,
+        "namespace": 4,
+        "property": 2,
+        "punctuation": 5,
+        "string": 2,
+        "type": 3
+      }
+    },
+    {
+      "file": "docs/LANGUAGE.md",
+      "line": 213,
+      "surface": "mox",
+      "degraded": false,
+      "spans": 22,
+      "classes": {
+        "comment": 5,
+        "keyword": 4,
+        "namespace": 3,
+        "property": 2,
+        "punctuation": 4,
+        "string": 1,
+        "type": 3
+      }
+    },
+    {
+      "file": "docs/LANGUAGE.md",
+      "line": 498,
+      "surface": "mox",
+      "degraded": false,
+      "spans": 43,
+      "classes": {
+        "annotation": 2,
+        "comment": 3,
+        "keyword": 5,
+        "namespace": 3,
+        "number": 3,
+        "operator": 1,
+        "property": 5,
+        "punctuation": 12,
+        "string": 2,
+        "type": 7
+      }
+    },
+    {
+      "file": "docs/LANGUAGE.md",
+      "line": 643,
+      "surface": "mox",
+      "degraded": false,
+      "spans": 57,
+      "classes": {
+        "constant": 2,
+        "function": 4,
+        "keyword": 17,
+        "namespace": 2,
+        "number": 2,
+        "operator": 3,
+        "property": 2,
+        "punctuation": 11,
+        "type": 12,
+        "variable": 2
+      }
+    },
+    {
+      "file": "docs/USECASES.md",
+      "line": 41,
+      "surface": "uc",
+      "degraded": false,
+      "spans": 20,
+      "classes": {
+        "function": 1,
+        "keyword": 8,
+        "namespace": 1,
+        "punctuation": 3,
+        "string": 4,
+        "type": 1,
+        "variable": 2
+      }
+    }
+  ]
+}

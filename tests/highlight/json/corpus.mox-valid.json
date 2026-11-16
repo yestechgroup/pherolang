@@ -1,0 +1,205 @@
+{
+  "formatVersion": 1,
+  "surface": "mox",
+  "sourceHash": "sha256:a9788461b20223d40b7c2f59edf0100c704bdd47dc069f13a9df134a3676d07f",
+  "generator": {
+    "name": "pherolang",
+    "version": "0.4.0"
+  },
+  "degraded": false,
+  "spans": [
+    {
+      "start": 0,
+      "end": 7,
+      "class": "keyword",
+      "modifiers": []
+    },
+    {
+      "start": 8,
+      "end": 12,
+      "class": "namespace",
+      "modifiers": [
+        "declaration"
+      ]
+    },
+    {
+      "start": 14,
+      "end": 42,
+      "class": "comment",
+      "modifiers": [
+        "documentation"
+      ]
+    },
+    {
+      "start": 43,
+      "end": 48,
+      "class": "keyword",
+      "modifiers": []
+    },
+    {
+      "start": 49,
+      "end": 53,
+      "class": "type",
+      "modifiers": [
+        "declaration"
+      ]
+    },
+    {
+      "start": 54,
+      "end": 55,
+      "class": "punctuation",
+      "modifiers": []
+    },
+    {
+      "start": 60,
+      "end": 66,
+      "class": "type",
+      "modifiers": [
+        "defaultLibrary"
+      ]
+    },
+    {
+      "start": 67,
+      "end": 72,
+      "class": "property",
+      "modifiers": [
+        "declaration"
+      ]
+    },
+    {
+      "start": 77,
+      "end": 85,
+      "class": "keyword",
+      "modifiers": []
+    },
+    {
+      "start": 86,
+      "end": 89,
+      "class": "type",
+      "modifiers": [
+        "defaultLibrary"
+      ]
+    },
+    {
+      "start": 90,
+      "end": 95,
+      "class": "property",
+      "modifiers": [
+        "declaration",
+        "readonly"
+      ]
+    },
+    {
+      "start": 101,
+      "end": 141,
+      "class": "comment",
+      "modifiers": [
+        "documentation"
+      ]
+    },
+    {
+      "start": 146,
+      "end": 148,
+      "class": "keyword",
+      "modifiers": []
+    },
+    {
+      "start": 149,
+      "end": 156,
+      "class": "type",
+      "modifiers": [
+        "defaultLibrary"
+      ]
+    },
+    {
+      "start": 157,
+      "end": 161,
+      "class": "function",
+      "modifiers": [
+        "declaration"
+      ]
+    },
+    {
+      "start": 161,
+      "end": 162,
+      "class": "punctuation",
+      "modifiers": []
+    },
+    {
+      "start": 162,
+      "end": 165,
+      "class": "type",
+      "modifiers": [
+        "defaultLibrary"
+      ]
+    },
+    {
+      "start": 166,
+      "end": 170,
+      "class": "parameter",
+      "modifiers": [
+        "declaration"
+      ]
+    },
+    {
+      "start": 170,
+      "end": 171,
+      "class": "punctuation",
+      "modifiers": []
+    },
+    {
+      "start": 172,
+      "end": 173,
+      "class": "punctuation",
+      "modifiers": []
+    },
+    {
+      "start": 182,
+      "end": 186,
+      "class": "annotation",
+      "modifiers": []
+    },
+    {
+      "start": 187,
+      "end": 188,
+      "class": "punctuation",
+      "modifiers": []
+    },
+    {
+      "start": 189,
+      "end": 193,
+      "class": "variable",
+      "modifiers": []
+    },
+    {
+      "start": 194,
+      "end": 195,
+      "class": "operator",
+      "modifiers": []
+    },
+    {
+      "start": 196,
+      "end": 197,
+      "class": "number",
+      "modifiers": []
+    },
+    {
+      "start": 198,
+      "end": 199,
+      "class": "punctuation",
+      "modifiers": []
+    },
+    {
+      "start": 204,
+      "end": 205,
+      "class": "punctuation",
+      "modifiers": []
+    },
+    {
+      "start": 206,
+      "end": 207,
+      "class": "punctuation",
+      "modifiers": []
+    }
+  ]
+}

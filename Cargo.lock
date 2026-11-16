@@ -2281,7 +2281,7 @@ dependencies = [
 
 [[package]]
 name = "phero-backend-cedar"
-version = "0.3.0"
+version = "0.4.0"
 dependencies = [
  "anyhow",
  "cedar-policy",
@@ -2294,7 +2294,7 @@ dependencies = [
 
 [[package]]
 name = "phero-backend-cmmn"
-version = "0.3.0"
+version = "0.4.0"
 dependencies = [
  "phero-driver",
  "phero-expr",
@@ -2306,7 +2306,7 @@ dependencies = [
 
 [[package]]
 name = "phero-backend-common"
-version = "0.3.0"
+version = "0.4.0"
 dependencies = [
  "anyhow",
  "serde_json",
@@ -2314,7 +2314,7 @@ dependencies = [
 
 [[package]]
 name = "phero-backend-ddd"
-version = "0.3.0"
+version = "0.4.0"
 dependencies = [
  "phero-backend-common",
  "phero-driver",
@@ -2324,7 +2324,7 @@ dependencies = [
 
 [[package]]
 name = "phero-backend-dmn"
-version = "0.3.0"
+version = "0.4.0"
 dependencies = [
  "dsntk-common",
  "dsntk-feel",
@@ -2343,7 +2343,7 @@ dependencies = [
 
 [[package]]
 name = "phero-backend-jsonschema"
-version = "0.3.0"
+version = "0.4.0"
 dependencies = [
  "anyhow",
  "jsonschema",
@@ -2356,7 +2356,7 @@ dependencies = [
 
 [[package]]
 name = "phero-backend-rust"
-version = "0.3.0"
+version = "0.4.0"
 dependencies = [
  "anyhow",
  "phero-backend-common",
@@ -2369,7 +2369,7 @@ dependencies = [
 
 [[package]]
 name = "phero-cli"
-version = "0.3.0"
+version = "0.4.0"
 dependencies = [
  "anyhow",
  "clap",
@@ -2396,15 +2396,15 @@ dependencies = [
 
 [[package]]
 name = "phero-dates"
-version = "0.3.0"
+version = "0.4.0"
 
 [[package]]
 name = "phero-diagnostics"
-version = "0.3.0"
+version = "0.4.0"
 
 [[package]]
 name = "phero-driver"
-version = "0.3.0"
+version = "0.4.0"
 dependencies = [
  "anyhow",
  "ariadne",
@@ -2431,7 +2431,7 @@ dependencies = [
 
 [[package]]
 name = "phero-evidence"
-version = "0.3.0"
+version = "0.4.0"
 dependencies = [
  "serde",
  "serde_json",
@@ -2440,7 +2440,7 @@ dependencies = [
 
 [[package]]
 name = "phero-expr"
-version = "0.3.0"
+version = "0.4.0"
 dependencies = [
  "chumsky 0.10.1",
  "logos 0.15.1",
@@ -2457,7 +2457,7 @@ dependencies = [
 
 [[package]]
 name = "phero-highlight"
-version = "0.3.0"
+version = "0.4.0"
 dependencies = [
  "phero-ifml",
  "phero-syntax",
@@ -2469,7 +2469,7 @@ dependencies = [
 
 [[package]]
 name = "phero-ifml"
-version = "0.3.0"
+version = "0.4.0"
 dependencies = [
  "chumsky 0.10.1",
  "logos 0.15.1",
@@ -2487,7 +2487,7 @@ dependencies = [
 
 [[package]]
 name = "phero-ir"
-version = "0.3.0"
+version = "0.4.0"
 dependencies = [
  "serde",
  "serde_json",
@@ -2496,7 +2496,7 @@ dependencies = [
 
 [[package]]
 name = "phero-lsp"
-version = "0.3.0"
+version = "0.4.0"
 dependencies = [
  "futures",
  "phero-driver",
@@ -2516,7 +2516,7 @@ dependencies = [
 
 [[package]]
 name = "phero-parser"
-version = "0.3.0"
+version = "0.4.0"
 dependencies = [
  "chumsky 0.10.1",
  "thiserror",
@@ -2524,7 +2524,7 @@ dependencies = [
 
 [[package]]
 name = "phero-runtime"
-version = "0.3.0"
+version = "0.4.0"
 dependencies = [
  "phero-dates",
  "slotmap",
@@ -2533,11 +2533,11 @@ dependencies = [
 
 [[package]]
 name = "phero-strings"
-version = "0.3.0"
+version = "0.4.0"
 
 [[package]]
 name = "phero-syntax"
-version = "0.3.0"
+version = "0.4.0"
 dependencies = [
  "chumsky 0.10.1",
  "logos 0.15.1",
@@ -2548,7 +2548,7 @@ dependencies = [
 
 [[package]]
 name = "phero-testkit"
-version = "0.3.0"
+version = "0.4.0"
 dependencies = [
  "phero-driver",
  "phero-ifml",
@@ -2557,7 +2557,7 @@ dependencies = [
 
 [[package]]
 name = "phero-verify"
-version = "0.3.0"
+version = "0.4.0"
 dependencies = [
  "creusot-std",
  "phero-evidence",
@@ -2566,7 +2566,7 @@ dependencies = [
 
 [[package]]
 name = "phero-vocab"
-version = "0.3.0"
+version = "0.4.0"
 dependencies = [
  "anyhow",
  "phero-ir",

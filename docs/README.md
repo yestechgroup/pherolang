@@ -35,6 +35,7 @@ artifact. This index routes to the right document.
 | [../AGENTS.md](../AGENTS.md) | you change the compiler itself: crate ownership, commands, testing quirks, gotchas |
 | [REBRAND.md](REBRAND.md) | you are migrating a 0.2 consumer — the old → new command, env-var, crate, path and wire tables, and the operator checklist that is not a repository diff |
 | [RELEASE-0.3.0.md](RELEASE-0.3.0.md) | you are cutting the 0.3.0 release: the gate, the repository rename, the tag, and the install smoke test |
+| [RELEASE-0.4.0.md](RELEASE-0.4.0.md) | you are cutting the 0.4.0 release: the highlight/grammar contract, the tag, and the post-publish site regeneration |
 | [adr/](adr/README.md) | you are asking *why* — the architecture decision records, starting with the rename itself |
 
 ## Reading paths

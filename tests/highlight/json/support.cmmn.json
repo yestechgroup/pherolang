@@ -4,7 +4,7 @@
   "sourceHash": "sha256:db59aa68d119df84db9adaba9c3f42cc3bc011b80700b30391726a8f40e92670",
   "generator": {
     "name": "pherolang",
-    "version": "0.3.0"
+    "version": "0.4.0"
   },
   "degraded": false,
   "spans": [

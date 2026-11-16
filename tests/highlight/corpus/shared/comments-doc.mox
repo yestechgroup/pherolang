@@ -1,0 +1,7 @@
+package demo
+
+/// Documentation on the class.
+class Book {
+    /// Documentation on the feature.
+    String title
+}

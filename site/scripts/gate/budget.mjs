@@ -1,17 +1,22 @@
 /**
- * Check 6 — the client-JS budget.
+ * Check 6 — the client-JS budget and the zero-JS page rule.
  *
  * The marketing site is static-first: every page renders complete HTML and the
- * only shipped script is the graph island (the single-page budget does not
- * count Starlight's own search UI, which belongs to the docs origin). This
- * check sums the gzipped bytes of every distinct `.js` file the built marketing
- * pages reference, so a second island, an analytics bundle or a "@astrojs
- * prefetch" runtime turns a passing build into a failing one instead of a
- * surprise on the next Lighthouse run.
+ * only shipped script is the graph island on `/demo`. This check does two
+ * things:
  *
- * Gzip is measured at level 9 over the exact bytes the origin serves. Inline
- * scripts are counted and reported but not budgeted — the budget's sentence is
- * "one 1.8 KB island", i.e. files.
+ *   1. **Zero-JS pages.** Every other built marketing page must reference no
+ *      executable script and contain no inline executable script. A second
+ *      island, an analytics bundle or an Astro prefetch runtime is a finding,
+ *      not a silent budget increase. (`<script type="application/json">` is
+ *      data, not code, and is ignored.)
+ *   2. **The budget.** The gzipped bytes of every distinct `.js` file the pages
+ *      reference stay under `JS_BUDGET_BYTES`, so the one documented island
+ *      cannot grow unnoticed.
+ *
+ * Gzip is measured at level 9 over the exact bytes the origin serves. The SH7
+ * hover surface ships no JavaScript at all; it is covered by the same rule and
+ * by its own gate.
  */
 
 import { readFileSync } from 'node:fs';
@@ -26,27 +31,73 @@ const NAME = 'budget';
 
 const gzipped = (buffer) => gzipSync(buffer, { level: 9 }).length;
 
+/**
+ * The one documented client-JS island: the graph explorer on `/demo`
+ * (SH7 and the hover page are static and ship no script). The key is the
+ * page path relative to `dist/client`, POSIX separators.
+ */
+export const JS_ISLAND_PAGES = new Set(['demo/index.html']);
+
+/** True when a `<script>` element runs code (as opposed to JSON data). */
+export function isExecutableScript(attributes) {
+  if (typeof attributes.src === 'string' && attributes.src !== '') return true;
+  const type = String(attributes.type ?? '').trim().toLowerCase();
+  return type === '' || type === 'module' || type.includes('javascript') || type.includes('ecmascript');
+}
+
+/**
+ * Split one page's `<script>` elements into external sources and inline
+ * executable scripts. Pure, so the unit tests can pin the classification.
+ */
+export function classifyPageScripts(html) {
+  const external = [];
+  const inline = [];
+  for (const attributes of scripts(html)) {
+    if (!isExecutableScript(attributes)) continue;
+    if (typeof attributes.src === 'string' && attributes.src !== '') external.push(attributes.src);
+    else inline.push(attributes);
+  }
+  return { external, inline };
+}
+
 export const check = {
   name: NAME,
-  title: `marketing client JS stays under ${JS_BUDGET_BYTES / 1024} KB gzipped`,
+  title: `static marketing pages ship no client JS except the /demo island (${JS_BUDGET_BYTES / 1024} KB gzip)`,
 
   run() {
     const lines = [];
     const problems = [];
     const referenced = new Map();
     const inline = [];
+    const pagesWithScripts = [];
     let pages = 0;
 
     for (const rel of walk(APPS.web.dist, (file) => file.endsWith('.html'))) {
       const html = readText(join(APPS.web.dist, rel));
       pages += 1;
-      for (const script of scripts(html)) {
-        if (typeof script.src === 'string' && script.src !== '') {
-          if (!referenced.has(script.src)) referenced.set(script.src, new Set());
-          referenced.get(script.src).add(rel);
-        } else if ((script.type ?? '').includes('javascript') || script.type === undefined) {
-          // Inline classic/module scripts: reported, not budgeted.
-          inline.push(rel);
+      const classified = classifyPageScripts(html);
+      for (const src of classified.external) {
+        if (!referenced.has(src)) referenced.set(src, new Set());
+        referenced.get(src).add(rel);
+      }
+      if (classified.external.length > 0 || classified.inline.length > 0) {
+        pagesWithScripts.push(rel);
+      }
+      if (classified.inline.length > 0) {
+        // Inline executable scripts are reported and, outside the island,
+        // failures: a static page has no reason to run one.
+        inline.push({ page: rel, count: classified.inline.length });
+      }
+      if (!JS_ISLAND_PAGES.has(rel)) {
+        for (const src of classified.external) {
+          problems.push(
+            `${rel} loads ${src}, but only the documented graph island (${[...JS_ISLAND_PAGES].join(', ')}) may ship client JS`,
+          );
+        }
+        if (classified.inline.length > 0) {
+          problems.push(
+            `${rel} contains ${plural(classified.inline.length, 'inline executable script')}; static pages are zero-JS`,
+          );
         }
       }
     }
@@ -77,7 +128,8 @@ export const check = {
       0,
       0,
       `scanned ${plural(pages, 'built marketing page')}: ${plural(referenced.size, 'referenced .js file')}, ` +
-        `${plural(inline.length, 'inline script')}`,
+        `${plural(pagesWithScripts.length, 'page with a script', 'pages with a script')}, ` +
+        `${plural(inline.length, 'page with an inline script', 'pages with an inline script')}`,
     );
     lines.push(
       `${total <= JS_BUDGET_BYTES ? 'ok  ' : 'FAIL'} total ${bytes(total)} gzip (${bytes(raw)} raw) against a ${bytes(JS_BUDGET_BYTES)} budget — ${bytes(JS_BUDGET_BYTES - total)} ${total <= JS_BUDGET_BYTES ? 'headroom' : 'over'}`,

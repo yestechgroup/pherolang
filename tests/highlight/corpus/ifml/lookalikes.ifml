@@ -1,0 +1,10 @@
+view "Inbox" {
+    params { package: Ticket };
+    label "service";
+
+    component "list" {
+        type: list;
+        data: Ticket;
+        fields: [class, service, deployment, event, decision, case];
+    }
+}
