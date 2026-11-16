@@ -1,0 +1,77 @@
+{
+  "//": "The authored symbol/doc index for the SH7 static hover prototype. Each entry names a compiler graph node id from site/data/graph.json, the SH4 span classes that identify the token, and a signature that MUST appear verbatim (whitespace-normalised) in the excerpt. node/signature/span are validated by hover.mjs and the hover site gate; the summary is the one authored sentence and the docs link is derived from the node's surface. Add an entry only when the compiler has already produced the symbol; this file is not a second symbol table.",
+  "formatVersion": 1,
+  "examples": [
+    {
+      "id": "mox-ticket",
+      "surface": "mox",
+      "excerpt": "mox",
+      "application": "SupportDesk",
+      "title": "A ticket and its refund operations",
+      "lede": "The domain model behind the support desk: one class, its identity and refund state, and the two operations that guard a refund.",
+      "symbols": [
+        {
+          "key": "ticket",
+          "name": "Ticket",
+          "node": "class:support/support.mox#nz.example.support.Ticket",
+          "classes": ["type"],
+          "declaration": true,
+          "signature": "class Ticket",
+          "summary": "The support ticket aggregate: a stable ticket number, a title, an assignee, and the refund value the approval operations guard."
+        },
+        {
+          "key": "raise-refund",
+          "name": "raiseRefund",
+          "node": "operation:support/support.mox#nz.example.support.Ticket.raiseRefund",
+          "classes": ["function"],
+          "declaration": true,
+          "signature": "op boolean raiseRefund(int cents)",
+          "summary": "Asks for a refund on this ticket; the operation admits the request while the running total stays at or below 5,000 cents."
+        },
+        {
+          "key": "approve-refund",
+          "name": "approveRefund",
+          "node": "operation:support/support.mox#nz.example.support.Ticket.approveRefund",
+          "classes": ["function"],
+          "declaration": true,
+          "signature": "op boolean approveRefund(int cents)",
+          "summary": "Approves a refund on this ticket; the operation admits up to 100,000 cents."
+        }
+      ]
+    },
+    {
+      "id": "ddd-ticket-service",
+      "surface": "ddd",
+      "excerpt": "ddd",
+      "application": "SupportDesk",
+      "title": "A service, its operation, and the capability that gates it",
+      "lede": "The application design that orchestrates the domain: a service operation and the policy capability it names.",
+      "symbols": [
+        {
+          "key": "ticket-service",
+          "name": "TicketService",
+          "node": "service:support/support.ddd#SupportDesk.desk.TicketService",
+          "classes": ["type"],
+          "signature": "service TicketService",
+          "summary": "Triages and resolves support tickets."
+        },
+        {
+          "key": "raise-refund",
+          "name": "raiseRefund",
+          "node": "serviceOperation:support/support.ddd#SupportDesk.desk.TicketService.raiseRefund",
+          "classes": ["variable"],
+          "signature": "boolean raiseRefund(String ticketNo, int cents) capability RaiseRefund emits RefundRequested",
+          "summary": "Raises a refund for a ticket, emits RefundRequested, and is gated by the RaiseRefund capability."
+        },
+        {
+          "key": "raise-refund-capability",
+          "name": "RaiseRefund",
+          "node": "capability:support/support.actor#Support.RaiseRefund",
+          "classes": ["type"],
+          "signature": "capability RaiseRefund",
+          "summary": "The permission that gates raiseRefund; support.actor declares it on Ticket."
+        }
+      ]
+    }
+  ]
+}

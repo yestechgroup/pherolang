@@ -403,7 +403,7 @@
       "docs": {
         "path": "docs/IFML.md",
         "exists": true,
-        "bytes": 40732
+        "bytes": 40994
       },
       "example": {
         "path": "examples/support/support.ifml",

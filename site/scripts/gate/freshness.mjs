@@ -1,5 +1,5 @@
 /**
- * Check 9 — freshness: the committed `site/data` is what the pinned/released
+ * Check 10 — freshness: the committed `site/data` is what the pinned/released
  * toolchain produces.
  *
  * `site/data/**` is generated (see `site/data/CONTRACT.md`) and committed. The

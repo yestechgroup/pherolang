@@ -168,6 +168,13 @@
       "collection": "adr",
       "target": "adr/0001-rebrand-to-phero-lang.md",
       "url": "/adr/0001-rebrand-to-phero-lang/"
+    },
+    {
+      "source": "docs/adr/0002-static-hover-reference-panels.md",
+      "slug": "0002-static-hover-reference-panels",
+      "collection": "adr",
+      "target": "adr/0002-static-hover-reference-panels.md",
+      "url": "/adr/0002-static-hover-reference-panels/"
     }
   ]
 }

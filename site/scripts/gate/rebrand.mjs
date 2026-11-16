@@ -1,5 +1,5 @@
 /**
- * Check 9 — the repository's own rebrand gate.
+ * Check 11 — the repository's own rebrand gate.
  *
  * The pre-0.3 product name is gated by `scripts/check-rebrand.sh` (CI step 2/7,
  * epic pherolang#270): it fails on a revived old-name token anywhere in the

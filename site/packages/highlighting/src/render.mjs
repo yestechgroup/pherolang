@@ -104,3 +104,61 @@ export function renderInlineHtml(source, spans) {
   }
   return html;
 }
+
+/**
+ * Render one source range as highlighted HTML, wrapping annotated spans in
+ * links to their reference entries.
+ *
+ * This is the same span stream and the same `hl-*` classes as
+ * {@link renderInlineHtml}; the only addition is an optional `<a>` around a
+ * span whose byte `start` appears in `annotations`. Annotation identity is
+ * the compiler's span start, so a stale index can never shift a link to a
+ * different token: the caller must resolve the exact span first.
+ *
+ * `annotations` entries carry `spanStart`, `key`, `targetId`, and
+ * `descriptionId`. Unknown/missing annotations are simply not linked.
+ */
+export function renderAnnotatedInlineHtml(source, spans, annotations = []) {
+  const text = String(source ?? '');
+  if (text.length === 0) return '';
+
+  const byteMap = buildByteMap(text);
+  const byStart = new Map();
+  for (const annotation of annotations ?? []) {
+    if (annotation && Number.isInteger(annotation.spanStart)) {
+      byStart.set(annotation.spanStart, annotation);
+    }
+  }
+
+  let html = '';
+  let cursor = 0;
+  for (const span of spans ?? []) {
+    const from = byteMap[span.start];
+    const to = byteMap[span.end];
+    if (from === undefined || to === undefined || to <= from || from < cursor) continue;
+    if (from > cursor) html += escapeHtml(text.slice(cursor, from));
+
+    const classNames = classNamesFor(span).join(' ');
+    const inner = text.slice(from, to);
+    if (classNames === '') {
+      html += escapeHtml(inner);
+    } else {
+      const rendered = `<span class="${classNames}">${escapeHtml(inner)}</span>`;
+      const annotation = byStart.get(span.start);
+      if (annotation) {
+        html +=
+          `<a class="pherolang-hover__symbol" ` +
+          `href="#${escapeHtml(annotation.targetId)}" ` +
+          `data-symbol="${escapeHtml(annotation.key)}" ` +
+          `aria-describedby="${escapeHtml(annotation.descriptionId)}">` +
+          rendered +
+          '</a>';
+      } else {
+        html += rendered;
+      }
+    }
+    cursor = to;
+  }
+  if (cursor < text.length) html += escapeHtml(text.slice(cursor));
+  return html;
+}

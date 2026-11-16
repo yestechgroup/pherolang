@@ -79,8 +79,8 @@
       "slug": "graph",
       "title": "The unified semantic graph",
       "description": "`pherolang graph build` compiles a tree of model files into **one queryable,",
-      "bytes": 61334,
-      "lines": 979
+      "bytes": 62138,
+      "lines": 992
     },
     {
       "path": "docs/HIGHLIGHTING.md",
@@ -88,8 +88,8 @@
       "slug": "highlighting",
       "title": "Compiler-backed syntax highlighting",
       "description": "Phero Lang source is highlighted by the compiler, not by a hand-written",
-      "bytes": 42887,
-      "lines": 875
+      "bytes": 53833,
+      "lines": 1066
     },
     {
       "path": "docs/IFML.md",
@@ -97,8 +97,8 @@
       "slug": "ifml",
       "title": "IFML DSL",
       "description": "A Domain-Specific Language that is semantically aligned with OMG IFML 1.0(https://www.omg.org/spec/IFML/) but uses a modern, C-like expression-heavy syntax instead of XML/XMI. Lexed by a **logos** lexer and parsed by **chumsky** into a spanned syntax tree, then lowered into a versioned `IfmlModel` artifact; the same parser and byte-offset spans back the language server.",
-      "bytes": 40732,
-      "lines": 867
+      "bytes": 40994,
+      "lines": 871
     },
     {
       "path": "docs/LANGUAGE.md",

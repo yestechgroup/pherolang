@@ -1,0 +1,248 @@
+---
+/**
+ * /demo/hover — the SH7 decision prototype.
+ *
+ * Two compiler-backed examples, one small authored symbol index, and a
+ * CSS-only floating preview card over a permanent reference panel. The page
+ * ships no client JavaScript: the spans come from the committed SH4 artifact,
+ * the symbol identities from the committed graph, and every card is a
+ * build-time duplicate of an entry that is always visible below the code.
+ *
+ * The page is deliberately additive. The existing language pages and their
+ * static code blocks are untouched, and the decision record (ADR 0002) explains
+ * why Option B — Monaco/CodeMirror plus an LSP bridge — is deferred.
+ */
+import Base from '../../layouts/Base.astro';
+import Breadcrumb from '@ui/Breadcrumb.astro';
+import SectionHeader from '@ui/SectionHeader.astro';
+import Prose from '@ui/Prose.astro';
+import Callout from '@ui/Callout.astro';
+import CodeBlock from '@ui/CodeBlock.astro';
+import HoverCode from '../../components/HoverCode.astro';
+
+import { findRepoRoot } from '../../../../packages/highlighting/src/artifact.mjs';
+import { loadHoverIndex } from '../../../../packages/highlighting/src/hover.mjs';
+
+const ADR_URL = 'https://docs.pherolang.com/adr/0002-static-hover-reference-panels/';
+
+interface Example {
+  id: string;
+  surface: string;
+  excerpt: string;
+  title: string;
+  lede: string;
+  symbols?: unknown[];
+}
+
+/** The page's own example identity, so a broken index still renders static code. */
+const FALLBACK_EXAMPLES: Example[] = [
+  {
+    id: 'mox-ticket',
+    surface: 'mox',
+    excerpt: 'mox',
+    title: 'A ticket and its refund operations',
+    lede: 'The domain model behind the support desk: one class, its identity and refund state, and the two operations that guard a refund.',
+  },
+  {
+    id: 'ddd-ticket-service',
+    surface: 'ddd',
+    excerpt: 'ddd',
+    title: 'A service, its operation, and the capability that gates it',
+    lede: 'The application design that orchestrates the domain: a service operation and the policy capability it names.',
+  },
+];
+
+const root = findRepoRoot(process.cwd());
+if (!root) {
+  throw new Error(
+    '/demo/hover: cannot find the repository root; this page reads the committed highlight artifact and symbol index.',
+  );
+}
+
+let index: { examples?: Example[] } | null = null;
+try {
+  index = loadHoverIndex(root) as { examples?: Example[] };
+} catch {
+  /* the component renders each example as static code and the hover gate fails */
+}
+
+const authoredExamples = Array.isArray(index?.examples) ? index.examples : [];
+const examples = FALLBACK_EXAMPLES.map((fallback) => {
+  const authored = authoredExamples.find((entry) => entry.id === fallback.id);
+  return { ...fallback, ...(authored ?? {}) };
+});
+const symbolCount = examples.reduce(
+  (total, example) => total + (Array.isArray(example.symbols) ? example.symbols.length : 0),
+  0,
+);
+const commands = [
+  'node site/scripts/sync-highlight.mjs   # regenerate the SH4 span artifact',
+  'node site/scripts/gate.mjs --only=hover # index, zero-JS, keyboard and axe checks',
+].join('\n');
+---
+
+<Base
+  title="Symbol docs without an editor — Phero Lang"
+  description="The SH7 hover prototype: compiler-backed spans, a small symbol index, and a CSS-only floating preview card. No client JavaScript, and every hover card has an always-visible reference entry."
+>
+  <Breadcrumb
+    trail={[
+      { href: '/', label: 'Phero Lang' },
+      { href: '/demo', label: 'Demo' },
+      { href: '/demo/hover', label: 'Symbol docs' },
+    ]}
+  />
+
+  <header class="border-b border-[var(--border)] pb-12 pt-6">
+    <p class="font-mono text-xs uppercase tracking-[0.2em] text-[var(--text-muted)]">
+      Demo / the hover prototype
+    </p>
+    <h1 class="mt-5 max-w-[24ch] font-display text-display-1 font-semibold text-balance">
+      Hover docs, without a browser IDE.
+    </h1>
+    <p class="mt-6 max-w-[64ch] text-lg leading-[1.6] text-[var(--text-muted)] text-pretty">
+      This is the SH7 decision prototype. The spans are the compiler's own, the symbol identities
+      come from the committed semantic graph, and the page ships no client JavaScript. Hover or
+      focus a symbol to preview its docs; the same signature, summary and reference link are always
+      visible in the panel below the code.
+    </p>
+
+    <div class="mt-10 grid grid-cols-2 gap-6 border-t border-[var(--border)] pt-8 sm:grid-cols-4">
+      <div>
+        <p class="font-display text-3xl font-semibold tabular-nums">{examples.length}</p>
+        <p class="mt-1 font-mono text-[0.6875rem] uppercase tracking-[0.12em] text-[var(--text-muted)]">
+          Examples
+        </p>
+      </div>
+      <div>
+        <p class="font-display text-3xl font-semibold tabular-nums">{symbolCount}</p>
+        <p class="mt-1 font-mono text-[0.6875rem] uppercase tracking-[0.12em] text-[var(--text-muted)]">
+          Symbols
+        </p>
+      </div>
+      <div>
+        <p class="font-display text-3xl font-semibold tabular-nums">0 KB</p>
+        <p class="mt-1 font-mono text-[0.6875rem] uppercase tracking-[0.12em] text-[var(--text-muted)]">
+          Client JS
+        </p>
+      </div>
+      <div>
+        <p class="font-display text-3xl font-semibold tabular-nums">2</p>
+        <p class="mt-1 font-mono text-[0.6875rem] uppercase tracking-[0.12em] text-[var(--text-muted)]">
+          Surfaces
+        </p>
+      </div>
+    </div>
+  </header>
+
+  <section id="why" class="border-b border-[var(--border)] py-16">
+    <SectionHeader
+      eyebrow="The decision"
+      title="A reference panel, not an editor."
+      lede="The original ask was IDE-style hover docs. The cheaper answer is a static page that already knows every symbol the compiler emitted."
+    />
+    <div class="mt-8 grid gap-10 lg:grid-cols-[minmax(0,1.1fr)_minmax(0,0.9fr)]">
+      <Prose>
+        <p>
+          Option A was chosen: precompute the SH4 spans and a small symbol index at build time, then
+          render an ordinary page. There is no editor, no LSP process, no worker, no WASM bundle and
+          no second highlighter.
+        </p>
+        <p>
+          The floating card is a CSS-only preview. It is a visual duplicate of the entry below the
+          code, which is always visible and carries the real documentation link. A browser without
+          <code>:has()</code> loses the card, not the information.
+        </p>
+      </Prose>
+      <Callout title="Option B is deferred">
+        <p>
+          Monaco or CodeMirror plus a browser LSP bridge would add a large client bundle and either
+          a multi-megabyte WASM artifact or a hosted sidecar/WebSocket runtime. It is the right
+          product bet only when editing, completion or diagnostics become requirements.
+        </p>
+        <p class="mt-3">
+          <a href={ADR_URL}>Read the decision record</a> for the measured A budget, the estimated B
+          costs, the accessibility trade-offs and the deferred work.
+        </p>
+      </Callout>
+    </div>
+  </section>
+
+  {examples.map((example) => (
+    <section id={example.id} class="border-b border-[var(--border)] py-16">
+      <SectionHeader
+        eyebrow={`${example.surface} · annotated example`}
+        title={example.title}
+        lede={example.lede}
+      />
+      <div class="mt-8">
+        <HoverCode
+          exampleId={example.id}
+          surface={example.surface}
+          excerptKey={example.excerpt}
+        />
+      </div>
+    </section>
+  ))}
+
+  <section id="how" class="border-b border-[var(--border)] py-16">
+    <SectionHeader
+      eyebrow="How it works"
+      title="The compiler supplies the symbols; the index supplies the prose."
+      lede="The page is a projection of committed data. Nothing is fetched at runtime and nothing is tokenised in the browser."
+    />
+    <div class="mt-8 grid gap-10 lg:grid-cols-[minmax(0,1fr)_minmax(0,0.9fr)]">
+      <Prose>
+        <p>
+          <code>site/data/highlighting/spans.json</code> is the SH4 artifact. The page looks up the
+          exact excerpt bytes and renders the same <code>hl-*</code> spans as every other Phero
+          block. The annotated symbol is then wrapped in an ordinary anchor.
+        </p>
+        <p>
+          <code>site/packages/highlighting/hover.json</code> is the small authored index. Each entry
+          names a graph node id, the span class that identifies the token, and a signature that must
+          appear in the excerpt. The hover gate resolves the graph node, the span and the docs page
+          before it will pass.
+        </p>
+      </Prose>
+      <div>
+        <CodeBlock lang="sh" filename="repository root" code={commands} />
+        <p class="mt-4 text-sm leading-[1.6] text-[var(--text-muted)]">
+          The full gate runs the index validation, a zero-script assertion, keyboard activation,
+          the focused-state axe pass and the hover CSS budget.
+        </p>
+      </div>
+    </div>
+  </section>
+
+  <section id="limits" class="py-16">
+    <SectionHeader
+      eyebrow="Scope"
+      title="What this prototype is not."
+      lede="It is a decision and a measured surface, not a commitment to ship a browser IDE."
+    />
+    <div class="mt-8 grid gap-8 md:grid-cols-2">
+      <Prose>
+        <p>Deliberately out of scope for SH7:</p>
+        <ul>
+          <li>editing, completion, code actions or diagnostics squiggles;</li>
+          <li>multi-file projects or a hosted language service;</li>
+          <li>Monaco/CodeMirror, WASM or a WebSocket LSP proxy;</li>
+          <li>symbol coverage beyond these two examples and their six symbols;</li>
+          <li>mobile editor UX beyond the responsive card and panel.</li>
+        </ul>
+      </Prose>
+      <Callout title="Accessibility contract">
+        <p>
+          Every card is also a permanent reference entry. The symbol is a link to that entry;
+          Enter moves focus to it, and the documentation link is next in the tab order. The card
+          itself is <code>aria-hidden</code> and has no focusable content, so it cannot create a
+          focus trap.
+        </p>
+        <p class="mt-3">
+          The page introduces no animation, and the global reduced-motion policy is unchanged.
+        </p>
+      </Callout>
+    </div>
+  </section>
+</Base>

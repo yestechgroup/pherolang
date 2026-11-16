@@ -4,8 +4,8 @@ Phero Lang source is highlighted by the compiler, not by a hand-written
 grammar. One language model — the taxonomy, the nine-surface registry, and
 the engine in the `phero-highlight` crate — drives every consumer: the
 `pherolang highlight` JSON/HTML output, the generated TextMate grammars and
-language configurations (`pherolang grammar`), the static sites (SH4), and
-LSP semantic tokens and hover (SH6).
+language configurations (`pherolang grammar`), the static sites (SH4), LSP
+semantic tokens and hover (SH6), and the static hover reference panels (SH7).
 
 The parser modules are the grammar authority. This document is the
 **highlighting contract**: the vocabulary, the spans, the engine guarantees,
@@ -15,9 +15,14 @@ the lexer/parser wins; change both in the same commit.
 > **Status.** This slice of epic SH (#286) covers the metadata registry
 > (SH1, #287), the engine (SH2, #288), the CLI/wire format (SH3, #289), the
 > generated editor grammars (SH5, #291), the static site integration
-> (SH4, #290), and LSP semantic tokens plus hover (SH6, #292). The
-> interactive editor (SH7) and the remaining release gates (SH8) are **not**
-> implemented here; see [Out of scope](#out-of-scope).
+> (SH4, #290), and LSP semantic tokens plus hover (SH6, #292). SH7 (#293)
+> chose the static surface: `/demo/hover` ships compiler-backed hover
+> reference panels with no client JavaScript, and a browser editor
+> (Option B) is deferred. See
+> [Interactive hover surface](#interactive-hover-surface-sh7) and
+> [ADR 0002](adr/0002-static-hover-reference-panels.md). The remaining
+> release gates (SH8) are **not** implemented here; see
+> [Out of scope](#out-of-scope).
 
 ## Purpose
 
@@ -836,6 +841,102 @@ maps the stable `hl-*` classes to `--code-*` variables in
 `site/scripts/sync-highlight.mjs` is also wired into the site gate's
 `freshness` check and the `Site` workflow; a stale artifact is a merge failure.
 
+## Interactive hover surface (SH7)
+
+SH7 asked for hover documentation on the public site. The accepted decision is
+**Option A**: a static, zero-JavaScript reference surface at `/demo/hover`,
+not a browser IDE. The reasoning, the measured and estimated costs, and the
+deferred editor work live in
+[ADR 0002](adr/0002-static-hover-reference-panels.md); this section records
+only how the surface fits the highlighting contract.
+
+### Data flow
+
+The page adds one authored layer and no new compiler output:
+
+- `site/data/highlighting/spans.json` — the SH4 artifact — remains the only
+  span source. A symbol is identified by an existing span, never by a second
+  tokenizer.
+- `site/packages/highlighting/hover.json` is the authored index. Each entry
+  names a compiler graph node id from `site/data/graph.json`, the span class
+  and optional `declaration` modifier that identify the token, and a
+  signature that must appear (whitespace-normalised) in the excerpt.
+- The documentation link is derived from the node file's surface through
+  `site/data/surfaces.json` and `site/data/docs-manifest.json`. A missing
+  page is an error, not a guessed URL.
+- `site/packages/highlighting/src/hover.mjs` resolves and validates all of
+  that at build time. `site/phero-web/src/components/HoverCode.astro` renders
+  one example, and `site/phero-web/src/pages/demo/hover.astro` is the route.
+
+The prototype covers two examples and six symbols: a `.mox` class with its
+two refund operations, and a `.ddd` service, its operation, and the
+capability that gates it.
+
+SH7 uses the SH4 span stream and the same class/modifier vocabulary as SH6,
+but **not** SH6's LSP transport. There is no language server, worker, or
+WebSocket in the page; SH6 remains the editor path.
+
+### Zero client JavaScript
+
+The built page emits no `<script>` element. The floating card is painted by
+CSS `:has()` when a symbol is hovered or focused, and it is a visual duplicate
+of a permanent reference entry that is always visible below the code. The
+permanent panel carries the real documentation link and the full signature,
+kind, and summary, so no information is hover-only and a browser without
+`:has()` loses the preview but keeps every fact.
+
+The symbol is an ordinary anchor to its panel entry. Enter moves focus to that
+entry (`tabindex="-1"`), and the documentation link is next in tab order. The
+card is `aria-hidden` and contains no focusable content, so it cannot create a
+focus trap. No animation or transition is introduced; the global
+`prefers-reduced-motion` policy is unchanged.
+
+### Failure behaviour
+
+A missing or unreadable index (invalid JSON), an unresolved graph node, a
+missing span, a signature absent from the excerpt, or a node with no
+documentation page makes that example fall back to the plain highlighted
+block and sets `data-hover-fallback`. The page still builds and the other
+example still renders. The hover gate fails on the marker, so the prototype
+cannot vanish silently.
+
+### Measured budget
+
+Measured on this tree; gzip uses Node's zlib at level 9.
+
+| Surface | Raw | Gzip |
+|---|---|---|
+| Client JavaScript | 0 bytes (no `<script>` emitted) | 0 bytes |
+| `site/packages/highlighting/src/hover.css` | 4,133 bytes | 1,235 bytes (gate budget 8 KiB) |
+| `site/packages/highlighting/hover.json` | 3,683 bytes | 1,093 bytes, build-time only |
+| `site/phero-web/dist/client/demo/hover/index.html` | 54,265 bytes | 8,440 bytes |
+
+The page is one more prerendered asset on the existing Workers static-assets
+deployment — no new binding, KV, Durable Object, container, secret, or runtime
+process. The marketing build now emits 20 HTML pages against a floor of 19.
+
+### Validation
+
+`site/scripts/gate/hover.mjs` is part of the local
+`node site/scripts/gate.mjs` run. It validates `hover.json` against the
+committed artifact, graph, surfaces table, and docs manifest; asserts the
+built page has no `<script>` and no fallback marker; enforces the gzip CSS
+budget; and drives Playwright through hover, focus, and Enter, with axe on the
+focused state and a reduced-motion pass. The `a11y` check also covers the
+route in light and dark.
+
+The browser checks are **local only** by explicit choice. CI's `Site verify`
+job runs `pnpm -C site test`, which includes the pure committed-index test in
+`site/scripts/test/hover.test.mjs`; it does not run the interactive gate.
+
+### Deferred
+
+The editor shape (Monaco or CodeMirror plus an LSP client and a WASM or
+Worker/WebSocket transport) is deferred, along with editing, completion,
+diagnostics, multi-file projects, and symbol coverage beyond these two
+examples. See [ADR 0002](adr/0002-static-hover-reference-panels.md) for the
+cost comparison and the alternatives considered.
+
 ## CSS and themes
 
 The highlighter emits semantics; the site owns presentation.
@@ -895,6 +996,18 @@ The highlighting slice is gated like the rest of the compiler:
   classes; the artifact is fresh, path-free and colour-free; code-token
   contrast passes in light and dark; and no client JS is added by this
   pipeline. Gate: `site/scripts/gate/highlighting.mjs`.
+- **Static hover surface**: every `hover.json` entry resolves to exactly one
+  existing span and one committed graph node, its signature appears in the
+  excerpt, its docs page exists, and every example annotates both a
+  class/type and a capability/operation; the built `/demo/hover` page emits
+  no `<script>`, has no `data-hover-fallback` marker, keeps the hover CSS
+  under 8 KiB gzip, and passes the hover/focus/Enter, axe, and reduced-motion
+  checks. Gate: `site/scripts/gate/hover.mjs`, run by
+  `node site/scripts/gate.mjs` — the interactive checks are **local only**.
+- **Pure hover index test**: `site/scripts/test/hover.test.mjs` validates the
+  committed index and the annotated HTML renderer without a browser, and is
+  part of `pnpm -C site test` (the CI `Site verify` job), so a broken index
+  fails CI even though the interactive gate does not run there.
 
 Regenerate the goldens with:
 
@@ -904,18 +1017,20 @@ PHERO_UPDATE_FIXTURES=1 cargo test -p phero-cli --test cli highlight
 
 ## Out of scope
 
-Epic status: SH6 is **implemented**; SH7 and SH8 are **not** part of this
-slice.
+Epic status: SH6 and SH7 are **implemented**; SH8 is **not** part of this
+slice. SH7 chose the static surface (Option A); the browser editor
+(Option B) is deferred.
 
 | Issue | Scope |
 |---|---|
 | SH6 (#292) | LSP semantic tokens, hover, definitions, and diagnostics — **implemented** in `phero-lsp` (full semantic tokens and hover provenance); see [LSP semantic tokens](#lsp-semantic-tokens) |
-| SH7 (#293) | Interactive browser hover/editor surface |
+| SH7 (#293) | Static hover reference panels — **implemented** at `/demo/hover` with no client JavaScript; see [Interactive hover surface](#interactive-hover-surface-sh7) and [ADR 0002](adr/0002-static-hover-reference-panels.md). The browser editor (Option B) is deferred |
 | SH8 (#294) | Release gates, accessibility/contrast measurements, and documentation beyond this slice |
 
 Also out of scope: a second lexer or parser, a watch mode, publishing a
 standalone schema package, publishing a VS Code extension to the marketplace
-(the LSP serves tokens and hover, but no VS Code client ships),
+(the LSP serves tokens and hover, but no VS Code client ships), a
+Monaco/CodeMirror editor with a browser LSP bridge (Option B, deferred),
 `textDocument/semanticTokens/range` and delta tokens, and any client-side
 JavaScript on static pages.
 
@@ -931,6 +1046,17 @@ JavaScript on static pages.
   [`site/scripts/sync-highlight.mjs`](../site/scripts/sync-highlight.mjs),
   [`site/packages/highlighting/src/`](../site/packages/highlighting/src/), and
   [`site/scripts/gate/highlighting.mjs`](../site/scripts/gate/highlighting.mjs)
+- Static hover surface:
+  [`site/packages/highlighting/hover.json`](../site/packages/highlighting/hover.json),
+  [`site/packages/highlighting/src/hover.mjs`](../site/packages/highlighting/src/hover.mjs),
+  [`site/packages/highlighting/src/hover.css`](../site/packages/highlighting/src/hover.css),
+  [`site/phero-web/src/components/HoverCode.astro`](../site/phero-web/src/components/HoverCode.astro),
+  [`site/phero-web/src/pages/demo/hover.astro`](../site/phero-web/src/pages/demo/hover.astro),
+  and the local gate
+  [`site/scripts/gate/hover.mjs`](../site/scripts/gate/hover.mjs)
+- [ADR 0002 — Static hover reference panels, not a browser IDE](adr/0002-static-hover-reference-panels.md)
+  — the decision, the measured A budget, the estimated B costs, and the
+  deferred editor
 - Expression language: [EXPRESSIONS.md](EXPRESSIONS.md)
 - Spelling contract: [NAMING.md](NAMING.md) — product "Phero Lang", binary
   `pherolang`, crates `phero-*`
