@@ -38,35 +38,23 @@ jobs:
       fail-fast: false
       matrix:
         # Asset-naming contract, shared with `.github/workflows/site.yml`:
-        #   pherolang-<version>-<target>.tar.gz  (unix)
-        #   pherolang-<version>-<target>.zip     (windows)
+        #   pherolang-<version>-<target>.tar.gz
         #   SHA256SUMS                           (one line per archive)
         # site.yml's PHEROLANG_ASSET_PATTERN must match
         # `pherolang-*-x86_64-unknown-linux-gnu.tar.gz`; if the naming here
         # changes, that pattern changes in the same commit or the site's
         # binary download silently 404s.
         #
-        # The macOS rows are data, not dead code: the organization's runner
-        # configuration does not currently offer macOS runners (the arm64
-        # label answers "configuration 'macos-14-arm64-us-default' is not
-        # supported" and the Intel label never provisions), and a matrix row
-        # cannot be conditional, so the whole list is selected here. Set the
-        # repository variable PHERO_MACOS_RUNNERS=true once the org has macOS
-        # runners; the next release then publishes the two darwin archives
-        # with no other edit. Everything downstream reads the matrix, so no
-        # count to keep in sync.
-        include: ${{ fromJSON(vars.PHERO_MACOS_RUNNERS == 'true' && '[
-          {"target":"x86_64-unknown-linux-gnu","os":"ubuntu-latest","binary":"pherolang"},
-          {"target":"aarch64-unknown-linux-gnu","os":"ubuntu-latest","binary":"pherolang"},
-          {"target":"x86_64-apple-darwin","os":"macos-13","binary":"pherolang"},
-          {"target":"aarch64-apple-darwin","os":"macos-14","binary":"pherolang"},
-          {"target":"x86_64-pc-windows-msvc","os":"windows-latest","binary":"pherolang.exe"}
-          ]' || '[
-          {"target":"x86_64-unknown-linux-gnu","os":"ubuntu-latest","binary":"pherolang"},
-          {"target":"aarch64-unknown-linux-gnu","os":"ubuntu-latest","binary":"pherolang"},
-          {"target":"x86_64-pc-windows-msvc","os":"windows-latest","binary":"pherolang.exe"}
-          ]') }}
-    runs-on: ${{ matrix.os }}
+        # Linux only — x86_64 and aarch64, both on the same runner — is the
+        # supported set (docs/adr/0004-supported-platforms-linux-only.md).
+        # A row here is a support claim, not a build experiment: the archive
+        # is built, published, and documented. Adding a platform is a
+        # maintainer decision that comes with a CI job which *executes* the
+        # binary; a leg nobody runs is a claim we cannot back.
+        include:
+          - target: x86_64-unknown-linux-gnu
+          - target: aarch64-unknown-linux-gnu
+    runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
 
@@ -116,7 +104,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          bin="target/${{ matrix.target }}/release/${{ matrix.binary }}"
+          bin="target/${{ matrix.target }}/release/pherolang"
           test -f "$bin" || { echo "::error::expected binary missing: $bin"; exit 1; }
           ls -l "$bin"
 
@@ -125,8 +113,7 @@ jobs:
       # release will publish*, not merely in a debug build of the same commit:
       # `highlight` must emit the v1 JSON artifact, and the generated grammar
       # package must round-trip through `--out`/`--check`.
-      - name: Verify the highlight contract (unix)
-        if: runner.os != 'Windows'
+      - name: Verify the highlight contract
         shell: bash
         run: |
           set -euo pipefail
@@ -139,25 +126,7 @@ jobs:
           "$bin" grammar --check "$grammars" >/dev/null
           echo "highlight + grammar contract verified in $bin"
 
-      - name: Verify the highlight contract (windows)
-        if: runner.os == 'Windows'
-        shell: pwsh
-        run: |
-          $ErrorActionPreference = 'Stop'
-          $bin = "target/${{ matrix.target }}/release/pherolang.exe"
-          $json = 'class A { }' | & $bin highlight --surface mox --format json -
-          if ($json -notmatch '"formatVersion": 1') { throw 'highlight output has no formatVersion 1' }
-          if ($json -notmatch '"surface": "mox"') { throw 'highlight output has no mox surface' }
-          $grammars = Join-Path $env:RUNNER_TEMP 'grammar-contract'
-          New-Item -ItemType Directory -Force -Path $grammars | Out-Null
-          & $bin grammar --out $grammars | Out-Null
-          if ($LASTEXITCODE -ne 0) { throw 'grammar --out failed' }
-          & $bin grammar --check $grammars | Out-Null
-          if ($LASTEXITCODE -ne 0) { throw 'grammar --check failed' }
-          Write-Host "highlight + grammar contract verified in $bin"
-
-      - name: Package archive (unix)
-        if: runner.os != 'Windows'
+      - name: Package archive
         shell: bash
         run: |
           set -euo pipefail
@@ -166,34 +135,11 @@ jobs:
           asset="pherolang-${version}-${target}.tar.gz"
           mkdir -p dist
           # The binary sits at the archive root, so `tar -xzf` followed by
-          # `./pherolang` works without a cd into a platform-named directory.
+          # `./pherolang` works without a cd into a target-named directory.
           tar -czf "dist/${asset}" -C "target/${target}/release" 'pherolang'
-          # GNU coreutils has sha256sum; macOS ships shasum instead. Both print
-          # "<hex>  <name>", the only format `sha256sum -c` reads.
-          if command -v sha256sum >/dev/null 2>&1; then
-            (cd dist && sha256sum "$asset" > "$asset.sha256")
-          else
-            (cd dist && shasum -a 256 "$asset" > "$asset.sha256")
-          fi
+          # "<hex>  <name>" is the only format `sha256sum -c` reads.
+          (cd dist && sha256sum "$asset" > "$asset.sha256")
           cat "dist/${asset}.sha256"
-
-      - name: Package archive (windows)
-        if: runner.os == 'Windows'
-        shell: pwsh
-        run: |
-          $ErrorActionPreference = 'Stop'
-          $version = '${{ steps.version.outputs.version }}'
-          $target = '${{ matrix.target }}'
-          $asset = "pherolang-$version-$target.zip"
-          New-Item -ItemType Directory -Force -Path dist | Out-Null
-          # -Path on a file puts pherolang.exe at the archive root.
-          Compress-Archive -Path "target/$target/release/pherolang.exe" -DestinationPath "dist/$asset"
-          # LF endings and lowercase hex on purpose: `sha256sum -c` on
-          # linux/macOS reads a trailing CR as part of the filename and fails
-          # the whole manifest.
-          $hash = (Get-FileHash -Algorithm SHA256 "dist/$asset").Hash.ToLowerInvariant()
-          [IO.File]::WriteAllText("dist/$asset.sha256", "$hash  $asset`n")
-          Get-Content "dist/$asset.sha256"
 
       - uses: actions/upload-artifact@v4
         with:
@@ -219,7 +165,7 @@ jobs:
           # leaves this job unrun (`needs: build`), so nothing below has to
           # count archives. What is checked here is integrity — every archive
           # carries a checksum, and the checksum matches the bytes.
-          archives=$(ls pherolang-*.tar.gz pherolang-*.zip)
+          archives=$(ls pherolang-*.tar.gz)
           for archive in $archives; do
             if [ ! -f "$archive.sha256" ]; then
               echo "::error::$archive has no checksum"
@@ -233,7 +179,7 @@ jobs:
           # a truncated download artifact is caught here, not by a user.
           sha256sum -c SHA256SUMS
           echo "targets published by this run:"
-          ls -l ./*.tar.gz ./*.zip
+          ls -l ./*.tar.gz
 
       # Notes are generated from the merged PRs rather than pasted from
       # CHANGELOG.md. The changelog stays the source of truth for drift, and
@@ -247,5 +193,4 @@ jobs:
           fail_on_unmatched_files: true
           files: |
             dist/pherolang-*.tar.gz
-            dist/pherolang-*.zip
             dist/SHA256SUMS

@@ -20,6 +20,20 @@ every identifier that carries its name is
 [CONTRIBUTING.md](CONTRIBUTING.md) covers the contribution workflow, and
 [SECURITY.md](SECURITY.md) covers private vulnerability reports.
 
+## Supported platforms
+
+Phero Lang is **Linux only**: `x86_64-unknown-linux-gnu` and
+`aarch64-unknown-linux-gnu`, both glibc. Those two targets are what a release
+builds, publishes and smoke-tests, and `ubuntu-latest` is the only runner the
+gate executes on.
+
+Windows and macOS are unsupported and untested — no archive is published for
+either, and no CI job runs the binary there. A pull request that adds one
+needs a CI job which actually *executes* the binary plus a maintainer
+decision: a matrix row nobody runs is a claim, not support. The reasoning,
+and why the dependency graph still contains `windows-sys`, is recorded in
+[docs/adr/0004-supported-platforms-linux-only.md](docs/adr/0004-supported-platforms-linux-only.md).
+
 ```
 .mox source  -> lexer/parser -> AST -> resolve & validate -> Core IR (.phero.json)
    ^                                                              |

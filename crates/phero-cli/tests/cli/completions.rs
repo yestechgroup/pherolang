@@ -113,6 +113,9 @@ fn check_directory_reports_files_in_sorted_order() {
 
 /// Symlinks are never followed: a self-referencing directory link cannot
 /// hang or loop the scan, and the real model next to it is still found.
+///
+/// The link is created unconditionally: the supported (and only tested)
+/// platform set is Linux (ADR 0004), so this is never skipped.
 #[test]
 fn directory_scan_ignores_symlink_loops() {
     let dir = scratch_dir().join("scan_loop");
@@ -120,10 +123,7 @@ fn directory_scan_ignores_symlink_loops() {
     // Canonical `.mox` text: the formatter expands declaration headers.
     let canonical = "package demo\n\nclass Book {\n    String title\n}\n";
     std::fs::write(dir.join("model.mox"), canonical).expect("write model");
-    #[cfg(unix)]
-    {
-        std::os::unix::fs::symlink(&dir, dir.join("self")).expect("create symlink loop");
-    }
+    std::os::unix::fs::symlink(&dir, dir.join("self")).expect("create symlink loop");
     let output = pherolang()
         .args(["fmt", "--check", dir.to_str().unwrap()])
         .output()
