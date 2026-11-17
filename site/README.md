@@ -24,7 +24,7 @@ cd site
 fnm use                      # or: nvm use  (respects .nvmrc)
 pnpm install
 
-node scripts/fetch-pherolang.mjs   # released v0.3.0 binary, sha256-verified
+node scripts/fetch-pherolang.mjs   # pinned v0.4.0 (falls back to the latest published release while untagged), sha256-verified
 
 pnpm dev                     # both apps: :4321 (web) and :4322 (docs)
 ```
