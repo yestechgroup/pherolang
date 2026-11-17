@@ -7,14 +7,17 @@ use super::*;
 
 /// Compiles `source` with no imports and checks with no domains: the lint
 /// pass is domain-independent, so pure-lint cases need no fixture model.
-fn lint_diags(source: &str) -> Vec<IfmlDiagnostic> {
+fn lint_diags(source: &str) -> Vec<(String, Diagnostic<&'static str>)> {
     let compilation = crate::compile_ifml_str("app.ifml", source, &crate::IfmlImports::default())
         .expect("source must parse and resolve");
     check_ifml(&compilation, None)
 }
 
 /// [`lint_diags`] with one import provided.
-fn lint_diags_with_import(source: &str, imports: &crate::IfmlImports) -> Vec<IfmlDiagnostic> {
+fn lint_diags_with_import(
+    source: &str,
+    imports: &crate::IfmlImports,
+) -> Vec<(String, Diagnostic<&'static str>)> {
     let compilation = crate::compile_ifml_str("app.ifml", source, imports)
         .expect("source must parse and resolve");
     check_ifml(&compilation, None)
@@ -33,14 +36,14 @@ action "Orphan" {
 "#;
     let diags = lint_diags(source);
     assert_eq!(diags.len(), 1, "{diags:?}");
-    assert_eq!(diags[0].code, W_DEAD_ACTION);
-    assert_eq!(diags[0].severity, crate::Severity::Warning);
-    assert!(!diags[0].severity.is_error());
+    assert_eq!(diags[0].1.code.unwrap(), W_DEAD_ACTION);
+    assert_eq!(diags[0].1.severity, crate::Severity::Warning);
+    assert!(!diags[0].1.severity.is_error());
     assert_eq!(
-        diags[0].message,
+        diags[0].1.message,
         "action 'Orphan' is declared but never invoked"
     );
-    let (start, end) = diags[0].span;
+    let (start, end) = span_bounds(diags[0].1.span);
     assert_eq!(&source[start..end], "\"Orphan\"");
 }
 
@@ -105,16 +108,17 @@ view "Ghost" {
 "#;
     let diags = lint_diags(source);
     assert_eq!(diags.len(), 1, "{diags:?}");
-    assert_eq!(diags[0].code, W_UNREACHABLE_VIEW);
-    assert_eq!(diags[0].severity, crate::Severity::Warning);
+    assert_eq!(diags[0].1.code.unwrap(), W_UNREACHABLE_VIEW);
+    assert_eq!(diags[0].1.severity, crate::Severity::Warning);
     assert!(
         diags[0]
+            .1
             .message
             .starts_with("view 'Ghost' is never navigated to"),
         "{}",
-        diags[0].message
+        diags[0].1.message
     );
-    let (start, end) = diags[0].span;
+    let (start, end) = span_bounds(diags[0].1.span);
     assert_eq!(&source[start..end], "\"Ghost\"");
 }
 
@@ -173,13 +177,13 @@ module "Pager" {
     );
     let diags = lint_diags_with_import(source, &imports);
     assert_eq!(diags.len(), 1, "{diags:?}");
-    assert_eq!(diags[0].code, W_SHADOWED_MODULE);
-    assert_eq!(diags[0].severity, crate::Severity::Warning);
+    assert_eq!(diags[0].1.code.unwrap(), W_SHADOWED_MODULE);
+    assert_eq!(diags[0].1.severity, crate::Severity::Warning);
     assert_eq!(
-        diags[0].message,
+        diags[0].1.message,
         "module 'Pager' shadows an imported module of the same name (from 'lib.ifml')"
     );
-    let (start, end) = diags[0].span;
+    let (start, end) = span_bounds(diags[0].1.span);
     assert_eq!(&source[start..end], "\"Pager\"");
 }
 
@@ -222,16 +226,17 @@ view "Entry" {
 "#;
     let diags = lint_diags(source);
     assert_eq!(diags.len(), 1, "{diags:?}");
-    assert_eq!(diags[0].code, W_COMPONENT_WITHOUT_DATA);
-    assert_eq!(diags[0].severity, crate::Severity::Warning);
+    assert_eq!(diags[0].1.code.unwrap(), W_COMPONENT_WITHOUT_DATA);
+    assert_eq!(diags[0].1.severity, crate::Severity::Warning);
     assert!(
         diags[0]
+            .1
             .message
             .contains("component 'ghost' binds no entity data"),
         "{}",
-        diags[0].message
+        diags[0].1.message
     );
-    let (start, end) = diags[0].span;
+    let (start, end) = span_bounds(diags[0].1.span);
     assert_eq!(&source[start..end], "fields: [name];");
 }
 
@@ -279,16 +284,17 @@ view "Ghost" {
 "#;
     let diags = lint_diags(source);
     assert_eq!(diags.len(), 1, "{diags:?}");
-    assert_eq!(diags[0].code, W_VIEW_WITHOUT_DOMAIN);
-    assert_eq!(diags[0].severity, crate::Severity::Warning);
+    assert_eq!(diags[0].1.code.unwrap(), W_VIEW_WITHOUT_DOMAIN);
+    assert_eq!(diags[0].1.severity, crate::Severity::Warning);
     assert!(
         diags[0]
+            .1
             .message
             .starts_with("view 'Ghost' has no domain binding"),
         "{}",
-        diags[0].message
+        diags[0].1.message
     );
-    let (start, end) = diags[0].span;
+    let (start, end) = span_bounds(diags[0].1.span);
     assert_eq!(&source[start..end], "\"Ghost\"");
 }
 
@@ -386,14 +392,14 @@ action "Orphan" {
     assert_eq!(diags.len(), 2, "{diags:?}");
     let dangling = diags
         .iter()
-        .find(|diagnostic| diagnostic.code == E_UNKNOWN_ACTION)
+        .find(|(_, diagnostic)| diagnostic.code == Some(E_UNKNOWN_ACTION))
         .expect("the dangling invocation is diagnosed");
-    assert_eq!(dangling.severity, crate::Severity::Error);
+    assert_eq!(dangling.1.severity, crate::Severity::Error);
     let dead = diags
         .iter()
-        .find(|diagnostic| diagnostic.code == W_DEAD_ACTION)
+        .find(|(_, diagnostic)| diagnostic.code == Some(W_DEAD_ACTION))
         .expect("the dead declaration warns");
-    assert_eq!(dead.severity, crate::Severity::Warning);
+    assert_eq!(dead.1.severity, crate::Severity::Warning);
 }
 
 #[test]
@@ -441,7 +447,7 @@ view "Home" {
         .expect("part compiles");
     let diags = check_ifml_with_actors(&own, Some(&shop_model()), &[auth_model()]);
     assert_eq!(diags.len(), 1, "{diags:?}");
-    assert_eq!(diags[0].code, E_UNKNOWN_CAPABILITY);
+    assert_eq!(diags[0].1.code.unwrap(), E_UNKNOWN_CAPABILITY);
 }
 
 #[test]
@@ -457,7 +463,10 @@ view "Edit" {
 }
 "#;
     let diags = diags_with_actors(source, &shop_model(), &[auth_model()]);
-    let codes: Vec<&str> = diags.iter().map(|diagnostic| diagnostic.code).collect();
+    let codes: Vec<&str> = diags
+        .iter()
+        .map(|(_, diagnostic)| diagnostic.code.unwrap())
+        .collect();
     assert!(codes.contains(&E_UNKNOWN_CAPABILITY), "{diags:?}");
     assert!(codes.contains(&E_UNKNOWN_ENTITY), "{diags:?}");
 }
@@ -483,18 +492,22 @@ action "ListCustomers" {
     let invalid = source.replace("limit > 10", "limit > \"ten\"");
     let diags = diags(&invalid, &shop_model());
     assert_eq!(diags.len(), 1, "{diags:?}");
-    assert_eq!(diags[0].code, E_TYPE_MISMATCH);
+    assert_eq!(diags[0].1.code.unwrap(), E_TYPE_MISMATCH);
     assert!(
-        diags[0].message.contains("command 'customers' event 'run'"),
+        diags[0]
+            .1
+            .message
+            .contains("command 'customers' event 'run'"),
         "{}",
-        diags[0].message
+        diags[0].1.message
     );
     assert!(
         diags[0]
+            .1
             .message
             .contains("requires numeric operands, found int and string"),
         "{}",
-        diags[0].message
+        diags[0].1.message
     );
 }
 
@@ -509,9 +522,9 @@ command "customers" {
 "#;
     let diags = diags(source, &shop_model());
     assert_eq!(diags.len(), 1, "{diags:?}");
-    assert_eq!(diags[0].code, E_UNKNOWN_FEATURE);
+    assert_eq!(diags[0].1.code.unwrap(), E_UNKNOWN_FEATURE);
     assert_eq!(
-        diags[0].message,
+        diags[0].1.message,
         "command 'customers' event 'run': unknown feature 'nope' on class 'Customer'"
     );
 }
@@ -547,13 +560,14 @@ command "customers" {
 "#;
     let reported = diags(source, &shop_model());
     assert_eq!(reported.len(), 1, "{reported:?}");
-    assert_eq!(reported[0].code, E_TYPE_MISMATCH);
+    assert_eq!(reported[0].1.code.unwrap(), E_TYPE_MISMATCH);
     assert!(
         reported[0]
+            .1
             .message
             .contains("default of option 'limit' does not suit Int: '\"twenty\"'"),
         "{}",
-        reported[0].message
+        reported[0].1.message
     );
 
     let valid = source.replace("Int = \"twenty\"", "CustomerStatus = \"active\"");
@@ -572,13 +586,14 @@ command "onboard" {
 "#;
     let reported = diags(source, &shop_model());
     assert_eq!(reported.len(), 1, "{reported:?}");
-    assert_eq!(reported[0].code, E_TYPE_MISMATCH);
+    assert_eq!(reported[0].1.code.unwrap(), E_TYPE_MISMATCH);
     assert!(
         reported[0]
+            .1
             .message
             .contains("default of prompt 'count' does not suit number: '\"lots\"'"),
         "{}",
-        reported[0].message
+        reported[0].1.message
     );
 
     let valid = source.replace("number = \"lots\"", "text = \"Ada\"");
@@ -656,20 +671,22 @@ module "Card" {
     compilation.model.views[0].module_uses[0].properties[0].value = deep("nope");
     let diags = check_ifml(&compilation, Some(&shop_model()));
     assert_eq!(diags.len(), 1, "{diags:?}");
-    assert_eq!(diags[0].code, E_UNKNOWN_FEATURE);
+    assert_eq!(diags[0].1.code.unwrap(), E_UNKNOWN_FEATURE);
     assert!(
         diags[0]
+            .1
             .message
             .contains("unknown feature 'nope' on class 'Category'"),
         "{}",
-        diags[0].message
+        diags[0].1.message
     );
     assert!(
         diags[0]
+            .1
             .message
             .contains("override 'title' of module 'Card'"),
         "{}",
-        diags[0].message
+        diags[0].1.message
     );
 }
 
@@ -688,10 +705,10 @@ view "Catalog" {
 "#;
     let diags = diags(source, &shop_model());
     assert_eq!(diags.len(), 1, "{diags:?}");
-    assert_eq!(diags[0].code, E_UNKNOWN_FEATURE);
-    assert_eq!(diags[0].file, "app.ifml");
+    assert_eq!(diags[0].1.code.unwrap(), E_UNKNOWN_FEATURE);
+    assert_eq!(diags[0].0, "app.ifml");
     assert_eq!(
-        diags[0].message,
+        diags[0].1.message,
         "view 'Catalog' component 'orders' property 'filter': \
              unknown feature 'nope' on class 'Product'"
     );
@@ -715,22 +732,24 @@ module "Card" {
 "#;
     let diags = diags(source, &shop_model());
     assert_eq!(diags.len(), 1, "{diags:?}");
-    assert_eq!(diags[0].code, E_TYPE_MISMATCH);
+    assert_eq!(diags[0].1.code.unwrap(), E_TYPE_MISMATCH);
     assert!(
         diags[0]
+            .1
             .message
             .contains("override 'title' of module 'Card'"),
         "{}",
-        diags[0].message
+        diags[0].1.message
     );
     assert!(
         diags[0]
+            .1
             .message
             .contains("expected string, found int in 'product.price'"),
         "{}",
-        diags[0].message
+        diags[0].1.message
     );
-    let (start, end) = diags[0].span;
+    let (start, end) = span_bounds(diags[0].1.span);
     assert!(source[start..end].starts_with("title: product.price"));
 }
 
@@ -746,12 +765,12 @@ view "Catalog" {
 "#;
     let diags = diags(source, &shop_model());
     assert_eq!(diags.len(), 1, "{diags:?}");
-    assert_eq!(diags[0].code, E_UNKNOWN_ENTITY);
+    assert_eq!(diags[0].1.code.unwrap(), E_UNKNOWN_ENTITY);
     assert_eq!(
-        diags[0].message,
+        diags[0].1.message,
         "view 'Catalog' component 'orders': unknown data entity 'Widget'"
     );
-    let (start, end) = diags[0].span;
+    let (start, end) = span_bounds(diags[0].1.span);
     assert!(source[start..end].starts_with("data: Widget"));
 }
 
@@ -777,11 +796,14 @@ view "Catalog" {
 "#;
     let diags = diags(source, &model);
     assert_eq!(diags.len(), 1, "{diags:?}");
-    assert_eq!(diags[0].code, E_UNKNOWN_ENTITY);
+    assert_eq!(diags[0].1.code.unwrap(), E_UNKNOWN_ENTITY);
     assert!(
-        diags[0].message.contains("ambiguous data entity 'Product'"),
+        diags[0]
+            .1
+            .message
+            .contains("ambiguous data entity 'Product'"),
         "{}",
-        diags[0].message
+        diags[0].1.message
     );
 }
 
@@ -802,11 +824,11 @@ view "Report" {
     let invalid = valid.replace("price * 2", "price.nope");
     let diags = diags(&invalid, &shop_model());
     assert_eq!(diags.len(), 1, "{diags:?}");
-    assert_eq!(diags[0].code, E_UNKNOWN_FEATURE);
+    assert_eq!(diags[0].1.code.unwrap(), E_UNKNOWN_FEATURE);
     assert!(
-        diags[0].message.contains("column 'Twice'"),
+        diags[0].1.message.contains("column 'Twice'"),
         "{}",
-        diags[0].message
+        diags[0].1.message
     );
 }
 
@@ -844,16 +866,16 @@ view "Catalog" {
     let invalid = source.replace("product.status == \"active\"", "product.status == 3");
     let diags = diags(&invalid, &shop_model());
     assert_eq!(diags.len(), 1, "{diags:?}");
-    assert_eq!(diags[0].code, E_TYPE_MISMATCH);
+    assert_eq!(diags[0].1.code.unwrap(), E_TYPE_MISMATCH);
     assert!(
-        diags[0].message.contains("event 'select'"),
+        diags[0].1.message.contains("event 'select'"),
         "{}",
-        diags[0].message
+        diags[0].1.message
     );
     assert!(
-        diags[0].message.contains("cannot compare string and int"),
+        diags[0].1.message.contains("cannot compare string and int"),
         "{}",
-        diags[0].message
+        diags[0].1.message
     );
 }
 
@@ -878,10 +900,11 @@ view "Catalog" {
     assert_eq!(diags.len(), 1, "{diags:?}");
     assert!(
         diags[0]
+            .1
             .message
             .contains("argument type mismatch in call to 'score'"),
         "{}",
-        diags[0].message
+        diags[0].1.message
     );
 }
 
@@ -899,11 +922,11 @@ view "Catalog" {
 "#;
     let diags = diags(source, &scored_shop_model());
     assert_eq!(diags.len(), 1, "{diags:?}");
-    assert_eq!(diags[0].code, E_UNKNOWN_FEATURE);
+    assert_eq!(diags[0].1.code.unwrap(), E_UNKNOWN_FEATURE);
     assert!(
-        diags[0].message.contains("unknown function 'today'"),
+        diags[0].1.message.contains("unknown function 'today'"),
         "{}",
-        diags[0].message
+        diags[0].1.message
     );
 }
 
@@ -936,16 +959,16 @@ view "Catalog" {
 "#;
     let diags = diags(source, &model);
     assert_eq!(diags.len(), 1, "{diags:?}");
-    assert_eq!(diags[0].code, E_UNKNOWN_FEATURE);
+    assert_eq!(diags[0].1.code.unwrap(), E_UNKNOWN_FEATURE);
     assert!(
-        diags[0].message.contains("ambiguous function 'score'"),
+        diags[0].1.message.contains("ambiguous function 'score'"),
         "{}",
-        diags[0].message
+        diags[0].1.message
     );
     assert!(
-        diags[0].message.contains("shop.a") && diags[0].message.contains("shop.b"),
+        diags[0].1.message.contains("shop.a") && diags[0].1.message.contains("shop.b"),
         "{}",
-        diags[0].message
+        diags[0].1.message
     );
 }
 
@@ -972,11 +995,11 @@ view "Editor" {
     let invalid = source.replace("product.price", "product.nope");
     let diags = diags(&invalid, &shop_model());
     assert_eq!(diags.len(), 1, "{diags:?}");
-    assert_eq!(diags[0].code, E_UNKNOWN_FEATURE);
+    assert_eq!(diags[0].1.code.unwrap(), E_UNKNOWN_FEATURE);
     assert!(
-        diags[0].message.contains("binding 'total'"),
+        diags[0].1.message.contains("binding 'total'"),
         "{}",
-        diags[0].message
+        diags[0].1.message
     );
 }
 
@@ -1008,9 +1031,9 @@ view "Report" {
     let diags = diags(unknown, &scored_shop_model());
     assert_eq!(diags.len(), 1, "{diags:?}");
     assert!(
-        diags[0].message.contains("unknown function 'today'"),
+        diags[0].1.message.contains("unknown function 'today'"),
         "{}",
-        diags[0].message
+        diags[0].1.message
     );
 
     // With domains absent checking is disabled entirely.
@@ -1091,11 +1114,11 @@ view "Detail" {
 "#;
     let diags = diags(source, &shop_model());
     assert_eq!(diags.len(), 1, "{diags:?}");
-    assert_eq!(diags[0].code, E_UNKNOWN_FEATURE);
+    assert_eq!(diags[0].1.code.unwrap(), E_UNKNOWN_FEATURE);
     assert!(
-        diags[0].message.contains("unknown feature 'bogus'"),
+        diags[0].1.message.contains("unknown feature 'bogus'"),
         "{}",
-        diags[0].message
+        diags[0].1.message
     );
 }
 
@@ -1175,7 +1198,7 @@ view "Report" {
     let unknown = source.replace("filter: region != drill;", "filter: params.nope == \"x\";");
     let diags = diags(&unknown, &shop_model());
     assert_eq!(diags.len(), 1, "{diags:?}");
-    assert_eq!(diags[0].code, E_UNKNOWN_FEATURE);
+    assert_eq!(diags[0].1.code.unwrap(), E_UNKNOWN_FEATURE);
 }
 
 #[test]
@@ -1204,10 +1227,12 @@ fn canonical_fixture_checks_clean_against_its_reference_domain() {
     assert!(diags.is_empty(), "{}", {
         let rendered = diags
             .iter()
-            .map(|diagnostic| {
+            .map(|(_, diagnostic)| {
                 format!(
                     "  {} at {:?}: {}",
-                    diagnostic.code, diagnostic.span, diagnostic.message
+                    diagnostic.code.unwrap_or("<none>"),
+                    diagnostic.span,
+                    diagnostic.message
                 )
             })
             .collect::<Vec<_>>()
@@ -1325,11 +1350,11 @@ view "Catalog" {
 "#;
     let diags = diags(source, &shop_model());
     assert_eq!(diags.len(), 1, "{diags:?}");
-    assert_eq!(diags[0].code, E_TYPE_MISMATCH);
+    assert_eq!(diags[0].1.code.unwrap(), E_TYPE_MISMATCH);
     assert!(
-        diags[0].message.contains("cannot compare int and string"),
+        diags[0].1.message.contains("cannot compare int and string"),
         "{}",
-        diags[0].message
+        diags[0].1.message
     );
 }
 
@@ -1360,12 +1385,12 @@ action "ListWidgets" {
 "#;
     let diags = diags(source, &shop_model());
     assert_eq!(diags.len(), 1, "{diags:?}");
-    assert_eq!(diags[0].code, E_UNKNOWN_ACTION_TARGET);
+    assert_eq!(diags[0].1.code.unwrap(), E_UNKNOWN_ACTION_TARGET);
     assert_eq!(
-        diags[0].message,
+        diags[0].1.message,
         "action 'ListWidgets': unknown target entity 'Widget'"
     );
-    let (start, end) = diags[0].span;
+    let (start, end) = span_bounds(diags[0].1.span);
     assert!(source[start..end].starts_with("target: Widget"));
 }
 
@@ -1398,13 +1423,14 @@ action "ListProducts" {
 "#;
     let diags = diags(source, &model);
     assert_eq!(diags.len(), 1, "{diags:?}");
-    assert_eq!(diags[0].code, E_UNKNOWN_ACTION_TARGET);
+    assert_eq!(diags[0].1.code.unwrap(), E_UNKNOWN_ACTION_TARGET);
     assert!(
         diags[0]
+            .1
             .message
             .contains("ambiguous target entity 'Product'"),
         "{}",
-        diags[0].message
+        diags[0].1.message
     );
 }
 
@@ -1421,7 +1447,7 @@ action "ListWidgets" {
     assert!(
         diags
             .iter()
-            .all(|diagnostic| diagnostic.code != E_UNKNOWN_ACTION_TARGET),
+            .all(|(_, diagnostic)| diagnostic.code != Some(E_UNKNOWN_ACTION_TARGET)),
         "without domains the target check is off: {diags:?}"
     );
 }
@@ -1436,14 +1462,14 @@ action "Archive" {
     let diags = diags(source, &shop_model());
     assert_eq!(diags.len(), 1, "{diags:?}");
     assert!(
-        diags[0].message.contains("action 'Archive'"),
+        diags[0].1.message.contains("action 'Archive'"),
         "{}",
-        diags[0].message
+        diags[0].1.message
     );
     assert!(
-        diags[0].message.contains("unknown name 'nonsense'"),
+        diags[0].1.message.contains("unknown name 'nonsense'"),
         "{}",
-        diags[0].message
+        diags[0].1.message
     );
 }
 

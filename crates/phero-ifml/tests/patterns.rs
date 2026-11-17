@@ -11,6 +11,11 @@ use phero_ifml::{check_ifml, compile_ifml_str, IfmlCompilation, IfmlImports, E_U
 
 const PATTERNS_DIR: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/../../patterns/ifml");
 
+fn span_bounds(span: Option<phero_parser::Span>) -> (usize, usize) {
+    let span = span.expect("the diagnostic carries a span");
+    (span.start, span.end)
+}
+
 /// The `import "..."` targets of one source, in source order.
 fn import_paths(text: &str) -> Vec<String> {
     text.lines()
@@ -48,11 +53,16 @@ fn compile_pattern(file_name: &str) -> IfmlCompilation {
         Err(diagnostics) => {
             let rendered = diagnostics
                 .iter()
-                .map(|diagnostic| {
-                    let (start, end) = diagnostic.span;
+                .map(|(file, diagnostic)| {
+                    let span = diagnostic
+                        .span
+                        .expect("a resolver diagnostic carries a span");
                     format!(
-                        "  {} in {} at {start}..{end}: {}",
-                        diagnostic.code, diagnostic.file, diagnostic.message
+                        "  {} in {file} at {}..{}: {}",
+                        diagnostic.code.unwrap_or("<none>"),
+                        span.start,
+                        span.end,
+                        diagnostic.message
                     )
                 })
                 .collect::<Vec<_>>()
@@ -131,11 +141,13 @@ fn every_pattern_file_checks_without_warnings() {
         let compilation = compile_pattern(file_name);
         let warnings: Vec<String> = check_ifml(&compilation, None)
             .into_iter()
-            .filter(|diagnostic| !diagnostic.severity.is_error())
-            .map(|diagnostic| {
+            .filter(|(_, diagnostic)| !diagnostic.severity.is_error())
+            .map(|(_, diagnostic)| {
                 format!(
                     "  {} at {:?}: {}",
-                    diagnostic.code, diagnostic.span, diagnostic.message
+                    diagnostic.code.unwrap_or("<none>"),
+                    diagnostic.span,
+                    diagnostic.message
                 )
             })
             .collect();
@@ -215,13 +227,13 @@ fn unknown_override_names_e0007() {
     let diagnostics = compile_ifml_str("consumer.ifml", BAD_OVERRIDE, &imports)
         .expect_err("unknown override name must be a diagnostic");
     assert_eq!(diagnostics.len(), 1);
-    assert_eq!(diagnostics[0].code, E_UNKNOWN_INPUT);
+    assert_eq!(diagnostics[0].1.code.unwrap(), E_UNKNOWN_INPUT);
     assert_eq!(
-        diagnostics[0].message,
+        diagnostics[0].1.message,
         "unknown input 'bogus' for module 'Pagination'"
     );
-    assert_eq!(diagnostics[0].file, "consumer.ifml");
-    let (start, end) = diagnostics[0].span;
+    assert_eq!(diagnostics[0].0, "consumer.ifml");
+    let (start, end) = span_bounds(diagnostics[0].1.span);
     assert_eq!(&BAD_OVERRIDE[start..end], "bogus: 1;");
 }
 

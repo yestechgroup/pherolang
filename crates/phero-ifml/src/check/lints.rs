@@ -8,13 +8,14 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 
+use phero_diagnostics::Diagnostic;
 use phero_ir::ifml::{
     ColumnDef, ComponentDeclaration, ComponentSpec, ComponentType, ContainerDeclaration,
     EventHandler, ViewDeclaration,
 };
 
 use crate::index::{IfmlIndex, NamedSite};
-use crate::resolve::{IfmlCompilation, IfmlDiagnostic};
+use crate::resolve::IfmlCompilation;
 
 use super::{
     W_COMPONENT_WITHOUT_DATA, W_DEAD_ACTION, W_SHADOWED_MODULE, W_UNREACHABLE_VIEW,
@@ -24,7 +25,9 @@ use super::{
 /// The lint pass: five structural warnings over the main file's
 /// declarations, run after the interaction and authorization passes (their
 /// errors already name dangling references; the lints judge what remains).
-pub(super) fn check_lints(compilation: &IfmlCompilation) -> Vec<IfmlDiagnostic> {
+pub(super) fn check_lints(
+    compilation: &IfmlCompilation,
+) -> Vec<(String, Diagnostic<&'static str>)> {
     let mut diags = Vec::new();
     diags.extend(dead_actions(compilation));
     diags.extend(unreachable_views(compilation));
@@ -54,7 +57,7 @@ fn main_view_sites(
 
 /// W0150 — a main-file `action "X"` declaration no `action("X")` invocation
 /// names, anywhere in the compilation.
-fn dead_actions(compilation: &IfmlCompilation) -> Vec<IfmlDiagnostic> {
+fn dead_actions(compilation: &IfmlCompilation) -> Vec<(String, Diagnostic<&'static str>)> {
     let index = &compilation.index;
     let invoked: BTreeSet<&str> = index
         .action_targets
@@ -68,11 +71,13 @@ fn dead_actions(compilation: &IfmlCompilation) -> Vec<IfmlDiagnostic> {
         .filter(|site| site.file == 0)
         .filter(|site| !invoked.contains(site.name.as_str()))
         .map(|site| {
-            IfmlDiagnostic::warning(
-                W_DEAD_ACTION,
-                format!("action '{}' is declared but never invoked", site.name),
-                site.name_span,
+            (
                 main_path(index),
+                Diagnostic::warning(
+                    format!("action '{}' is declared but never invoked", site.name),
+                    Some((site.name_span.0..site.name_span.1).into()),
+                )
+                .with_code(W_DEAD_ACTION),
             )
         })
         .collect()
@@ -83,7 +88,7 @@ fn dead_actions(compilation: &IfmlCompilation) -> Vec<IfmlDiagnostic> {
 /// no body content. The manifest exports every view as a route, so a
 /// content view is intentionally routable; the empty shell nothing
 /// navigates to is the dead-UI class.
-fn unreachable_views(compilation: &IfmlCompilation) -> Vec<IfmlDiagnostic> {
+fn unreachable_views(compilation: &IfmlCompilation) -> Vec<(String, Diagnostic<&'static str>)> {
     let index = &compilation.index;
     let navigated: BTreeSet<&str> = index
         .action_targets
@@ -103,14 +108,16 @@ fn unreachable_views(compilation: &IfmlCompilation) -> Vec<IfmlDiagnostic> {
         if has_content {
             continue;
         }
-        diags.push(IfmlDiagnostic::warning(
-            W_UNREACHABLE_VIEW,
-            format!(
-                "view '{}' is never navigated to — mark it landmark or navigate to it",
-                view.name
-            ),
-            site.name_span,
+        diags.push((
             main_path(index),
+            Diagnostic::warning(
+                format!(
+                    "view '{}' is never navigated to — mark it landmark or navigate to it",
+                    view.name
+                ),
+                Some((site.name_span.0..site.name_span.1).into()),
+            )
+            .with_code(W_UNREACHABLE_VIEW),
         ));
     }
     diags
@@ -120,7 +127,7 @@ fn unreachable_views(compilation: &IfmlCompilation) -> Vec<IfmlDiagnostic> {
 /// file's declaration. Resolution deliberately lets the main file win
 /// silently; the warning documents the shadowing at the winning
 /// declaration's name.
-fn shadowed_modules(compilation: &IfmlCompilation) -> Vec<IfmlDiagnostic> {
+fn shadowed_modules(compilation: &IfmlCompilation) -> Vec<(String, Diagnostic<&'static str>)> {
     let index = &compilation.index;
     let mut imported_by: BTreeMap<&str, &str> = BTreeMap::new();
     for decl in &index.module_decls {
@@ -135,14 +142,16 @@ fn shadowed_modules(compilation: &IfmlCompilation) -> Vec<IfmlDiagnostic> {
         let Some(imported_from) = imported_by.get(decl.name.as_str()) else {
             continue;
         };
-        diags.push(IfmlDiagnostic::warning(
-            W_SHADOWED_MODULE,
-            format!(
-                "module '{}' shadows an imported module of the same name (from '{}')",
-                decl.name, imported_from
-            ),
-            decl.name_span,
+        diags.push((
             main_path(index),
+            Diagnostic::warning(
+                format!(
+                    "module '{}' shadows an imported module of the same name (from '{}')",
+                    decl.name, imported_from
+                ),
+                Some((decl.name_span.0..decl.name_span.1).into()),
+            )
+            .with_code(W_SHADOWED_MODULE),
         ));
     }
     diags
@@ -152,7 +161,9 @@ fn shadowed_modules(compilation: &IfmlCompilation) -> Vec<IfmlDiagnostic> {
 /// no events, no chart, and no explicit `Entity.field` table columns: a
 /// fully static placeholder. Walks views and modules recursively through
 /// containers.
-fn components_without_data(compilation: &IfmlCompilation) -> Vec<IfmlDiagnostic> {
+fn components_without_data(
+    compilation: &IfmlCompilation,
+) -> Vec<(String, Diagnostic<&'static str>)> {
     let index = &compilation.index;
     let mut diags = Vec::new();
     let mut warn = |context: &str, component: &ComponentDeclaration| {
@@ -164,14 +175,16 @@ fn components_without_data(compilation: &IfmlCompilation) -> Vec<IfmlDiagnostic>
             .iter()
             .find_map(|property| property.span)
             .unwrap_or((0, 0));
-        diags.push(IfmlDiagnostic::warning(
-            W_COMPONENT_WITHOUT_DATA,
-            format!(
-                "{context} component '{}' binds no entity data",
-                component.name
-            ),
-            span,
+        diags.push((
             main_path(index),
+            Diagnostic::warning(
+                format!(
+                    "{context} component '{}' binds no entity data",
+                    component.name
+                ),
+                Some((span.0..span.1).into()),
+            )
+            .with_code(W_COMPONENT_WITHOUT_DATA),
         ));
     };
     for view in &compilation.model.views {
@@ -197,7 +210,9 @@ fn components_without_data(compilation: &IfmlCompilation) -> Vec<IfmlDiagnostic>
 /// explicit entity columns in its body, no `params`, no module composition,
 /// no event handlers anywhere in its body, and no `roles:`/`requires:`
 /// policy gate.
-fn views_without_domain_binding(compilation: &IfmlCompilation) -> Vec<IfmlDiagnostic> {
+fn views_without_domain_binding(
+    compilation: &IfmlCompilation,
+) -> Vec<(String, Diagnostic<&'static str>)> {
     let index = &compilation.index;
     let mut diags = Vec::new();
     for (view, site) in main_view_sites(compilation) {
@@ -209,14 +224,16 @@ fn views_without_domain_binding(compilation: &IfmlCompilation) -> Vec<IfmlDiagno
         if tied {
             continue;
         }
-        diags.push(IfmlDiagnostic::warning(
-            W_VIEW_WITHOUT_DOMAIN,
-            format!(
-                "view '{}' has no domain binding — bind data, declare params, or compose a module",
-                view.name
-            ),
-            site.name_span,
+        diags.push((
             main_path(index),
+            Diagnostic::warning(
+                format!(
+                    "view '{}' has no domain binding — bind data, declare params, or compose a module",
+                    view.name
+                ),
+                Some((site.name_span.0..site.name_span.1).into()),
+            )
+            .with_code(W_VIEW_WITHOUT_DOMAIN),
         ));
     }
     diags

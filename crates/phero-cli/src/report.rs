@@ -97,56 +97,62 @@ pub(crate) fn report_cmmn_diagnostics(
 /// checker, and lints) grouped per file, ariadne-rendered against each
 /// file's own source — the main interaction file and every imported
 /// `.ifml` file. Severity is carried through: lints render as warnings.
+///
+/// The records are the workspace's shared diagnostic (SK2 of epic
+/// pherolang#328) tagged by file, so this reporter renders them through
+/// the same [`render_grouped`] path as every other surface. The visible
+/// `.ifml` line keeps the `"{code} {message}"` join the CLI has always
+/// printed — joined here, at print time, from the record's `code`; the
+/// stored message stays bare.
 pub(crate) fn report_ifml_diagnostics(
     sources: &[(String, String)],
-    diagnostics: &[phero_ifml::IfmlDiagnostic],
+    diagnostics: &[(String, phero_diagnostics::Diagnostic<&'static str>)],
 ) {
-    let converted: Vec<(String, phero_driver::Diagnostic)> = diagnostics
-        .iter()
-        .map(|diagnostic| {
-            let constructor = if diagnostic.severity.is_error() {
-                phero_driver::Diagnostic::error
-            } else {
-                phero_driver::Diagnostic::warning
-            };
-            (
-                diagnostic.file.clone(),
-                constructor(
-                    format!("{} {}", diagnostic.code, diagnostic.message),
-                    Some(phero_driver::Span {
-                        start: diagnostic.span.0,
-                        end: diagnostic.span.1,
-                        context: (),
-                    }),
-                ),
-            )
-        })
-        .collect();
-    render_grouped(&converted, |path| {
-        sources
-            .iter()
-            .find(|(name, _)| name == path)
-            .map(|(_, source)| source.as_str())
-    });
+    render_grouped_with(
+        diagnostics,
+        |path| {
+            sources
+                .iter()
+                .find(|(name, _)| name == path)
+                .map(|(_, source)| source.as_str())
+        },
+        |diagnostic| match &diagnostic.code {
+            Some(code) => format!("{code} {}", diagnostic.message),
+            None => diagnostic.message.clone(),
+        },
+    );
 }
 
 /// Groups diagnostics by file path and renders each group against its
 /// source; paths with no known source are skipped. Groups keep the
 /// diagnostics' own order and file contiguity.
-fn render_grouped<'d, 's>(
-    diagnostics: &'d [(String, phero_driver::Diagnostic)],
+fn render_grouped<'s, C: Clone>(
+    diagnostics: &[(String, phero_diagnostics::Diagnostic<C>)],
     source_of: impl Fn(&str) -> Option<&'s str>,
+) {
+    render_grouped_with(diagnostics, source_of, |diagnostic| {
+        diagnostic.message.clone()
+    });
+}
+
+/// [`render_grouped`] with a report-line decorator: the line rendered for a
+/// record is `line(record)`, used by the `.ifml` reporter to join its
+/// stable code onto the message without touching the stored record.
+fn render_grouped_with<'s, C: Clone>(
+    diagnostics: &[(String, phero_diagnostics::Diagnostic<C>)],
+    source_of: impl Fn(&str) -> Option<&'s str>,
+    line: impl Fn(&phero_diagnostics::Diagnostic<C>) -> String,
 ) {
     if diagnostics.is_empty() {
         return;
     }
-    let mut groups: Vec<(&str, Vec<phero_driver::Diagnostic>)> = Vec::new();
+    let mut groups: Vec<(&str, Vec<phero_diagnostics::Diagnostic<C>>)> = Vec::new();
     for (path, diagnostic) in diagnostics {
+        let mut rendered = diagnostic.clone();
+        rendered.message = line(diagnostic);
         match groups.last_mut() {
-            Some((group_path, group)) if *group_path == path.as_str() => {
-                group.push(diagnostic.clone())
-            }
-            _ => groups.push((path.as_str(), vec![diagnostic.clone()])),
+            Some((group_path, group)) if *group_path == path.as_str() => group.push(rendered),
+            _ => groups.push((path.as_str(), vec![rendered])),
         }
     }
     for (path, group) in groups {

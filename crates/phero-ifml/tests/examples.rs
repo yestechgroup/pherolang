@@ -10,7 +10,7 @@ use std::path::{Path, PathBuf};
 
 use phero_driver::{compile_str, DomainImports};
 use phero_ifml::{
-    check_ifml_with_decisions, compile_ifml_str, IfmlCompilation, IfmlDiagnostic, IfmlImports,
+    check_ifml_with_decisions, compile_ifml_str, Diagnostic, IfmlCompilation, IfmlImports,
 };
 
 /// The interaction-flow examples as `(name, app-relative stem)`, hardcoded
@@ -208,14 +208,17 @@ fn load(stem: &str) -> Example {
     example
 }
 
-fn render(diagnostics: &[IfmlDiagnostic]) -> String {
+fn render(diagnostics: &[(String, Diagnostic<&'static str>)]) -> String {
     diagnostics
         .iter()
-        .map(|diagnostic| {
-            let (start, end) = diagnostic.span;
+        .map(|(file, diagnostic)| {
+            let span = diagnostic.span.expect("a diagnostic carries a span");
             format!(
-                "  {} in {} at {start}..{end}: {}",
-                diagnostic.code, diagnostic.file, diagnostic.message
+                "  {} in {file} at {}..{}: {}",
+                diagnostic.code.unwrap_or("<none>"),
+                span.start,
+                span.end,
+                diagnostic.message
             )
         })
         .collect::<Vec<_>>()

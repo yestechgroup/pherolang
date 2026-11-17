@@ -232,7 +232,7 @@ fn compile_ifml(file: &Path, ctx: &mut CompileContext<'_>) -> Compiled {
     );
     let warnings = binding
         .iter()
-        .filter(|diagnostic| !diagnostic.severity.is_error())
+        .filter(|(_, diagnostic)| !diagnostic.severity.is_error())
         .count();
     let failed = warnings < binding.len();
     if ctx.renders(failed) && !binding.is_empty() {
