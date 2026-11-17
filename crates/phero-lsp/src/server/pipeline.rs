@@ -9,13 +9,13 @@ use phero_driver::{NavigationIndex, SurfaceKind};
 use tower_lsp_server::ls_types::*;
 
 use super::graph::{is_formatter_golden, resolved_imports, surface_of_path};
-use super::{PheroBackend, Surface, SOURCE_NAME};
+use super::{DocumentSurface, PheroBackend, SOURCE_NAME};
 use crate::position::PositionMap;
 
 /// One candidate file of a directory snapshot: where it lives, its surface,
 /// and the text the application relation reads (an open buffer wins over
 /// disk).
-type DirectoryCandidate = (std::path::PathBuf, Surface, String);
+type DirectoryCandidate = (std::path::PathBuf, DocumentSurface, String);
 
 /// The import closure of one `.ifml` document, gathered by
 /// [`PheroBackend::import_closure`].
@@ -85,7 +85,7 @@ impl PheroBackend {
         };
         let map = PositionMap::new(&text);
         let lsp_diagnostics = match surface {
-            Surface::Known(SurfaceKind::Mox) => {
+            DocumentSurface::Known(SurfaceKind::Mox) => {
                 let Some(file) = file else {
                     return;
                 };
@@ -111,7 +111,7 @@ impl PheroBackend {
                     .map(|diagnostic| to_lsp_diagnostic(diagnostic, &map))
                     .collect()
             }
-            Surface::Known(SurfaceKind::Ifml) => {
+            DocumentSurface::Known(SurfaceKind::Ifml) => {
                 let (_snapshot, diagnostics) = self.compile_ifml(uri, &text);
                 diagnostics
                     .iter()
@@ -119,7 +119,7 @@ impl PheroBackend {
                     .map(|(_, diagnostic)| to_lsp_ifml_diagnostic(diagnostic, &map))
                     .collect()
             }
-            Surface::Known(SurfaceKind::Ddd) => {
+            DocumentSurface::Known(SurfaceKind::Ddd) => {
                 // The driver keys by the disk path when the document lives
                 // on disk — the CLI's semantics, where imports resolve
                 // lexically against the real path and sibling artifacts
@@ -169,7 +169,7 @@ impl PheroBackend {
                     .map(|(_, diagnostic)| to_lsp_diagnostic(diagnostic, &map))
                     .collect()
             }
-            Surface::Known(SurfaceKind::Actor) => {
+            DocumentSurface::Known(SurfaceKind::Actor) => {
                 let driver_path = uri
                     .to_file_path()
                     .map(|path| path.display().to_string())
@@ -188,7 +188,7 @@ impl PheroBackend {
                     .map(|(_, diagnostic)| to_lsp_diagnostic(diagnostic, &map))
                     .collect()
             }
-            Surface::Known(SurfaceKind::Dmn) => {
+            DocumentSurface::Known(SurfaceKind::Dmn) => {
                 // The driver keys by the disk path when the document lives
                 // on disk — the CLI's semantics, where imports resolve
                 // lexically against the real path and sibling designs pool
@@ -214,11 +214,11 @@ impl PheroBackend {
             // with no directory) has no snapshot — publish nothing, never a
             // bogus empty set; a clean file publishes an empty vector, which
             // clears its stale diagnostics.
-            Surface::Known(SurfaceKind::Evt)
-            | Surface::Known(SurfaceKind::Deploy)
-            | Surface::Known(SurfaceKind::Uc)
-            | Surface::Known(SurfaceKind::Cmmn) => self.snapshot_diagnostics(uri),
-            Surface::Other => Vec::new(),
+            DocumentSurface::Known(SurfaceKind::Evt)
+            | DocumentSurface::Known(SurfaceKind::Deploy)
+            | DocumentSurface::Known(SurfaceKind::Uc)
+            | DocumentSurface::Known(SurfaceKind::Cmmn) => self.snapshot_diagnostics(uri),
+            DocumentSurface::Other => Vec::new(),
         };
         self.client
             .publish_diagnostics(uri.clone(), lsp_diagnostics, version)
@@ -311,7 +311,8 @@ impl PheroBackend {
             let directory = path.parent()?;
             let mut found = None;
             for (candidate, surface, candidate_text) in self.directory_candidates(directory) {
-                if surface != Surface::Known(SurfaceKind::Ddd) || !is_root(&candidate_text) {
+                if surface != DocumentSurface::Known(SurfaceKind::Ddd) || !is_root(&candidate_text)
+                {
                     continue;
                 }
                 let candidate_key = candidate.display().to_string();
@@ -417,7 +418,7 @@ impl PheroBackend {
         let open = {
             let documents = self.documents.lock().unwrap();
             documents.iter().find_map(|(open_uri, document)| {
-                if document.surface != Surface::Known(SurfaceKind::Mox) {
+                if document.surface != DocumentSurface::Known(SurfaceKind::Mox) {
                     return None;
                 }
                 let open_path = open_uri.to_file_path()?;
@@ -490,12 +491,12 @@ impl PheroBackend {
     /// LSP's analog of the CLI's gathered project snapshot: imports leaving
     /// the directory contribute no application edge.
     fn directory_candidates(&self, directory: &std::path::Path) -> Vec<DirectoryCandidate> {
-        let open: Vec<(std::path::PathBuf, Surface, String)> = {
+        let open: Vec<(std::path::PathBuf, DocumentSurface, String)> = {
             let documents = self.documents.lock().unwrap();
             documents
                 .iter()
                 .filter(|(uri, document)| {
-                    document.surface != Surface::Other
+                    document.surface != DocumentSurface::Other
                         && uri
                             .to_file_path()
                             .is_some_and(|path| path.parent() == Some(directory))
@@ -506,7 +507,7 @@ impl PheroBackend {
                 })
                 .collect()
         };
-        let mut candidates: std::collections::BTreeMap<std::path::PathBuf, Surface> =
+        let mut candidates: std::collections::BTreeMap<std::path::PathBuf, DocumentSurface> =
             Default::default();
         if let Ok(entries) = std::fs::read_dir(directory) {
             for entry in entries.flatten() {
@@ -753,7 +754,8 @@ impl PheroBackend {
             documents
                 .iter()
                 .filter(|(url, document)| {
-                    **url != *changed && document.surface == Surface::Known(SurfaceKind::Ifml)
+                    **url != *changed
+                        && document.surface == DocumentSurface::Known(SurfaceKind::Ifml)
                 })
                 .map(|(url, document)| (url.clone(), document.text.clone()))
                 .collect()
@@ -774,7 +776,7 @@ impl PheroBackend {
             .lock()
             .unwrap()
             .get(uri)
-            .is_some_and(|document| document.surface == Surface::Known(SurfaceKind::Ifml))
+            .is_some_and(|document| document.surface == DocumentSurface::Known(SurfaceKind::Ifml))
     }
 
     /// Compiles every open `.ifml` document into a snapshot. References
@@ -786,7 +788,9 @@ impl PheroBackend {
             let documents = self.documents.lock().unwrap();
             documents
                 .iter()
-                .filter(|(_, document)| document.surface == Surface::Known(SurfaceKind::Ifml))
+                .filter(|(_, document)| {
+                    document.surface == DocumentSurface::Known(SurfaceKind::Ifml)
+                })
                 .map(|(url, document)| (url.clone(), document.text.clone()))
                 .collect()
         };
@@ -808,7 +812,7 @@ impl PheroBackend {
             let document = documents.get(uri)?;
             (
                 document.text.clone(),
-                document.surface == Surface::Known(SurfaceKind::Ifml),
+                document.surface == DocumentSurface::Known(SurfaceKind::Ifml),
             )
         };
         let (text, is_ifml) = snapshot;

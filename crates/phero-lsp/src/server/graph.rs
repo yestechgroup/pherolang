@@ -46,7 +46,7 @@ use phero_ir::graph::{kinds, GraphModel, GraphNode};
 use tower_lsp_server::ls_types::*;
 
 use super::pipeline::{to_lsp_diagnostic, to_lsp_ifml_diagnostic};
-use super::{PheroBackend, Surface};
+use super::{DocumentSurface, PheroBackend};
 use crate::position::PositionMap;
 
 /// One compiled snapshot: the graph model and one spanned index per file it
@@ -375,7 +375,7 @@ impl PheroBackend {
         let mut signature: Vec<(String, i32)> = documents
             .iter()
             .filter(|(uri, document)| {
-                document.surface != Surface::Other
+                document.surface != DocumentSurface::Other
                     && uri
                         .to_file_path()
                         .is_some_and(|path| path.parent() == Some(directory))
@@ -396,12 +396,12 @@ impl PheroBackend {
     /// open/change/close, which is also when the snapshot cache is
     /// cleared).
     fn build_graph_snapshot(&self, directory: &Path) -> Option<GraphSnapshot> {
-        let open: Vec<(Uri, Surface, String)> = {
+        let open: Vec<(Uri, DocumentSurface, String)> = {
             let documents = self.documents.lock().unwrap();
             documents
                 .iter()
                 .filter(|(uri, document)| {
-                    document.surface != Surface::Other
+                    document.surface != DocumentSurface::Other
                         && uri
                             .to_file_path()
                             .is_some_and(|path| path.parent() == Some(directory))
@@ -409,7 +409,7 @@ impl PheroBackend {
                 .map(|(uri, document)| (uri.clone(), document.surface, document.text.clone()))
                 .collect()
         };
-        let open_for = |path: &Path| -> Option<&(Uri, Surface, String)> {
+        let open_for = |path: &Path| -> Option<&(Uri, DocumentSurface, String)> {
             open.iter().find(|(uri, _, _)| {
                 uri.to_file_path()
                     .is_some_and(|candidate| candidate.as_ref() == path)
@@ -418,7 +418,7 @@ impl PheroBackend {
 
         // Candidates: the directory's supported files, plus every open
         // document that lives there (which need not exist on disk).
-        let mut candidates: BTreeMap<PathBuf, Surface> = BTreeMap::new();
+        let mut candidates: BTreeMap<PathBuf, DocumentSurface> = BTreeMap::new();
         if let Ok(entries) = std::fs::read_dir(directory) {
             for entry in entries.flatten() {
                 let path = entry.path();
@@ -540,8 +540,13 @@ impl PheroBackend {
     /// fragment needs its root's (DD8) — `ddd_app_sources` resolves it
     /// through the directory snapshot, and `None` means no root reaches it
     /// (the fragment is then reported as unreachable, not guessed).
-    fn snapshot_application(&self, surface: Surface, uri: &Uri, text: &str) -> Option<String> {
-        if surface != Surface::Known(SurfaceKind::Ddd) {
+    fn snapshot_application(
+        &self,
+        surface: DocumentSurface,
+        uri: &Uri,
+        text: &str,
+    ) -> Option<String> {
+        if surface != DocumentSurface::Known(SurfaceKind::Ddd) {
             return None;
         }
         let (_, root_text, _) = self.ddd_app_sources(uri, text)?;
@@ -564,8 +569,11 @@ impl PheroBackend {
             .filter_map(|fragment| {
                 let path = Path::new(&fragment.path);
                 let display = display_path(path)?;
-                let imports =
-                    resolved_imports(Surface::Known(SurfaceKind::Ddd), &fragment.source, path);
+                let imports = resolved_imports(
+                    DocumentSurface::Known(SurfaceKind::Ddd),
+                    &fragment.source,
+                    path,
+                );
                 Some(GraphFragment {
                     display,
                     path: fragment.path,
@@ -592,7 +600,13 @@ impl PheroBackend {
     /// no mtime, a version bump with identical text should not recompile,
     /// and only content tells a dependent's compile that an imported
     /// domain moved.
-    fn compile_key(&self, surface: Surface, path: &Path, text: &str, imports: &[String]) -> u64 {
+    fn compile_key(
+        &self,
+        surface: DocumentSurface,
+        path: &Path,
+        text: &str,
+        imports: &[String],
+    ) -> u64 {
         let mut hasher = DefaultHasher::new();
         path.hash(&mut hasher);
         text.hash(&mut hasher);
@@ -600,7 +614,7 @@ impl PheroBackend {
             import.hash(&mut hasher);
             hash_text(&mut hasher, self.fetch_open_or_disk(import));
         }
-        if surface == Surface::Known(SurfaceKind::Mox) {
+        if surface == DocumentSurface::Known(SurfaceKind::Mox) {
             for import in mox_schema_imports(text, path) {
                 import.hash(&mut hasher);
                 hash_text(&mut hasher, std::fs::read_to_string(&import).ok());
@@ -610,7 +624,7 @@ impl PheroBackend {
         // covers the root text and every fragment's text — an edit to the
         // root (or a sibling fragment) must invalidate each participant's
         // index and diagnostics.
-        if surface == Surface::Known(SurfaceKind::Ddd) {
+        if surface == DocumentSurface::Known(SurfaceKind::Ddd) {
             if let Some(uri) = Uri::from_file_path(path) {
                 if let Some((root_path, root_text, fragments)) = self.ddd_app_sources(&uri, text) {
                     root_path.hash(&mut hasher);
@@ -631,7 +645,7 @@ impl PheroBackend {
     /// itself, already in LSP shape.
     fn compile_snapshot_file(
         &self,
-        surface: Surface,
+        surface: DocumentSurface,
         path: &Path,
         text: &str,
         uri: &Uri,
@@ -641,7 +655,7 @@ impl PheroBackend {
         let domain_inputs = |domains: &[(String, String)]| super::pipeline::domain_inputs(domains);
         let mut fetch = |resolved: &str| -> Option<String> { self.fetch_open_or_disk(resolved) };
         match surface {
-            Surface::Known(SurfaceKind::Mox) => {
+            DocumentSurface::Known(SurfaceKind::Mox) => {
                 // A schema/sigil import that cannot be read is not a compile
                 // diagnostic (the import content never reached the driver).
                 let Ok(imports) =
@@ -659,7 +673,7 @@ impl PheroBackend {
                         .collect(),
                 )
             }
-            Surface::Known(SurfaceKind::Actor) => {
+            DocumentSurface::Known(SurfaceKind::Actor) => {
                 let domains = phero_driver::project::gather_domain_sources(
                     &key,
                     text,
@@ -678,7 +692,7 @@ impl PheroBackend {
                     keyed_diagnostics(&compilation.diagnostics, &key, &map),
                 )
             }
-            Surface::Known(SurfaceKind::Ddd) => {
+            DocumentSurface::Known(SurfaceKind::Ddd) => {
                 let fragment = phero_syntax::parse_ddd(text)
                     .ast
                     .is_some_and(|ast| ast.application.is_none());
@@ -715,7 +729,7 @@ impl PheroBackend {
                     keyed_diagnostics(&compilation.diagnostics, &key, &map),
                 )
             }
-            Surface::Known(SurfaceKind::Evt) => {
+            DocumentSurface::Known(SurfaceKind::Evt) => {
                 let domains = phero_driver::project::gather_domain_sources(
                     &key,
                     text,
@@ -734,7 +748,7 @@ impl PheroBackend {
                     keyed_diagnostics(&compilation.diagnostics, &key, &map),
                 )
             }
-            Surface::Known(SurfaceKind::Deploy) => {
+            DocumentSurface::Known(SurfaceKind::Deploy) => {
                 let Ok(pair) = phero_driver::project::gather_deploy_imports(
                     &key,
                     text,
@@ -755,7 +769,7 @@ impl PheroBackend {
                     keyed_diagnostics(&compilation.diagnostics, &key, &map),
                 )
             }
-            Surface::Known(SurfaceKind::Ifml) => {
+            DocumentSurface::Known(SurfaceKind::Ifml) => {
                 let (snapshot, diagnostics) = self.compile_ifml(uri, text);
                 (
                     snapshot.map(|snapshot| SnapshotArtifact::Flow(snapshot.compilation.model)),
@@ -766,7 +780,7 @@ impl PheroBackend {
                         .collect(),
                 )
             }
-            Surface::Known(SurfaceKind::Uc) => {
+            DocumentSurface::Known(SurfaceKind::Uc) => {
                 let Ok(buckets) = phero_driver::project::gather_usecase_imports(
                     &key,
                     text,
@@ -787,7 +801,7 @@ impl PheroBackend {
                     keyed_diagnostics(&compilation.diagnostics, &key, &map),
                 )
             }
-            Surface::Known(SurfaceKind::Cmmn) => {
+            DocumentSurface::Known(SurfaceKind::Cmmn) => {
                 let Ok(buckets) = phero_driver::project::gather_case_imports(
                     &key,
                     text,
@@ -808,7 +822,7 @@ impl PheroBackend {
                     keyed_diagnostics(&compilation.diagnostics, &key, &map),
                 )
             }
-            Surface::Known(SurfaceKind::Dmn) => {
+            DocumentSurface::Known(SurfaceKind::Dmn) => {
                 let sources = self.dmn_sources_for(uri, text);
                 let compilation = phero_driver::compile_dmn_str(&key, text, &sources.inputs);
                 (
@@ -816,7 +830,7 @@ impl PheroBackend {
                     keyed_diagnostics(&compilation.diagnostics, &key, &map),
                 )
             }
-            Surface::Other => (None, Vec::new()),
+            DocumentSurface::Other => (None, Vec::new()),
         }
     }
 
@@ -969,8 +983,8 @@ fn push_artifact(
 /// The document surface a path names, by extension — [`super::surface_of_path`]
 /// lifted into the classifier the snapshot and publish pipeline match on
 /// (`None` for a file no surface owns).
-pub(super) fn surface_of_path(path: &Path) -> Option<Surface> {
-    super::surface_of_path(path).map(Surface::Known)
+pub(super) fn surface_of_path(path: &Path) -> Option<DocumentSurface> {
+    super::surface_of_path(path).map(DocumentSurface::Known)
 }
 
 /// `true` for a formatter-golden `X.fmt.<ext>` file — an output, not a
@@ -998,27 +1012,31 @@ fn display_path(path: &Path) -> Option<String> {
 /// name, which its own source does not carry, so the snapshot supplies it.
 /// Every other surface ignores it.
 fn surface_index(
-    surface: Surface,
+    surface: DocumentSurface,
     text: &str,
     display: &str,
     application: Option<&str>,
 ) -> Option<SurfaceIndex> {
     Some(match surface {
-        Surface::Known(SurfaceKind::Mox) => mox_index(text),
-        Surface::Known(SurfaceKind::Actor) => phero_driver::navigation::actors_index(text),
-        Surface::Known(SurfaceKind::Ddd) => {
+        DocumentSurface::Known(SurfaceKind::Mox) => mox_index(text),
+        DocumentSurface::Known(SurfaceKind::Actor) => phero_driver::navigation::actors_index(text),
+        DocumentSurface::Known(SurfaceKind::Ddd) => {
             phero_driver::navigation::ddd_index_with_application(text, application)
         }
-        Surface::Known(SurfaceKind::Evt) => phero_driver::navigation::evt_index(text, display),
-        Surface::Known(SurfaceKind::Deploy) => phero_driver::navigation::deploy_index(text),
-        Surface::Known(SurfaceKind::Ifml) => {
+        DocumentSurface::Known(SurfaceKind::Evt) => {
+            phero_driver::navigation::evt_index(text, display)
+        }
+        DocumentSurface::Known(SurfaceKind::Deploy) => phero_driver::navigation::deploy_index(text),
+        DocumentSurface::Known(SurfaceKind::Ifml) => {
             let (model, index) = phero_ifml::parse_ifml_indexed(text).ok()?;
             ifml_surface(&model, &index)
         }
-        Surface::Known(SurfaceKind::Uc) => phero_driver::navigation::uc_index(text),
-        Surface::Known(SurfaceKind::Cmmn) => phero_driver::navigation::cmmn_index(text),
-        Surface::Known(SurfaceKind::Dmn) => phero_driver::navigation::dmn_index(text, display),
-        Surface::Other => return None,
+        DocumentSurface::Known(SurfaceKind::Uc) => phero_driver::navigation::uc_index(text),
+        DocumentSurface::Known(SurfaceKind::Cmmn) => phero_driver::navigation::cmmn_index(text),
+        DocumentSurface::Known(SurfaceKind::Dmn) => {
+            phero_driver::navigation::dmn_index(text, display)
+        }
+        DocumentSurface::Other => return None,
     })
 }
 
@@ -1027,7 +1045,7 @@ fn surface_index(
 /// host-normalized keys the graph clusters applications on. The publish
 /// pipeline's compile-time joins reuse this (pherolang#249), so graph
 /// clustering and capability pooling can never see different edges.
-pub(super) fn resolved_imports(surface: Surface, text: &str, path: &Path) -> Vec<String> {
+pub(super) fn resolved_imports(surface: DocumentSurface, text: &str, path: &Path) -> Vec<String> {
     let directory = path.parent().unwrap_or_else(|| Path::new("."));
     let mut keys: Vec<String> = written_imports(surface, text)
         .into_iter()
@@ -1044,36 +1062,36 @@ pub(super) fn resolved_imports(surface: Surface, text: &str, path: &Path) -> Vec
 }
 
 /// The `import "…"` strings one surface's source writes.
-fn written_imports(surface: Surface, text: &str) -> Vec<String> {
+fn written_imports(surface: DocumentSurface, text: &str) -> Vec<String> {
     match surface {
         // `.mox` imports are schema/sigil content, not application files.
-        Surface::Known(SurfaceKind::Mox) | Surface::Other => Vec::new(),
-        Surface::Known(SurfaceKind::Actor) => phero_syntax::parse_actors(text)
+        DocumentSurface::Known(SurfaceKind::Mox) | DocumentSurface::Other => Vec::new(),
+        DocumentSurface::Known(SurfaceKind::Actor) => phero_syntax::parse_actors(text)
             .ast
             .map(|ast| ast.imports.into_iter().map(|import| import.path).collect())
             .unwrap_or_default(),
-        Surface::Known(SurfaceKind::Ddd) => phero_syntax::parse_ddd(text)
+        DocumentSurface::Known(SurfaceKind::Ddd) => phero_syntax::parse_ddd(text)
             .ast
             .map(|ast| ast.imports.into_iter().map(|import| import.path).collect())
             .unwrap_or_default(),
-        Surface::Known(SurfaceKind::Evt) => phero_syntax::parse_evt(text)
+        DocumentSurface::Known(SurfaceKind::Evt) => phero_syntax::parse_evt(text)
             .ast
             .map(|ast| ast.imports.into_iter().map(|import| import.path).collect())
             .unwrap_or_default(),
-        Surface::Known(SurfaceKind::Deploy) => phero_syntax::parse_deploy(text)
+        DocumentSurface::Known(SurfaceKind::Deploy) => phero_syntax::parse_deploy(text)
             .ast
             .map(|ast| ast.imports.into_iter().map(|import| import.path).collect())
             .unwrap_or_default(),
-        Surface::Known(SurfaceKind::Uc) => phero_syntax::parse_usecases(text)
+        DocumentSurface::Known(SurfaceKind::Uc) => phero_syntax::parse_usecases(text)
             .ast
             .map(|ast| ast.imports.into_iter().map(|import| import.path).collect())
             .unwrap_or_default(),
-        Surface::Known(SurfaceKind::Cmmn) => phero_syntax::parse_cmmn(text)
+        DocumentSurface::Known(SurfaceKind::Cmmn) => phero_syntax::parse_cmmn(text)
             .ast
             .map(|ast| ast.imports.into_iter().map(|import| import.path).collect())
             .unwrap_or_default(),
-        Surface::Known(SurfaceKind::Dmn) => phero_driver::project::dmn_import_paths(text),
-        Surface::Known(SurfaceKind::Ifml) => phero_ifml::parse_ifml(text)
+        DocumentSurface::Known(SurfaceKind::Dmn) => phero_driver::project::dmn_import_paths(text),
+        DocumentSurface::Known(SurfaceKind::Ifml) => phero_ifml::parse_ifml(text)
             .map(|model| model.imports)
             .unwrap_or_default(),
     }
