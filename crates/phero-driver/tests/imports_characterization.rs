@@ -72,9 +72,10 @@ fn owned(entries: &[(&str, &str)]) -> BTreeMap<String, String> {
         .collect()
 }
 
-fn owned_pairs(
-    entries: &[((&str, &str), (&str, &str))],
-) -> BTreeMap<(String, String), (String, String)> {
+/// One `((importer, import), (resolved key, text))` pair fixture.
+type PairFixture<'a> = ((&'a str, &'a str), (&'a str, &'a str));
+
+fn owned_pairs(entries: &[PairFixture<'_>]) -> BTreeMap<(String, String), (String, String)> {
     entries
         .iter()
         .map(|((importer, import), (key, text))| {
@@ -172,7 +173,10 @@ fn domain_gather_resolves_lexically_without_normalising() {
     drop(fetch);
     assert_eq!(
         log,
-        vec!["lib/widgets.mox".to_string(), "lib/./widgets.mox".to_string()],
+        vec![
+            "lib/widgets.mox".to_string(),
+            "lib/./widgets.mox".to_string()
+        ],
         "`./widgets.mox` resolves to `lib/./widgets.mox`, not `lib/widgets.mox`"
     );
 }
@@ -190,7 +194,12 @@ fn path_host<'a>(
 
 #[test]
 fn uc_missing_import_for_every_bucket_is_the_pinned_message() {
-    for missing in ["missing-domain.mox", "missing.ddd", "missing.actor", "missing.evt"] {
+    for missing in [
+        "missing-domain.mox",
+        "missing.ddd",
+        "missing.actor",
+        "missing.evt",
+    ] {
         let paths = owned(&[]);
         let mut log = Vec::new();
         let mut fetch = path_host(&paths, &mut log);
@@ -273,7 +282,10 @@ fn uc_nested_artifact_domain_miss_names_the_artifact_as_importer() {
     // `app.ddd` imports `extra.mox`, which the host cannot provide: the
     // nested gather's strict contract names the artifact, not the `.uc`.
     const DESIGN_WITH_EXTRA: &str = "import \"widgets.mox\";\nimport \"extra.mox\";\n\napplication App {\n    base test.widgets\n    module core {\n        entity Widget;\n    }\n}\n";
-    let paths = owned(&[("lib/app.ddd", DESIGN_WITH_EXTRA), ("lib/widgets.mox", WIDGET_MOX)]);
+    let paths = owned(&[
+        ("lib/app.ddd", DESIGN_WITH_EXTRA),
+        ("lib/widgets.mox", WIDGET_MOX),
+    ]);
     let mut log = Vec::new();
     let mut fetch = path_host(&paths, &mut log);
     let error = gather_usecase_imports(
@@ -293,7 +305,10 @@ fn uc_nested_artifact_domain_miss_names_the_artifact_as_importer() {
 fn uc_non_compiling_artifact_messages_name_kind_and_key() {
     // `.actor` fails: unknown capability target.
     const BROKEN_ACTOR: &str = "import \"widgets.mox\"\n\nactors Ops {\n    actor Admin\n\n    capability Touch on Nope\n\n    grant Admin {\n        permit Touch\n    }\n}\n";
-    let paths = owned(&[("lib/ops.actor", BROKEN_ACTOR), ("lib/widgets.mox", WIDGET_MOX)]);
+    let paths = owned(&[
+        ("lib/ops.actor", BROKEN_ACTOR),
+        ("lib/widgets.mox", WIDGET_MOX),
+    ]);
     let mut log = Vec::new();
     let mut fetch = path_host(&paths, &mut log);
     let error = gather_usecase_imports(
@@ -313,9 +328,13 @@ fn uc_non_compiling_artifact_messages_name_kind_and_key() {
     let paths = owned(&[("lib/app.ddd", BROKEN_DDD)]);
     let mut log = Vec::new();
     let mut fetch = path_host(&paths, &mut log);
-    let error =
-        gather_usecase_imports("lib/app.uc", "// uc", |_| vec!["app.ddd".to_string()], &mut fetch)
-            .unwrap_err();
+    let error = gather_usecase_imports(
+        "lib/app.uc",
+        "// uc",
+        |_| vec!["app.ddd".to_string()],
+        &mut fetch,
+    )
+    .unwrap_err();
     assert!(
         error.starts_with("imported design lib/app.ddd does not compile"),
         "unexpected: {error}"
@@ -323,13 +342,18 @@ fn uc_non_compiling_artifact_messages_name_kind_and_key() {
 
     // `.evt` fails: an event with a concrete body member instead of a
     // declared field type.
-    const BROKEN_EVT: &str = "import \"widgets.mox\"\n\nevent WidgetMade version \"1.0.0\" {\n    widgetId: Nope;\n}\n";
+    const BROKEN_EVT: &str =
+        "import \"widgets.mox\"\n\nevent WidgetMade version \"1.0.0\" {\n    widgetId: Nope;\n}\n";
     let paths = owned(&[("lib/ops.evt", BROKEN_EVT), ("lib/widgets.mox", WIDGET_MOX)]);
     let mut log = Vec::new();
     let mut fetch = path_host(&paths, &mut log);
-    let error =
-        gather_usecase_imports("lib/app.uc", "// uc", |_| vec!["ops.evt".to_string()], &mut fetch)
-            .unwrap_err();
+    let error = gather_usecase_imports(
+        "lib/app.uc",
+        "// uc",
+        |_| vec!["ops.evt".to_string()],
+        &mut fetch,
+    )
+    .unwrap_err();
     assert!(
         error.starts_with("imported contract lib/ops.evt does not compile"),
         "unexpected: {error}"
@@ -414,8 +438,7 @@ fn cmmn_error_order_is_the_four_bucket_pass_then_the_decision_pass() {
     )
     .unwrap_err();
     assert_eq!(
-        error,
-        "cannot read imported file lib/missing-domain.mox (imported by lib/case.cmmn)",
+        error, "cannot read imported file lib/missing-domain.mox (imported by lib/case.cmmn)",
         "the bucket pass runs before the decision pass"
     );
 }
@@ -425,7 +448,10 @@ fn cmmn_error_order_is_the_four_bucket_pass_then_the_decision_pass() {
 /// message names the decision model.
 #[test]
 fn cmmn_dmn_model_without_its_table_names_the_model_not_the_table() {
-    let paths = owned(&[("lib/verdicts.dmn", WIDGET_DMN), ("lib/widgets.mox", WIDGET_MOX)]);
+    let paths = owned(&[
+        ("lib/verdicts.dmn", WIDGET_DMN),
+        ("lib/widgets.mox", WIDGET_MOX),
+    ]);
     let mut log = Vec::new();
     let mut fetch = path_host(&paths, &mut log);
     let error = gather_case_imports(
@@ -480,11 +506,19 @@ fn deploy_pairs_keep_source_order_and_dedupe() {
     )
     .expect("both pairs gather and compile");
     assert_eq!(
-        pairs.designs.iter().map(|(k, _)| k.as_str()).collect::<Vec<_>>(),
+        pairs
+            .designs
+            .iter()
+            .map(|(k, _)| k.as_str())
+            .collect::<Vec<_>>(),
         vec!["lib/app.ddd"]
     );
     assert_eq!(
-        pairs.flows.iter().map(|(k, _)| k.as_str()).collect::<Vec<_>>(),
+        pairs
+            .flows
+            .iter()
+            .map(|(k, _)| k.as_str())
+            .collect::<Vec<_>>(),
         vec!["lib/gui.ifml"]
     );
     drop(fetch);
@@ -525,7 +559,10 @@ fn deploy_non_compiling_flow_names_the_flow_key() {
     // The flow imports a module the host does not provide: the walk leaves
     // it unresolved and `compile_ifml_str` fails, which the deploy gather
     // reports as the pinned "imported flow" message.
-    let paths = owned(&[("lib/broken.ifml", "import \"nope.ifml\";\n\nview \"Home\" {}\n")]);
+    let paths = owned(&[(
+        "lib/broken.ifml",
+        "import \"nope.ifml\";\n\nview \"Home\" {}\n",
+    )]);
     let mut log = Vec::new();
     let mut fetch = path_host(&paths, &mut log);
     let error = gather_deploy_imports(
@@ -553,12 +590,12 @@ fn dmn_import_paths_are_as_written_in_source_order() {
 
 /// A contract with no imports of its own, so the written-key bucket is
 /// observed without a nested domain gather interleaving.
-const PLAIN_EVT: &str =
-    "event WidgetMade version \"1.0.0\" {\n    widgetId: String;\n}\n";
+const PLAIN_EVT: &str = "event WidgetMade version \"1.0.0\" {\n    widgetId: String;\n}\n";
 
 #[test]
 fn dmn_events_are_keyed_as_written_and_fetched_as_resolved() {
-    const DMN: &str = "import \"contracts/ops.evt\"\n\ndecision_model D {\n    namespace test.d\n}\n";
+    const DMN: &str =
+        "import \"contracts/ops.evt\"\n\ndecision_model D {\n    namespace test.d\n}\n";
     let paths = owned(&[
         ("lib/contracts/ops.evt", OPS_EVT),
         ("lib/contracts/widgets.mox", WIDGET_MOX),
@@ -567,7 +604,10 @@ fn dmn_events_are_keyed_as_written_and_fetched_as_resolved() {
     let mut fetch = path_host(&paths, &mut log);
     let events = gather_dmn_events("lib/verdicts.dmn", DMN, &mut fetch).expect("events gather");
     assert_eq!(
-        events.iter().map(|(key, _)| key.as_str()).collect::<Vec<_>>(),
+        events
+            .iter()
+            .map(|(key, _)| key.as_str())
+            .collect::<Vec<_>>(),
         vec!["contracts/ops.evt"],
         "the bucket key is the path exactly as written"
     );
@@ -591,7 +631,10 @@ fn dmn_events_dedupe_by_the_written_path_only() {
     let mut fetch = path_host(&paths, &mut log);
     let events = gather_dmn_events("lib/verdicts.dmn", DMN, &mut fetch).expect("events gather");
     assert_eq!(
-        events.iter().map(|(key, _)| key.as_str()).collect::<Vec<_>>(),
+        events
+            .iter()
+            .map(|(key, _)| key.as_str())
+            .collect::<Vec<_>>(),
         vec!["ops.evt", "./ops.evt"],
         "two spellings are two written keys (and the same file compiles twice)"
     );
@@ -638,7 +681,8 @@ const FRAGMENT_DDD: &str =
 
 const ORDER_MOX: &str = "package demo\n\nclass Order {\n    id readonly String orderId\n}\n";
 
-const PRODUCT_MOX: &str = "package demo.catalogue\n\nclass Product {\n    id readonly String productId\n}\n";
+const PRODUCT_MOX: &str =
+    "package demo.catalogue\n\nclass Product {\n    id readonly String productId\n}\n";
 
 #[test]
 fn ddd_fragments_are_post_order_and_dedup_once() {
@@ -672,7 +716,11 @@ fn ddd_fragments_are_post_order_and_dedup_once() {
         fragments
             .sites
             .iter()
-            .map(|site| (site.importer.as_str(), site.import.as_str(), site.resolved.as_str()))
+            .map(|site| (
+                site.importer.as_str(),
+                site.import.as_str(),
+                site.resolved.as_str()
+            ))
             .collect::<Vec<_>>(),
         vec![
             ("app.ddd", "sub/catalogue.ddd", "./sub/catalogue.ddd"),
@@ -900,10 +948,7 @@ fn ifml_actors_and_decisions_carry_their_nested_gathers() {
     );
     assert_eq!(
         project.decisions[0].tables,
-        vec![(
-            "./tables/verdict.md".to_string(),
-            VERDICT_TABLE.to_string()
-        )],
+        vec![("./tables/verdict.md".to_string(), VERDICT_TABLE.to_string())],
         "decision tables are keyed by the path as written"
     );
     assert_eq!(
