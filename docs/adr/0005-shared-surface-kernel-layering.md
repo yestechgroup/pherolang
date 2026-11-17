@@ -307,6 +307,19 @@ unstable identity, no consumer.
 5. **SK6 — `.ifml` carve-out.** `IfmlDiagnostic`, `IfmlImports` and the LSP's
    `.ifml` pipeline align with SK2/SK3/SK5; the lexer, parser, AST, `IfmlIndex`
    and formatter stay.
+
+   *Shipped (SK6, pherolang#334).* The diagnostic seam was already closed by
+   SK2 — `IfmlDiagnostic` no longer exists anywhere in `crates/`, and `.ifml`
+   results are `(path, phero_diagnostics::Diagnostic<&'static str>)` — so SK6
+   deleted nothing there rather than inventing churn. The import seam stays
+   the two-key `IfmlImports` / `walk_ifml_imports` contract, a *different*
+   contract from the driver's path-keyed walker (which names it as one of the
+   two walks it does not absorb), and the surface seam is
+   `phero_parser::Surface::Ifml` with no local table or mapping. The carve-out
+   and the one-way `phero-driver → phero-ifml` direction are recorded in
+   `docs/IFML.md` ("The recorded carve-out") and pinned by
+   `crates/phero-ifml/tests/seams.rs`. No parser, AST, formatter, manifest,
+   pattern-library or golden changed.
 6. **Unfiled — parser scaffolding.** The seven `parse_*` tails are measured at
    25–28 lines each (183–199 lines total) and are mechanically identical. That
    is *material but small*: file a new issue citing this ADR if and when someone is already in

@@ -474,7 +474,7 @@ crates/phero-ifml/
 │   ├── parser/           # chumsky parsers; mod.rs carries the normative EBNF
 │   ├── lower.rs          # AST → (IfmlModel, IfmlIndex) in one traversal
 │   ├── index.rs          # Span side-table (IfmlIndex): module decls/uses, views, containers, actions, actors, components, commands, auth sites — never serialized
-│   ├── resolve.rs        # Cross-file module resolution: IfmlImports bundle, compile_ifml_str, IfmlDiagnostic (E0001–E0009)
+│   ├── resolve.rs        # Cross-file module resolution: IfmlImports bundle, compile_ifml_str (E0001–E0009, the shared Diagnostic record)
 │   ├── check/           # Typed expression checking against a domain Model, via phero_expr::DomainTypes; interaction cross-reference, authorization, decision, and lint passes over instantiated-module sites (code table: docs/DIAGNOSTICS.md)
 │   ├── expand.rs         # Module-use expansion (opt-in for the IR artifact; the manifest always derives from it)
 │   ├── manifest.rs       # The control/route manifest emitter: IfmlCompilation (+ imports, + optional domain union) → phero_ir::ifml_manifest::IfmlManifest
@@ -483,6 +483,7 @@ crates/phero-ifml/
     ├── golden.rs         # Conformance goldens — IR artifacts and manifests (PHERO_UPDATE_FIXTURES=1 regenerates)
     ├── manifest.rs       # The manifest emitter's derivation contract
     ├── resolve.rs        # Resolver conformance tests
+    ├── seams.rs          # The shared diagnostic/import/surface-identity seams (SK6)
     ├── patterns.rs       # patterns/ifml library compiles clean; composition + negative cases
     ├── recovery.rs       # Lenient recovery contract: partial model/index + span-accurate E_PARSE
     ├── proptest_recovery.rs # Arbitrary editor text never panics and always terminates
@@ -847,12 +848,44 @@ reverse) fails the suite.
 phero-ifml
   ├── logos (lexer)
   ├── chumsky (parser)
-  ├── phero-parser (byte-span token input + recovery combinators)
+  ├── phero-parser (byte-span token input, recovery combinators, the shared Surface identity)
+  ├── phero-diagnostics (the one diagnostic record + the ifml code bands)
+  ├── phero-strings (JSON string unescaping)
   ├── phero-expr (typed expression checking)
   └── phero-ir (IfmlModel artifact types, versioned wire format)
 ```
 
-`phero-ifml` is dependency-clean: no consumer-specific dependencies, so any backend can parse `.ifml` sources or consume `IfmlModel` artifacts directly.
+`phero-ifml` is dependency-clean: no consumer-specific dependencies, so any backend can parse `.ifml` sources or consume `IfmlModel` artifacts directly. The direction that matters is one-way: **`phero-driver` depends on `phero-ifml`**, never the reverse.
+
+### The recorded carve-out (ADR 0005 D6)
+
+`.ifml` stays a separate crate. That is a decision, not debt: the driver
+depends on `phero-ifml`, so a shortcut such as "use the driver's diagnostic
+type" would either cycle or force a layering rewrite. Its logos lexer, its
+chumsky parser, its spanned AST, its `IfmlIndex` and its formatter stay its
+own. What it shares are the three seams that live *below* both crates:
+
+| Seam | Shared artifact | Pinned by |
+|---|---|---|
+| Diagnostics | `phero_diagnostics::Diagnostic<&'static str>` — the crate has no record type of its own; a compilation tags each record `(path, record)` | `tests/seams.rs`, `tests/diagnostic_order.rs` |
+| Surface identity | `phero_parser::Surface::Ifml` — one `ALL` entry, `id()`/`extension()` equal `"ifml"`; no local surface enum or mapping | `tests/seams.rs` |
+| Import walk | the two-key `IfmlImports` / `walk_ifml_imports` contract: (importing-file identity, import path as written) | `tests/seams.rs`, `tests/resolve.rs` |
+
+The import seam is deliberately **not** the driver's path-keyed walker. The
+`.ifml` walk hands the host the importing document's identity and the path
+exactly as written, and the bundle is keyed by that pair, while the driver's
+gatherers key by the resolved host path. Those are different contracts, not
+one contract with a policy flag — which is why
+`phero_driver::imports::walker` lists this walk as one of the two it does
+not absorb.
+
+**What "aligned" means for a future surface.** A new surface aligns at the
+seams below both crates — the shared diagnostic record, the one surface
+identity, the shared lexer/parser scaffolding and expression engine, the
+import-walk substrate — and never by making a lower crate depend on
+`phero-driver`. A surface with a genuinely different import contract (as
+`.ifml` has) keeps its own walker and records why in the same place; the
+driver's walker does not grow a flag to swallow it.
 
 ---
 
