@@ -1,6 +1,6 @@
 //! DD8 (issue pherolang#305): multi-file design applications.
 
-use phero_driver::{compile_ddd_app_str, DddFragment, DomainImports};
+use phero_driver::{compile_ddd_app_str, DddFragment};
 
 const DOMAIN: &str = "package demo\n\nclass Order { String orderNo }\n";
 
@@ -16,8 +16,7 @@ fn compile(root: &str, fragments: &[(&str, &str)]) -> phero_driver::DddCompilati
         "app.ddd",
         root,
         &fragments,
-        &[("demo.mox".to_string(), DOMAIN.to_string())],
-        &DomainImports::default(),
+        &phero_driver::CompileInputs::from_domains(&[("demo.mox".to_string(), DOMAIN.to_string())]),
     )
 }
 
@@ -211,8 +210,7 @@ fn a_fragment_resolves_its_own_domain_import_relative_to_itself() {
         "app.ddd",
         FRAGMENTED_ROOT,
         &fragments,
-        &domains,
-        &DomainImports::default(),
+        &phero_driver::CompileInputs::from_domains(&domains),
     );
     assert!(
         compilation.diagnostics.is_empty(),

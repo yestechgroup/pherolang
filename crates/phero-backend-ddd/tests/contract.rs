@@ -6,9 +6,7 @@ use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 
 use phero_backend_ddd::{canonical_json, canonical_json_string, check_contract, Violation};
-use phero_driver::{
-    compile_actors_str, compile_ddd_str, compile_ddd_str_with_actors, DomainImports, Severity,
-};
+use phero_driver::{compile_actors_str, compile_ddd_str, Severity};
 use phero_ir::ddd::{
     BuiltinRepositoryOp, CapabilityRef, DddModel, DddTypeRef, Design, DtoDirection, DtoMember,
     DtoMemberKind, DtoShape, EqualityPolicy, ErrorRef, IdentityPolicy, QueryPagination,
@@ -37,8 +35,7 @@ fn compiled() -> DddModel {
     let compilation = compile_ddd_str(
         &design_path,
         &design,
-        &[(domain_path, domain)],
-        &DomainImports::default(),
+        &phero_driver::CompileInputs::from_domains(&[(domain_path, domain)]),
     );
     assert_clean(&compilation.diagnostics);
     compilation
@@ -60,8 +57,7 @@ fn compiled_with_actors() -> DddModel {
     let actor = compile_actors_str(
         &actor_path,
         &actor_source,
-        &[(domain_path.clone(), domain.clone())],
-        &DomainImports::default(),
+        &phero_driver::CompileInputs::from_domains(&[(domain_path.clone(), domain.clone())]),
     );
     assert_clean(&actor.diagnostics);
     let actor = actor.model.expect("library.actor lowers");
@@ -95,12 +91,11 @@ application Library {
     }
 }
 "#;
-    let compilation = compile_ddd_str_with_actors(
+    let compilation = compile_ddd_str(
         &design_path,
         design,
-        &[(domain_path, domain)],
-        &DomainImports::default(),
-        &[actor],
+        &phero_driver::CompileInputs::from_domains(&[(domain_path, domain)])
+            .with_actors([(actor_path, actor)]),
     );
     assert_clean(&compilation.diagnostics);
     compilation
@@ -127,8 +122,7 @@ fn compiled_values() -> DddModel {
     let compilation = compile_ddd_str(
         &design_path,
         &design,
-        &[(domain_path, domain)],
-        &DomainImports::default(),
+        &phero_driver::CompileInputs::from_domains(&[(domain_path, domain)]),
     );
     assert_clean(&compilation.diagnostics);
     compilation
@@ -586,8 +580,7 @@ fn childops() -> DddModel {
     let compilation = compile_ddd_str(
         &design_path,
         &design,
-        &[(domain_path, domain)],
-        &DomainImports::default(),
+        &phero_driver::CompileInputs::from_domains(&[(domain_path, domain)]),
     );
     assert_clean(&compilation.diagnostics);
     compilation
@@ -977,8 +970,7 @@ application Loans {
     let compilation = compile_ddd_str(
         &design_path,
         design,
-        &[(domain_path, domain)],
-        &DomainImports::default(),
+        &phero_driver::CompileInputs::from_domains(&[(domain_path, domain)]),
     );
     assert_clean(&compilation.diagnostics);
     compilation.model.expect("the error fixture lowers")

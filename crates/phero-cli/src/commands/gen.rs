@@ -58,8 +58,7 @@ pub(crate) fn run(target: GenTarget) -> anyhow::Result<ExitCode> {
             let files = expand_inputs(&files)?;
             if files.len() == 1 && is_actor_file(&files[0]) {
                 let pair = read_actor_pair(&files[0])?;
-                let compilation =
-                    compile_actors_str(&pair.path, &pair.source, &pair.domains, &pair.imports());
+                let compilation = compile_actors_str(&pair.path, &pair.source, pair.inputs());
                 report_actor_diagnostics(&pair, &compilation);
                 let Some(actor_model) = compilation.model else {
                     return Ok(ExitCode::FAILURE);
@@ -95,8 +94,7 @@ pub(crate) fn run(target: GenTarget) -> anyhow::Result<ExitCode> {
             let files = expand_inputs(&files)?;
             if files.len() == 1 && is_actor_file(&files[0]) {
                 let pair = read_actor_pair(&files[0])?;
-                let compilation =
-                    compile_actors_str(&pair.path, &pair.source, &pair.domains, &pair.imports());
+                let compilation = compile_actors_str(&pair.path, &pair.source, pair.inputs());
                 report_actor_diagnostics(&pair, &compilation);
                 let Some(actor_model) = compilation.model else {
                     return Ok(ExitCode::FAILURE);

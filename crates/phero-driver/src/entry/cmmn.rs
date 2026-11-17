@@ -6,7 +6,7 @@ use salsa::Database as Db;
 use crate::cmmn;
 use crate::compilation::CmmnCompilation;
 use crate::entry::finish_surface;
-use crate::imports::DomainImports;
+use crate::inputs::CompileInputs;
 use crate::session::{parse_cmmn_query, Database, SourceFile};
 use crate::union::{domain_files, lower_domains};
 
@@ -19,31 +19,18 @@ use crate::union::{domain_files, lower_domains};
 /// parse/domain editing feedback, not for full validation.
 #[salsa::tracked(returns(clone))]
 pub fn compile_cmmn(db: &dyn Db, file: SourceFile, domains: Vec<SourceFile>) -> CmmnCompilation {
-    compile_cmmn_with(
-        db,
-        file,
-        domains,
-        &[],
-        &[],
-        &[],
-        &[],
-        &DomainImports::default(),
-    )
+    compile_cmmn_with(db, file, domains, &CompileInputs::default())
 }
 
-/// The body of [`compile_cmmn`], parameterized over the pre-compiled
-/// design/actor/event/decision artifacts and the provided import content
-/// for the domain files (see [`compile_file`] for the import shape).
-#[allow(clippy::too_many_arguments)]
+/// The body of [`compile_cmmn`], parameterized over the compile-input
+/// bundle: its pre-compiled `designs`/`actors`/`events`/`decisions` buckets
+/// and its `imports` provider for the domain files (see [`compile_file`]
+/// for the import shape).
 fn compile_cmmn_with(
     db: &dyn Db,
     file: SourceFile,
     domains: Vec<SourceFile>,
-    designs: &[(String, phero_ir::ddd::DddModel)],
-    actors: &[(String, phero_ir::ActorModel)],
-    events: &[(String, phero_ir::events::EventModel)],
-    decisions: &[(String, phero_ir::dmn::DmnModel)],
-    imports: &DomainImports,
+    inputs: &CompileInputs,
 ) -> CmmnCompilation {
     let path = file.path(db);
     let source = file.text(db);
@@ -56,7 +43,7 @@ fn compile_cmmn_with(
         .as_ref()
         .map(|ast| ast.imports.clone())
         .unwrap_or_default();
-    let domains = lower_domains(db, &path, &domain_imports, &domains, imports);
+    let domains = lower_domains(db, &path, &domain_imports, &domains, inputs.imports());
 
     let (model, diagnostics) = cmmn::compile_cmmn_file(
         &path,
@@ -64,10 +51,10 @@ fn compile_cmmn_with(
         parsed.ast.as_ref(),
         &parsed.diagnostics,
         &domains.domain_units,
-        designs,
-        actors,
-        events,
-        decisions,
+        inputs.designs(),
+        inputs.actors().unwrap_or_default(),
+        inputs.events(),
+        inputs.decisions(),
     );
     finish_surface(domains, model, diagnostics, CmmnCompilation::assemble)
 }
@@ -75,13 +62,16 @@ fn compile_cmmn_with(
 /// Compiles a `.cmmn` case file against its imported domain models and
 /// pre-compiled design, actor, event, and decision artifacts in one call.
 ///
-/// The `domains` pairs are raw `.mox` texts; `designs`, `actors`, `events`,
-/// and `decisions` hold the pre-compiled artifacts the file's imports pull
-/// in, each keyed by the path the host resolved (the `.deploy` pattern).
-/// Every import — whatever its surface — matches a provided entry by exact
-/// path or by lexical resolution relative to the `.cmmn` file's directory
-/// (the `.deploy` rule). `imports` carries the domain files' own
-/// `import schema`/`import sigil` content (see [`DomainImports`]).
+/// `inputs` is the one [`CompileInputs`] bundle the host builds once from
+/// the gathered import closure: its `domains` bucket holds the raw `.mox`
+/// texts and its `designs`/`actors`/`events`/`decisions` buckets the
+/// pre-compiled artifacts the file's imports pull in, each keyed by the
+/// path the host resolved (the `.deploy` pattern). Every import — whatever
+/// its surface — matches a provided entry by exact path or by lexical
+/// resolution relative to the `.cmmn` file's directory (the `.deploy`
+/// rule). The bundle's `imports` provides the domain files' own
+/// `import schema`/`import sigil` content (see
+/// [`DomainImports`](crate::DomainImports)).
 ///
 /// The artifact is `None` on any error-severity diagnostic anywhere;
 /// warnings never block lowering.
@@ -196,21 +186,9 @@ fn compile_cmmn_with(
 /// diagnostics (import order), then the case's semantic diagnostics grouped
 /// by declaration kind (roles, case-file items, then plan items
 /// depth-first; each in source order).
-#[allow(clippy::too_many_arguments)]
-pub fn compile_cmmn_str(
-    path: &str,
-    source: &str,
-    domains: &[(String, String)],
-    imports: &DomainImports,
-    designs: &[(String, phero_ir::ddd::DddModel)],
-    actors: &[(String, phero_ir::ActorModel)],
-    events: &[(String, phero_ir::events::EventModel)],
-    decisions: &[(String, phero_ir::dmn::DmnModel)],
-) -> CmmnCompilation {
+pub fn compile_cmmn_str(path: &str, source: &str, inputs: &CompileInputs) -> CmmnCompilation {
     let db = Database::new();
     let file = SourceFile::new(&db, path.to_string(), source.to_string());
-    let files = domain_files(&db, domains);
-    compile_cmmn_with(
-        &db, file, files, designs, actors, events, decisions, imports,
-    )
+    let files = domain_files(&db, inputs.domains());
+    compile_cmmn_with(&db, file, files, inputs)
 }

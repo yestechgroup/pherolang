@@ -6,7 +6,7 @@ use salsa::Database as Db;
 use crate::compilation::EventCompilation;
 use crate::entry::finish_surface;
 use crate::events;
-use crate::imports::DomainImports;
+use crate::inputs::CompileInputs;
 use crate::session::{parse_evt_query, Database, SourceFile};
 use crate::union::{domain_files, lower_domains};
 
@@ -22,16 +22,16 @@ pub fn compile_evt(
     contract: SourceFile,
     domains: Vec<SourceFile>,
 ) -> EventCompilation {
-    compile_evt_with(db, contract, domains, &DomainImports::default())
+    compile_evt_with(db, contract, domains, &CompileInputs::default())
 }
 
-/// The body of [`compile_evt`], parameterized over the provided import
-/// content for the domain files (see [`compile_file`] for the shape).
+/// The body of [`compile_evt`], parameterized over the compile-input bundle
+/// (see [`compile_file`] for the import shape).
 fn compile_evt_with(
     db: &dyn Db,
     contract: SourceFile,
     domains: Vec<SourceFile>,
-    imports: &DomainImports,
+    inputs: &CompileInputs,
 ) -> EventCompilation {
     let contract_path = contract.path(db);
     let parsed = parse_evt_query(db, contract);
@@ -44,7 +44,7 @@ fn compile_evt_with(
             .map(|ast| ast.imports.as_slice())
             .unwrap_or_default(),
         &domains,
-        imports,
+        inputs.imports(),
     );
 
     let (model, diagnostics) = events::compile_evt_file(
@@ -59,7 +59,11 @@ fn compile_evt_with(
 /// Compiles an `.evt` event-contract file against its imported domain models
 /// in one call.
 ///
-/// Each domain is a `(path, source)` pair; a contract import resolves by
+/// `inputs` is the one [`CompileInputs`] bundle the host builds once from
+/// the gathered import closure; this surface consumes only its `domains`
+/// and `imports` buckets (see [`CompileInputs::domains`] /
+/// [`CompileInputs::imports`]). Each domain is a `(path, source)` pair; a
+/// contract import resolves by
 /// exact path match with a lexical resolution relative to the contract
 /// file's directory as the fallback (the same rule
 /// [`compile_actors_str`](crate::compile_actors_str) applies). Extra pairs
@@ -86,8 +90,7 @@ fn compile_evt_with(
 /// let compilation = phero_driver::compile_evt_str(
 ///     "orders.evt",
 ///     source,
-///     &domains,
-///     &phero_driver::DomainImports::default(),
+///     &phero_driver::CompileInputs::from_domains(&domains),
 /// );
 /// assert!(compilation.diagnostics.is_empty());
 /// let model = compilation.model.unwrap();
@@ -193,14 +196,9 @@ fn compile_evt_with(
 /// path, so hosts (and the CLI) render them grouped per file. On any error
 /// the result's `model` is `None`; `domains_model` still carries the
 /// imported domains when they lowered.
-pub fn compile_evt_str(
-    path: &str,
-    source: &str,
-    domains: &[(String, String)],
-    imports: &DomainImports,
-) -> EventCompilation {
+pub fn compile_evt_str(path: &str, source: &str, inputs: &CompileInputs) -> EventCompilation {
     let db = Database::new();
     let contract = SourceFile::new(&db, path.to_string(), source.to_string());
-    let files = domain_files(&db, domains);
-    compile_evt_with(&db, contract, files, imports)
+    let files = domain_files(&db, inputs.domains());
+    compile_evt_with(&db, contract, files, inputs)
 }

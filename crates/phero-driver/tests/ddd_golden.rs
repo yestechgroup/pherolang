@@ -94,11 +94,10 @@ fn compile_fixture(design_path: &str, domain_path: &str) -> phero_ir::ddd::DddMo
     let compilation = compile_ddd_str(
         design_absolute.to_str().expect("utf-8 path"),
         &source,
-        &[(
+        &phero_driver::CompileInputs::from_domains(&[(
             domain_absolute.to_str().expect("utf-8 path").to_string(),
             domain,
-        )],
-        &phero_driver::DomainImports::default(),
+        )]),
     );
     assert!(
         compilation.diagnostics.is_empty(),
@@ -476,8 +475,7 @@ fn a_fragmented_application_matches_one_merged_golden_artifact() {
         root_absolute.to_str().expect("utf-8 path"),
         &root,
         &fragments,
-        &domains,
-        &phero_driver::DomainImports::default(),
+        &phero_driver::CompileInputs::from_domains(&domains),
     );
     assert!(
         compilation.diagnostics.is_empty(),

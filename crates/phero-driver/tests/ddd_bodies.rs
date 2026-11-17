@@ -14,9 +14,7 @@
 //! `Line[]` collection, a `Status` lifecycle, an `Audit` aggregate with a
 //! declared `record` operation, and a `DraftLine` parameter type.
 
-use phero_driver::{
-    compile_ddd_str, diagnostic::Severity, DddCompilation, Diagnostic, DomainImports,
-};
+use phero_driver::{compile_ddd_str, diagnostic::Severity, DddCompilation, Diagnostic};
 use phero_expr::stmt::{Stmt, StmtBody};
 use phero_ir::ddd::{DddModel, RepositoryOperation, ServiceOperation};
 
@@ -162,8 +160,10 @@ fn compile(design: &str) -> DddCompilation {
     compile_ddd_str(
         "tests/conformance/ddd/test.ddd",
         design,
-        &[(DOMAIN_PATH.to_string(), DOMAIN.to_string())],
-        &DomainImports::default(),
+        &phero_driver::CompileInputs::from_domains(&[(
+            DOMAIN_PATH.to_string(),
+            DOMAIN.to_string(),
+        )]),
     )
 }
 

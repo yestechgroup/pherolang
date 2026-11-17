@@ -13,7 +13,7 @@
 //! `stem` is the example's path under `examples/` — one directory per
 //! application since pherolang#258. `support.cmmn` compiles against all four
 //! buckets (the `.uc` rule), and `support.ddd` is additionally compiled
-//! through `compile_ddd_str_with_actors`, proving its service-operation
+//! through `compile_ddd_str` with the actor bucket, proving its service-operation
 //! capabilities validate against the real `support.actor` policy.
 //!
 //! Regenerate the goldens with `PHERO_UPDATE_FIXTURES=1 cargo test -p
@@ -130,8 +130,7 @@ fn compile_evt(stem: &str) -> phero_ir::events::EventModel {
     let compilation = phero_driver::compile_evt_str(
         path.to_str().expect("utf-8 example path"),
         &source,
-        &[(domain_path, domain)],
-        &phero_driver::DomainImports::default(),
+        &phero_driver::CompileInputs::from_domains(&[(domain_path, domain)]),
     );
     assert_clean(&format!("{stem}.evt"), &compilation.diagnostics);
     compilation
@@ -145,8 +144,7 @@ fn compile_ddd(stem: &str) -> phero_ir::ddd::DddModel {
     let compilation = phero_driver::compile_ddd_str(
         path.to_str().expect("utf-8 example path"),
         &source,
-        &[(domain_path, domain)],
-        &phero_driver::DomainImports::default(),
+        &phero_driver::CompileInputs::from_domains(&[(domain_path, domain)]),
     );
     assert_clean(&format!("{stem}.ddd"), &compilation.diagnostics);
     compilation
@@ -163,8 +161,7 @@ fn support_actor_model() -> phero_ir::ActorModel {
     let compilation = phero_driver::compile_actors_str(
         path.to_str().expect("utf-8 example path"),
         &source,
-        &[("support.mox".to_string(), domain)],
-        &phero_driver::DomainImports::default(),
+        &phero_driver::CompileInputs::from_domains(&[("support.mox".to_string(), domain)]),
     );
     assert_clean("support.actor", &compilation.diagnostics);
     compilation
@@ -246,12 +243,11 @@ fn support_ddd_capabilities_validate_against_the_actor_model() {
     let (path, source) = example("support/support", "ddd");
     let (domain_path, domain) = domain_of("support/support");
     let actors = support_actor_model();
-    let compilation = phero_driver::compile_ddd_str_with_actors(
+    let compilation = phero_driver::compile_ddd_str(
         path.to_str().expect("utf-8 example path"),
         &source,
-        &[(domain_path, domain)],
-        &phero_driver::DomainImports::default(),
-        std::slice::from_ref(&actors),
+        &phero_driver::CompileInputs::from_domains(&[(domain_path, domain)])
+            .with_actors([("support/support.actor".to_string(), actors)]),
     );
     assert_clean("support.ddd (with actors)", &compilation.diagnostics);
     assert!(
@@ -281,11 +277,10 @@ fn uc_examples_match_golden_artifacts_and_round_trip() {
         let compilation = phero_driver::compile_usecase_str(
             path.to_str().expect("utf-8 example path"),
             &source,
-            &domains,
-            &phero_driver::DomainImports::default(),
-            &designs,
-            &actors,
-            &events,
+            &phero_driver::CompileInputs::from_domains(&domains)
+                .with_designs(designs)
+                .with_actors(actors)
+                .with_events(events),
         );
         assert_clean(&format!("{name}.uc"), &compilation.diagnostics);
         let model = compilation
@@ -342,10 +337,9 @@ fn dmn_examples_match_golden_artifacts_and_round_trip() {
         let compilation = phero_driver::compile_dmn_str(
             path.to_str().expect("utf-8 example path"),
             &source,
-            &domains,
-            &phero_driver::DomainImports::default(),
-            &tables,
-            &events,
+            &phero_driver::CompileInputs::from_domains(&domains)
+                .with_tables(tables.to_vec())
+                .with_events(events),
         );
         assert_clean(&format!("{name}.dmn"), &compilation.diagnostics);
         let model = compilation
@@ -383,8 +377,9 @@ fn deploy_examples_match_golden_artifacts_and_round_trip() {
         let compilation = phero_driver::compile_deploy_str(
             path.to_str().expect("utf-8 example path"),
             &source,
-            &designs,
-            &flows,
+            &phero_driver::CompileInputs::new()
+                .with_designs(designs)
+                .with_flows(flows),
         );
         assert_clean(&format!("{name}.deploy"), &compilation.diagnostics);
         let model = compilation
@@ -449,8 +444,7 @@ fn compile_cmmn(stem: &str) -> phero_ir::cmmn::CmmnModel {
             phero_driver::compile_evt_str(
                 dir.join("support.evt").to_str().expect("utf-8 event path"),
                 &read(&dir.join("support.evt")),
-                &dmn_domains,
-                &phero_driver::DomainImports::default(),
+                &phero_driver::CompileInputs::from_domains(&dmn_domains),
             )
             .model
             .expect("support.evt must lower to an event artifact"),
@@ -458,10 +452,9 @@ fn compile_cmmn(stem: &str) -> phero_ir::cmmn::CmmnModel {
         let compilation = phero_driver::compile_dmn_str(
             dmn_path.to_str().expect("utf-8 example path"),
             &dmn_source,
-            &dmn_domains,
-            &phero_driver::DomainImports::default(),
-            &tables,
-            &events,
+            &phero_driver::CompileInputs::from_domains(&dmn_domains)
+                .with_tables(tables.to_vec())
+                .with_events(events),
         );
         assert_clean("support.dmn", &compilation.diagnostics);
         vec![(
@@ -476,12 +469,11 @@ fn compile_cmmn(stem: &str) -> phero_ir::cmmn::CmmnModel {
     let compilation = phero_driver::compile_cmmn_str(
         path.to_str().expect("utf-8 example path"),
         &source,
-        &domains,
-        &phero_driver::DomainImports::default(),
-        &designs,
-        &actors,
-        &events,
-        &decisions,
+        &phero_driver::CompileInputs::from_domains(&domains)
+            .with_designs(designs)
+            .with_actors(actors)
+            .with_events(events)
+            .with_decisions(decisions),
     );
     assert_clean(&format!("{stem}.cmmn"), &compilation.diagnostics);
     compilation

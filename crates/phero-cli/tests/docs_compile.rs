@@ -324,8 +324,7 @@ fn compile_fence(fence: &Fence, workspace: &Path) -> String {
             let compilation = phero_driver::compile_actors_str(
                 &virtual_path,
                 &fence.source,
-                &gathered.domains,
-                &imports,
+                &phero_driver::CompileInputs::from_domains(&gathered.domains).with_imports(imports),
             );
             problems(tagged_errors_of(&compilation.diagnostics))
         }
@@ -333,8 +332,7 @@ fn compile_fence(fence: &Fence, workspace: &Path) -> String {
             let compilation = phero_driver::compile_ddd_str(
                 &virtual_path,
                 &fence.source,
-                &gathered.domains,
-                &imports,
+                &phero_driver::CompileInputs::from_domains(&gathered.domains).with_imports(imports),
             );
             problems(tagged_errors_of(&compilation.diagnostics))
         }
@@ -342,8 +340,7 @@ fn compile_fence(fence: &Fence, workspace: &Path) -> String {
             let compilation = phero_driver::compile_evt_str(
                 &virtual_path,
                 &fence.source,
-                &gathered.domains,
-                &imports,
+                &phero_driver::CompileInputs::from_domains(&gathered.domains).with_imports(imports),
             );
             problems(tagged_errors_of(&compilation.diagnostics))
         }
@@ -353,8 +350,14 @@ fn compile_fence(fence: &Fence, workspace: &Path) -> String {
             // validation over primitives only (an empty events bucket is
             // the blessed loosely-coupled behavior: `emits` entries lower
             // as authored, unchecked).
-            let compilation =
-                phero_driver::compile_dmn_str(&virtual_path, &fence.source, &[], &empty, &[], &[]);
+            let compilation = phero_driver::compile_dmn_str(
+                &virtual_path,
+                &fence.source,
+                &phero_driver::CompileInputs::new()
+                    .with_imports(empty.clone())
+                    .with_tables([])
+                    .with_events([]),
+            );
             problems(tagged_errors_of(&compilation.diagnostics))
         }
         "deploy" => {
@@ -365,8 +368,12 @@ fn compile_fence(fence: &Fence, workspace: &Path) -> String {
                     let dir = Path::new(path).parent().unwrap().to_path_buf();
                     let inner = gather(&dir, source, "ddd").expect("design imports");
                     let inner_domains = inner.domains.clone();
-                    let compiled =
-                        phero_driver::compile_ddd_str(path, source, &inner_domains, &empty);
+                    let compiled = phero_driver::compile_ddd_str(
+                        path,
+                        source,
+                        &phero_driver::CompileInputs::from_domains(&inner_domains)
+                            .with_imports(empty.clone()),
+                    );
                     (path.clone(), compiled.model.expect("design artifact"))
                 })
                 .collect();
@@ -375,8 +382,13 @@ fn compile_fence(fence: &Fence, workspace: &Path) -> String {
                 .iter()
                 .map(|(path, source)| compile_flow(path, source))
                 .collect();
-            let compilation =
-                phero_driver::compile_deploy_str(&virtual_path, &fence.source, &designs, &flows);
+            let compilation = phero_driver::compile_deploy_str(
+                &virtual_path,
+                &fence.source,
+                &phero_driver::CompileInputs::new()
+                    .with_designs(designs.to_vec())
+                    .with_flows(flows.to_vec()),
+            );
             problems(tagged_errors_of(&compilation.diagnostics))
         }
         "uc" => {
@@ -384,8 +396,12 @@ fn compile_fence(fence: &Fence, workspace: &Path) -> String {
                 .designs
                 .iter()
                 .map(|(path, source)| {
-                    let compiled =
-                        phero_driver::compile_ddd_str(path, source, &gathered.domains, &empty);
+                    let compiled = phero_driver::compile_ddd_str(
+                        path,
+                        source,
+                        &phero_driver::CompileInputs::from_domains(&gathered.domains)
+                            .with_imports(empty.clone()),
+                    );
                     (path.clone(), compiled.model.expect("design artifact"))
                 })
                 .collect();
@@ -393,8 +409,12 @@ fn compile_fence(fence: &Fence, workspace: &Path) -> String {
                 .actors
                 .iter()
                 .map(|(path, source)| {
-                    let compiled =
-                        phero_driver::compile_actors_str(path, source, &gathered.domains, &empty);
+                    let compiled = phero_driver::compile_actors_str(
+                        path,
+                        source,
+                        &phero_driver::CompileInputs::from_domains(&gathered.domains)
+                            .with_imports(empty.clone()),
+                    );
                     (path.clone(), compiled.model.expect("actor artifact"))
                 })
                 .collect();
@@ -402,19 +422,23 @@ fn compile_fence(fence: &Fence, workspace: &Path) -> String {
                 .events
                 .iter()
                 .map(|(path, source)| {
-                    let compiled =
-                        phero_driver::compile_evt_str(path, source, &gathered.domains, &empty);
+                    let compiled = phero_driver::compile_evt_str(
+                        path,
+                        source,
+                        &phero_driver::CompileInputs::from_domains(&gathered.domains)
+                            .with_imports(empty.clone()),
+                    );
                     (path.clone(), compiled.model.expect("event artifact"))
                 })
                 .collect();
             let compilation = phero_driver::compile_usecase_str(
                 &virtual_path,
                 &fence.source,
-                &gathered.domains,
-                &imports,
-                &designs,
-                &actors,
-                &events,
+                &phero_driver::CompileInputs::from_domains(&gathered.domains)
+                    .with_imports(imports)
+                    .with_designs(designs.to_vec())
+                    .with_actors(actors.to_vec())
+                    .with_events(events.to_vec()),
             );
             problems(tagged_errors_of(&compilation.diagnostics))
         }
@@ -423,8 +447,12 @@ fn compile_fence(fence: &Fence, workspace: &Path) -> String {
                 .designs
                 .iter()
                 .map(|(path, source)| {
-                    let compiled =
-                        phero_driver::compile_ddd_str(path, source, &gathered.domains, &empty);
+                    let compiled = phero_driver::compile_ddd_str(
+                        path,
+                        source,
+                        &phero_driver::CompileInputs::from_domains(&gathered.domains)
+                            .with_imports(empty.clone()),
+                    );
                     (path.clone(), compiled.model.expect("design artifact"))
                 })
                 .collect();
@@ -432,8 +460,12 @@ fn compile_fence(fence: &Fence, workspace: &Path) -> String {
                 .actors
                 .iter()
                 .map(|(path, source)| {
-                    let compiled =
-                        phero_driver::compile_actors_str(path, source, &gathered.domains, &empty);
+                    let compiled = phero_driver::compile_actors_str(
+                        path,
+                        source,
+                        &phero_driver::CompileInputs::from_domains(&gathered.domains)
+                            .with_imports(empty.clone()),
+                    );
                     (path.clone(), compiled.model.expect("actor artifact"))
                 })
                 .collect();
@@ -441,8 +473,12 @@ fn compile_fence(fence: &Fence, workspace: &Path) -> String {
                 .events
                 .iter()
                 .map(|(path, source)| {
-                    let compiled =
-                        phero_driver::compile_evt_str(path, source, &gathered.domains, &empty);
+                    let compiled = phero_driver::compile_evt_str(
+                        path,
+                        source,
+                        &phero_driver::CompileInputs::from_domains(&gathered.domains)
+                            .with_imports(empty.clone()),
+                    );
                     (path.clone(), compiled.model.expect("event artifact"))
                 })
                 .collect();
@@ -458,10 +494,10 @@ fn compile_fence(fence: &Fence, workspace: &Path) -> String {
                     let compiled = phero_driver::compile_dmn_str(
                         path,
                         source,
-                        &gathered.domains,
-                        &empty,
-                        &[],
-                        &events,
+                        &phero_driver::CompileInputs::from_domains(&gathered.domains)
+                            .with_imports(empty.clone())
+                            .with_tables([])
+                            .with_events(events.to_vec()),
                     );
                     (path.clone(), compiled.model.expect("decision artifact"))
                 })
@@ -469,12 +505,12 @@ fn compile_fence(fence: &Fence, workspace: &Path) -> String {
             let compilation = phero_driver::compile_cmmn_str(
                 &virtual_path,
                 &fence.source,
-                &gathered.domains,
-                &imports,
-                &designs,
-                &actors,
-                &events,
-                &decisions,
+                &phero_driver::CompileInputs::from_domains(&gathered.domains)
+                    .with_imports(imports)
+                    .with_designs(designs.to_vec())
+                    .with_actors(actors.to_vec())
+                    .with_events(events.to_vec())
+                    .with_decisions(decisions.to_vec()),
             );
             problems(tagged_errors_of(&compilation.diagnostics))
         }

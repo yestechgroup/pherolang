@@ -183,8 +183,7 @@ fn actor_model(display: &str) -> phero_ir::ActorModel {
     let compilation = phero_driver::compile_actors_str(
         &disk(display).display().to_string(),
         &source,
-        &[(import, read(&imported))],
-        &phero_driver::DomainImports::default(),
+        &phero_driver::CompileInputs::from_domains(&[(import, read(&imported))]),
     );
     assert_no_file_errors(display, &compilation.diagnostics);
     compilation.model.expect("actor policy must lower")
@@ -202,8 +201,7 @@ fn ddd_model() -> phero_ir::ddd::DddModel {
             .display()
             .to_string(),
         &read("tests/conformance/graph/app.ddd"),
-        &domains,
-        &phero_driver::DomainImports::default(),
+        &phero_driver::CompileInputs::from_domains(&domains),
     );
     assert_no_file_errors("app.ddd", &compilation.diagnostics);
     compilation.model.expect("design must lower")
@@ -221,8 +219,7 @@ fn evt_model() -> phero_ir::events::EventModel {
             .display()
             .to_string(),
         &read("tests/conformance/graph/app.evt"),
-        &domains,
-        &phero_driver::DomainImports::default(),
+        &phero_driver::CompileInputs::from_domains(&domains),
     );
     assert_no_file_errors("app.evt", &compilation.diagnostics);
     compilation.model.expect("event contract must lower")
@@ -266,8 +263,9 @@ fn deploy_model() -> phero_ir::deploy::DeployModel {
             .display()
             .to_string(),
         &read("tests/conformance/graph/app.deploy"),
-        &designs,
-        &flows,
+        &phero_driver::CompileInputs::new()
+            .with_designs(designs.to_vec())
+            .with_flows(flows.to_vec()),
     );
     assert_no_file_errors("app.deploy", &compilation.diagnostics);
     compilation.model.expect("deployment must lower")
@@ -301,11 +299,10 @@ fn uc_model() -> phero_ir::usecases::UseCaseModel {
     let compilation = phero_driver::compile_usecase_str(
         &disk("tests/conformance/graph/app.uc").display().to_string(),
         &read("tests/conformance/graph/app.uc"),
-        &domains,
-        &phero_driver::DomainImports::default(),
-        &designs,
-        &actors,
-        &events,
+        &phero_driver::CompileInputs::from_domains(&domains)
+            .with_designs(designs.to_vec())
+            .with_actors(actors.to_vec())
+            .with_events(events.to_vec()),
     );
     assert_no_file_errors("app.uc", &compilation.diagnostics);
     compilation.model.expect("use cases must lower")
@@ -324,10 +321,9 @@ fn dmn_model() -> phero_ir::dmn::DmnModel {
             .display()
             .to_string(),
         &read("tests/conformance/graph/app.dmn"),
-        &domains,
-        &phero_driver::DomainImports::default(),
-        &[],
-        &events,
+        &phero_driver::CompileInputs::from_domains(&domains)
+            .with_tables([])
+            .with_events(events.to_vec()),
     );
     assert_no_file_errors("app.dmn", &compilation.diagnostics);
     compilation.model.expect("decision model must lower")
@@ -369,12 +365,11 @@ fn cmmn_model() -> phero_ir::cmmn::CmmnModel {
             .display()
             .to_string(),
         &read("tests/conformance/graph/app.cmmn"),
-        &domains,
-        &phero_driver::DomainImports::default(),
-        &designs,
-        &actors,
-        &events,
-        &decisions,
+        &phero_driver::CompileInputs::from_domains(&domains)
+            .with_designs(designs.to_vec())
+            .with_actors(actors.to_vec())
+            .with_events(events.to_vec())
+            .with_decisions(decisions.to_vec()),
     );
     assert_no_file_errors("app.cmmn", &compilation.diagnostics);
     compilation.model.expect("case must lower")

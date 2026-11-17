@@ -49,8 +49,10 @@ fn compile_conformance() -> phero_driver::DeployCompilation {
                 let compilation = phero_driver::compile_ddd_str(
                     &design_path,
                     &design_source,
-                    &[(dir.join(domain).display().to_string(), domain_source)],
-                    &phero_driver::DomainImports::default(),
+                    &phero_driver::CompileInputs::from_domains(&[(
+                        dir.join(domain).display().to_string(),
+                        domain_source,
+                    )]),
                 );
                 assert!(
                     compilation.diagnostics.is_empty(),
@@ -79,8 +81,9 @@ fn compile_conformance() -> phero_driver::DeployCompilation {
     compile_deploy_str(
         deploy_absolute.to_str().expect("utf-8 path"),
         &source,
-        &designs,
-        &flows,
+        &phero_driver::CompileInputs::new()
+            .with_designs(designs.to_vec())
+            .with_flows(flows.to_vec()),
     )
 }
 
@@ -440,8 +443,7 @@ fn library_design() -> (String, phero_ir::ddd::DddModel) {
     let compilation = phero_driver::compile_ddd_str(
         "library.ddd",
         &source,
-        &[("library.mox".to_string(), domain)],
-        &phero_driver::DomainImports::default(),
+        &phero_driver::CompileInputs::from_domains(&[("library.mox".to_string(), domain)]),
     );
     (
         "library.ddd".to_string(),
@@ -453,7 +455,13 @@ fn compile_with(
     designs: &[(String, phero_ir::ddd::DddModel)],
     source: &str,
 ) -> phero_driver::DeployCompilation {
-    compile_deploy_str("bad.deploy", source, designs, &[])
+    compile_deploy_str(
+        "bad.deploy",
+        source,
+        &phero_driver::CompileInputs::new()
+            .with_designs(designs.to_vec())
+            .with_flows([]),
+    )
 }
 
 #[test]

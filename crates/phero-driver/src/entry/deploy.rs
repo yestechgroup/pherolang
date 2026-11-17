@@ -3,13 +3,15 @@
 
 use crate::compilation::DeployCompilation;
 use crate::deploy;
+use crate::inputs::CompileInputs;
 use crate::session::{parse_deploy_query, Database, SourceFile};
 
 /// Compiles a `.deploy` deployment file in one call.
 ///
-/// Each `import` in the file must resolve to a provided entry:
-/// `designs` holds the imported `.ddd` designs and `flows` the imported
-/// `.ifml` flows, each as `(path, artifact)` pairs. An import matches a
+/// Each `import` in the file must resolve to a provided entry: the bundle's
+/// [`designs`](CompileInputs::designs) bucket holds the imported `.ddd`
+/// designs and its [`flows`](CompileInputs::flows) bucket the imported
+/// `.ifml` flows, each keyed by the resolved path. An import matches a
 /// provided entry by exact path or by lexical resolution relative to the
 /// deploy file's directory (the same rule
 /// [`compile_actors_str`](crate::compile_actors_str) applies) — the CLI
@@ -19,8 +21,7 @@ use crate::session::{parse_deploy_query, Database, SourceFile};
 /// ``imported file "<path>" was not provided``.
 ///
 /// ```
-/// let designs: Vec<(String, phero_ir::ddd::DddModel)> = Vec::new();
-/// let flows: Vec<(String, phero_ir::ifml::IfmlModel)> = Vec::new();
+/// let inputs = phero_driver::CompileInputs::new();
 /// let source = concat!(
 ///     "application Svc {\n",
 ///     "    component api: api { replicas: 2 }\n",
@@ -37,7 +38,7 @@ use crate::session::{parse_deploy_query, Database, SourceFile};
 ///     "    use local\n",
 ///     "}\n",
 /// );
-/// let compilation = phero_driver::compile_deploy_str("svc.deploy", source, &designs, &flows);
+/// let compilation = phero_driver::compile_deploy_str("svc.deploy", source, &inputs);
 /// assert!(compilation.diagnostics.is_empty());
 /// assert_eq!(compilation.model.unwrap().applications.len(), 1);
 /// ```
@@ -137,12 +138,7 @@ use crate::session::{parse_deploy_query, Database, SourceFile};
 /// Diagnostics are ordered deterministically: the file's parse diagnostics
 /// first, then its semantic diagnostics in declaration order
 /// (applications, profiles, deployments — each in source order).
-pub fn compile_deploy_str(
-    path: &str,
-    source: &str,
-    designs: &[(String, phero_ir::ddd::DddModel)],
-    flows: &[(String, phero_ir::ifml::IfmlModel)],
-) -> DeployCompilation {
+pub fn compile_deploy_str(path: &str, source: &str, inputs: &CompileInputs) -> DeployCompilation {
     let db = Database::new();
     let file = SourceFile::new(&db, path.to_string(), source.to_string());
     let parsed = parse_deploy_query(&db, file);
@@ -151,8 +147,8 @@ pub fn compile_deploy_str(
         source,
         parsed.ast.as_ref(),
         &parsed.diagnostics,
-        designs,
-        flows,
+        inputs.designs(),
+        inputs.flows(),
     );
     DeployCompilation { model, diagnostics }
 }

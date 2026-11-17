@@ -406,7 +406,11 @@ fn a_ddd_document_expression_may_call_a_package_function() {
         "    }\n",
         "}\n",
     );
-    let compilation = compile_ddd_str("design.ddd", source, &domains, &imports);
+    let compilation = compile_ddd_str(
+        "design.ddd",
+        source,
+        &phero_driver::CompileInputs::from_domains(&domains).with_imports(imports.clone()),
+    );
     assert_clean(&compilation);
     let document = &compilation.model.expect("model").modules[0].searches[0].document;
     assert_eq!(document[0].expr, "calcRate(1.0, [\"a\"])");
@@ -414,7 +418,11 @@ fn a_ddd_document_expression_may_call_a_package_function() {
     // An unknown callee keeps the standard document-expression diagnostic
     // shape, wrapping the checker's unknown-function message.
     let source = source.replace("rate = calcRate(1.0, [\"a\"]);", "rate = unknownCall(1);");
-    let compilation = compile_ddd_str("design.ddd", &source, &domains, &imports);
+    let compilation = compile_ddd_str(
+        "design.ddd",
+        &source,
+        &phero_driver::CompileInputs::from_domains(&domains).with_imports(imports),
+    );
     let diagnostic = single(&compilation, "invalid document expression in field 'rate'");
     assert!(
         diagnostic.message.contains("unknown function"),
@@ -538,21 +546,18 @@ fn search_capabilities_validate_against_the_actor_model() {
         "    }\n",
         "}\n",
     );
-    let compilation = compile_ddd_str_with_actors(
+    let domains = [("search.mox".to_string(), SEARCH_DOMAIN.to_string())];
+    let compilation = compile_ddd_str(
         "design.ddd",
         source,
-        &[("search.mox".to_string(), SEARCH_DOMAIN.to_string())],
-        &phero_driver::DomainImports::default(),
-        &[actors_with(&["SearchMovies"])],
+        &inputs_with_actors(&domains, &[actors_with(&["SearchMovies"])]),
     );
     assert_clean(&compilation);
 
-    let compilation = compile_ddd_str_with_actors(
+    let compilation = compile_ddd_str(
         "design.ddd",
         source,
-        &[("search.mox".to_string(), SEARCH_DOMAIN.to_string())],
-        &phero_driver::DomainImports::default(),
-        &[actors_with(&["Unrelated"])],
+        &inputs_with_actors(&domains, &[actors_with(&["Unrelated"])]),
     );
     single(
         &compilation,

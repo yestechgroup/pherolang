@@ -6,7 +6,7 @@
 
 use phero_driver::{
     compile_actors_str, compile_cmmn_str, compile_ddd_str, compile_dmn_str, compile_evt_str,
-    CmmnCompilation, DomainImports,
+    CmmnCompilation,
 };
 use phero_ir::cmmn::{
     CaseFileTransition, DecisionTaskBinding, OnPart, PlanItemKind, PlanItemTransition, ServiceDef,
@@ -37,8 +37,7 @@ fn compile_conformance() -> CmmnCompilation {
     let events = compile_evt_str(
         &events_path,
         &events_source,
-        &domain,
-        &DomainImports::default(),
+        &phero_driver::CompileInputs::from_domains(&domain),
     );
     assert!(
         events.diagnostics.is_empty(),
@@ -52,8 +51,7 @@ fn compile_conformance() -> CmmnCompilation {
     let actors = compile_actors_str(
         &actors_path,
         &actors_source,
-        &domain,
-        &DomainImports::default(),
+        &phero_driver::CompileInputs::from_domains(&domain),
     );
     assert!(
         actors.diagnostics.is_empty(),
@@ -67,8 +65,7 @@ fn compile_conformance() -> CmmnCompilation {
     let design = compile_ddd_str(
         &design_path,
         &design_source,
-        &domain,
-        &DomainImports::default(),
+        &phero_driver::CompileInputs::from_domains(&domain),
     );
     assert!(
         design.diagnostics.is_empty(),
@@ -79,12 +76,11 @@ fn compile_conformance() -> CmmnCompilation {
     compile_cmmn_str(
         cmmn_absolute.to_str().expect("utf-8 path"),
         &source,
-        &domain,
-        &DomainImports::default(),
-        &[(design_path, design.model.expect("design artifact"))],
-        &[(actors_path, actors.model.expect("actor artifact"))],
-        &[(events_path, events.model.expect("event artifact"))],
-        &[],
+        &phero_driver::CompileInputs::from_domains(&domain)
+            .with_designs([(design_path, design.model.expect("design artifact"))].to_vec())
+            .with_actors([(actors_path, actors.model.expect("actor artifact"))].to_vec())
+            .with_events([(events_path, events.model.expect("event artifact"))].to_vec())
+            .with_decisions([]),
     )
 }
 
@@ -109,8 +105,7 @@ fn compile_with_buckets(source: &str) -> CmmnCompilation {
     let events = compile_evt_str(
         &events_path,
         &events_source,
-        &domain,
-        &DomainImports::default(),
+        &phero_driver::CompileInputs::from_domains(&domain),
     );
     let actors_source =
         std::fs::read_to_string(dir.join("lending.actor")).expect("read lending.actor");
@@ -118,28 +113,25 @@ fn compile_with_buckets(source: &str) -> CmmnCompilation {
     let actors = compile_actors_str(
         &actors_path,
         &actors_source,
-        &domain,
-        &DomainImports::default(),
+        &phero_driver::CompileInputs::from_domains(&domain),
     );
     let design_source = std::fs::read_to_string(dir.join("lending.ddd")).expect("read lending.ddd");
     let design_path = dir.join("lending.ddd").display().to_string();
     let design = compile_ddd_str(
         &design_path,
         &design_source,
-        &domain,
-        &DomainImports::default(),
+        &phero_driver::CompileInputs::from_domains(&domain),
     );
 
     let cmmn_path = dir.join("case.cmmn");
     compile_cmmn_str(
         cmmn_path.to_str().expect("utf-8 path"),
         source,
-        &domain,
-        &DomainImports::default(),
-        &[(design_path.clone(), design.model.expect("design artifact"))],
-        &[(actors_path.clone(), actors.model.expect("actor artifact"))],
-        &[(events_path.clone(), events.model.expect("event artifact"))],
-        &[],
+        &phero_driver::CompileInputs::from_domains(&domain)
+            .with_designs([(design_path.clone(), design.model.expect("design artifact"))].to_vec())
+            .with_actors([(actors_path.clone(), actors.model.expect("actor artifact"))].to_vec())
+            .with_events([(events_path.clone(), events.model.expect("event artifact"))].to_vec())
+            .with_decisions([]),
     )
 }
 
@@ -181,10 +173,9 @@ fn compile_decision_conformance() -> CmmnCompilation {
     let decisions = compile_dmn_str(
         &decisions_path,
         &decisions_source,
-        &domain,
-        &DomainImports::default(),
-        &[],
-        &[],
+        &phero_driver::CompileInputs::from_domains(&domain)
+            .with_tables([])
+            .with_events([]),
     );
     assert!(
         decisions.diagnostics.is_empty(),
@@ -195,12 +186,13 @@ fn compile_decision_conformance() -> CmmnCompilation {
     compile_cmmn_str(
         cmmn_absolute.to_str().expect("utf-8 path"),
         &source,
-        &domain,
-        &DomainImports::default(),
-        &[],
-        &[],
-        &[],
-        &[(decisions_path, decisions.model.expect("decision artifact"))],
+        &phero_driver::CompileInputs::from_domains(&domain)
+            .with_designs([])
+            .with_actors([])
+            .with_events([])
+            .with_decisions(
+                [(decisions_path, decisions.model.expect("decision artifact"))].to_vec(),
+            ),
     )
 }
 
@@ -222,10 +214,9 @@ fn compile_with_decisions(source: &str, decisions: bool) -> CmmnCompilation {
         let decisions = compile_dmn_str(
             &decisions_path,
             &decisions_source,
-            &domain,
-            &DomainImports::default(),
-            &[],
-            &[],
+            &phero_driver::CompileInputs::from_domains(&domain)
+                .with_tables([])
+                .with_events([]),
         );
         vec![(decisions_path, decisions.model.expect("decision artifact"))]
     } else {
@@ -236,12 +227,11 @@ fn compile_with_decisions(source: &str, decisions: bool) -> CmmnCompilation {
     compile_cmmn_str(
         cmmn_path.to_str().expect("utf-8 path"),
         source,
-        &domain,
-        &DomainImports::default(),
-        &[],
-        &[],
-        &[],
-        &decisions_bucket,
+        &phero_driver::CompileInputs::from_domains(&domain)
+            .with_designs([])
+            .with_actors([])
+            .with_events([])
+            .with_decisions(decisions_bucket.to_vec()),
     )
 }
 
@@ -647,15 +637,19 @@ fn compile_with_sigil_domain(source: &str) -> CmmnCompilation {
     compile_cmmn_str(
         "case.cmmn",
         source,
-        &[("funcs.mox".to_string(), mox)],
-        &phero_driver::DomainImports {
-            sigil: phero_driver::SigilImports::new().provide("funcs.mox", "funcs.rosetta", rosetta),
-            ..phero_driver::DomainImports::default()
-        },
-        &[],
-        &[],
-        &[],
-        &[],
+        &phero_driver::CompileInputs::from_domains(&[("funcs.mox".to_string(), mox)])
+            .with_imports(phero_driver::DomainImports {
+                sigil: phero_driver::SigilImports::new().provide(
+                    "funcs.mox",
+                    "funcs.rosetta",
+                    rosetta,
+                ),
+                ..phero_driver::DomainImports::default()
+            })
+            .with_designs([])
+            .with_actors([])
+            .with_events([])
+            .with_decisions([]),
     )
 }
 
@@ -1016,12 +1010,11 @@ fn compile_with_bucket(source: &str, bucket: Vec<(String, DmnModel)>) -> CmmnCom
     compile_cmmn_str(
         dir.join("pinned-case.cmmn").to_str().expect("utf-8 path"),
         source,
-        &domain,
-        &DomainImports::default(),
-        &[],
-        &[],
-        &[],
-        &bucket,
+        &phero_driver::CompileInputs::from_domains(&domain)
+            .with_designs([])
+            .with_actors([])
+            .with_events([])
+            .with_decisions(bucket.to_vec()),
     )
 }
 

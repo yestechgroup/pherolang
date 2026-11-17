@@ -118,8 +118,7 @@ fn ddd_model(display: &str, domain_display: &str) -> phero_ir::ddd::DddModel {
     let compilation = phero_driver::compile_ddd_str(
         &disk(display).display().to_string(),
         &read(display),
-        &domains,
-        &phero_driver::DomainImports::default(),
+        &phero_driver::CompileInputs::from_domains(&domains),
     );
     assert_clean(display, &compilation.diagnostics);
     compilation.model.expect("design must lower")
@@ -133,8 +132,7 @@ fn evt_model(display: &str, domain_display: &str) -> phero_ir::events::EventMode
     let compilation = phero_driver::compile_evt_str(
         &disk(display).display().to_string(),
         &read(display),
-        &domains,
-        &phero_driver::DomainImports::default(),
+        &phero_driver::CompileInputs::from_domains(&domains),
     );
     assert_clean(display, &compilation.diagnostics);
     compilation.model.expect("event contract must lower")
@@ -147,11 +145,10 @@ fn actor_model() -> phero_ir::ActorModel {
     let compilation = phero_driver::compile_actors_str(
         &disk(display).display().to_string(),
         &read(display),
-        &[(
+        &phero_driver::CompileInputs::from_domains(&[(
             "support.mox".to_string(),
             read("examples/support/support.mox"),
-        )],
-        &phero_driver::DomainImports::default(),
+        )]),
     );
     assert_clean(display, &compilation.diagnostics);
     compilation.model.expect("actor policy must lower")
@@ -177,10 +174,9 @@ fn dmn_model() -> phero_ir::dmn::DmnModel {
     let compilation = phero_driver::compile_dmn_str(
         &disk(display).display().to_string(),
         &read(display),
-        &domains,
-        &phero_driver::DomainImports::default(),
-        &tables,
-        &events,
+        &phero_driver::CompileInputs::from_domains(&domains)
+            .with_tables(tables.to_vec())
+            .with_events(events.to_vec()),
     );
     assert_clean(display, &compilation.diagnostics);
     compilation.model.expect("decision model must lower")
@@ -250,11 +246,10 @@ fn uc_model() -> phero_ir::usecases::UseCaseModel {
     let compilation = phero_driver::compile_usecase_str(
         &disk(display).display().to_string(),
         &read(display),
-        &domains,
-        &phero_driver::DomainImports::default(),
-        &designs,
-        &actors,
-        &events,
+        &phero_driver::CompileInputs::from_domains(&domains)
+            .with_designs(designs.to_vec())
+            .with_actors(actors.to_vec())
+            .with_events(events.to_vec()),
     );
     assert_clean(display, &compilation.diagnostics);
     compilation.model.expect("use cases must lower")
@@ -291,12 +286,11 @@ fn cmmn_model() -> phero_ir::cmmn::CmmnModel {
     let compilation = phero_driver::compile_cmmn_str(
         &disk(display).display().to_string(),
         &read(display),
-        &domains,
-        &phero_driver::DomainImports::default(),
-        &designs,
-        &actors,
-        &events,
-        &decisions,
+        &phero_driver::CompileInputs::from_domains(&domains)
+            .with_designs(designs.to_vec())
+            .with_actors(actors.to_vec())
+            .with_events(events.to_vec())
+            .with_decisions(decisions.to_vec()),
     );
     assert_clean(display, &compilation.diagnostics);
     compilation.model.expect("case must lower")
@@ -318,8 +312,9 @@ fn deploy_model() -> phero_ir::deploy::DeployModel {
     let compilation = phero_driver::compile_deploy_str(
         &disk(display).display().to_string(),
         &read(display),
-        &designs,
-        &flows,
+        &phero_driver::CompileInputs::new()
+            .with_designs(designs.to_vec())
+            .with_flows(flows.to_vec()),
     );
     assert_clean(display, &compilation.diagnostics);
     compilation.model.expect("deployment must lower")
@@ -907,8 +902,7 @@ fn inline_ddd(display: &str, source: &str) -> phero_ir::ddd::DddModel {
     let compilation = phero_driver::compile_ddd_str(
         &compile_path,
         source,
-        &domains,
-        &phero_driver::DomainImports::default(),
+        &phero_driver::CompileInputs::from_domains(&domains),
     );
     assert_clean(display, &compilation.diagnostics);
     compilation.model.expect("inline design must lower")

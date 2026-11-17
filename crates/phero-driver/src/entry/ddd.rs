@@ -8,7 +8,7 @@ use crate::compilation::DddCompilation;
 use crate::ddd;
 use crate::diagnostic::Diagnostic;
 use crate::entry::finish_surface;
-use crate::imports::DomainImports;
+use crate::inputs::CompileInputs;
 use crate::session::{parse_ddd_query, Database, SourceFile};
 use crate::union::{domain_files, lower_domains, lower_domains_from, DomainOrigin};
 
@@ -32,22 +32,23 @@ pub struct DddFragment {
 /// See [`compile_ddd_str`] for the normative contract.
 #[salsa::tracked(returns(clone))]
 pub fn compile_ddd(db: &dyn Db, design: SourceFile, domains: Vec<SourceFile>) -> DddCompilation {
-    compile_ddd_with(db, design, domains, None, &DomainImports::default(), &[])
+    compile_ddd_with(db, design, domains, &CompileInputs::default())
 }
 
-/// The body of [`compile_ddd`], parameterized over the actor models the
-/// `_with_actors` entry point validates capabilities against, the decision
-/// models the `_with_decisions` entry point validates decision links
-/// against, and the provided import content for the domain files (see
-/// [`compile_file`] for the import shape). Both buckets are
-/// empty-by-default: tracked surfaces carry no cross-surface artifacts.
+/// The body of [`compile_ddd`], parameterized over the compile-input bundle:
+/// its `imports` bucket provides the domain files' `import schema`/`import
+/// sigil` content (see [`compile_file`] for the import shape), its `actors`
+/// bucket is the capability table to validate against (absent or empty =
+/// record the names unvalidated), and its `decisions` bucket is the
+/// decision-service
+/// universe the design's `invokes`/`inject decision` links resolve against.
+/// The tracked query passes the empty bundle: tracked surfaces carry no
+/// cross-surface artifacts.
 fn compile_ddd_with(
     db: &dyn Db,
     design: SourceFile,
     domains: Vec<SourceFile>,
-    actors: Option<&[phero_ir::ActorModel]>,
-    imports: &DomainImports,
-    decisions: &[(String, phero_ir::dmn::DmnModel)],
+    inputs: &CompileInputs,
 ) -> DddCompilation {
     let design_path = design.path(db);
     let parsed = parse_ddd_query(db, design);
@@ -60,8 +61,9 @@ fn compile_ddd_with(
             .map(|ast| ast.imports.as_slice())
             .unwrap_or_default(),
         &domains,
-        imports,
+        inputs.imports(),
     );
+    let actors = actor_models(inputs);
 
     let (model, diagnostics) = ddd::compile_ddd_file(
         &design_path,
@@ -70,13 +72,21 @@ fn compile_ddd_with(
         &parsed.diagnostics,
         &domains.domain_units,
         &domains.provided_imports,
-        actors,
-        decisions,
+        actors.as_deref(),
+        inputs.decisions(),
     );
     finish_surface(domains, model, diagnostics, DddCompilation::assemble)
 }
 /// Compiles a `.ddd` design file against its imported domain models in one
 /// call.
+///
+/// `inputs` is the one [`CompileInputs`] bundle the host builds once from
+/// the gathered import closure. This surface consumes three buckets:
+/// `domains` and `imports` for the domain union, `actors` for capability
+/// validation (rule 10), and `decisions` for decision-link validation
+/// (rule 17) — see [`CompileInputs::actors`] for the policy-set provenance
+/// the bundle records, and [`CompileInputs::decisions`] for why an empty
+/// decision bucket is the plain compile's behavior.
 ///
 /// Each domain is a `(path, source)` pair; a design import resolves by
 /// exact path match with a lexical resolution relative to the design file's
@@ -109,8 +119,7 @@ fn compile_ddd_with(
 /// let compilation = phero_driver::compile_ddd_str(
 ///     "library.ddd",
 ///     source,
-///     &domains,
-///     &phero_driver::DomainImports::default(),
+///     &phero_driver::CompileInputs::from_domains(&domains),
 /// );
 /// assert!(compilation.diagnostics.is_empty());
 /// assert_eq!(compilation.model.unwrap().modules.len(), 1);
@@ -120,18 +129,17 @@ fn compile_ddd_with(
 ///
 /// ## Entry points
 ///
-/// - [`compile_ddd_str`] — parse, domain lowering, design validation; the
-///   capabilities declared on operations are recorded as authored and are
-///   **not** validated.
-/// - [`compile_ddd_str_with_actors`] — the same, plus capability
-///   validation against a caller-provided [`phero_ir::ActorModel`].
-/// - [`compile_ddd_str_with_decisions`] — the same, plus decision-link
-///   validation (rule 17) against caller-provided
-///   [`phero_ir::dmn::DmnModel`]s: every operation `invokes` name and every
-///   `inject decision` name must resolve to a decision service the
-///   provided models declare.
+/// - [`compile_ddd_str`] — parse, domain lowering, design validation, in
+///   one call, against the caller's [`CompileInputs`]: the capabilities
+///   declared on operations are validated only when the bundle declares an
+///   actor set, and the decision links only when it provides decision
+///   models.
+/// - [`compile_ddd_app_str`] — the same for a design **root** with its
+///   imported fragments (DD8), one bundle as well.
 /// - [`compile_ddd`] / [`parse_ddd_query`] — the salsa-tracked queries the
-///   one-shot wrappers run on a fresh [`Database`].
+///   one-shot wrappers run on a fresh [`Database`]; the tracked surface
+///   carries the empty bundle, so plain compiles record the names
+///   unvalidated.
 ///
 /// ## Resolution semantics
 ///
@@ -199,11 +207,20 @@ fn compile_ddd_with(
 ///    Service"); service → service across modules is allowed.
 /// 9. **inject** — every dependency name must resolve to a service, a
 ///    repository, or a search of the application.
-/// 10. **Capabilities** — only [`compile_ddd_str_with_actors`] validates:
-///     each declared capability name must exist in the union of the actor
-///     model's blocks' capabilities. Plain compiles record the names
-///     unvalidated — the design dimension is loosely coupled to the policy
-///     dimension by design.
+/// 10. **Capabilities** — validated only when the bundle declares a
+///     **non-empty** actor set ([`CompileInputs::with_actors`]): each
+///     declared capability name must exist in the union of the actor
+///     models' blocks' capabilities, else the operation's error names the
+///     operation, its service, and the unknown capability, with the
+///     [`did_you_mean_adaptive`](phero_diagnostics::did_you_mean_adaptive)
+///     closest declared name when one is a plausible typo and the
+///     `unknownCapability` code carrying it for quick fixes. Capabilities
+///     pool across every provided model, so a host passes all of the
+///     application's `.actor` artifacts. An absent or empty actor bucket
+///     records the names unvalidated — the design dimension is loosely
+///     coupled to the policy dimension by design, and "no actor artifacts
+///     were supplied" is never a claim that the application declares no
+///     capabilities.
 /// 11. **Searches** — a search's name is unique application-wide. Its
 ///     `entity` line is required, resolves like a design target, and must
 ///     bind to an entity design **of the same module** (the repository
@@ -253,9 +270,10 @@ fn compile_ddd_with(
 ///     and dtos are exempt (the check is entity semantics, the machine
 ///     rule's scope), and enum-typed fields stay legal — an enum without a
 ///     machine is a legitimate modeling choice.
-/// 17. **Decision links** — only [`compile_ddd_str_with_decisions`]
-///     validates: every decision-service reference (an operation's
-///     `invokes` name, a service's `inject decision` name) must resolve by
+/// 17. **Decision links** — validated only when the bundle provides
+///     decision models ([`CompileInputs::with_decisions`]): every
+///     decision-service reference (an operation's `invokes` name, a
+///     service's `inject decision` name) must resolve by
 ///     its **last segment** to a decision service declared in the union of
 ///     the provided decision models' services (E0250/E0251, the
 ///     `phero_diagnostics::dmn` codes — the code prefixes the message text,
@@ -397,78 +415,11 @@ fn compile_ddd_with(
 /// non-root — it may not declare a repository. The closure is computed
 /// only when every imported domain lowered (a failed domain may hide
 /// containments, and a wrong non-root verdict is worse than none).
-pub fn compile_ddd_str(
-    path: &str,
-    source: &str,
-    domains: &[(String, String)],
-    imports: &DomainImports,
-) -> DddCompilation {
-    compile_ddd_str_inner(path, source, domains, None, imports, &[])
-}
-
-/// Like [`compile_ddd_str`], but the capabilities declared on service
-/// operations are validated against `actors`: every name must exist in the
-/// union of the actor models' blocks' capabilities, else the operation's
-/// error names the operation, its service, and the unknown capability
-/// (rule 10) — with the
-/// [`did_you_mean_adaptive`](phero_diagnostics::did_you_mean_adaptive) closest
-/// declared name when one is a plausible typo, and the `unknownCapability`
-/// code carrying it for quick fixes. Capabilities pool across every
-/// provided model, so a host passes all of the application's `.actor`
-/// artifacts. The plain [`compile_ddd_str`] records capabilities
-/// unvalidated.
-pub fn compile_ddd_str_with_actors(
-    path: &str,
-    source: &str,
-    domains: &[(String, String)],
-    imports: &DomainImports,
-    actors: &[phero_ir::ActorModel],
-) -> DddCompilation {
-    compile_ddd_str_inner(path, source, domains, Some(actors), imports, &[])
-}
-
-/// Like [`compile_ddd_str`], but the design's **decision links** are
-/// validated against `decisions` (rule 17): every operation `invokes`
-/// name and every `inject decision` name must resolve by its last segment
-/// to a decision service declared in the union of the provided
-/// [`phero_ir::dmn::DmnModel`]s' services, else the reference errors
-/// `E0250 unknown decision service '<name>' invoked by operation '<op>'
-/// of service '<service>'` (or the `inject decision` variant, E0251),
-/// spanned on the reference, with the
-/// [`did_you_mean_adaptive`](phero_diagnostics::did_you_mean_adaptive)
-/// closest declared service when one is a plausible typo. Decision
-/// services pool across every provided model, so a host passes all of the
-/// application's `.dmn` artifacts as `(path, model)` pairs. An **empty**
-/// slice is the plain [`compile_ddd_str`] behavior: the names lower into
-/// the artifact unvalidated. Every `import "<path>.dmn"` the design
-/// declares must be provided under that path when a non-empty bucket is
-/// supplied, else `imported decision model "<path>" was not provided` —
-/// `.dmn` imports are never domains and never lower as `.mox` sources
-/// (a plain compile ignores them outright).
-pub fn compile_ddd_str_with_decisions(
-    path: &str,
-    source: &str,
-    domains: &[(String, String)],
-    imports: &DomainImports,
-    actors: &[phero_ir::ActorModel],
-    decisions: &[(String, phero_ir::dmn::DmnModel)],
-) -> DddCompilation {
-    compile_ddd_str_inner(path, source, domains, Some(actors), imports, decisions)
-}
-
-/// The body of the one-shot `.ddd` entry points.
-fn compile_ddd_str_inner(
-    path: &str,
-    source: &str,
-    domains: &[(String, String)],
-    actors: Option<&[phero_ir::ActorModel]>,
-    imports: &DomainImports,
-    decisions: &[(String, phero_ir::dmn::DmnModel)],
-) -> DddCompilation {
+pub fn compile_ddd_str(path: &str, source: &str, inputs: &CompileInputs) -> DddCompilation {
     let db = Database::new();
     let design = SourceFile::new(&db, path.to_string(), source.to_string());
-    let files = domain_files(&db, domains);
-    compile_ddd_with(&db, design, files, actors, imports, decisions)
+    let files = domain_files(&db, inputs.domains());
+    compile_ddd_with(&db, design, files, inputs)
 }
 
 /// Compiles a `.ddd` **root** with its imported fragments (DD8, issue
@@ -476,45 +427,15 @@ fn compile_ddd_str_inner(
 /// application in import order, and the result is one [`DddCompilation`]
 /// and one artifact. A source without an `application` declaration is a
 /// fragment and is refused here — compile its root instead.
+///
+/// `inputs` is the same one [`CompileInputs`] bundle [`compile_ddd_str`]
+/// takes; its `domains` bucket is the closure the root **and** every
+/// fragment import (each resolved relative to its declaring file).
 pub fn compile_ddd_app_str(
     path: &str,
     source: &str,
     fragments: &[DddFragment],
-    domains: &[(String, String)],
-    imports: &DomainImports,
-) -> DddCompilation {
-    compile_ddd_app_str_inner(path, source, fragments, domains, None, imports, &[])
-}
-
-/// [`compile_ddd_app_str`] with capability and decision-link validation.
-pub fn compile_ddd_app_str_with_decisions(
-    path: &str,
-    source: &str,
-    fragments: &[DddFragment],
-    domains: &[(String, String)],
-    imports: &DomainImports,
-    actors: &[phero_ir::ActorModel],
-    decisions: &[(String, phero_ir::dmn::DmnModel)],
-) -> DddCompilation {
-    compile_ddd_app_str_inner(
-        path,
-        source,
-        fragments,
-        domains,
-        Some(actors),
-        imports,
-        decisions,
-    )
-}
-
-fn compile_ddd_app_str_inner(
-    path: &str,
-    source: &str,
-    fragments: &[DddFragment],
-    domains: &[(String, String)],
-    actors: Option<&[phero_ir::ActorModel]>,
-    imports: &DomainImports,
-    decisions: &[(String, phero_ir::dmn::DmnModel)],
+    inputs: &CompileInputs,
 ) -> DddCompilation {
     let root = phero_syntax::parse_ddd(source);
     let mut diagnostics: Vec<(String, Diagnostic)> = root
@@ -546,7 +467,11 @@ fn compile_ddd_app_str_inner(
     // pads each fragment before parsing, so every AST span is already a
     // combined-source span. Ranges map diagnostics back to their file.
     let mut combined = source.to_string();
-    let mut ranges: Vec<(String, usize, usize)> = vec![(path.to_string(), 0, source.len())];
+    let mut ranges: Vec<FragmentRange> = vec![FragmentRange {
+        path: path.to_string(),
+        start: 0,
+        end: source.len(),
+    }];
     let mut fragment_modules = Vec::new();
     // The root's own import list, kept separate from the merged one: an
     // import resolves relative to the file that declares it (DD8).
@@ -582,7 +507,11 @@ fn compile_ddd_app_str_inner(
             }
         }
         combined.push_str(&fragment.source);
-        ranges.push((fragment.path.clone(), base, base + fragment.source.len()));
+        ranges.push(FragmentRange {
+            path: fragment.path.clone(),
+            start: base,
+            end: base + fragment.source.len(),
+        });
     }
     application.modules.extend(fragment_modules);
     application.modules = merge_modules(application.modules);
@@ -591,7 +520,7 @@ fn compile_ddd_app_str_inner(
     ast.fragments.clear();
 
     let db = Database::new();
-    let files = domain_files(&db, domains);
+    let files = domain_files(&db, inputs.domains());
     let mut origins = vec![DomainOrigin {
         path,
         imports: &root_imports,
@@ -602,7 +531,8 @@ fn compile_ddd_app_str_inner(
             imports: fragment_imports,
         });
     }
-    let lowered = lower_domains_from(&db, &origins, &files, imports);
+    let lowered = lower_domains_from(&db, &origins, &files, inputs.imports());
+    let actors = actor_models(inputs);
     let (model, local_diagnostics) = ddd::compile_ddd_file(
         path,
         &combined,
@@ -610,8 +540,8 @@ fn compile_ddd_app_str_inner(
         &[],
         &lowered.domain_units,
         &lowered.provided_imports,
-        actors,
-        decisions,
+        actors.as_deref(),
+        inputs.decisions(),
     );
     diagnostics.extend(local_diagnostics);
     let diagnostics = remap_diagnostics(diagnostics, path, &ranges);
@@ -647,12 +577,37 @@ fn merge_modules(modules: Vec<phero_syntax::ast::DddModule>) -> Vec<phero_syntax
     merged
 }
 
+/// The actor models the `.ddd` engine consumes, in bundle order.
+///
+/// The capability pass consumes policy **artifacts**, not their paths; the
+/// bundle keys them so every gatherer shares one shape, so this projects
+/// the models out. `None` stays `None` — the bundle's "the host has no
+/// actor models for this application" claim — and the engine treats it
+/// exactly as it treats an empty set: capability names are recorded
+/// unvalidated (rule 10).
+fn actor_models(inputs: &CompileInputs) -> Option<Vec<phero_ir::ActorModel>> {
+    inputs
+        .actors()
+        .map(|policies| policies.iter().map(|(_, model)| model.clone()).collect())
+}
+
+/// One file's slice of the combined fragment source, in combined-source byte
+/// coordinates — the diagnostic remapping table.
+struct FragmentRange {
+    /// The file the slice belongs to.
+    path: String,
+    /// Slice start in the combined source.
+    start: usize,
+    /// Slice end in the combined source.
+    end: usize,
+}
+
 /// Re-tags the combined-source diagnostics with their originating file and
 /// rebases their spans to that file's local coordinates.
 fn remap_diagnostics(
     diagnostics: Vec<(String, Diagnostic)>,
     root_path: &str,
-    ranges: &[(String, usize, usize)],
+    ranges: &[FragmentRange],
 ) -> Vec<(String, Diagnostic)> {
     diagnostics
         .into_iter()
@@ -663,10 +618,11 @@ fn remap_diagnostics(
             let Some(span) = diagnostic.span else {
                 return (file, diagnostic);
             };
-            for (path, start, end) in ranges {
-                if span.start >= *start && span.end <= *end {
-                    diagnostic.span = Some((span.start - start..span.end - start).into());
-                    return (path.clone(), diagnostic);
+            for range in ranges {
+                if span.start >= range.start && span.end <= range.end {
+                    diagnostic.span =
+                        Some((span.start - range.start..span.end - range.start).into());
+                    return (range.path.clone(), diagnostic);
                 }
             }
             (file, diagnostic)

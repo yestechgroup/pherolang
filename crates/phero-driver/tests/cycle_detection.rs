@@ -185,8 +185,7 @@ actors Support {
     let compilation = phero_driver::compile_actors_str(
         "actors.actor",
         source,
-        &[],
-        &phero_driver::DomainImports::default(),
+        &phero_driver::CompileInputs::new(),
     );
     let messages: Vec<String> = compilation
         .diagnostics
@@ -212,8 +211,7 @@ actors Support {
     let compilation = phero_driver::compile_actors_str(
         "actors.actor",
         source,
-        &[],
-        &phero_driver::DomainImports::default(),
+        &phero_driver::CompileInputs::new(),
     );
     assert!(
         compilation.diagnostics.is_empty(),
