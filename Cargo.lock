@@ -2418,6 +2418,7 @@ dependencies = [
  "phero-expr",
  "phero-ifml",
  "phero-ir",
+ "phero-parser",
  "phero-syntax",
  "phero-testkit",
  "phero-verify",
@@ -2463,6 +2464,7 @@ name = "phero-highlight"
 version = "0.4.0"
 dependencies = [
  "phero-ifml",
+ "phero-parser",
  "phero-syntax",
  "serde",
  "serde_json",
@@ -2522,6 +2524,7 @@ name = "phero-parser"
 version = "0.4.0"
 dependencies = [
  "chumsky 0.10.1",
+ "serde",
  "thiserror",
 ]
 

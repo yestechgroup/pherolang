@@ -3,8 +3,10 @@
 //! This crate owns the parser infrastructure that is genuinely agnostic of
 //! any one surface: the byte-offset [`Span`] type, [`Spanned`], the
 //! token-slice [`Tokens`] input, the [`ParseError`] shape, token-agnostic
-//! recovery/combination helpers, the grammar-doc test harness, and the
-//! bracket-depth scanner.
+//! recovery/combination helpers, the grammar-doc test harness, the
+//! bracket-depth scanner, and the workspace's one [`Surface`] identity
+//! (extensions, ids, `ALL` order) that the driver, the highlighter, the CLI
+//! and the LSP share.
 //!
 //! **No surface grammars live here.** Surface lexemes, AST declarations,
 //! keyword tables, and parser entry points stay in their own crates
@@ -36,9 +38,11 @@ pub mod combinators;
 pub mod grammar_doc;
 pub mod input;
 pub mod nesting;
+pub mod surface;
 
 pub use combinators::{chain, junk_until, kw, list_separated};
 pub use input::Tokens;
+pub use surface::Surface;
 
 /// Byte-offset span into a source text.
 pub type Span = SimpleSpan<usize>;
