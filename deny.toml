@@ -7,6 +7,33 @@ version = 2
 # The advisory DB is fetched fresh in CI; this gate must stay at zero.
 yanked = "deny"
 
+# Two informational "unmaintained" advisories, accepted with a recorded
+# review date rather than a dependency change — every other advisory,
+# including every vulnerability and unsound advisory, still fails the gate.
+#
+# RUSTSEC-2026-0543 (`chrono`) and RUSTSEC-2026-0555 (`chrono-tz`) entered
+# the RustSec DB on 2026-11-17, after the last green `main` run, which is why
+# the gate went red without a dependency change.  Evidence:
+#
+#   * `chrono` arrives twice: through the rev-pinned `yestechgroup/dsntk-rs`
+#     (`b926458`, which IS its current `main`; `phero-backend-dmn` needs its
+#     FEEL temporal values) and through `cedar-policy` 4.14, a dev-dependency
+#     of `phero-backend-cedar`.  `chrono-tz` arrives only through
+#     `dsntk-feel`.  A newer dsntk-rs rev therefore cannot clear `chrono`
+#     while `cedar-policy` keeps it, and no upstream rev or released crate
+#     version drops either dependency.
+#   * Both advisories are informational, not vulnerabilities; `cargo audit`
+#     already reports them as warnings at its default level.  The real fix
+#     belongs to the dsntk-rs and cedar-policy maintainers.
+#
+# Reviewed: 2026-11-17; re-review by 2027-05-17.  This cargo-deny (0.20.2)
+# has no per-ignore expiry field, so the date is recorded here and in each
+# reason rather than enforced by the tool.
+ignore = [
+    { id = "RUSTSEC-2026-0543", reason = "chrono is unmaintained (informational): pulled by the rev-pinned dsntk-rs (b926458, its current main) for FEEL temporal values and by cedar-policy 4.14 (dev-only); no upstream or dependency fix exists" },
+    { id = "RUSTSEC-2026-0555", reason = "chrono-tz is unmaintained (informational): pulled only by dsntk-feel from the rev-pinned dsntk-rs (b926458, its current main); no newer upstream rev or replacement exists" },
+]
+
 [licenses]
 version = 2
 allow = [
