@@ -1,10 +1,13 @@
 //! The nine-surface metadata registry.
 //!
-//! Every fact a highlighter, editor grammar, or documentation tool needs about
-//! a surface lives here **once**: the id/extension/aliases, the lexer family,
-//! the word tables (borrowed from the compiler's own `words` modules, never
-//! copied), the builtin type names, the declaration-word table, and the
-//! TextMate/LSP mappings.
+//! This is where the **highlight-only** facts about a surface live: the lexer
+//! family, the word tables (borrowed from the compiler's own `words` modules,
+//! never copied), the builtin type names, the declaration-word table, the
+//! documentation path, and the TextMate/LSP mappings. The surface identity
+//! itself — variants, `ALL` order, extensions, id, display name, aliases —
+//! is [`phero_parser::Surface`] (re-exported as [`Surface`]); the duplicated
+//! identity fields on [`SurfaceMetadata`] are a rendering convenience and the
+//! tests assert they equal the shared type's.
 //!
 //! The word tables are references into [`phero_syntax::words`] and
 //! [`phero_ifml::words`]. That is the anti-drift contract: a keyword is added

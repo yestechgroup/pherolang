@@ -136,9 +136,9 @@ forward-compatible consumer, rejected by the reference Rust model).
 ## The nine-surface registry
 
 Surface ids are the file extensions and the canonical `--surface` values.
-They mirror `phero_driver::SurfaceKind` — the compiler's one extension
-table — and are drift-tested against it; the registry is the highlighter's
-dispatch key, not a second extension map.
+They mirror `phero_parser::Surface` — the workspace's one surface identity,
+re-exported by the driver as `SurfaceKind` — and are drift-tested against it;
+the registry is the highlighter's dispatch key, not a second extension map.
 
 | Id | Extension | Lexer family | Language documentation |
 |---|---|---|---|
@@ -256,8 +256,8 @@ classifier in the same commit, or the build fails.
 
 ### Adding a surface
 
-1. Add the `SurfaceKind` arm and `SurfaceKind::ALL` entry (the compiler's
-   extension table).
+1. Add the `Surface` arm and `Surface::ALL` entry in `phero_parser` (the one
+   compiler table; the driver re-exports it as `SurfaceKind`).
 2. Add the lexer/parser and its word tables in the owning front-end crate.
 3. Add one registry row (id, extension, lexer family, docs link).
 4. Add a corpus directory under `tests/highlight/corpus/<id>/` with `valid`,

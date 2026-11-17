@@ -35,7 +35,6 @@
 //! rather than emitted, and nothing in this module indexes unchecked.
 
 use std::collections::HashSet;
-use std::path::Path;
 
 use phero_highlight::{
     HighlightClass, HighlightModifier, HighlightModifiers, HighlightSpan, Surface,
@@ -246,13 +245,13 @@ pub(super) fn encode(text: &str, spans: &[HighlightSpan]) -> SemanticTokens {
     }
 }
 
-/// The highlight surface a document URI names, by its extension.
+/// The surface a document URI names, for the highlighter.
 ///
-/// Mirrors [`super::surface_for`]'s decode (a `file:` URI's path may be
-/// percent-encoded); `None` for a document the highlighter does not know.
+/// The same decode as [`super::surface_for`] — one table, one rule — so the
+/// tokens the server publishes are the tokens `pherolang highlight` would
+/// produce for the same file; `None` for a document no surface owns.
 pub(super) fn surface_of_uri(uri: &Uri) -> Option<Surface> {
-    let path = uri.path().decode().to_string_lossy().into_owned();
-    Surface::from_path(Path::new(&path))
+    super::surface_of_path(&super::uri_path(uri))
 }
 
 #[cfg(test)]

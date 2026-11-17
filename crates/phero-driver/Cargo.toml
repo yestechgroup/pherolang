@@ -12,6 +12,7 @@ workspace = true
 [dependencies]
 anyhow = { workspace = true }
 phero-diagnostics = { workspace = true }
+phero-parser = { workspace = true }
 phero-syntax = { workspace = true }
 phero-ifml = { workspace = true }
 sigil-diag = { workspace = true }

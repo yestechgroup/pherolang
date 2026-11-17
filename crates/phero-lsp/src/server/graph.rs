@@ -966,9 +966,11 @@ fn push_artifact(
     }
 }
 
-/// The surface of a path, by extension.
+/// The document surface a path names, by extension — [`super::surface_of_path`]
+/// lifted into the classifier the snapshot and publish pipeline match on
+/// (`None` for a file no surface owns).
 pub(super) fn surface_of_path(path: &Path) -> Option<Surface> {
-    SurfaceKind::of_path(path).map(Surface::Known)
+    super::surface_of_path(path).map(Surface::Known)
 }
 
 /// `true` for a formatter-golden `X.fmt.<ext>` file — an output, not a

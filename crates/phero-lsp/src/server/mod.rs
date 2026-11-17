@@ -2,7 +2,7 @@
 //! plumbing on top of the phero-driver session.
 
 use std::collections::HashMap;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::sync::atomic::AtomicUsize;
 use std::sync::{Arc, Mutex};
 
@@ -44,19 +44,44 @@ const SOURCE_NAME: &str = "pherolang";
 /// unknown file kind publishes nothing (it must never produce bogus `.mox`
 /// errors).
 ///
-/// The extension table lives once, in [`phero_driver::SurfaceKind`]; this
-/// wrapper only adds the "not a pherolang surface" case the LSP must handle
-/// (the CLI has no equivalent — it compiles an unknown extension as a
-/// domain, its historical default).
+/// This is a **host classifier**, not a second taxonomy: [`SurfaceKind`] is
+/// the workspace's one surface identity (`phero_parser::Surface`, re-exported
+/// by the driver), and this wrapper only adds the "not a pherolang surface"
+/// case the LSP must handle (the CLI has no equivalent — it compiles an
+/// unknown extension as a domain, its historical default).
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-enum Surface {
+pub(super) enum DocumentSurface {
     Known(SurfaceKind),
     Other,
 }
 
-fn surface_for(uri: &Uri) -> Surface {
-    let path = uri.path().decode().to_string_lossy().into_owned();
-    SurfaceKind::of_path(std::path::Path::new(&path)).map_or(Surface::Other, Surface::Known)
+/// The classifier's historical spelling.
+///
+/// The server used to own an `enum Surface` of its own; the taxonomy moved to
+/// the shared identity, so `Surface` is now this module's alias for
+/// [`DocumentSurface`] and every existing arm in the publish pipeline
+/// (`Surface::Known(..)` / `Surface::Other`) keeps compiling. The alias is
+/// removable once those call sites are renamed.
+pub(super) use DocumentSurface as Surface;
+
+/// The filesystem path a document URI names, percent-decoded.
+///
+/// A `file:` URI's path may be percent-encoded (`%20`, …); this is the one
+/// place the server turns a document URI into a path for surface decoding.
+fn uri_path(uri: &Uri) -> PathBuf {
+    PathBuf::from(uri.path().decode().to_string_lossy().into_owned())
+}
+
+/// The one path → surface decode in the server: [`SurfaceKind::of_path`]'s
+/// exact extension rule. The document classifier and the semantic-token layer
+/// both go through it, so an extension names the same surface everywhere in
+/// the server (and the same one `pherolang check` compiles).
+fn surface_of_path(path: &Path) -> Option<SurfaceKind> {
+    SurfaceKind::of_path(path)
+}
+
+fn surface_for(uri: &Uri) -> DocumentSurface {
+    surface_of_path(&uri_path(uri)).map_or(DocumentSurface::Other, DocumentSurface::Known)
 }
 
 /// The short file label a hover provenance footer names (the file name of
