@@ -1,6 +1,13 @@
 {
   "formatVersion": 2,
   "pheroVersion": "0.4.0",
+  "domainFingerprint": {
+    "algorithm": "sha256",
+    "value": "96c12a125a6159b75abba3e2848e664738c2bbd719ca9cc8fba0dabce4a75783",
+    "packages": [
+      "demo.queries"
+    ]
+  },
   "application": {
     "name": "Queries",
     "base": "demo.queries"

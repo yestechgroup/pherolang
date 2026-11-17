@@ -260,7 +260,7 @@ fn the_diagnostic_emission_order_is_stable() {
                     // Stage 5b: the `extend` block's deprecated-keyword
                     // warning and diagnostics ride the design stage, after
                     // every design of the module.
-                    (Severity::Warning, "E0387 'extend' is deprecated; write 'children Item'".to_string()),
+                    (Severity::Warning, "E0387 'extend' is deprecated since 0.4 and removed in 0.5; write 'children Item'".to_string()),
                     (Severity::Error, "E0355 unknown child feature 'widgets' on 'Item'".to_string()),
                     (Severity::Error, "unknown text field 'ghost' on 'Item'".to_string()),
                     (Severity::Error, "boost of text field 'sku' must be at least 1".to_string()),

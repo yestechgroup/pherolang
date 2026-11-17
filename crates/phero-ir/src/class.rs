@@ -355,13 +355,15 @@ impl ClassDef {
 
     /// (Re)assigns every [`Feature::id`] to its 0-based declaration index.
     ///
-    /// # Stability warning
+    /// # Contract
     ///
-    /// IDs are **frozen for wire formats** once a model has been published.
-    /// Only call this while authoring a model (e.g. immediately after
-    /// inserting, removing, or reordering features) — never on a model that
-    /// has been serialized for or by consumers, since reordering features
-    /// invalidates previously published ids.
+    /// The id is an **intra-publication ordinal**, not a cross-publication
+    /// identity (DF2, issue pherolang#325). Run this while authoring a model
+    /// (e.g. immediately after inserting, removing, or reordering features):
+    /// the ids then equal the declaration indices for that publication. A
+    /// later edit renumbers the affected slots; a consumer that needs
+    /// continuity across publications keys on
+    /// `(package, class name, feature name)`.
     ///
     /// Formally specified as register row V10 in `docs/VERIFICATION.md`:
     /// the proof lives in `phero-verify::feature_ids` (spec mirror — in-crate
@@ -374,7 +376,7 @@ impl ClassDef {
         }
     }
 
-    /// Looks up a feature by its stable id.
+    /// Looks up a feature by its intra-publication id.
     pub fn feature(&self, id: u32) -> Option<&Feature> {
         self.features.iter().find(|feature| feature.id == id)
     }
@@ -385,9 +387,17 @@ impl ClassDef {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Feature {
-    /// **Stable id, frozen for wire formats.** Equals the 0-based declaration
-    /// index within the owning class at publication time; backends key on it.
-    /// Never recompute it on a published model.
+    /// **Intra-publication ordinal.** Equals the 0-based declaration index
+    /// within the owning class in one published artifact: it is stable for
+    /// indexing, equality, and deterministic output *within that artifact*,
+    /// and backends may key within-publication structures on it.
+    ///
+    /// It is **not** a cross-publication identity. Inserting, removing, or
+    /// reordering a feature renumbers every later feature, so a consumer that
+    /// persists an id across publications silently re-points it. Key
+    /// cross-publication identity on `(package, class name, feature name)`
+    /// instead; a rename is deliberately a new identity (DF2, issue
+    /// pherolang#325).
     pub id: u32,
     /// Feature name, unique within its class.
     pub name: String,

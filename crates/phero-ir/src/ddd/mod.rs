@@ -27,6 +27,14 @@
 //!   precedent. Readers gate on `formatVersion` alone: an artifact without
 //!   `pheroVersion` (written before the field existed) deserializes
 //!   unchanged.
+//! - **Domain pairing.** [`DddModel::domain_fingerprint`] records the shape
+//!   of every domain model the design resolved against (DF1, issue
+//!   pherolang#324): a SHA-256 over the canonicalized imported models with
+//!   `pheroVersion` stripped, plus the sorted package names. It is emitted on
+//!   every compiler-written artifact (empty imports included); the
+//!   artifact-only contract requires it, and a consumer compares it against
+//!   the domain artifact it intends to use. It is a staleness check, never a
+//!   signature.
 //! - **Empty = minimal.** Every optional field is `#[serde(default)]` and
 //!   omitted when absent/empty (`skip_serializing_if`), so an empty artifact
 //!   serializes as exactly
@@ -144,6 +152,7 @@ use serde::{Deserialize, Serialize};
 mod application;
 mod designs;
 mod errors;
+mod fingerprint;
 mod references;
 mod searches;
 mod services;
@@ -156,6 +165,7 @@ pub use designs::{
     Stereotype, Transition, ValueSemantics,
 };
 pub use errors::{ErrorDecl, ErrorRef, ErrorScope};
+pub use fingerprint::{DomainFingerprint, DOMAIN_FINGERPRINT_ALGORITHM};
 pub use references::{CapabilityRef, DecisionRef, EventRef, TargetKind, TargetRef};
 pub use searches::{
     Boost, DocumentField, Pagination, RankingStrategy, SearchDef, SearchField, SearchFilter,
@@ -197,6 +207,15 @@ pub struct DddModel {
     /// without this field still deserializes.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub phero_version: Option<String>,
+    /// The domain shape this design was compiled against (DF1, issue
+    /// pherolang#324) — the pairing key a consumer checks before generation.
+    ///
+    /// Every compiler-written artifact carries it, including a design with
+    /// no domain imports ([`DomainFingerprint`] with `packages: []`). The
+    /// artifact-only contract requires it; a hand-built artifact may omit
+    /// the key and is then refused as contract-incomplete.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub domain_fingerprint: Option<DomainFingerprint>,
     /// The designed application, when the artifact declares one.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub application: Option<Application>,
@@ -218,10 +237,17 @@ impl DddModel {
         Self {
             format_version: DDD_MODEL_FORMAT_VERSION,
             phero_version: Some(env!("CARGO_PKG_VERSION").to_string()),
+            domain_fingerprint: None,
             application: None,
             errors: Vec::new(),
             modules: Vec::new(),
         }
+    }
+
+    /// Chainable setter installing the domain pairing fingerprint (DF1).
+    pub fn with_domain_fingerprint(mut self, fingerprint: DomainFingerprint) -> Self {
+        self.domain_fingerprint = Some(fingerprint);
+        self
     }
 
     /// Chainable setter installing the application.

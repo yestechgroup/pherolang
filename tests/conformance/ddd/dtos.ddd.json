@@ -1,6 +1,13 @@
 {
   "formatVersion": 2,
   "pheroVersion": "0.4.0",
+  "domainFingerprint": {
+    "algorithm": "sha256",
+    "value": "4f4effa84df2d006aea9d236750ff01fd3c4c9ed631c958cdd21d4c0bade7f44",
+    "packages": [
+      "nz.example.dtos"
+    ]
+  },
   "application": {
     "name": "Catalogue",
     "base": "nz.example.dtos"

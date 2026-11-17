@@ -189,8 +189,8 @@ pub const E_AGGREGATE_BOUNDARY_UNKNOWN: &str = "E0385";
 /// `aggregate root '<root>' is itself a member of '<outer>'; name the
 /// outermost root` (DD4).
 pub const E_AGGREGATE_ROOT_NOT_ROOT: &str = "E0386";
-/// `'extend' is deprecated; write 'children <Class>'` — the old
-/// child-operation block keyword (DD4).
+/// `'extend' is deprecated since 0.4 and removed in 0.5; write 'children
+/// <Class>'` — the old child-operation block keyword (DD4).
 pub const E_DEPRECATED_EXTEND: &str = "E0387";
 /// `invalid invariant in design '<design>': <detail>` — the invariant does
 /// not parse, does not type-check, is not boolean, or reads beyond the
@@ -540,8 +540,8 @@ pub(crate) const ENTRIES: &[Entry] = &[
         band: DDD_BAND,
         severity: Severity::Warning,
         title: "Deprecated extend keyword",
-        meaning: "`'extend' is deprecated; write 'children <Class>'` — the child-operation block was renamed so it no longer reads like class inheritance.",
-        fix: "Rename the block keyword to `children`; the formatter rewrites it automatically.",
+        meaning: "`'extend' is deprecated since 0.4 and removed in 0.5; write 'children <Class>'` — the child-operation block was renamed so it no longer reads like class inheritance; the alias has a recorded removal milestone (DF4, issue pherolang#327).",
+        fix: "Rename the block keyword to `children`; `pherolang fmt` rewrites it automatically before 0.5.",
     },
     Entry {
         code: E_INVALID_INVARIANT,

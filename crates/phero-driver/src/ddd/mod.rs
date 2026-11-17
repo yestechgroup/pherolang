@@ -30,6 +30,7 @@ mod conditions;
 mod designs;
 mod dtos;
 mod errors;
+mod fingerprint;
 mod graph;
 mod invariants;
 mod links;
@@ -38,6 +39,8 @@ mod queries;
 mod searches;
 mod services;
 mod values;
+
+pub use fingerprint::domain_fingerprint;
 
 use crate::conditions::{
     check_condition as pipeline_check_condition, when_interior, ConditionSpanning, ConditionTriage,
@@ -505,6 +508,18 @@ pub(crate) fn compile_ddd_file(
     // application-wide reference gains its resolved companion now that the
     // registries are complete and the deferred rules have validated them.
     fill_resolved_links(&mut model, &registries, actors, decisions);
+
+    // Stage 8.5 — the domain pairing fingerprint (DF1, pherolang#324): every
+    // compiler-written design names the domain shape it resolved against.
+    // A domain that failed to lower is already an error (the artifact is
+    // discarded below), so an incomplete shape is simply not stamped.
+    if domains.iter().all(|unit| unit.model.is_some()) {
+        let refs: Vec<&phero_ir::Model> = domains
+            .iter()
+            .filter_map(|unit| unit.model.as_ref())
+            .collect();
+        model = model.with_domain_fingerprint(fingerprint::domain_fingerprint_refs(&refs));
+    }
 
     pipeline::engine_finish(path, local, diags, model)
 }

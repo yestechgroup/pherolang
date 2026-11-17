@@ -2426,6 +2426,7 @@ dependencies = [
  "salsa",
  "serde",
  "serde_json",
+ "sha2",
  "sigil-diag",
  "sigil-model",
  "sigil-resolve",

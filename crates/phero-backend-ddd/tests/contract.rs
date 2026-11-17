@@ -5,13 +5,15 @@
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 
-use phero_backend_ddd::{canonical_json, canonical_json_string, check_contract, Violation};
+use phero_backend_ddd::{
+    canonical_json, canonical_json_string, check_contract, check_pairing, Violation,
+};
 use phero_driver::{compile_actors_str, compile_ddd_str, Severity};
 use phero_ir::ddd::{
-    BuiltinRepositoryOp, CapabilityRef, DddModel, DddTypeRef, Design, DtoDirection, DtoMember,
-    DtoMemberKind, DtoShape, EqualityPolicy, ErrorRef, IdentityPolicy, QueryPagination,
-    QuerySortKey, QuerySpec, RepositoryOperation, SortDirection, StateMachine, Stereotype,
-    TargetKind, TargetRef, ValueSemantics, DDD_MODEL_FORMAT_VERSION,
+    BuiltinRepositoryOp, CapabilityRef, DddModel, DddTypeRef, Design, DomainFingerprint,
+    DtoDirection, DtoMember, DtoMemberKind, DtoShape, EqualityPolicy, ErrorRef, IdentityPolicy,
+    QueryPagination, QuerySortKey, QuerySpec, RepositoryOperation, SortDirection, StateMachine,
+    Stereotype, TargetKind, TargetRef, ValueSemantics, DDD_MODEL_FORMAT_VERSION,
 };
 use phero_ir::{Multiplicity, PrimitiveType, TypeRef};
 
@@ -153,6 +155,65 @@ fn has(violations: &[Violation], path: &str) -> bool {
 #[test]
 fn a_compiled_design_is_contract_complete() {
     assert_eq!(check_contract(&compiled()), Vec::new());
+}
+
+// --- domain pairing (DF1, pherolang#324) -------------------------------------
+
+fn domain_model(name: &str) -> phero_ir::Model {
+    let (path, source) = fixture(name);
+    let compilation =
+        phero_driver::compile_str(&path, &source, &phero_driver::DomainImports::default());
+    assert!(
+        compilation
+            .diagnostics
+            .iter()
+            .all(|diagnostic| diagnostic.severity != Severity::Error),
+        "expected a clean domain compile, got: {:?}",
+        compilation.diagnostics
+    );
+    compilation.model.expect("the domain lowers")
+}
+
+#[test]
+fn a_design_without_a_domain_fingerprint_is_reported() {
+    let mut model = compiled();
+    model.domain_fingerprint = None;
+    assert!(has(&check_contract(&model), "domainFingerprint"));
+}
+
+#[test]
+fn a_malformed_domain_fingerprint_is_reported() {
+    let mut model = compiled();
+    model.domain_fingerprint = Some(DomainFingerprint {
+        algorithm: "sha512".to_string(),
+        value: "NOT-HEX".to_string(),
+        packages: vec!["z".to_string(), "a".to_string()],
+    });
+    let violations = check_contract(&model);
+    assert!(has(&violations, "domainFingerprint.algorithm"));
+    assert!(has(&violations, "domainFingerprint.value"));
+    assert!(has(&violations, "domainFingerprint.packages"));
+}
+
+#[test]
+fn pairing_accepts_the_compiled_domain_and_names_a_mismatch() {
+    let model = compiled();
+    let matching = phero_driver::ddd::domain_fingerprint(&[domain_model("library.mox")]);
+    assert_eq!(check_pairing(&model, &matching), Ok(()));
+
+    let other = phero_driver::ddd::domain_fingerprint(&[domain_model("queries.mox")]);
+    let violation = check_pairing(&model, &other).expect_err("the pair is stale");
+    assert_eq!(violation.path, "domainFingerprint");
+    assert!(
+        violation.message.contains("nz.example.library"),
+        "the diagnostic names the compiled package: {}",
+        violation.message
+    );
+    assert!(
+        violation.message.contains("demo.queries"),
+        "the diagnostic names the supplied package: {}",
+        violation.message
+    );
 }
 
 // --- value semantics (DD2, pherolang#299) ------------------------------------

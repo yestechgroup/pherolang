@@ -36,12 +36,15 @@
 //!    tagged: `{"type": "<variant>", "value": <payload>}`. Adjacent tagging is
 //!    used (rather than internal tagging) because payloads may be bare
 //!    primitives, which internal tagging cannot represent.
-//! 3. **Stable feature IDs.** A [`Feature::id`] equals its 0-based declaration
-//!    index within its [`ClassDef`]. **IDs are FROZEN for wire formats**: once
-//!    a model has been published/serialized, ids must never be recomputed or
-//!    renumbered — backends key on them. [`ClassDef::assign_feature_ids`] may
-//!    only be run while a model is being *authored* (before first
-//!    publication), e.g. after inserting or reordering features.
+//! 3. **Intra-publication feature IDs.** A [`Feature::id`] equals its 0-based
+//!    declaration index within its [`ClassDef`] **in one published artifact**.
+//!    It is stable within that artifact (indexing, equality, deterministic
+//!    output), but it is **not** a cross-publication identity: inserting,
+//!    removing, or reordering a feature renumbers later slots. Consumers key
+//!    cross-publication identity on `(package, class name, feature name)`; a
+//!    rename is deliberately a new identity (DF2, issue pherolang#325).
+//!    [`ClassDef::assign_feature_ids`] establishes the index equality while a
+//!    model is authored.
 //! 4. **Version gate.** Every artifact carries `formatVersion`
 //!    ([`FORMAT_VERSION`]). [`Model::from_json`] rejects any other version
 //!    with [`IrError::UnsupportedFormatVersion`] rather than guessing.

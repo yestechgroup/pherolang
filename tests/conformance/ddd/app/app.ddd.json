@@ -1,6 +1,13 @@
 {
   "formatVersion": 2,
   "pheroVersion": "0.4.0",
+  "domainFingerprint": {
+    "algorithm": "sha256",
+    "value": "d56cb996ca2cbc78171a450c0f42adfaf23ea49572e3b30b3c2bc216dca0b3d4",
+    "packages": [
+      "demo.app"
+    ]
+  },
   "application": {
     "name": "Shop",
     "base": "demo.app"

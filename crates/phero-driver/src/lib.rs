@@ -29,7 +29,7 @@
 pub mod applications;
 pub(crate) mod cmmn;
 pub(crate) mod conditions;
-mod ddd;
+pub mod ddd;
 pub(crate) mod deploy;
 pub mod diagnostic;
 pub(crate) mod dmn;

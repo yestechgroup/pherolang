@@ -73,8 +73,8 @@ pub(crate) fn lower_module_child_operations(
             local.push(
                 Diagnostic::warning(
                     format!(
-                        "{E_DEPRECATED_EXTEND} 'extend' is deprecated; write \
-                         'children {}'",
+                        "{E_DEPRECATED_EXTEND} 'extend' is deprecated since 0.4 and \
+                         removed in 0.5; write 'children {}'",
                         extend.class.text
                     ),
                     Some(extend.span),

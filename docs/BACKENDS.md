@@ -43,7 +43,7 @@ Root shapes, as actually serialized:
 | --- | --- |
 | Domain IR (`Model`) | `{"formatVersion": N, "pheroVersion"?: "…", "packages": […]}` |
 | Actor policy (`ActorModel`) | `{"formatVersion": N, "blocks"?: […]}` — block-less serializes as exactly `{"formatVersion": N}` |
-| DDD design (`ddd::DddModel`) | `{"formatVersion": N, "pheroVersion"?: "…", "application"?: {…}, "errors"?: […], "modules"?: […]}` (the design keys omitted when empty; `pheroVersion` is provenance only; a `value` design nested inside carries the fixed `semantics` block, entity and dto designs omit it — strict value semantics, issue #299; a `dto` design carries `dtoShape`, and `class` is omitted for a standalone DTO — DD3, issue #300; `errors` carries the application-scoped error declarations, each module its private ones, and operations their resolved `throws` — DD7, issue #304; every entity design carries its effective `isAggregateRoot` (absent only when the verdict is undecided) and a non-root its `aggregate {root, origin}` — DD4, issue #301; entity/value designs carry the sparse ordered `invariants: [{expression}]` — DD5, issue #302; a multi-file application is one merged artifact for its root plus imported fragments, never one per fragment — DD8, issue #305 — and `formatVersion` stays 2; a declared repository operation may carry the sparse `query` block — DD9, issue #306) |
+| DDD design (`ddd::DddModel`) | `{"formatVersion": N, "pheroVersion"?: "…", "domainFingerprint": {…}, "application"?: {…}, "errors"?: […], "modules"?: […]}` (the design keys omitted when empty; `pheroVersion` is provenance only; `domainFingerprint` is the domain pairing key and is always emitted — DF1, issue #324; a `value` design nested inside carries the fixed `semantics` block, entity and dto designs omit it — strict value semantics, issue #299; a `dto` design carries `dtoShape`, and `class` is omitted for a standalone DTO — DD3, issue #300; `errors` carries the application-scoped error declarations, each module its private ones, and operations their resolved `throws` — DD7, issue #304; every entity design carries its effective `isAggregateRoot` (absent only when the verdict is undecided) and a non-root its `aggregate {root, origin}` — DD4, issue #301; entity/value designs carry the sparse ordered `invariants: [{expression}]` — DD5, issue #302; a multi-file application is one merged artifact for its root plus imported fragments, never one per fragment — DD8, issue #305 — and `formatVersion` stays 2; a declared repository operation may carry the sparse `query` block — DD9, issue #306) |
 | Event contract (`events::EventModel`) | `{"formatVersion": N, "events"?: […], "channels"?: […], "subscriptions"?: […]}` (all omitted when empty) |
 | Deployment (`deploy::DeployModel`) | `{"formatVersion": N, "applications"?: […], "profiles"?: […], "deployments"?: […]}` (all omitted when empty) |
 | Use case (`usecases::UseCaseModel`) | `{"formatVersion": N, "useCases"?: […]}` (omitted when empty) |
@@ -97,6 +97,17 @@ an actor artifact).
   `{"dto": "<boundary>"}`. `DddParam` mirrors `OperationParam` with that type
   slot; the domain IR's own `TypeRef`/`OperationParam` stay untouched (a
   `.mox` operation never references a DTO).
+- **DDD domain pairing (DF1, issue #324).** `DddModel.domainFingerprint` is
+  `{"algorithm":"sha256","value":"<64 lowercase hex>","packages":[…]}`, where
+  `value` is SHA-256 over the canonicalized imported domain `Model`s
+  (`pheroVersion` stripped, models ordered by sorted package names, each
+  length-prefixed) and `packages` is the sorted unique union. It is emitted
+  on every compiler-written artifact, including one with no imports
+  (`packages: []`). A consumer recomputes it over the domain artifact it
+  intends to use and refuses generation on mismatch
+  (`phero_backend_ddd::check_pairing`); `pherolang artifact check
+  <design.json> --domain <domain.json>` is the reference implementation. It
+  is a staleness check, not a signature.
 - **DDD error vocabulary (DD7, issue #304).** An `ErrorDecl` is
   `{"name": …, "description"?: …, "fields"?: [{name, type, multiplicity?}]}`
   — the payload reuses the `DddParam` signature slot. `DddModel.errors` holds
@@ -187,8 +198,13 @@ an actor artifact).
   function and the slot (the `expr`-body bail convention): the driver
   never attaches an unchecked body, so a present-but-invalid target is
   artifact corruption, not deferral.
-- **Stable feature ids.** `Feature::id` equals its 0-based declaration index
-  at publication time and is frozen for wire formats; backends key on it.
+- **Feature ids are intra-publication ordinals.** `Feature::id` equals its
+  0-based declaration index in one published artifact: stable within that
+  artifact for indexing and deterministic output, but **not** a
+  cross-publication identity — inserting, removing, or reordering a feature
+  renumbers later slots. A consumer that persists identity across
+  publications keys on `(package, class name, feature name)`; a rename is a
+  new identity (DF2, issue #325).
 - **Golden byte-identity.** The goldens under `tests/conformance/` are the
   spec: an emitter change that shifts a byte is a contract change. When
   developing *in* this workspace, `PHERO_UPDATE_FIXTURES=1` regenerates them

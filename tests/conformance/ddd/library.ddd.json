@@ -1,6 +1,13 @@
 {
   "formatVersion": 2,
   "pheroVersion": "0.4.0",
+  "domainFingerprint": {
+    "algorithm": "sha256",
+    "value": "83af0936a34854daf7c2b5ab4d1acc1a6477d525820537421bd40a73c4fedb80",
+    "packages": [
+      "nz.example.library"
+    ]
+  },
   "application": {
     "name": "Library",
     "base": "nz.example.library"
