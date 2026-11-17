@@ -55,15 +55,6 @@ pub(super) enum DocumentSurface {
     Other,
 }
 
-/// The classifier's historical spelling.
-///
-/// The server used to own an `enum Surface` of its own; the taxonomy moved to
-/// the shared identity, so `Surface` is now this module's alias for
-/// [`DocumentSurface`] and every existing arm in the publish pipeline
-/// (`Surface::Known(..)` / `Surface::Other`) keeps compiling. The alias is
-/// removable once those call sites are renamed.
-pub(super) use DocumentSurface as Surface;
-
 /// The filesystem path a document URI names, percent-decoded.
 ///
 /// A `file:` URI's path may be percent-encoded (`%20`, …); this is the one
@@ -98,7 +89,7 @@ fn file_label(uri: &Uri) -> String {
 /// One open document as the server sees it.
 #[derive(Clone)]
 struct Document {
-    surface: Surface,
+    surface: DocumentSurface,
     text: String,
     version: i32,
     /// The salsa-tracked `.mox` source; `None` for every other surface.
@@ -221,7 +212,7 @@ impl LanguageServer for PheroBackend {
         let uri = text_document.uri;
         let surface = surface_for(&uri);
         let file = match surface {
-            Surface::Known(SurfaceKind::Mox) => {
+            DocumentSurface::Known(SurfaceKind::Mox) => {
                 let db = self.db.lock().unwrap();
                 Some(SourceFile::new(
                     &*db,
@@ -298,10 +289,10 @@ impl LanguageServer for PheroBackend {
             let documents = self.documents.lock().unwrap();
             match documents.get(&uri) {
                 Some(document) => match document.surface {
-                    Surface::Known(SurfaceKind::Ifml) => {
+                    DocumentSurface::Known(SurfaceKind::Ifml) => {
                         Some(phero_ifml::format_ifml(&document.text))
                     }
-                    Surface::Known(SurfaceKind::Dmn) => {
+                    DocumentSurface::Known(SurfaceKind::Dmn) => {
                         phero_syntax::format_dmn(&document.text).ok()
                     }
                     _ => None,
@@ -352,7 +343,7 @@ impl LanguageServer for PheroBackend {
         }) else {
             return Ok(None);
         };
-        if surface == Surface::Other {
+        if surface == DocumentSurface::Other {
             return Ok(None);
         }
         if let Some((cached_version, tokens)) = self.semantic_cache.lock().unwrap().get(&uri) {
@@ -382,7 +373,7 @@ impl LanguageServer for PheroBackend {
     ) -> tower_lsp_server::jsonrpc::Result<Option<GotoDefinitionResponse>> {
         let uri = params.text_document_position_params.text_document.uri;
         let position = params.text_document_position_params.position;
-        if surface_for(&uri) == Surface::Known(SurfaceKind::Mox) {
+        if surface_for(&uri) == DocumentSurface::Known(SurfaceKind::Mox) {
             // `.mox` keeps its own index: it resolves typed references,
             // `opposite` ends, enum literals, and vocabulary facets the graph
             // deliberately does not model.
@@ -410,7 +401,7 @@ impl LanguageServer for PheroBackend {
         // `.ifml` keeps its own declaration-to-declaration walk for the
         // free-string names (module uses, views) when the graph has no node
         // to bind.
-        if surface_for(&uri) == Surface::Known(SurfaceKind::Ifml) {
+        if surface_for(&uri) == DocumentSurface::Known(SurfaceKind::Ifml) {
             return Ok(self.with_ifml(&uri, |snapshot| {
                 ifml_goto_definition(snapshot, uri.clone(), position)
             }));
@@ -421,7 +412,7 @@ impl LanguageServer for PheroBackend {
     async fn hover(&self, params: HoverParams) -> tower_lsp_server::jsonrpc::Result<Option<Hover>> {
         let uri = params.text_document_position_params.text_document.uri;
         let position = params.text_document_position_params.position;
-        if surface_for(&uri) == Surface::Known(SurfaceKind::Mox) {
+        if surface_for(&uri) == DocumentSurface::Known(SurfaceKind::Mox) {
             let label = file_label(&uri);
             // An `actors { … }` member is a graph node (`actor`,
             // `capability`); the navigation index only knows it as a
@@ -471,7 +462,7 @@ impl LanguageServer for PheroBackend {
         }
         // `.ifml`'s own hover (the module signature, the declaration kind)
         // wins where it has an answer; the graph enriches the rest.
-        if surface_for(&uri) == Surface::Known(SurfaceKind::Ifml) {
+        if surface_for(&uri) == DocumentSurface::Known(SurfaceKind::Ifml) {
             if let Some(hover) = self.with_ifml(&uri, |snapshot| ifml_hover(snapshot, position)) {
                 return Ok(Some(hover));
             }
@@ -488,7 +479,7 @@ impl LanguageServer for PheroBackend {
         params: DocumentSymbolParams,
     ) -> tower_lsp_server::jsonrpc::Result<Option<DocumentSymbolResponse>> {
         let uri = params.text_document.uri;
-        if surface_for(&uri) == Surface::Known(SurfaceKind::Mox) {
+        if surface_for(&uri) == DocumentSurface::Known(SurfaceKind::Mox) {
             let symbols = self.with_navigation(&uri, |map, index| {
                 let roots: Vec<DocumentSymbol> = index
                     .definitions()
@@ -516,7 +507,7 @@ impl LanguageServer for PheroBackend {
         }
         // `.ifml`'s outline carries its module `use` sites nested under their
         // declarations — richer than the flat surface index.
-        if surface_for(&uri) == Surface::Known(SurfaceKind::Ifml) {
+        if surface_for(&uri) == DocumentSurface::Known(SurfaceKind::Ifml) {
             if let Some(symbols) = self.with_ifml(&uri, ifml_document_symbols) {
                 return Ok(Some(symbols));
             }
@@ -643,7 +634,7 @@ impl LanguageServer for PheroBackend {
         // `.mox` references ride rename's resolver (the navigation index's
         // typed targets); the standalone handler declines rather than
         // answering from a second, partial table.
-        if surface_for(&uri) == Surface::Known(SurfaceKind::Mox) {
+        if surface_for(&uri) == DocumentSurface::Known(SurfaceKind::Mox) {
             return Ok(None);
         }
         let locations = self
@@ -666,7 +657,7 @@ impl LanguageServer for PheroBackend {
                 }
             }
         }
-        if surface_for(&uri) == Surface::Known(SurfaceKind::Mox) {
+        if surface_for(&uri) == DocumentSurface::Known(SurfaceKind::Mox) {
             return Ok(None);
         }
         match self
@@ -705,7 +696,7 @@ impl LanguageServer for PheroBackend {
                 "invalid identifier",
             ));
         }
-        if surface_for(&uri) == Surface::Known(SurfaceKind::Mox) {
+        if surface_for(&uri) == DocumentSurface::Known(SurfaceKind::Mox) {
             let edit = self.with_navigation(&uri, |map, index| {
                 let offset = map.offset_for(position);
                 let target = match index.at(offset) {
