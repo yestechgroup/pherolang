@@ -1,5 +1,7 @@
 //! `pherolang` CLI tests: ddd.
 
+use std::path::PathBuf;
+
 use crate::support::*;
 
 // --- `.ddd` design files -------------------------------------------------------
@@ -200,6 +202,64 @@ fn artifact_check_passes_on_the_ddd_golden_artifact() {
         String::from_utf8_lossy(&output.stdout),
         format!("OK {}\n", path.display())
     );
+}
+
+#[test]
+fn artifact_check_pairs_a_design_with_the_domain_it_was_compiled_against() {
+    let design = workspace_root().join("tests/conformance/ddd/library.ddd.json");
+    let domain = emit_domain_artifact("library.mox");
+    let output = pherolang()
+        .args([
+            "artifact",
+            "check",
+            design.to_str().unwrap(),
+            "--domain",
+            domain.to_str().unwrap(),
+        ])
+        .output()
+        .expect("run pherolang artifact check");
+    assert!(
+        output.status.success(),
+        "stderr: {:?}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+
+    // A different domain is a stale pair, named by the mismatch diagnostic.
+    let other = emit_domain_artifact("queries.mox");
+    let output = pherolang()
+        .args([
+            "artifact",
+            "check",
+            design.to_str().unwrap(),
+            "--domain",
+            other.to_str().unwrap(),
+        ])
+        .output()
+        .expect("run pherolang artifact check");
+    assert_eq!(output.status.code(), Some(1), "the stale pair is refused");
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(
+        stderr.contains("domainFingerprint") && stderr.contains("nz.example.library"),
+        "stderr names the pairing mismatch, was: {stderr}"
+    );
+}
+
+/// Emits a domain artifact for one conformance `.mox` file.
+fn emit_domain_artifact(name: &str) -> PathBuf {
+    let source = workspace_root().join("tests/conformance/ddd").join(name);
+    let output = pherolang()
+        .args(["ir", source.to_str().unwrap()])
+        .output()
+        .expect("run pherolang ir");
+    assert!(
+        output.status.success(),
+        "stderr: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    write_source(
+        &format!("{name}.json"),
+        &String::from_utf8_lossy(&output.stdout),
+    )
 }
 
 #[test]

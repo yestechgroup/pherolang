@@ -75,6 +75,7 @@ pub use compilation::{
     ActorCompilation, CmmnCompilation, Compilation, Compiled, DddCompilation, DeployCompilation,
     DmnCompilation, EventCompilation, MultiCompilation, UseCaseCompilation,
 };
+pub use ddd::domain_fingerprint;
 pub use entry::ddd::DddFragment;
 pub use entry::{
     compile, compile_actors, compile_actors_str, compile_cmmn, compile_cmmn_str, compile_ddd,

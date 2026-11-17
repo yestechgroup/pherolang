@@ -1,6 +1,13 @@
 {
   "formatVersion": 2,
   "pheroVersion": "0.4.0",
+  "domainFingerprint": {
+    "algorithm": "sha256",
+    "value": "8e618537ce0e9fa9db9154171d22cb290eeec5e47a0c717b13d03719093b538e",
+    "packages": [
+      "nz.example.values"
+    ]
+  },
   "application": {
     "name": "Values",
     "base": "nz.example.values"

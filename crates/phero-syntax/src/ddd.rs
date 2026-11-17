@@ -57,7 +57,8 @@ pub(crate) const SEARCH: &str = "search";
 /// (issue pherolang#179; renamed by DD4, issue pherolang#301). A contextual
 /// word like the rest — special only in module-member position, an ordinary
 /// identifier everywhere else (`^extend` escapes). The parser accepts it,
-/// the driver warns, and the formatter rewrites it to `children`.
+/// the driver warns (`E0387`: deprecated in 0.4, removed in 0.5), and the
+/// formatter rewrites it to `children`.
 pub(crate) const EXTEND: &str = "extend";
 /// The optional `abstract` modifier of a design declaration.
 pub(crate) const ABSTRACT: &str = "abstract";

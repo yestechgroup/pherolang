@@ -2100,6 +2100,7 @@ pub(crate) enum DddSearchMember {
     Filter(QualifiedName),
     Sort(QualifiedName),
     Document(DddProjectionMember),
+    DocumentRef(QualifiedName),
     Ranking(DddRanking),
     Analyzer(String),
     Pagination(DddPagination),
@@ -2172,24 +2173,30 @@ pub(crate) fn ddd_search_member<'src>(
                 ddd::SearchMemberKind::Sort => {
                     ddd_search_names(member_keyword(*keyword), DddSearchMember::Sort).boxed()
                 }
-                ddd::SearchMemberKind::Document => ddd_keyword(member_keyword(*keyword))
-                    .ignore_then(kw(Token::LBrace))
-                    .ignore_then(
-                        ddd_document_entry()
-                            .map(Some)
-                            .or(junk_ddd_document_entry().to(None))
-                            .repeated()
-                            .collect::<Vec<_>>(),
-                    )
-                    .then_ignore(kw(Token::RBrace))
-                    .map(|entries| {
-                        entries
-                            .into_iter()
-                            .flatten()
-                            .map(DddSearchMember::Document)
-                            .collect::<Vec<_>>()
-                    })
-                    .boxed(),
+                ddd::SearchMemberKind::Document => {
+                    let inline = kw(Token::LBrace)
+                        .ignore_then(
+                            ddd_document_entry()
+                                .map(Some)
+                                .or(junk_ddd_document_entry().to(None))
+                                .repeated()
+                                .collect::<Vec<_>>(),
+                        )
+                        .then_ignore(kw(Token::RBrace))
+                        .map(|entries| {
+                            entries
+                                .into_iter()
+                                .flatten()
+                                .map(DddSearchMember::Document)
+                                .collect::<Vec<_>>()
+                        });
+                    let named = qname()
+                        .then_ignore(kw(Token::Other(';')))
+                        .map(|name| vec![DddSearchMember::DocumentRef(name)]);
+                    ddd_keyword(member_keyword(*keyword))
+                        .ignore_then(inline.or(named))
+                        .boxed()
+                }
                 ddd::SearchMemberKind::Ranking => ddd_ranking()
                     .map(|ranking| vec![DddSearchMember::Ranking(ranking)])
                     .boxed(),
@@ -2245,6 +2252,7 @@ pub(crate) fn ddd_search_decl<'src>(
                 filters: Vec::new(),
                 sort: Vec::new(),
                 document: Vec::new(),
+                document_ref: None,
                 ranking: None,
                 analyzer: None,
                 pagination: None,
@@ -2262,6 +2270,11 @@ pub(crate) fn ddd_search_decl<'src>(
                     DddSearchMember::Filter(name) => search.filters.push(name),
                     DddSearchMember::Sort(name) => search.sort.push(name),
                     DddSearchMember::Document(entry) => search.document.push(entry),
+                    DddSearchMember::DocumentRef(name) => {
+                        if search.document_ref.is_none() {
+                            search.document_ref = Some(name);
+                        }
+                    }
                     DddSearchMember::Ranking(ranking) => {
                         if search.ranking.is_none() {
                             search.ranking = Some(ranking);
@@ -2390,7 +2403,7 @@ pub(crate) enum DddModuleMember {
     Error(DddErrorDecl),
     Service(DddService),
     Design(Box<DddDesign>),
-    Search(DddSearch),
+    Search(Box<DddSearch>),
     Extend(DddExtend),
 }
 
@@ -2417,7 +2430,7 @@ pub(crate) fn ddd_module_member<'src>(
         ddd_error_decl().map(DddModuleMember::Error),
         ddd_service_decl().map(DddModuleMember::Service),
         ddd_design_decl().map(|design| DddModuleMember::Design(Box::new(design))),
-        ddd_search_decl().map(DddModuleMember::Search),
+        ddd_search_decl().map(|search| DddModuleMember::Search(Box::new(search))),
         ddd_extend_decl().map(DddModuleMember::Extend),
     ))
     .map(Some)
@@ -2457,7 +2470,7 @@ pub(crate) fn ddd_module_decl<'src>(
                     }
                     Some(DddModuleMember::Search(search)) => {
                         saw_member = true;
-                        searches.push(search);
+                        searches.push(*search);
                     }
                     Some(DddModuleMember::Extend(extend)) => {
                         saw_member = true;

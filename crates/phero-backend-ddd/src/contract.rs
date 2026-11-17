@@ -17,10 +17,10 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::fmt;
 
 use phero_ir::ddd::{
-    DddModel, DddParam, DddTypeRef, DecisionRef, Delegation, Design, DtoDirection, DtoMember,
-    DtoMemberKind, DtoShape, EqualityPolicy, ErrorDecl, ErrorRef, ErrorScope, EventRef,
-    IdentityPolicy, Repository, RepositoryOperation, SearchDef, Service, ServiceOperation,
-    Stereotype, TargetKind, TargetRef, DDD_MODEL_FORMAT_VERSION,
+    DddModel, DddParam, DddTypeRef, DecisionRef, Delegation, Design, DomainFingerprint,
+    DtoDirection, DtoMember, DtoMemberKind, DtoShape, EqualityPolicy, ErrorDecl, ErrorRef,
+    ErrorScope, EventRef, IdentityPolicy, Repository, RepositoryOperation, SearchDef, Service,
+    ServiceOperation, Stereotype, TargetKind, TargetRef, DDD_MODEL_FORMAT_VERSION,
 };
 use phero_ir::TypeRef;
 
@@ -72,6 +72,7 @@ pub fn check_contract(model: &DddModel) -> Vec<Violation> {
             "the design artifact must carry a non-empty provenance string",
         )),
     }
+    validate_domain_fingerprint(model, &mut violations);
 
     let application = model.application.as_ref();
     let application_name = match application {
@@ -97,6 +98,79 @@ pub fn check_contract(model: &DddModel) -> Vec<Violation> {
     validate_modules(model, application_name, &registry, &mut violations);
     validate_aggregate_and_invariants(model, &mut violations);
     violations
+}
+
+/// The domain-pairing contract (DF1, issue pherolang#324), checked from the
+/// artifact alone: every design artifact carries a SHA-256 fingerprint whose
+/// digest is 64 lowercase hex digits and whose package list is sorted and
+/// de-duplicated. The check cannot recompute the hash — that needs the paired
+/// domain artifact, which is [`check_pairing`]'s job.
+fn validate_domain_fingerprint(model: &DddModel, violations: &mut Vec<Violation>) {
+    let Some(fingerprint) = &model.domain_fingerprint else {
+        violations.push(Violation::new(
+            "domainFingerprint",
+            "the design artifact must carry the domain pairing fingerprint it was compiled against",
+        ));
+        return;
+    };
+    if !fingerprint.uses_sha256() {
+        violations.push(Violation::new(
+            "domainFingerprint.algorithm",
+            format!(
+                "is '{}' but the only supported algorithm is 'sha256'",
+                fingerprint.algorithm
+            ),
+        ));
+    }
+    if !fingerprint.value_is_sha256_hex() {
+        violations.push(Violation::new(
+            "domainFingerprint.value",
+            "must be a lowercase SHA-256 digest (64 hex digits)",
+        ));
+    }
+    if !fingerprint.packages_are_sorted_unique() {
+        violations.push(Violation::new(
+            "domainFingerprint.packages",
+            "must be sorted and free of duplicates",
+        ));
+    }
+}
+
+/// Compares a design artifact's pairing fingerprint with the one computed
+/// over the domain artifact the consumer intends to use (DF1, issue
+/// pherolang#324).
+///
+/// Returns `Ok(())` when the pair matches, or a [`Violation`] naming the
+/// differing package sets and digests. The consumer calls this **before**
+/// generation: a mismatch is a stale pair, not a resolution failure.
+pub fn check_pairing(model: &DddModel, expected: &DomainFingerprint) -> Result<(), Violation> {
+    let Some(actual) = &model.domain_fingerprint else {
+        return Err(Violation::new(
+            "domainFingerprint",
+            "the design artifact carries no domain pairing fingerprint",
+        ));
+    };
+    if actual == expected {
+        return Ok(());
+    }
+    let actual_digest = short_digest(&actual.value);
+    let expected_digest = short_digest(&expected.value);
+    Err(Violation::new(
+        "domainFingerprint",
+        format!(
+            "the design was compiled against domain packages [{}] ({actual_digest}), \
+             but the supplied domains are [{}] ({expected_digest})",
+            actual.packages.join(", "),
+            expected.packages.join(", "),
+        ),
+    ))
+}
+
+/// The first 12 hex digits of a digest — enough to distinguish a mismatch
+/// without flooding the message.
+fn short_digest(value: &str) -> String {
+    let prefix: String = value.chars().take(12).collect();
+    format!("sha256 {prefix}…")
 }
 
 /// The aggregate-boundary contract (DD4, pherolang#301) and the invariant
@@ -519,7 +593,7 @@ fn validate_modules(
                     format!("duplicate search '{}' in the application", search.name),
                 ));
             }
-            validate_search(search, &search_path, violations);
+            validate_search(search, &search_path, module, violations);
         }
     }
 }
@@ -1684,7 +1758,12 @@ fn validate_delegation_throws(
     }
 }
 
-fn validate_search(search: &SearchDef, path: &str, violations: &mut Vec<Violation>) {
+fn validate_search(
+    search: &SearchDef,
+    path: &str,
+    module: &phero_ir::ddd::Module,
+    violations: &mut Vec<Violation>,
+) {
     check_class_ref(
         violations,
         &format!("{path}.entityRef"),
@@ -1692,6 +1771,64 @@ fn validate_search(search: &SearchDef, path: &str, violations: &mut Vec<Violatio
         search.entity_ref.as_ref(),
         "search",
     );
+
+    // The named document boundary (DF3, pherolang#326): a same-module dto
+    // boundary whose source class is this search's entity, mutually exclusive
+    // with the inline document list.
+    if let Some(document_ref) = &search.document_ref {
+        if !search.document.is_empty() {
+            violations.push(Violation::new(
+                format!("{path}.documentRef"),
+                "is set alongside inline \"document\" entries; a search carries exactly one document shape",
+            ));
+        }
+        match document_ref {
+            DddTypeRef::Dto { dto } => {
+                let shape = module
+                    .designs
+                    .iter()
+                    .filter_map(|design| design.dto_shape.as_ref())
+                    .find(|shape| &shape.name == dto);
+                match shape {
+                    None => violations.push(Violation::new(
+                        format!("{path}.documentRef"),
+                        format!(
+                            "names '{dto}', which is not a dto boundary declared in module '{}'",
+                            module.name
+                        ),
+                    )),
+                    Some(shape) => match (&shape.source, &search.entity_ref) {
+                        (None, _) => violations.push(Violation::new(
+                            format!("{path}.documentRef"),
+                            format!(
+                                "names the standalone dto '{dto}', which has no source class to \
+                                 project as a document shape"
+                            ),
+                        )),
+                        (Some(source), Some(entity)) if source == entity => {}
+                        (Some(source), Some(entity)) => violations.push(Violation::new(
+                            format!("{path}.documentRef"),
+                            format!(
+                                "names '{dto}', which projects {}, but the search targets {}",
+                                describe_type_ref(source),
+                                describe_type_ref(entity)
+                            ),
+                        )),
+                        (Some(_), None) => violations.push(Violation::new(
+                            format!("{path}.documentRef"),
+                            format!(
+                                "names '{dto}', but the search has no resolved entity to match"
+                            ),
+                        )),
+                    },
+                }
+            }
+            _ => violations.push(Violation::new(
+                format!("{path}.documentRef"),
+                "must be a dto reference ({\"dto\": \"<Name>\"})",
+            )),
+        }
+    }
 
     if search.capabilities.len() != search.capability_refs.len() {
         violations.push(Violation::new(
@@ -1755,6 +1892,14 @@ fn validate_search(search: &SearchDef, path: &str, violations: &mut Vec<Violatio
                 format!("missing resolved type for sort '{}'", sort.property),
             ));
         }
+    }
+}
+
+/// A readable class name for a resolved type reference in a diagnostic.
+fn describe_type_ref(type_ref: &TypeRef) -> String {
+    match type_ref {
+        TypeRef::Class { package, name } => format!("{package}.{name}"),
+        other => format!("{other:?}"),
     }
 }
 

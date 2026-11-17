@@ -1,6 +1,6 @@
 use serde::{Deserialize, Serialize};
 
-use crate::ddd::CapabilityRef;
+use crate::ddd::{CapabilityRef, DddTypeRef};
 use crate::wire::is_false;
 use crate::TypeRef;
 
@@ -41,9 +41,16 @@ pub struct SearchDef {
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub sort: Vec<SearchSort>,
     /// Computed projection entries of the search document, in declaration
-    /// order: named values derived from the matched instance.
+    /// order: named values derived from the matched instance. Empty when the
+    /// document shape is named by [`Self::document_ref`].
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub document: Vec<DocumentField>,
+    /// The named document boundary (DF3, issue pherolang#326): a same-module
+    /// DTO design whose members *are* the search document shape. Mutually
+    /// exclusive with the inline [`Self::document`] list; sparse, so an
+    /// inline-form search is byte-identical.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub document_ref: Option<DddTypeRef>,
     /// The relevance ranking strategy; `None` lets the consumer choose.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub ranking: Option<RankingStrategy>,
@@ -83,6 +90,7 @@ impl SearchDef {
             filters: Vec::new(),
             sort: Vec::new(),
             document: Vec::new(),
+            document_ref: None,
             ranking: None,
             analyzer: None,
             pagination: None,
@@ -118,6 +126,13 @@ impl SearchDef {
     /// Chainable setter for the document projection.
     pub fn with_document(mut self, document: Vec<DocumentField>) -> Self {
         self.document = document;
+        self
+    }
+
+    /// Chainable setter for a named document boundary (DF3, issue
+    /// pherolang#326).
+    pub fn with_document_ref(mut self, document_ref: DddTypeRef) -> Self {
+        self.document_ref = Some(document_ref);
         self
     }
 

@@ -1,6 +1,13 @@
 {
   "formatVersion": 2,
   "pheroVersion": "0.4.0",
+  "domainFingerprint": {
+    "algorithm": "sha256",
+    "value": "f99af6c80f44d9facf8f55a3420eb3c08cc90b4fe1e712409c13befbd7a55dac",
+    "packages": [
+      "nz.example.payroll"
+    ]
+  },
   "application": {
     "name": "Payroll",
     "base": "nz.example.payroll"

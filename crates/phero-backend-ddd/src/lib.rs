@@ -29,4 +29,4 @@ mod canonical;
 mod contract;
 
 pub use canonical::{canonical_json, canonical_json_string};
-pub use contract::{check_contract, Violation};
+pub use contract::{check_contract, check_pairing, Violation};

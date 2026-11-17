@@ -18,6 +18,22 @@ version.
 
 ### Added
 
+- **Design artifacts now name the domain shape they were compiled against**
+  (DF1, issue [#324](https://github.com/yestechgroup/pherolang/issues/324)):
+  every `DddModel` carries a `domainFingerprint` — a SHA-256 over the
+  canonicalized imported domain models (`pheroVersion` stripped) plus the
+  sorted package names — emitted even when the design imports no domains.
+  `pherolang artifact check design.ddd.json --domain domain.mox.json`
+  recomputes it and refuses a stale pair with a diagnostic naming both
+  package sets; `phero-backend-ddd` requires a well-formed block and exposes
+  `check_pairing` for consumers. It is a staleness check, not a signature.
+- **Search document shapes can reuse a DTO boundary** (DF3, issue
+  [#326](https://github.com/yestechgroup/pherolang/issues/326)): a search
+  may write `document BookSummary;` instead of repeating an inline block.
+  The boundary must be a same-module mirror/projection of the search's
+  entity; the artifact carries `documentRef` and no inline entries, and the
+  inline/named forms are mutually exclusive (`E0400`–`E0402`). A search and
+  a response DTO now share one declaration without drift.
 - **Quality gates, checked corpus and release readiness for highlighting**
   (SH8, issue [#294](https://github.com/yestechgroup/pherolang/issues/294),
   epic #286): `tests/highlight/corpus/` now covers every surface with valid,
@@ -267,6 +283,20 @@ version.
 
 ### Changed
 
+- **`extend` has a recorded removal milestone** (DF4, issue
+  [#327](https://github.com/yestechgroup/pherolang/issues/327)): the
+  deprecated child-operation alias warns `E0387` with "deprecated since 0.4
+  and removed in 0.5"; `pherolang fmt` remains the migration path. 0.5 turns
+  the warning into a compile error (the formatter still rewrites), and 1.0
+  removes the grammar alternative. No in-tree `.ddd` source uses it.
+- **Feature ids are documented as intra-publication ordinals, not cross-
+  publication identities** (DF2, issue
+  [#325](https://github.com/yestechgroup/pherolang/issues/325)): the wire
+  contract (`phero-ir` rule 3, the `Feature::id` docs, `docs/BACKENDS.md`,
+  and register row V10) now says exactly what is guaranteed. Inserting or
+  reordering a feature renumbers later slots (a test pins it); consumers key
+  continuity on `(package, class name, feature name)`. No wire-shape change,
+  `formatVersion` stays.
 - **`.ddd` resolution documentation corrected** (Phase 0 follow-up): the
   `compile_ddd_str` reference no longer claims resolution is validation-only
   — the artifact keeps the authored spelling and adds the resolved companion,

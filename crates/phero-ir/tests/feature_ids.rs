@@ -60,6 +60,41 @@ fn assignment_is_idempotent() {
 }
 
 #[test]
+fn inserting_a_feature_renumbers_later_ids() {
+    // DF2 (issue pherolang#325): the id is an intra-publication ordinal.
+    // Inserting a feature renumbers every later slot — pin the behaviour as
+    // intended, and use (package, class, feature name) for identity across
+    // publications instead.
+    let mut class = ClassDef::new("Account", vec![], vec![feature("bank"), feature("balance")]);
+    let before: Vec<(String, u32)> = class
+        .features
+        .iter()
+        .map(|f| (f.name.clone(), f.id))
+        .collect();
+    assert_eq!(
+        before,
+        vec![("bank".to_string(), 0), ("balance".to_string(), 1)]
+    );
+
+    class.features.insert(1, feature("number"));
+    class.assign_feature_ids();
+    let after: Vec<(String, u32)> = class
+        .features
+        .iter()
+        .map(|f| (f.name.clone(), f.id))
+        .collect();
+    assert_eq!(
+        after,
+        vec![
+            ("bank".to_string(), 0),
+            ("number".to_string(), 1),
+            ("balance".to_string(), 2),
+        ],
+        "balance's id moved from 1 to 2 — a persisted id would re-point"
+    );
+}
+
+#[test]
 fn feature_lookup_resolves_by_id() {
     let class = ClassDef::new(
         "Account",

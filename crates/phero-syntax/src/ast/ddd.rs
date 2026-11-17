@@ -825,6 +825,10 @@ pub struct DddSearch {
     /// DTO projection AST ([`DddProjectionMember`]); search syntax is the
     /// assignment form only (`name = <expression>;`).
     pub document: Vec<DddProjectionMember>,
+    /// The named document boundary (`document DtoName;`, DF3, issue
+    /// pherolang#326), when the search names a same-module DTO instead of an
+    /// inline block. Mutually exclusive with [`Self::document`].
+    pub document_ref: Option<QualifiedName>,
     /// The declared ranking strategy, when present.
     pub ranking: Option<DddRanking>,
     /// The search-wide default analyzer, when present.

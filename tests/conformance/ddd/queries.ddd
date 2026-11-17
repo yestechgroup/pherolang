@@ -23,6 +23,18 @@ application Queries {
             /// Key-set pagination: no offset is required of the consumer.
             Order[] shipped(OrderStatus targetState) where (self.status == targetState) page cursor;
         }
+        /// The named document form (DF3, issue pherolang#326): the projection
+        /// boundary below *is* the document shape — declared once, reused.
+        search OpenOrders {
+            entity Order
+            text {
+                orderNo
+            }
+            sort {
+                orderNo
+            }
+            document OrderSummary;
+        }
         /// The projection the finder returns; `total` and `status` are wire
         /// fields, not derived members.
         dto OrderSummary from Order {

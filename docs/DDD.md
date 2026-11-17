@@ -312,8 +312,8 @@ Lexical and structural rules:
   module-level `children <Class> { ... }` block declares operations that act
   on the aggregate root's contained children (the root-side counterpart of
   a child aggregate's own lifecycle). The block was named `extend` before
-  DD4; that spelling is a deprecated alias (a warning, `E0387`) and the
-  formatter rewrites it to `children`:
+  DD4; that spelling is a deprecated alias (warning `E0387`, deprecated in
+  0.4 and removed in 0.5) and the formatter rewrites it to `children`:
 
   ```
   children PayRun {
@@ -533,13 +533,21 @@ the short version to implement against without reading `phero-driver`.
 
 **Pairing.** A `DddModel` is meaningful only with the domain `Model` it was
 compiled against: the design names classes and features, the domain defines
-them. Carry the pair together. The design's optional dimensions pair with
-the artifacts the compile was given — the `ActorModel`s supply capabilities
-(recorded as `declaredIn`) and the `DmnModel`s supply decision services
-(recorded as `contract`/`version`). A `.ddd` compile has no `.evt` bucket,
-so event contracts pair at the union-integrity layer (`pherolang check`),
-never through `emittedRefs`. None of the pairing needs the `.mox`, `.actor`,
-`.evt`, or `.dmn` sources.
+them. Carry the pair together. Every compiler-written artifact names that
+domain shape in `domainFingerprint` (DF1, issue
+[#324](https://github.com/yestechgroup/pherolang/issues/324)): a SHA-256
+over the canonicalized imported domain models with `pheroVersion` stripped,
+plus the sorted package names. **Compare it before generation** and refuse a
+mismatch; `pherolang artifact check design.ddd.json --domain domain.mox.json`
+is the reference implementation. The fingerprint is a staleness check, not a
+signature: it covers domain shape only (not the `.ddd` source, not
+`pheroVersion`, not `.actor`/`.dmn` artifacts, whose absence is legal). The
+design's optional dimensions pair with the artifacts the compile was given —
+the `ActorModel`s supply capabilities (recorded as `declaredIn`) and the
+`DmnModel`s supply decision services (recorded as `contract`/`version`). A
+`.ddd` compile has no `.evt` bucket, so event contracts pair at the
+union-integrity layer (`pherolang check`), never through `emittedRefs`. None
+of the pairing needs the `.mox`, `.actor`, `.evt`, or `.dmn` sources.
 
 **Gate.** Accept exactly `formatVersion` 2; `DddModel::from_json` and
 `pherolang artifact check` both gate on it. `pheroVersion` is provenance:
@@ -644,9 +652,13 @@ entity design carries an effective aggregate verdict with the membership
 shape that verdict implies (a root carries no `aggregate`, a non-root's
 `aggregate.root` names an entity design this artifact marks as a root),
 invariant expressions are non-empty and no dto carries one, and
-`pheroVersion` is present and well-formed. A hand-edited or truncated artifact that drops a
-companion, a `semantics` block, a `dtoShape`, an aggregate verdict, or an
-invariant, or invents an illegal
+`pheroVersion` is present and well-formed. It also requires a well-formed
+`domainFingerprint` (`sha256`, 64 lowercase hex digits, sorted unique
+packages), and with `--domain` it refuses a design paired with a domain shape
+whose fingerprint differs, naming both package sets. A hand-edited or
+truncated artifact that drops a
+companion, a `semantics` block, a `dtoShape`, an aggregate verdict, an
+invariant, or the domain pairing block, or invents an illegal
 combination fails with a diagnostic naming the design or reference. It does
 not re-typecheck against the domain — that needs the paired `Model` — and it
 cannot re-check the value rules (R-V1 to R-V3), which read the `.mox`
@@ -737,8 +749,12 @@ classes, nor the DTO member typing, which reads the source class.
     direct features that are not class references. Document field names are
     unique per search, and every document expression is parsed and
     type-checked with the entity as `self` (any value type is legal; the
-    consumer decides the rendered form). Pagination bounds satisfy
-    `1 ≤ limit ≤ max`.
+    consumer decides the rendered form). A **named** document
+    (`document DtoName;`) resolves to a same-module dto boundary whose source
+    is this search's entity; a standalone boundary, a cross-module boundary,
+    a projection of another class, and an inline-plus-named combination are
+    each a spanned error (`E0400`–`E0402`), and the two forms are mutually
+    exclusive. Pagination bounds satisfy `1 ≤ limit ≤ max`.
 12. **Value contract** — a `value` design is a strictly immutable value
     object (Sculptor's ValueObject with no `!immutable` opt-out, issue
     [#299](https://github.com/yestechgroup/pherolang/issues/299)): no
@@ -947,8 +963,9 @@ classes, nor the DTO member typing, which reads the source class.
     containment or cross reference (`E0355`); the action must be one of
     `add`, `remove`, `save` (`E0357`), with `add`/`remove` requiring a
     many-valued feature (`E0356`). The deprecated `extend` block spelling
-    parses to the same declaration: it emits warning `E0387` and the
-    formatter rewrites it to `children`. A child operation's `when` guard is
+    parses to the same declaration: it emits warning `E0387` (deprecated in
+    0.4, removed in 0.5) and the formatter rewrites it to `children`. A child
+    operation's `when` guard is
     typed with the operation's declared parameters in scope **and** the
     child feature's target class as `self` — `line.quantity` reads a
     parameter, a bare `quantity` reads the child's feature, and the root's
@@ -1464,8 +1481,13 @@ aggregate member, and carries no invariants; its members are data only.
 **Shared projection AST.** A DTO projection's assignment and a search
 `document` entry are the same AST node (`DddProjectionMember::Assign`)
 with the same raw-expression capture; parsing and typing are the driver's.
-Converging the two surfaces further — `document DtoName;` as a search's
-document shape — is a follow-up, not shipped.
+A search may also name a boundary directly (`document DtoName;`, DF3, issue
+[#326](https://github.com/yestechgroup/pherolang/issues/326)): the boundary
+must be a same-module dto whose source is the search's `entity` (a mirror or
+projection, never standalone), and its members *are* the document shape. The
+artifact carries `documentRef` (`{"dto":"Name"}`) and no inline entries; the
+inline `document { ... }` block stays legal for a one-off shape. The two
+forms are mutually exclusive.
 
 ## Aggregate derivation
 
@@ -1520,7 +1542,8 @@ decided the boundary or `"derived"` when containment did. A root omits
 
 **Children.** The root-side child operations are declared with
 `children <Root> { ... }` (rule 23); the pre-DD4 `extend` spelling is a
-deprecated alias (`E0387`) that the formatter rewrites to `children`.
+deprecated alias (`E0387`, deprecated in 0.4 and removed in 0.5) that the
+formatter rewrites to `children`.
 
 ## Domain operations vs service operations
 
@@ -1555,7 +1578,8 @@ contained child through the root — no outside cross reference to a
 non-root member (rule 13) is needed. The child's own behavior stays a
 domain `op` on the child class; the `children` operation is the root-owned
 entry point over it, and the aggregate boundary stays intact. The pre-DD4
-`extend` spelling is a deprecated alias (`E0387`).
+`extend` spelling is a deprecated alias (`E0387`, deprecated in 0.4 and
+removed in 0.5).
 
 ## The lowering contract (issue #143)
 
@@ -1753,6 +1777,8 @@ pherolang check library.ddd                  # validate design + imported domain
 pherolang ir library.ddd -o library.ddd.json # emit the DddModel artifact
 pherolang fmt --check library.ddd            # canonical formatting gate
 pherolang artifact check library.ddd.json    # validate the artifact's DDD contract
+pherolang artifact check library.ddd.json \
+    --domain library.mox.json                # also prove the design/domain pair
 ```
 
 - Import paths resolve **relative to the importing file's directory** —
@@ -1815,7 +1841,7 @@ rationale for each divergence is in [Deliberate divergences](#deliberate-diverge
 | `scaffold` / `auditable` / `optimisticLocking` / `cache` | design flags (entity-only where noted; `auditable`/`optimisticLocking` default on for entities, `!flag` opts out) | `!immutable` is absent (D3) — not an opt-out but a refused spelling; there is no `!aggregateRoot` flag — the boundary is authored with `root`/`aggregate <Root>` or derived (DD4); the artifact stores the effective flag values, never the raw spelling |
 | `belongsTo` / `!aggregateRoot` | authored with `root` / `aggregate <Root>`, or derived from the domain model's containment graph (see [aggregate derivation](#aggregate-derivation)) | both authorable and derived (DD4): an authored clause wins over the derivation; an unknown verdict warns `E0385` and the artifact carries no `isAggregateRoot` |
 | Module | `module` label grouping services and designs; an application may span a root file and its imported fragments (DD8) | a root owns the application name, `base`, and application-scoped errors; fragments contribute modules only (they may reopen a module); the module is a design label, not a deployment boundary, and duplicate members stay application-wide errors |
-| child-scoped aggregate operations | `children <Root> { ... }` block (issue [#179](https://github.com/yestechgroup/pherolang/issues/179)) | not class inheritance; the pre-DD4 `extend` spelling parses as a deprecated alias (`E0387`) and formats to `children` |
+| child-scoped aggregate operations | `children <Root> { ... }` block (issue [#179](https://github.com/yestechgroup/pherolang/issues/179)) | not class inheritance; the pre-DD4 `extend` spelling parses as a deprecated alias (`E0387`, deprecated in 0.4, removed in 0.5) and formats to `children` |
 | DTO | `dto` design in three forms: mirror (`dto User`), projection (`dto BookSummary from Book { ... }`), standalone (`dto CreateBookRequest { ... }`) | real parity, shaped differently: a projection selects (`name;`), renames a path (`name = path;`), or derives (`name = expr;`, source class as `self`); no identity, aggregate membership, repository, machine, invariants, or behavior; `input`/`output` is derived from the member set, and an output boundary is not a parameter; a standalone DTO has no domain class |
 | `findByQuery` / `findByCondition` finders | declared repository **query** operations: `where` (typed predicate over the designed class + parameters), `sort` (direct stored scalar features with direction), `page` (`limit`/`max`/`cursor`), optional `capability` (DD9, issue [#306](https://github.com/yestechgroup/pherolang/issues/306)) | declarative and typed, not a string query language: no `ConditionalCriteriaBuilder`, no generated properties class, no dynamic ordering from user input, no joins/aggregations (project into a DTO instead); the consumer lowers the typed predicate to its store and never interpolates parameter values |
 | full-text search | `search` projection (intent only: text fields with boosts, filters, sorts, ranking, pagination, document projections) — the backend chooses the engine (Postgres FTS, Tantivy, OpenSearch, ...) | a search is not a structured query: no query language and no engine-specific ordering; the engine is the consumer's choice |

@@ -339,6 +339,12 @@ enum ArtifactAction {
     Check {
         /// Artifact JSON files to check.
         files: Vec<PathBuf>,
+        /// Domain IR artifacts (`pherolang ir <domain.mox>`) to pair a
+        /// design artifact against. Repeatable. When supplied, a DDD
+        /// design's `domainFingerprint` must match the fingerprint computed
+        /// over these domain models; a mismatch is a stale pair.
+        #[arg(long, value_name = "DOMAIN")]
+        domain: Vec<PathBuf>,
     },
 }
 
@@ -451,8 +457,8 @@ fn run(cli: Cli) -> anyhow::Result<ExitCode> {
         Command::Gen { target } => commands::gen::run(target),
         Command::Fmt { check, files } => commands::fmt::run(check, files),
         Command::Artifact {
-            action: ArtifactAction::Check { files },
-        } => commands::artifact::check(files),
+            action: ArtifactAction::Check { files, domain },
+        } => commands::artifact::check(files, domain),
         Command::Vocab {
             action:
                 VocabAction::Fetch {

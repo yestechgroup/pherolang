@@ -975,6 +975,33 @@ fn search_decl_parses_with_all_members() {
 }
 
 #[test]
+fn search_named_document_reference_parses() {
+    // DF3 (issue pherolang#326): `document DtoName;` is the reusable form;
+    // the inline block remains the one-off form.
+    let source = "application A { module m { search S { entity Movie document BookSummary; } } }";
+    let result = parse_ddd(source);
+    assert!(
+        result.errors.is_empty(),
+        "unexpected errors: {:?}",
+        result.errors
+    );
+    let file = result.ast.expect("expected an AST");
+    let search = &file.application.as_ref().expect("application").modules[0].searches[0];
+    assert_eq!(
+        search
+            .document_ref
+            .as_ref()
+            .expect("the named reference parses")
+            .full_name(),
+        "BookSummary"
+    );
+    assert!(
+        search.document.is_empty(),
+        "the named form carries no inline entries"
+    );
+}
+
+#[test]
 fn search_capability_clause_accepts_a_list_and_clauses_merge() {
     // The unified clause grammar: a search's `capability` clause takes the
     // same `capability <name> (, <name>)*` list a service operation takes,
@@ -1136,6 +1163,27 @@ fn search_formats_canonically_and_is_idempotent() {
         formatted,
         "formatting must be idempotent"
     );
+}
+
+#[test]
+fn a_named_search_document_formats_on_one_line_and_is_idempotent() {
+    let source = "application A { module m { search S { entity Movie document BookSummary; } } }";
+    let formatted = fmt_ddd(source);
+    assert_eq!(
+        formatted,
+        concat!(
+            "application A {\n",
+            "    module m {\n",
+            "        search S {\n",
+            "            entity Movie\n",
+            "            document BookSummary;\n",
+            "        }\n",
+            "    }\n",
+            "}\n",
+        ),
+        "the named document stays one canonical line, got:\n{formatted}"
+    );
+    assert_eq!(fmt_ddd(&formatted), formatted, "formatting is idempotent");
 }
 
 #[test]

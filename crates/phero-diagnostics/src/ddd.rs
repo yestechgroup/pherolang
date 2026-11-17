@@ -21,7 +21,9 @@
 //! application name, import cycle, root imported as a fragment, and a
 //! missing fragment); E0396–E0399 are the typed repository-query checks
 //! (DD9, issue pherolang#306: read-only shape, predicate typing, sort keys,
-//! and pagination).
+//! and pagination); E0400–E0402 are the named search-document checks (DF3,
+//! issue pherolang#326: an invalid `document DtoName;` reference, a source
+//! mismatch, and an inline-plus-named conflict).
 //! Claim a new code by adding a documented constant plus an `Entry` to
 //! `ENTRIES`.
 
@@ -189,8 +191,8 @@ pub const E_AGGREGATE_BOUNDARY_UNKNOWN: &str = "E0385";
 /// `aggregate root '<root>' is itself a member of '<outer>'; name the
 /// outermost root` (DD4).
 pub const E_AGGREGATE_ROOT_NOT_ROOT: &str = "E0386";
-/// `'extend' is deprecated; write 'children <Class>'` — the old
-/// child-operation block keyword (DD4).
+/// `'extend' is deprecated since 0.4 and removed in 0.5; write 'children
+/// <Class>'` — the old child-operation block keyword (DD4).
 pub const E_DEPRECATED_EXTEND: &str = "E0387";
 /// `invalid invariant in design '<design>': <detail>` — the invariant does
 /// not parse, does not type-check, is not boolean, or reads beyond the
@@ -237,6 +239,17 @@ pub const E_QUERY_SORT: &str = "E0398";
 /// `invalid pagination in operation '<op>' of repository '<repo>': …` —
 /// `limit`/`max` must be positive and `limit` may not exceed `max` (DD9).
 pub const E_QUERY_PAGE: &str = "E0399";
+/// `invalid document reference '<name>' in search '<search>': <detail>` —
+/// the named document is not a same-module dto boundary with a source class
+/// (an unknown name, another module, or a standalone dto) (DF3).
+pub const E_DOCUMENT_REF: &str = "E0400";
+/// `document reference '<name>' of search '<search>' projects '<source>', but
+/// the search targets '<entity>'` — a named document must be a mirror or
+/// projection of the search's own entity (DF3).
+pub const E_DOCUMENT_SOURCE_MISMATCH: &str = "E0401";
+/// `search '<search>' declares both an inline document block and a named
+/// document reference` — exactly one document shape per search (DF3).
+pub const E_DOCUMENT_FORM_CONFLICT: &str = "E0402";
 
 pub(crate) const ENTRIES: &[Entry] = &[
     Entry {
@@ -540,8 +553,8 @@ pub(crate) const ENTRIES: &[Entry] = &[
         band: DDD_BAND,
         severity: Severity::Warning,
         title: "Deprecated extend keyword",
-        meaning: "`'extend' is deprecated; write 'children <Class>'` — the child-operation block was renamed so it no longer reads like class inheritance.",
-        fix: "Rename the block keyword to `children`; the formatter rewrites it automatically.",
+        meaning: "`'extend' is deprecated since 0.4 and removed in 0.5; write 'children <Class>'` — the child-operation block was renamed so it no longer reads like class inheritance; the alias has a recorded removal milestone (DF4, issue pherolang#327).",
+        fix: "Rename the block keyword to `children`; `pherolang fmt` rewrites it automatically before 0.5.",
     },
     Entry {
         code: E_INVALID_INVARIANT,
@@ -638,5 +651,29 @@ pub(crate) const ENTRIES: &[Entry] = &[
         title: "Invalid query pagination",
         meaning: "`invalid pagination in operation '<op>' of repository '<repo>': <detail>` — `limit` and `max` must be positive page sizes, and a `limit` above the declared `max` cap is refused.",
         fix: "Declare a positive `limit` no greater than the `max` cap (or drop `max` to let `limit` stand alone).",
+    },
+    Entry {
+        code: E_DOCUMENT_REF,
+        band: DDD_BAND,
+        severity: Severity::Error,
+        title: "Invalid document reference",
+        meaning: "`invalid document reference '<name>' in search '<search>': <detail>` — `document DtoName;` must name a dto design declared in the search's own module whose boundary is a mirror or projection of a source class. An unknown name, a cross-module boundary, and a standalone (source-less) dto are each refused with the reason (DF3).",
+        fix: "Declare the dto in the same module as a mirror (`dto Book`) or projection (`dto BookSummary from Book { ... }`), or use the inline `document { ... }` block.",
+    },
+    Entry {
+        code: E_DOCUMENT_SOURCE_MISMATCH,
+        band: DDD_BAND,
+        severity: Severity::Error,
+        title: "Document boundary projects another entity",
+        meaning: "`document reference '<name>' of search '<search>' projects '<source>', but the search targets '<entity>'` — a named document shares the DTO boundary's shape, so its source class must be the search's entity (DF3).",
+        fix: "Name a boundary projected from the search's entity, or use an inline `document { ... }` block.",
+    },
+    Entry {
+        code: E_DOCUMENT_FORM_CONFLICT,
+        band: DDD_BAND,
+        severity: Severity::Error,
+        title: "Conflicting search document forms",
+        meaning: "`search '<search>' declares both an inline document block and a named document reference` — a search carries exactly one document shape (DF3).",
+        fix: "Keep the reusable `document DtoName;` reference or the inline `document { ... }` block, not both.",
     },
 ];
