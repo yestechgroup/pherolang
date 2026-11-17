@@ -135,9 +135,10 @@ domain, certificate or redirect rule has been created, so these remain
 - certificate issuance for the apex and the docs subdomain;
 - anything about response time, uptime, or the analytics beacon.
 
-The deploy path itself is reachable today: the `v0.3.0` release carries
-`pherolang-0.3.0-x86_64-unknown-linux-gnu.tar.gz`, which is the asset name
-`site.yml` resolves, so the `freshness` job will actually run (not skip).
+The deploy path itself is reachable today: the `v0.4.0` release carries
+`pherolang-0.4.0-x86_64-unknown-linux-gnu.tar.gz`, which is the asset name
+`site.yml` resolves, so the `freshness` job actually runs (and passes) instead
+of skipping.
 
 ### The generated data pipeline and the release gate
 
@@ -161,11 +162,10 @@ build time and never fetch a grammar or a tokenizer at request time.
 - Both `sync-model` and `sync-highlight` resolve one binary through
   `site/scripts/highlighting/runner.mjs`: a release that can check
   `examples/support/support.ddd` and provides `pherolang highlight`, else a
-  source build. v0.3.0 predates both, so the committed data is source-built —
-  the documented temporary exception, never released-binary freshness.
-- `site/scripts/fetch-pherolang.mjs` pins `0.4.0`. While that tag is
-  unpublished, an unset `PHEROLANG_VERSION` falls back to the latest published
-  release with a warning; an explicit pin never falls back.
+  source build. v0.4.0 provides both, and the committed data was regenerated
+  with the released asset — released-binary freshness, not a source build.
+- `site/scripts/fetch-pherolang.mjs` pins `0.4.0`, which is published; an
+  explicit pin never falls back to another release.
 - **The release gate**: `site.yml` `detect` reports the workspace version (from
   `Cargo.toml`) and the latest release version (from the asset name). `deploy`
   requires them to be equal. A 0.4.0 bump PR merges before its tag, so
