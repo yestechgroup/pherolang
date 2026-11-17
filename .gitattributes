@@ -1,0 +1,4 @@
+# Keep the CRLF corpus case byte-exact. This is the only corpus file whose
+# line endings are part of the test; everything else is LF like the rest of
+# the repository.
+tests/highlight/corpus/shared/crlf.mox -text

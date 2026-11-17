@@ -114,6 +114,7 @@ const PLACEMENT = {
   // Migration — moving a 0.2 consumer, then cutting the release.
   rebrand: ['migration', 10],
   'release-0.3.0': ['migration', 20],
+  'release-0.4.0': ['migration', 30],
 };
 
 const FALLBACK_GROUP = 'reference';

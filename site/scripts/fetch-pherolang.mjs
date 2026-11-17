@@ -8,10 +8,19 @@
  * `Site` workflow's freshness job meaningful: it downloads the same asset and
  * expects the committed data under `site/data/` to be byte-identical.
  *
+ * The default pin is the release the tree is prepared for (`0.4.0`, the first
+ * release that ships `pherolang highlight`). Until that tag exists, an
+ * unset `PHEROLANG_VERSION` falls back to the latest published release with a
+ * loud warning; an explicit pin never falls back. The resolver in
+ * `scripts/highlighting/runner.mjs` then refuses a release that cannot check
+ * the current examples, so the site tooling builds this checkout instead —
+ * the documented temporary exception (docs/HIGHLIGHTING.md), never a claim of
+ * released-binary freshness.
+ *
  * Usage:
- *   node scripts/fetch-pherolang.mjs            # download if missing
+ *   node scripts/fetch-pherolang.mjs            # pinned release, or latest published while the pin is pending
  *   node scripts/fetch-pherolang.mjs --check    # verify the pinned asset only
- *   PHEROLANG_VERSION=0.3.0 node scripts/...    # pin a release (default 0.3.0)
+ *   PHEROLANG_VERSION=0.3.0 node scripts/...    # pin a release (default 0.4.0)
  */
 
 import { createHash } from 'node:crypto';
@@ -22,22 +31,15 @@ import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { execFileSync } from 'node:child_process';
 
-const VERSION = process.env.PHEROLANG_VERSION ?? '0.3.0';
+const REQUESTED = process.env.PHEROLANG_VERSION ?? '0.4.0';
+const EXPLICIT = Boolean(process.env.PHEROLANG_VERSION);
 const REPO = 'yestechgroup/pherolang';
 const BIN_DIR = join(dirname(dirname(fileURLToPath(import.meta.url))), '.bin');
 const BIN = join(BIN_DIR, process.platform === 'win32' ? 'pherolang.exe' : 'pherolang');
 const MARKER = join(BIN_DIR, 'VERSION');
 
-/** The release assets v0.3.0 actually publishes. */
-const TARGETS = {
-  'linux-x64': { asset: `pherolang-${VERSION}-x86_64-unknown-linux-gnu.tar.gz`, kind: 'tar' },
-  'linux-arm64': { asset: `pherolang-${VERSION}-aarch64-unknown-linux-gnu.tar.gz`, kind: 'tar' },
-  'win32-x64': { asset: `pherolang-${VERSION}-x86_64-pc-windows-msvc.zip`, kind: 'zip' },
-};
-
 const checkOnly = process.argv.includes('--check');
 const key = `${process.platform}-${process.arch}`;
-const target = TARGETS[key];
 
 function fail(message) {
   console.error(`fetch-pherolang: ${message}`);
@@ -48,21 +50,36 @@ function log(message) {
   console.log(`fetch-pherolang: ${message}`);
 }
 
-if (!target) {
-  fail(
-    [
-      `no published pherolang asset for ${key}.`,
-      `v${VERSION} publishes: ${Object.values(TARGETS).map((t) => t.asset).join(', ')}.`,
-      `On this platform either build from source (cargo build -p phero-cli) and pass`,
-      `PHEROLANG_BIN=/path/to/pherolang to scripts/sync-model.mjs, or wait for a release.`,
-    ].join('\n  '),
-  );
+/** The archive shape one release publishes for the host platform. */
+function targetFor(version) {
+  const targets = {
+    'linux-x64': {
+      asset: `pherolang-${version}-x86_64-unknown-linux-gnu.tar.gz`,
+      kind: 'tar',
+    },
+    'linux-arm64': {
+      asset: `pherolang-${version}-aarch64-unknown-linux-gnu.tar.gz`,
+      kind: 'tar',
+    },
+    'win32-x64': { asset: `pherolang-${version}-x86_64-pc-windows-msvc.zip`, kind: 'zip' },
+  };
+  return targets[key] ?? null;
 }
 
-const base = `https://github.com/${REPO}/releases/download/v${VERSION}`;
+function baseFor(version) {
+  return `https://github.com/${REPO}/releases/download/v${version}`;
+}
 
 async function fetchBytes(url) {
   const response = await fetch(url, { redirect: 'follow' });
+  if (!response.ok) fail(`GET ${url} -> ${response.status} ${response.statusText}`);
+  return Buffer.from(await response.arrayBuffer());
+}
+
+/** Like `fetchBytes`, but a 404 is data (the release/asset is absent). */
+async function fetchOptional(url) {
+  const response = await fetch(url, { redirect: 'follow' });
+  if (response.status === 404) return null;
   if (!response.ok) fail(`GET ${url} -> ${response.status} ${response.statusText}`);
   return Buffer.from(await response.arrayBuffer());
 }
@@ -71,22 +88,56 @@ function sha256(buffer) {
   return createHash('sha256').update(buffer).digest('hex');
 }
 
-async function installedVersion() {
-  if (!existsSync(BIN) || !existsSync(MARKER)) return null;
-  const recorded = (await readFile(MARKER, 'utf8')).trim();
-  return recorded === VERSION ? VERSION : null;
+/** The latest published release version, from the redirect GitHub serves. */
+async function latestPublished() {
+  const response = await fetch(`https://github.com/${REPO}/releases/latest`, {
+    redirect: 'follow',
+  });
+  if (!response.ok) fail(`GET releases/latest -> ${response.status} ${response.statusText}`);
+  const match = /\/releases\/tag\/v([0-9]+\.[0-9]+\.[0-9]+)$/.exec(response.url);
+  if (!match) fail(`cannot read a release version from ${response.url}`);
+  return match[1];
 }
 
-async function verifyAndInstall() {
-  log(`downloading ${target.asset}`);
-  const sums = (await fetchBytes(`${base}/SHA256SUMS`)).toString('utf8');
+async function installedVersion() {
+  if (!existsSync(BIN) || !existsSync(MARKER)) return null;
+  return (await readFile(MARKER, 'utf8')).trim();
+}
+
+/**
+ * Download and install `version`.
+ *
+ * Returns `false` when the release (or its asset) is not published yet and the
+ * caller may fall back; every other failure is fatal.
+ */
+async function verifyAndInstall(version) {
+  const target = targetFor(version);
+  if (!target) {
+    fail(
+      [
+        `no published pherolang asset for ${key}.`,
+        `v${version} publishes linux-x64, linux-arm64 and win32-x64 archives.`,
+        `On this platform either build from source (cargo build -p phero-cli) and pass`,
+        `PHEROLANG_BIN=/path/to/pherolang to scripts/sync-model.mjs, or wait for a release.`,
+      ].join('\n  '),
+    );
+  }
+
+  const base = baseFor(version);
+  const sumsBuffer = await fetchOptional(`${base}/SHA256SUMS`);
+  if (sumsBuffer === null) return false;
+  const sums = sumsBuffer.toString('utf8');
   const expected = sums
     .split('\n')
     .map((line) => line.trim().split(/\s+/))
     .find(([, name]) => name === target.asset)?.[0];
 
-  if (!expected) fail(`SHA256SUMS from v${VERSION} does not list ${target.asset}`);
+  if (!expected) {
+    if (checkOnly) fail(`SHA256SUMS from v${version} does not list ${target.asset}`);
+    return false;
+  }
 
+  log(`downloading ${target.asset}`);
   const archive = await fetchBytes(`${base}/${target.asset}`);
   const actual = sha256(archive);
   if (actual !== expected) {
@@ -95,8 +146,8 @@ async function verifyAndInstall() {
   log(`checksum ok (${actual.slice(0, 16)}…)`);
 
   if (checkOnly) {
-    log(`${target.asset} verifies against v${VERSION}`);
-    return;
+    log(`${target.asset} verifies against v${version}`);
+    return true;
   }
 
   const work = await mkdtemp(join(tmpdir(), 'pherolang-fetch-'));
@@ -119,13 +170,14 @@ async function verifyAndInstall() {
     await mkdir(BIN_DIR, { recursive: true });
     await writeFile(BIN, await readFile(found));
     await chmod(BIN, 0o755);
-    await writeFile(MARKER, `${VERSION}\n`);
+    await writeFile(MARKER, `${version}\n`);
 
     const reported = execFileSync(BIN, ['--version'], { encoding: 'utf8' }).trim();
     log(`installed ${BIN} (${reported})`);
   } finally {
     await rm(work, { recursive: true, force: true });
   }
+  return true;
 }
 
 function findBinary(root) {
@@ -142,9 +194,27 @@ function findBinary(root) {
 }
 
 const current = await installedVersion();
-if (current && !checkOnly) {
+if (current === REQUESTED && !checkOnly) {
   log(`already at v${current} (${BIN}); nothing to do`);
   process.exit(0);
 }
 
-await verifyAndInstall();
+const installed = await verifyAndInstall(REQUESTED);
+if (installed) process.exit(0);
+
+if (checkOnly) {
+  fail(`v${REQUESTED} is not published yet (or has no ${key} asset)`);
+}
+
+if (EXPLICIT) {
+  fail(`v${REQUESTED} is not published yet (or has no ${key} asset); see docs/RELEASE-0.4.0.md`);
+}
+
+const fallback = await latestPublished();
+if (fallback === REQUESTED) {
+  fail(`v${REQUESTED} has no usable release asset`);
+}
+log(`v${REQUESTED} is not published yet; falling back to the latest published release v${fallback}`);
+log(`the site resolver will reject a release that cannot check this tree (docs/HIGHLIGHTING.md)`);
+const ok = await verifyAndInstall(fallback);
+if (!ok) fail(`v${fallback} has no usable release asset`);

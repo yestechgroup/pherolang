@@ -67,7 +67,7 @@ pins it).
   "formatVersion": 1,                       // the only compatibility gate
   "kind": "verificationReceipt",            // closed: exactly this string
   "subject": "support",                     // --subject, else the inputs' common stem
-  "generator": { "name": "pherolang", "version": "0.3.0" },   // provenance (CARGO_PKG_VERSION)
+  "generator": { "name": "pherolang", "version": "0.4.0" },   // provenance (CARGO_PKG_VERSION)
   "inputs":  [ "examples/support/support.actor", … ],               // sorted, repo-relative
   "sources": [ { "path": "…", "sha256": "…" }, … ],         // sorted, repo-relative
   "artifacts": [

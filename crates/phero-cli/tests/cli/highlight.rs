@@ -287,3 +287,206 @@ fn unknown_surface_and_extension_are_clean_errors() {
     assert_eq!(inferred.status.code(), Some(1));
     assert!(stderr(&inferred).contains("cannot infer"));
 }
+
+// --- input modes, output shapes and usage errors -----------------------------
+
+fn run_stdin(args: &[&str], source: &[u8]) -> Output {
+    let mut child = pherolang()
+        .arg("highlight")
+        .args(args)
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
+        .expect("spawn highlight");
+    child
+        .stdin
+        .as_mut()
+        .expect("stdin")
+        .write_all(source)
+        .expect("write stdin");
+    child.wait_with_output().expect("wait")
+}
+
+#[test]
+fn strict_mode_reports_degradation_and_still_emits_spans() {
+    let path = write_source("highlight_strict.mox", "package demo\nclass Book {\n");
+    let output = run(&[
+        path.to_str().expect("utf-8 path"),
+        "--mode",
+        "strict",
+        "--format",
+        "json",
+    ]);
+    assert!(output.status.success(), "stderr: {}", stderr(&output));
+    let json: serde_json::Value = serde_json::from_str(&stdout(&output)).expect("stdout is JSON");
+    assert_eq!(json["degraded"], true);
+    assert!(!json["spans"].as_array().expect("spans").is_empty());
+}
+
+#[test]
+fn single_input_output_file_writes_exactly_there() {
+    let path = write_source("highlight_out_file.mox", GOOD);
+    let out = scratch_dir().join("highlight-one.json");
+    let output = run(&[
+        path.to_str().expect("utf-8 path"),
+        "--output",
+        out.to_str().expect("utf-8 output path"),
+    ]);
+    assert!(output.status.success(), "stderr: {}", stderr(&output));
+    assert!(
+        stdout(&output).is_empty(),
+        "a written artifact is not also printed"
+    );
+    let json: serde_json::Value =
+        serde_json::from_str(&std::fs::read_to_string(&out).expect("read output"))
+            .expect("output is JSON");
+    assert_eq!(json["surface"], "mox");
+}
+
+#[test]
+fn single_input_output_directory_mirrors_the_input_path() {
+    let path = write_source("highlight_out_dir.mox", GOOD);
+    let out = scratch_dir().join("highlight-one-dir");
+    std::fs::create_dir_all(&out).expect("create output dir");
+    let output = run(&[
+        path.to_str().expect("utf-8 path"),
+        "--output",
+        out.to_str().expect("utf-8 output path"),
+    ]);
+    assert!(output.status.success(), "stderr: {}", stderr(&output));
+    let expected = mirrored_output(&out, &path, "json");
+    assert!(expected.is_file(), "missing {}", expected.display());
+}
+
+#[test]
+fn html_directory_input_writes_one_fragment_per_file() {
+    let dir = scratch_dir().join("highlight_html_tree");
+    std::fs::create_dir_all(&dir).expect("create tree");
+    std::fs::write(dir.join("a.mox"), GOOD).expect("write a");
+    std::fs::write(dir.join("b.mox"), GOOD).expect("write b");
+    let out = scratch_dir().join("highlight_html_out");
+    let output = run(&[
+        dir.to_str().expect("utf-8 path"),
+        "--format",
+        "html",
+        "--output",
+        out.to_str().expect("utf-8 output path"),
+    ]);
+    assert!(output.status.success(), "stderr: {}", stderr(&output));
+    for input in [dir.join("a.mox"), dir.join("b.mox")] {
+        let expected = mirrored_output(&out, &input, "html");
+        let html = std::fs::read_to_string(&expected)
+            .unwrap_or_else(|error| panic!("read {}: {error}", expected.display()));
+        assert!(html.contains("pherolang-highlight"));
+        assert!(html.contains("hl-keyword"));
+    }
+}
+
+#[test]
+fn surface_accepts_an_extension_alias_and_forces_one_file() {
+    let path = write_source("highlight_forced.txt", GOOD);
+    let output = run(&[
+        path.to_str().expect("utf-8 path"),
+        "--surface",
+        ".mox",
+        "--format",
+        "json",
+    ]);
+    assert!(output.status.success(), "stderr: {}", stderr(&output));
+    let json: serde_json::Value = serde_json::from_str(&stdout(&output)).expect("stdout is JSON");
+    assert_eq!(json["surface"], "mox");
+
+    let alias = run_stdin(
+        &["-", "--surface", "domain", "--format", "json"],
+        GOOD.as_bytes(),
+    );
+    assert!(alias.status.success(), "stderr: {}", stderr(&alias));
+    let json: serde_json::Value = serde_json::from_str(&stdout(&alias)).expect("stdout is JSON");
+    assert_eq!(json["surface"], "mox");
+}
+
+#[test]
+fn empty_stdin_has_no_spans_and_is_not_degraded() {
+    let output = run_stdin(&["-", "--surface", "mox", "--format", "json"], b"");
+    assert!(output.status.success(), "stderr: {}", stderr(&output));
+    let json: serde_json::Value = serde_json::from_str(&stdout(&output)).expect("stdout is JSON");
+    assert_eq!(json["degraded"], false);
+    assert_eq!(json["spans"].as_array().expect("spans").len(), 0);
+}
+
+#[test]
+fn stdin_with_another_input_is_a_usage_error() {
+    let path = write_source("highlight_stdin_plus_file.mox", GOOD);
+    let output = run(&["-", path.to_str().expect("utf-8 path"), "--surface", "mox"]);
+    assert_eq!(output.status.code(), Some(2));
+    assert!(stderr(&output).contains("stdin"), "{}", stderr(&output));
+}
+
+#[test]
+fn directory_with_a_forced_surface_is_a_usage_error() {
+    let dir = scratch_dir().join("highlight_forced_dir");
+    std::fs::create_dir_all(&dir).expect("create dir");
+    std::fs::write(dir.join("a.mox"), GOOD).expect("write a");
+    let output = run(&[dir.to_str().expect("utf-8 path"), "--surface", "mox"]);
+    assert_eq!(output.status.code(), Some(2));
+    assert!(stderr(&output).contains("directory"), "{}", stderr(&output));
+}
+
+#[test]
+fn unknown_format_mode_and_option_are_usage_errors() {
+    let path = write_source("highlight_usage.mox", GOOD);
+    let arg = path.to_str().expect("utf-8 path");
+
+    let format = run(&[arg, "--format", "yaml"]);
+    assert_eq!(format.status.code(), Some(2));
+
+    let mode = run(&[arg, "--mode", "sometimes"]);
+    assert_eq!(mode.status.code(), Some(2));
+
+    let option = run(&[arg, "--nope"]);
+    assert_eq!(option.status.code(), Some(2));
+}
+
+#[test]
+fn crlf_stdin_hash_covers_the_exact_bytes() {
+    let lf = run_stdin(
+        &["-", "--surface", "mox", "--format", "json"],
+        GOOD.as_bytes(),
+    );
+    assert!(lf.status.success(), "stderr: {}", stderr(&lf));
+    let lf_json: serde_json::Value = serde_json::from_str(&stdout(&lf)).expect("LF JSON");
+
+    let crlf_source = GOOD.replace('\n', "\r\n");
+    let crlf = run_stdin(
+        &["-", "--surface", "mox", "--format", "json"],
+        crlf_source.as_bytes(),
+    );
+    assert!(crlf.status.success(), "stderr: {}", stderr(&crlf));
+    let crlf_json: serde_json::Value = serde_json::from_str(&stdout(&crlf)).expect("CRLF JSON");
+
+    assert!(crlf_json["sourceHash"]
+        .as_str()
+        .expect("hash")
+        .starts_with("sha256:"));
+    assert_ne!(
+        lf_json["sourceHash"], crlf_json["sourceHash"],
+        "the hash covers the exact line-ending bytes"
+    );
+    for span in crlf_json["spans"].as_array().expect("spans") {
+        assert!(span["end"].as_u64().expect("end") <= crlf_source.len() as u64);
+    }
+}
+
+#[test]
+fn help_documents_the_contract() {
+    let output = pherolang()
+        .args(["highlight", "--help"])
+        .output()
+        .expect("run highlight --help");
+    assert!(output.status.success());
+    let help = stdout(&output);
+    for flag in ["--format", "--mode", "--surface", "--output"] {
+        assert!(help.contains(flag), "help is missing {flag}:\n{help}");
+    }
+}

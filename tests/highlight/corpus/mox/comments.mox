@@ -1,0 +1,10 @@
+package demo
+
+// A line comment with a "quote" and \\ a backslash.
+/* A block comment.
+   It spans two lines. */
+/// Documentation on the class.
+class Book {
+    /// Documentation on the feature.
+    String title
+}

@@ -24,7 +24,7 @@ cd site
 fnm use                      # or: nvm use  (respects .nvmrc)
 pnpm install
 
-node scripts/fetch-pherolang.mjs   # released v0.3.0 binary, sha256-verified
+node scripts/fetch-pherolang.mjs   # pinned v0.4.0 (falls back to the latest published release while untagged), sha256-verified
 
 pnpm dev                     # both apps: :4321 (web) and :4322 (docs)
 ```
@@ -50,16 +50,27 @@ through `site/packages/highlighting/src/`; no app runs the compiler at build
 time and nothing is generated per request.
 
 **Release-binary status:** the latest release, v0.3.0, predates both
-`pherolang highlight` and the DD9 examples. The site script resolver
-(`scripts/highlighting/runner.mjs`) refuses a binary that cannot check
-`examples/support/support.ddd` or lacks the command
-(`PHEROLANG_BIN` first, then the fetched `.bin`, then `PATH`) and otherwise
-builds the CLI from the checkout (`cargo build -q -p phero-cli`). One resolved
-binary produces the model data, the highlight artifact, and the commands the
-gate executes. This is a temporary exception, not released-binary freshness;
-the `Site` workflow installs Rust for the freshness/drift jobs and warns when
-the fallback runs. Regenerate with the first release that matches the tree.
-Details: [`docs/HIGHLIGHTING.md`](../docs/HIGHLIGHTING.md#release-binary-status).
+`pherolang highlight` and the DD9 examples. The tree is prepared for **v0.4.0
+(the first release with the command)**; the tag/publish is the operator step
+in [`docs/RELEASE-0.4.0.md`](../docs/RELEASE-0.4.0.md). Until then:
+
+- `scripts/fetch-pherolang.mjs` pins `0.4.0`; while that tag is unpublished an
+  unset `PHEROLANG_VERSION` falls back to the latest published release with a
+  warning (an explicit pin never falls back).
+- the shared resolver (`scripts/highlighting/runner.mjs`) refuses a binary that
+  cannot check `examples/support/support.ddd` or lacks `highlight`
+  (`PHEROLANG_BIN` first, then the fetched `.bin`, then `PATH`) and otherwise
+  builds the CLI from the checkout (`cargo build -q -p phero-cli`).
+- `sync-model` and `sync-highlight` both use that resolver, so one binary
+  produces the model data, the highlight artifact, and the commands the gate
+  executes.
+
+This is a temporary exception, not released-binary freshness; the `Site`
+workflow installs Rust for the freshness/drift jobs and warns when the fallback
+runs. Its `deploy` job waits until the latest release version equals the
+workspace version, so production never advertises a download that does not
+exist. After the tag, regenerate with the released binary and update
+[`docs/HIGHLIGHTING.md`](../docs/HIGHLIGHTING.md#release-binary-status).
 
 The docs app integration is an Expressive Code plugin
 (`site/phero-docs/ec.config.mjs`) that adds the compiler's `hl-*` classes inside
@@ -116,10 +127,22 @@ node scripts/gate.mjs --only=links,a11y --no-build
 `highlighting` proves every Phero block in both built apps carries compiler
 classes, no raw Phero block remains, every docs fence language is covered or
 explicitly exempt, and the committed artifact covers exactly the current
-sources. `hover` proves the prototype's index resolves, its page emits no
-`<script>`, its stylesheet stays under 8 KiB gzip, and hover/focus/Enter work
-in a browser. `freshness` reruns both sync scripts and fails on any `site/data`
-diff. The code-token colours are part of `contrast`/`a11y` in both modes.
+sources. `budget` proves every marketing page except the documented graph
+island on `/demo` is zero-JS, and keeps the island under 12 KB gzip. `hover`
+proves the prototype's index resolves, its page emits no `<script>`, its
+stylesheet stays under 8 KiB gzip, and hover/focus/Enter work in a browser.
+`freshness` reruns both sync scripts and fails on any `site/data` diff. The
+code-token colours are part of `contrast`/`a11y` in both modes.
+
+The Node suite (`pnpm test` → `node --test scripts/test/*.test.mjs`) covers the
+pure scanners, the highlight artifact lookup, the hover index, the zero-JS
+classifier, and the release-artifact/version contract. CI's `Site verify` job
+runs it after the build and the highlighting gate.
+
+The release-window guard: `site.yml` `detect` reports the workspace version and
+the latest release version; `deploy` requires them to be equal. A 0.4.0 bump PR
+therefore merges with previews but does not deploy production until v0.4.0 is
+tagged.
 
 `a11y` uses axe over the built output through Playwright. If the browser is
 missing, the gate fails with the install command rather than skipping:

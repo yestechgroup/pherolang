@@ -1,0 +1,638 @@
+{
+  "formatVersion": 1,
+  "cases": [
+    {
+      "id": "actor/parse-error",
+      "surface": "actor",
+      "degraded": true,
+      "spans": 9,
+      "classes": {
+        "keyword": 2,
+        "operator": 1,
+        "punctuation": 4,
+        "string": 1,
+        "variable": 1
+      },
+      "modifiers": {}
+    },
+    {
+      "id": "actor/truncated",
+      "surface": "actor",
+      "degraded": true,
+      "spans": 8,
+      "classes": {
+        "keyword": 3,
+        "punctuation": 2,
+        "string": 1,
+        "type": 1,
+        "variable": 1
+      },
+      "modifiers": {}
+    },
+    {
+      "id": "actor/valid",
+      "surface": "actor",
+      "degraded": false,
+      "spans": 18,
+      "classes": {
+        "function": 2,
+        "keyword": 7,
+        "namespace": 1,
+        "punctuation": 4,
+        "string": 1,
+        "type": 3
+      },
+      "modifiers": {
+        "declaration": 3
+      }
+    },
+    {
+      "id": "cmmn/parse-error",
+      "surface": "cmmn",
+      "degraded": true,
+      "spans": 9,
+      "classes": {
+        "keyword": 2,
+        "namespace": 1,
+        "operator": 1,
+        "punctuation": 4,
+        "string": 1
+      },
+      "modifiers": {
+        "declaration": 1
+      }
+    },
+    {
+      "id": "cmmn/truncated",
+      "surface": "cmmn",
+      "degraded": true,
+      "spans": 7,
+      "classes": {
+        "keyword": 3,
+        "punctuation": 2,
+        "string": 1,
+        "type": 1
+      },
+      "modifiers": {}
+    },
+    {
+      "id": "cmmn/valid",
+      "surface": "cmmn",
+      "degraded": false,
+      "spans": 12,
+      "classes": {
+        "keyword": 4,
+        "namespace": 1,
+        "punctuation": 5,
+        "string": 1,
+        "type": 1
+      },
+      "modifiers": {
+        "declaration": 2
+      }
+    },
+    {
+      "id": "ddd/contextual-ordinary",
+      "surface": "ddd",
+      "degraded": false,
+      "spans": 23,
+      "classes": {
+        "function": 1,
+        "keyword": 4,
+        "namespace": 2,
+        "parameter": 2,
+        "punctuation": 9,
+        "string": 1,
+        "type": 4
+      },
+      "modifiers": {
+        "declaration": 6
+      }
+    },
+    {
+      "id": "ddd/contextual-real",
+      "surface": "ddd",
+      "degraded": false,
+      "spans": 21,
+      "classes": {
+        "function": 1,
+        "keyword": 8,
+        "namespace": 2,
+        "punctuation": 7,
+        "string": 1,
+        "type": 2
+      },
+      "modifiers": {
+        "declaration": 4
+      }
+    },
+    {
+      "id": "ddd/parse-error",
+      "surface": "ddd",
+      "degraded": true,
+      "spans": 9,
+      "classes": {
+        "keyword": 2,
+        "namespace": 1,
+        "operator": 1,
+        "punctuation": 4,
+        "string": 1
+      },
+      "modifiers": {
+        "declaration": 1
+      }
+    },
+    {
+      "id": "ddd/truncated",
+      "surface": "ddd",
+      "degraded": true,
+      "spans": 8,
+      "classes": {
+        "keyword": 3,
+        "punctuation": 2,
+        "string": 1,
+        "type": 2
+      },
+      "modifiers": {}
+    },
+    {
+      "id": "ddd/valid",
+      "surface": "ddd",
+      "degraded": false,
+      "spans": 20,
+      "classes": {
+        "function": 1,
+        "keyword": 4,
+        "namespace": 2,
+        "parameter": 1,
+        "punctuation": 8,
+        "string": 1,
+        "type": 3
+      },
+      "modifiers": {
+        "declaration": 5
+      }
+    },
+    {
+      "id": "deploy/parse-error",
+      "surface": "deploy",
+      "degraded": true,
+      "spans": 9,
+      "classes": {
+        "keyword": 2,
+        "operator": 1,
+        "punctuation": 4,
+        "string": 1,
+        "type": 1
+      },
+      "modifiers": {}
+    },
+    {
+      "id": "deploy/truncated",
+      "surface": "deploy",
+      "degraded": true,
+      "spans": 10,
+      "classes": {
+        "keyword": 3,
+        "punctuation": 3,
+        "string": 1,
+        "type": 1,
+        "variable": 2
+      },
+      "modifiers": {}
+    },
+    {
+      "id": "deploy/valid",
+      "surface": "deploy",
+      "degraded": false,
+      "spans": 14,
+      "classes": {
+        "constant": 1,
+        "function": 1,
+        "keyword": 4,
+        "namespace": 1,
+        "punctuation": 5,
+        "string": 1,
+        "type": 1
+      },
+      "modifiers": {
+        "declaration": 2
+      }
+    },
+    {
+      "id": "dmn/parse-error",
+      "surface": "dmn",
+      "degraded": true,
+      "spans": 9,
+      "classes": {
+        "keyword": 2,
+        "operator": 1,
+        "punctuation": 4,
+        "string": 1,
+        "type": 1
+      },
+      "modifiers": {
+        "declaration": 1
+      }
+    },
+    {
+      "id": "dmn/truncated",
+      "surface": "dmn",
+      "degraded": true,
+      "spans": 7,
+      "classes": {
+        "keyword": 3,
+        "punctuation": 2,
+        "string": 1,
+        "type": 1
+      },
+      "modifiers": {
+        "declaration": 1
+      }
+    },
+    {
+      "id": "dmn/valid",
+      "surface": "dmn",
+      "degraded": false,
+      "spans": 16,
+      "classes": {
+        "function": 1,
+        "keyword": 5,
+        "punctuation": 7,
+        "string": 1,
+        "type": 2
+      },
+      "modifiers": {
+        "declaration": 2,
+        "defaultLibrary": 1
+      }
+    },
+    {
+      "id": "evt/parse-error",
+      "surface": "evt",
+      "degraded": true,
+      "spans": 9,
+      "classes": {
+        "keyword": 2,
+        "operator": 1,
+        "punctuation": 4,
+        "string": 1,
+        "type": 1
+      },
+      "modifiers": {}
+    },
+    {
+      "id": "evt/truncated",
+      "surface": "evt",
+      "degraded": true,
+      "spans": 9,
+      "classes": {
+        "keyword": 2,
+        "punctuation": 3,
+        "string": 1,
+        "type": 2,
+        "variable": 1
+      },
+      "modifiers": {}
+    },
+    {
+      "id": "evt/valid",
+      "surface": "evt",
+      "degraded": false,
+      "spans": 19,
+      "classes": {
+        "keyword": 5,
+        "property": 1,
+        "punctuation": 7,
+        "string": 2,
+        "type": 4
+      },
+      "modifiers": {
+        "declaration": 3
+      }
+    },
+    {
+      "id": "ifml/lookalikes",
+      "surface": "ifml",
+      "degraded": false,
+      "spans": 40,
+      "classes": {
+        "keyword": 4,
+        "parameter": 1,
+        "property": 3,
+        "punctuation": 20,
+        "string": 1,
+        "type": 3,
+        "variable": 8
+      },
+      "modifiers": {
+        "declaration": 3
+      }
+    },
+    {
+      "id": "ifml/parse-error",
+      "surface": "ifml",
+      "degraded": true,
+      "spans": 7,
+      "classes": {
+        "error": 1,
+        "keyword": 1,
+        "operator": 1,
+        "punctuation": 3,
+        "type": 1
+      },
+      "modifiers": {
+        "declaration": 1
+      }
+    },
+    {
+      "id": "ifml/truncated",
+      "surface": "ifml",
+      "degraded": true,
+      "spans": 6,
+      "classes": {
+        "keyword": 2,
+        "punctuation": 2,
+        "type": 2
+      },
+      "modifiers": {
+        "declaration": 2
+      }
+    },
+    {
+      "id": "ifml/valid",
+      "surface": "ifml",
+      "degraded": false,
+      "spans": 32,
+      "classes": {
+        "keyword": 4,
+        "parameter": 1,
+        "property": 3,
+        "punctuation": 16,
+        "string": 1,
+        "type": 3,
+        "variable": 4
+      },
+      "modifiers": {
+        "declaration": 3
+      }
+    },
+    {
+      "id": "mox/comments",
+      "surface": "mox",
+      "degraded": false,
+      "spans": 12,
+      "classes": {
+        "comment": 4,
+        "keyword": 2,
+        "namespace": 1,
+        "property": 1,
+        "punctuation": 2,
+        "type": 2
+      },
+      "modifiers": {
+        "declaration": 3,
+        "defaultLibrary": 1,
+        "documentation": 2
+      }
+    },
+    {
+      "id": "mox/escapes",
+      "surface": "mox",
+      "degraded": false,
+      "spans": 18,
+      "classes": {
+        "escape": 4,
+        "keyword": 2,
+        "namespace": 1,
+        "operator": 1,
+        "property": 1,
+        "punctuation": 2,
+        "string": 5,
+        "type": 2
+      },
+      "modifiers": {
+        "declaration": 3,
+        "defaultLibrary": 1
+      }
+    },
+    {
+      "id": "mox/parse-error",
+      "surface": "mox",
+      "degraded": true,
+      "spans": 10,
+      "classes": {
+        "keyword": 2,
+        "namespace": 1,
+        "operator": 2,
+        "punctuation": 4,
+        "type": 1
+      },
+      "modifiers": {
+        "declaration": 2
+      }
+    },
+    {
+      "id": "mox/truncated",
+      "surface": "mox",
+      "degraded": true,
+      "spans": 7,
+      "classes": {
+        "keyword": 2,
+        "namespace": 1,
+        "punctuation": 1,
+        "type": 2,
+        "variable": 1
+      },
+      "modifiers": {
+        "declaration": 1,
+        "defaultLibrary": 1
+      }
+    },
+    {
+      "id": "mox/valid",
+      "surface": "mox",
+      "degraded": false,
+      "spans": 28,
+      "classes": {
+        "annotation": 1,
+        "comment": 2,
+        "function": 1,
+        "keyword": 4,
+        "namespace": 1,
+        "number": 1,
+        "operator": 1,
+        "parameter": 1,
+        "property": 2,
+        "punctuation": 8,
+        "type": 5,
+        "variable": 1
+      },
+      "modifiers": {
+        "declaration": 6,
+        "defaultLibrary": 4,
+        "documentation": 2,
+        "readonly": 1
+      }
+    },
+    {
+      "id": "shared/comments-doc",
+      "surface": "mox",
+      "degraded": false,
+      "spans": 10,
+      "classes": {
+        "comment": 2,
+        "keyword": 2,
+        "namespace": 1,
+        "property": 1,
+        "punctuation": 2,
+        "type": 2
+      },
+      "modifiers": {
+        "declaration": 3,
+        "defaultLibrary": 1,
+        "documentation": 2
+      }
+    },
+    {
+      "id": "shared/crlf",
+      "surface": "mox",
+      "degraded": false,
+      "spans": 8,
+      "classes": {
+        "keyword": 2,
+        "namespace": 1,
+        "property": 1,
+        "punctuation": 2,
+        "type": 2
+      },
+      "modifiers": {
+        "declaration": 3,
+        "defaultLibrary": 1
+      }
+    },
+    {
+      "id": "shared/emoji-combining",
+      "surface": "mox",
+      "degraded": false,
+      "spans": 10,
+      "classes": {
+        "keyword": 2,
+        "namespace": 1,
+        "operator": 1,
+        "property": 1,
+        "punctuation": 2,
+        "string": 1,
+        "type": 2
+      },
+      "modifiers": {
+        "declaration": 3,
+        "defaultLibrary": 1
+      }
+    },
+    {
+      "id": "shared/escapes",
+      "surface": "mox",
+      "degraded": false,
+      "spans": 18,
+      "classes": {
+        "escape": 4,
+        "keyword": 2,
+        "namespace": 1,
+        "operator": 1,
+        "property": 1,
+        "punctuation": 2,
+        "string": 5,
+        "type": 2
+      },
+      "modifiers": {
+        "declaration": 3,
+        "defaultLibrary": 1
+      }
+    },
+    {
+      "id": "shared/unicode-identifier-error",
+      "surface": "mox",
+      "degraded": true,
+      "spans": 9,
+      "classes": {
+        "keyword": 2,
+        "namespace": 1,
+        "punctuation": 3,
+        "type": 2,
+        "variable": 1
+      },
+      "modifiers": {
+        "declaration": 1,
+        "defaultLibrary": 1
+      }
+    },
+    {
+      "id": "shared/unicode-strings",
+      "surface": "mox",
+      "degraded": false,
+      "spans": 12,
+      "classes": {
+        "comment": 2,
+        "keyword": 2,
+        "namespace": 1,
+        "operator": 1,
+        "property": 1,
+        "punctuation": 2,
+        "string": 1,
+        "type": 2
+      },
+      "modifiers": {
+        "declaration": 3,
+        "defaultLibrary": 1,
+        "documentation": 1
+      }
+    },
+    {
+      "id": "uc/parse-error",
+      "surface": "uc",
+      "degraded": true,
+      "spans": 9,
+      "classes": {
+        "function": 1,
+        "keyword": 2,
+        "operator": 1,
+        "punctuation": 4,
+        "string": 1
+      },
+      "modifiers": {
+        "declaration": 1
+      }
+    },
+    {
+      "id": "uc/truncated",
+      "surface": "uc",
+      "degraded": true,
+      "spans": 5,
+      "classes": {
+        "keyword": 2,
+        "punctuation": 1,
+        "string": 1,
+        "type": 1
+      },
+      "modifiers": {}
+    },
+    {
+      "id": "uc/valid",
+      "surface": "uc",
+      "degraded": false,
+      "spans": 10,
+      "classes": {
+        "function": 1,
+        "keyword": 3,
+        "punctuation": 3,
+        "string": 1,
+        "type": 1,
+        "variable": 1
+      },
+      "modifiers": {
+        "declaration": 2
+      }
+    }
+  ]
+}

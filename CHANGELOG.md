@@ -7,7 +7,34 @@ policy in [docs/VERSIONING.md](docs/VERSIONING.md).
 
 ## [Unreleased]
 
+Planned as **v0.4.0** — the first release whose binary ships
+`pherolang highlight`. The workspace version is `0.4.0`; the tag and publish
+are the operator step in
+[docs/RELEASE-0.4.0.md](docs/RELEASE-0.4.0.md). Until that tag exists the
+committed site data is source-built (the documented exception in
+[docs/HIGHLIGHTING.md](docs/HIGHLIGHTING.md#release-binary-status)), and
+production deploy waits for the released version to match the workspace
+version.
+
 ### Added
+
+- **Quality gates, checked corpus and release readiness for highlighting**
+  (SH8, issue [#294](https://github.com/yestechgroup/pherolang/issues/294),
+  epic #286): `tests/highlight/corpus/` now covers every surface with valid,
+  truncated, and parse-error inputs plus Unicode/emoji/combining, CRLF,
+  escapes, doc comments, contextual words in real and ordinary positions, and
+  `.ifml` lookalikes. The compact summaries
+  (`tests/highlight/summary/{corpus,docs-fences}.json`), representative
+  exact-span goldens, and committed invalid-version fixtures are byte-pinned;
+  a new surface without a corpus case, or a keyword missing from the registry,
+  fails by name. The CLI suite adds the mode/output/surface/exit-code edge
+  cases, `scripts/ci-local.sh` runs `grammar --check`, and the site gate adds
+  the zero-JS page rule and the release-version deploy guard. The release
+  workflow now proves the shipped binary exposes `pherolang highlight` and
+  round-trips the generated grammar package. Documentation gains the corpus,
+  troubleshooting, performance and `formatVersion` policy sections plus
+  [ADR 0003](docs/adr/0003-compiler-backed-highlighting-is-the-source-of-truth.md);
+  the 0.4.0 release runbook is [docs/RELEASE-0.4.0.md](docs/RELEASE-0.4.0.md).
 
 - **Static hover reference panels on the site** (SH7, issue
   [#293](https://github.com/yestechgroup/pherolang/issues/293), epic #286):
@@ -590,4 +617,5 @@ commit log (`git log v0.2.0` ancestry); the per-surface references under
 `docs/` describe each surface as shipped.
 
 [0.2.0]: https://github.com/yestechgroup/rexlang/releases/tag/v0.2.0
+[0.4.0]: https://github.com/yestechgroup/pherolang/releases/tag/v0.4.0
 [0.3.0]: https://github.com/yestechgroup/pherolang/releases/tag/v0.3.0

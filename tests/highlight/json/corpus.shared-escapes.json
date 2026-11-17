@@ -1,0 +1,128 @@
+{
+  "formatVersion": 1,
+  "surface": "mox",
+  "sourceHash": "sha256:27b902cfdb14cb6471251946ec686c0ad8a9665f42b07bc8050e80ad2113de45",
+  "generator": {
+    "name": "pherolang",
+    "version": "0.4.0"
+  },
+  "degraded": false,
+  "spans": [
+    {
+      "start": 0,
+      "end": 7,
+      "class": "keyword",
+      "modifiers": []
+    },
+    {
+      "start": 8,
+      "end": 12,
+      "class": "namespace",
+      "modifiers": [
+        "declaration"
+      ]
+    },
+    {
+      "start": 14,
+      "end": 19,
+      "class": "keyword",
+      "modifiers": []
+    },
+    {
+      "start": 20,
+      "end": 24,
+      "class": "type",
+      "modifiers": [
+        "declaration"
+      ]
+    },
+    {
+      "start": 25,
+      "end": 26,
+      "class": "punctuation",
+      "modifiers": []
+    },
+    {
+      "start": 31,
+      "end": 37,
+      "class": "type",
+      "modifiers": [
+        "defaultLibrary"
+      ]
+    },
+    {
+      "start": 38,
+      "end": 43,
+      "class": "property",
+      "modifiers": [
+        "declaration"
+      ]
+    },
+    {
+      "start": 44,
+      "end": 45,
+      "class": "operator",
+      "modifiers": []
+    },
+    {
+      "start": 46,
+      "end": 48,
+      "class": "string",
+      "modifiers": []
+    },
+    {
+      "start": 48,
+      "end": 50,
+      "class": "escape",
+      "modifiers": []
+    },
+    {
+      "start": 50,
+      "end": 51,
+      "class": "string",
+      "modifiers": []
+    },
+    {
+      "start": 51,
+      "end": 53,
+      "class": "escape",
+      "modifiers": []
+    },
+    {
+      "start": 53,
+      "end": 54,
+      "class": "string",
+      "modifiers": []
+    },
+    {
+      "start": 54,
+      "end": 56,
+      "class": "escape",
+      "modifiers": []
+    },
+    {
+      "start": 56,
+      "end": 57,
+      "class": "string",
+      "modifiers": []
+    },
+    {
+      "start": 57,
+      "end": 59,
+      "class": "escape",
+      "modifiers": []
+    },
+    {
+      "start": 59,
+      "end": 67,
+      "class": "string",
+      "modifiers": []
+    },
+    {
+      "start": 68,
+      "end": 69,
+      "class": "punctuation",
+      "modifiers": []
+    }
+  ]
+}

@@ -37,6 +37,24 @@ Semver-flavored: `MAJOR.MINOR.PATCH`.
   output pins its support-lib expectations at generation time.
 - **The CLI** (`pherolang`): subcommand surface is additive within 0.x;
   script-breaking changes allowed at minor bumps with changelog notes.
+- **Highlighting** (`pherolang highlight`, the committed site artifact, and
+  the generated editor grammars): the JSON artifact is gated by
+  `HIGHLIGHT_FORMAT_VERSION` (v1), independently of the IR. Additive changes
+  keep v1; a re-purposed field, a unit change, or a removed field bumps it.
+  Readers reject an absent or non-1 version. The site artifact under
+  `site/data/highlighting/` has its own v1 gate. Contract:
+  [HIGHLIGHTING.md](HIGHLIGHTING.md#versioning-and-compatibility).
+
+## The 0.4 release (highlighting)
+
+**0.4.0 does not break the wire.** It ships `pherolang highlight`, the
+`pherolang grammar` generator, LSP semantic tokens/hover, and the static site
+integration. Every existing `formatVersion` stays where it was; the only
+change in the provenance-stamped artifacts is the `pheroVersion` string
+(`0.3.0` → `0.4.0`), which is why the golden regeneration diff is mechanical.
+The highlight artifact's compatibility policy is
+[HIGHLIGHTING.md](HIGHLIGHTING.md#versioning-and-compatibility); the release
+runbook is [RELEASE-0.4.0.md](RELEASE-0.4.0.md).
 
 ## The 0.3 wire break (Phero Lang rename)
 

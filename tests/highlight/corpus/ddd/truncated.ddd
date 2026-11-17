@@ -1,0 +1,4 @@
+import "demo.mox"
+
+application Demo {
+    module Core {

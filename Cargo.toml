@@ -28,7 +28,7 @@ members = [
 ]
 
 [workspace.package]
-version = "0.3.0"
+version = "0.4.0"
 edition = "2021"
 license = "Apache-2.0"
 description = "Phero Lang: a verifiable, multi-target modeling language inspired by Eclipse Xcore"

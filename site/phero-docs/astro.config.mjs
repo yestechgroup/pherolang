@@ -18,7 +18,7 @@ import cloudflare from '@astrojs/cloudflare';
  *   Overview     the docs home, generated from `docs/README.md`
  *   Reference    the language manual, one page per surface
  *   Engineering  what is claimed, how it is proved, what a release ships
- *   Migration    moving a 0.2 consumer, then cutting 0.3.0
+ *   Migration    moving a 0.2 consumer, then cutting the current release
  *   Decisions    the numbered, immutable records
  *
  * Every group autogenerates one directory the ingestion step owns, so a new

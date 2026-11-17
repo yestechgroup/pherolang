@@ -1,0 +1,7 @@
+package demo
+
+/// Café ☕ — a combining mark follows: é.
+class Book {
+    String title = "naïve — 😀"
+    // comment with emoji 🎉 and a combining mark á
+}

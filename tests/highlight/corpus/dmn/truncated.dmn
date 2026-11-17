@@ -1,0 +1,4 @@
+import "demo.mox"
+
+decision_model Demo {
+    decisions {

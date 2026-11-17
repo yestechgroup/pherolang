@@ -7,8 +7,8 @@
       "slug": "backends",
       "title": "Writing a backend for Phero Lang",
       "description": "Phero Lang is a DSL for **modelling**. Backends are consumers of the Core IR —",
-      "bytes": 20116,
-      "lines": 318
+      "bytes": 20142,
+      "lines": 319
     },
     {
       "path": "docs/CMMN.md",
@@ -88,8 +88,8 @@
       "slug": "highlighting",
       "title": "Compiler-backed syntax highlighting",
       "description": "Phero Lang source is highlighted by the compiler, not by a hand-written",
-      "bytes": 53833,
-      "lines": 1066
+      "bytes": 64665,
+      "lines": 1265
     },
     {
       "path": "docs/IFML.md",
@@ -124,8 +124,8 @@
       "slug": "index",
       "title": "Phero Lang documentation",
       "description": "Phero Lang is a multi-surface modeling language: every surface follows the same",
-      "bytes": 5363,
-      "lines": 57
+      "bytes": 5521,
+      "lines": 58
     },
     {
       "path": "docs/REBRAND.md",
@@ -153,6 +153,15 @@
       "description": "The operator sequence for cutting **v0.3.0**, in the order the work actually",
       "bytes": 7335,
       "lines": 201
+    },
+    {
+      "path": "docs/RELEASE-0.4.0.md",
+      "name": "RELEASE-0.4.0.md",
+      "slug": "release-0.4.0",
+      "title": "Release runbook: v0.4.0 (Phero Lang)",
+      "description": "The operator sequence for cutting **v0.4.0**, the first release whose binary",
+      "bytes": 5394,
+      "lines": 138
     },
     {
       "path": "docs/RUNE-BODIES.md",
@@ -196,8 +205,8 @@
       "slug": "versioning",
       "title": "Versioning and release policy",
       "description": "How Phero Lang versions, what compatibility each version line promises, and",
-      "bytes": 5314,
-      "lines": 112
+      "bytes": 6387,
+      "lines": 130
     }
   ]
 }

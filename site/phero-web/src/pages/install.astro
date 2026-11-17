@@ -35,9 +35,9 @@ const prints = (id: string) => command(id).expectStdout ?? '';
 const repo = 'https://github.com/yestechgroup/pherolang';
 const releases = `${repo}/releases`;
 const assets = [
-  { platform: 'Linux x86_64', asset: 'pherolang-0.3.0-x86_64-unknown-linux-gnu.tar.gz' },
-  { platform: 'Linux aarch64', asset: 'pherolang-0.3.0-aarch64-unknown-linux-gnu.tar.gz' },
-  { platform: 'Windows x86_64', asset: 'pherolang-0.3.0-x86_64-pc-windows-msvc.zip' },
+  { platform: 'Linux x86_64', asset: 'pherolang-0.4.0-x86_64-unknown-linux-gnu.tar.gz' },
+  { platform: 'Linux aarch64', asset: 'pherolang-0.4.0-aarch64-unknown-linux-gnu.tar.gz' },
+  { platform: 'Windows x86_64', asset: 'pherolang-0.4.0-x86_64-pc-windows-msvc.zip' },
   { platform: 'All of the above', asset: 'SHA256SUMS' },
 ];
 
@@ -80,8 +80,8 @@ const cargoInstall = shell('install-cargo');
     <p class="mt-6">
       <a
         class="text-[var(--link)] underline decoration-[color-mix(in_oklab,var(--link)_45%,transparent)] underline-offset-4 hover:decoration-[var(--link)]"
-        href={`${releases}/tag/v0.3.0`}
-        rel="noopener">Browse the v0.3.0 release on GitHub</a
+        href={`${releases}/tag/v0.4.0`}
+        rel="noopener">Browse the v0.4.0 release on GitHub</a
       >.
     </p>
 
@@ -89,12 +89,12 @@ const cargoInstall = shell('install-cargo');
       <SectionHeader
         eyebrow="Step 1"
         title="Download the archive for your platform"
-        lede="v0.3.0 publishes three archives and a checksum manifest. An archive contains a single file: the binary, at the archive root."
+        lede="v0.4.0 publishes three archives and a checksum manifest. An archive contains a single file: the binary, at the archive root."
       />
 
       <div class="mt-8 max-w-[68ch] overflow-x-auto">
         <table class="w-full border-collapse text-left text-[0.9375rem]">
-          <caption class="sr-only">Released archives for pherolang v0.3.0</caption>
+          <caption class="sr-only">Released archives for pherolang v0.4.0</caption>
           <thead>
             <tr class="border-b border-[var(--border-strong)]">
               <th scope="col" class="py-2 pr-6 font-medium">Platform</th>
@@ -116,7 +116,7 @@ const cargoInstall = shell('install-cargo');
 
       <Prose class="mt-6">
         <p>
-          The commands below pin <code>v0.3.0</code>. If the
+          The commands below pin <code>v0.4.0</code>. If the
           <a href={releases} rel="noopener">releases page</a> lists a newer tag, substitute it in the
           download URLs and in the archive names.
         </p>
@@ -146,7 +146,7 @@ const cargoInstall = shell('install-cargo');
         </p>
         <p>
           <code>sha256sum -c</code> prints one line per listed archive it can find —
-          <code>pherolang-0.3.0-x86_64-unknown-linux-gnu.tar.gz: OK</code>. It exits <code>1</code> and
+          <code>pherolang-0.4.0-x86_64-unknown-linux-gnu.tar.gz: OK</code>. It exits <code>1</code> and
           names the file if a single byte differs.
         </p>
         <p>
@@ -158,7 +158,7 @@ const cargoInstall = shell('install-cargo');
 
       <Callout tone="warning" title="macOS is not published yet">
         <p>
-          v0.3.0 ships no <code>apple-darwin</code> archive. The release workflow carries the two
+          v0.4.0 ships no <code>apple-darwin</code> archive. The release workflow carries the two
           macOS rows behind the repository variable <code>PHERO_MACOS_RUNNERS</code>, which is unset
           because the project's runner configuration does not offer macOS runners. Until that
           changes, build from source on macOS — the
@@ -233,7 +233,7 @@ const cargoInstall = shell('install-cargo');
       <Prose class="mt-4">
         <p>
           It prints <code>{prints('version')}</code> followed by the target triple it was built for —
-          <code>pherolang 0.3.0 (x86_64-unknown-linux-gnu)</code> for the Linux x86_64 archive. The
+          <code>pherolang 0.4.0 (x86_64-unknown-linux-gnu)</code> for the Linux x86_64 archive. The
           triple is part of the banner so a bug report can name the platform.
         </p>
       </Prose>

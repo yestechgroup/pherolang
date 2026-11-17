@@ -1,0 +1,10 @@
+view "Home" {
+    params { tickets: Ticket };
+    label "Support home";
+
+    component "list" {
+        type: list;
+        data: Ticket;
+        fields: [ticketNo, title];
+    }
+}

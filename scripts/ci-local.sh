@@ -141,6 +141,11 @@ step_fmt() {
   nice -n 19 cargo fmt --all -- --check && echo "RUSTFMT-OK" || echo "RUSTFMT-FAIL"
   nice -n 19 cargo run -q -p phero-cli -- fmt --check "${FIXTURE_FORMAT_GLOBS[@]}" \
     && echo "PHEROFMT-OK" || echo "PHEROFMT-FAIL"
+  # The generated editor grammar package is a golden too (SH5/SH8). `--check`
+  # is Rust-only and byte-compares `site/packages/highlighting`, so a hand edit
+  # or a metadata change without regeneration fails here without needing Node.
+  nice -n 19 cargo run -q -p phero-cli -- grammar --check site/packages/highlighting \
+    && echo "GRAMMAR-CHECK-OK" || echo "GRAMMAR-CHECK-FAIL"
   kill_orphans
 }
 

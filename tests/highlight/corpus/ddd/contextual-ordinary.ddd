@@ -1,0 +1,9 @@
+import "demo.mox"
+
+application Demo {
+    module Core {
+        service Books {
+            Book book(Book service, Book decision);
+        }
+    }
+}

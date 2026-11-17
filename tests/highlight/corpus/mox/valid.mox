@@ -1,0 +1,12 @@
+package demo
+
+/// A book in the catalogue.
+class Book {
+    String title
+    readonly int shelf
+
+    /// Lend this book for a number of days.
+    op boolean lend(int days) {
+        expr { days > 0 }
+    }
+}

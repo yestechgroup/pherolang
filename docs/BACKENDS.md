@@ -209,7 +209,7 @@ over their emitted documents.
 
 ## Semver and `formatVersion` policy
 
-The workspace is at **0.3.0 — pre-1.0**, so the usual "breaking = major"
+The workspace is at **0.4.0 — pre-1.0**, so the usual "breaking = major"
 rule does not apply yet:
 
 - **Until 1.0, a breaking wire change bumps the MINOR crate version**
@@ -227,6 +227,7 @@ rule does not apply yet:
 | --- | --- | --- | --- | --- |
 | 0.1.0 | 1 | 1 | 1 | 1 |
 | 0.3.0 | 2 | 2 | 2 | 2 |
+| 0.4.0 | 2 | 2 | 2 | 2 |
 
 - `pheroVersion` inside an artifact is provenance only — consumers that must
   not care can ignore it. The domain `Model` and, since issue #298, the DDD
