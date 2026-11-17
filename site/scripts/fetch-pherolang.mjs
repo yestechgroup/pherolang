@@ -57,10 +57,6 @@ function targetFor(version) {
       asset: `pherolang-${version}-x86_64-unknown-linux-gnu.tar.gz`,
       kind: 'tar',
     },
-    'linux-arm64': {
-      asset: `pherolang-${version}-aarch64-unknown-linux-gnu.tar.gz`,
-      kind: 'tar',
-    },
   };
   return targets[key] ?? null;
 }
@@ -115,7 +111,7 @@ async function verifyAndInstall(version) {
     fail(
       [
         `no published pherolang asset for ${key}.`,
-        `v${version} publishes linux-x64 and linux-arm64 archives. Windows and macOS are unsupported (ADR 0004).`,
+        `v${version} publishes a linux-x64 archive only. Linux aarch64, Windows, and macOS are unsupported (ADR 0004).`,
         `On this platform either build from source (cargo build -p phero-cli) and pass`,
         `PHEROLANG_BIN=/path/to/pherolang to scripts/sync-model.mjs, or wait for a release.`,
       ].join('\n  '),
