@@ -427,10 +427,11 @@ design, search, or child-operation names remain the existing application-wide
 errors (rule 2) — reopening is not an allowlist for duplicates.
 
 `compile_ddd_str` remains the single-file entry. A host compiles a root with
-`compile_ddd_app_str` (or `compile_ddd_app_str_with_decisions` for the
-capability and decision joins), passing the root source and its
-`DddFragment { path, source }` closure; the result is one merged `DddModel`
-for the application and there is no fragment artifact. A single-file
+`compile_ddd_app_str`, passing the root source and its
+`DddFragment { path, source }` closure; the capability and decision joins
+ride in the same `phero_driver::CompileInputs` bundle (its `actors` and
+`decisions` buckets), and the result is one merged `DddModel` for the
+application and there is no fragment artifact. A single-file
 application compiles byte-identically to before.
 
 The CLI follows the root. `pherolang check <dir>` compiles each root with its
@@ -717,13 +718,13 @@ classes, nor the DTO member typing, which reads the source class.
    Service"); service → service across modules is allowed.
 9. **inject** — every dependency name must resolve to a service, a
    repository, or a search of the application.
-10. **Capabilities** — only the actor-aware entries
-    (`compile_ddd_str_with_actors` and
-    `compile_ddd_app_str_with_decisions`) validate: each
-    declared capability name must exist in the union of the actor model's
-    blocks' capabilities. Plain compiles record the names unvalidated —
-    the design dimension is loosely coupled to the policy dimension by
-    design.
+10. **Capabilities** — the entry points validate only when the
+    `phero_driver::CompileInputs` bundle provides a **non-empty** actor
+    set (its `actors` bucket): each declared capability name must exist in
+    the union of the actor models' blocks' capabilities, each pooled across
+    every provided model. An absent or empty bucket records the names
+    unvalidated — the design dimension is loosely coupled to the policy
+    dimension by design.
 11. **Searches** — a search's name is unique application-wide. Its `entity`
     line is required, resolves like a design target, and must bind to an
     entity design **of the same module** (the repository coupling rule;
@@ -802,10 +803,9 @@ classes, nor the DTO member typing, which reads the source class.
     rule's scope), and enum-typed fields stay legal — an enum without a
     machine is a legitimate modeling choice (the canonical fixture's
     `MediaStatus status` field is the shape).
-17. **Decision links** — only the decision-aware entries
-    (`compile_ddd_str_with_decisions` and
-    `compile_ddd_app_str_with_decisions`) validate:
-    every decision-service reference (an operation's `invokes` name, a
+17. **Decision links** — the entry points validate only when the
+    `phero_driver::CompileInputs` bundle provides decision models (its
+    `decisions` bucket): every decision-service reference (an operation's `invokes` name, a
     service's `inject decision` name) must resolve by its **last segment**
     to a decision service declared in the union of the provided `.dmn`
     models' services (the names pool across every provided model, the
@@ -1599,13 +1599,13 @@ the gap.
 
 ## Capabilities and the actor dimension
 
-A service operation's `capability` clause names actor capabilities. Only
-the actor-aware library entries (`compile_ddd_str_with_actors` and
-`compile_ddd_app_str_with_decisions`) validate the names against a
-caller-provided actor-model **slice**; capability names pool
-across every model, so a host passes all of the application's `.actor`
-artifacts. An empty slice is the plain `compile_ddd_str` behavior (the
-records-unvalidated loose-mapping contract); `capabilityRefs` still records
+A service operation's `capability` clause names actor capabilities. Only a
+compile whose `phero_driver::CompileInputs` bundle carries a **non-empty**
+actor set validates the names against those caller-provided models;
+capability names pool across every model, so a host passes all of the
+application's `.actor` artifacts. An absent or empty bucket is the plain
+`compile_ddd_str` behavior (the records-unvalidated loose-mapping
+contract); `capabilityRefs` still records
 each capability name, without `declaredIn`. Since pherolang#128 the CLI
 project pipeline and the LSP pass the sibling artifacts, so the check is a
 compile-time language error — spanned on the capability clause, with the
@@ -1619,7 +1619,8 @@ Both directions of the design↔actor wiring resolve at **compile time**
 (pherolang#128): the CLI project pipeline and the LSP resolve every
 capability clause against the pooled actor artifacts (existence, rule 10
 above) and every grant against the pooled design artifacts (coverage —
-`compile_actors_str_with_designs`, the actor engine's coverage pass
+`compile_actors_str` with the bundle's `designs` bucket, the actor
+engine's coverage pass
 diagnosing `capability 'X' is granted but no operation or search carries
 it` spanned on the grant entry, code `grantedCapabilityUncarried`). The
 union integrity pass (`phero_driver::check_integrity`, register row
@@ -1667,8 +1668,8 @@ passes through `lower_actors`, is the exact plain `compile_actors_str`
 behavior, byte for byte. The `.ddd` inline
 `actors` block path always passes no table: actor lowering and the design
 registries never co-occur there (domains lower through the shared
-per-file union pipeline before designs exist, and
-`compile_ddd_str_with_actors` receives pre-lowered `ActorModel`s).
+per-file union pipeline before designs exist, and `compile_ddd_str`'s
+actor bucket carries pre-lowered `ActorModel`s).
 
 ## Events and the event-contract dimension
 
@@ -1726,11 +1727,10 @@ invokes; `inject decision <qualified-name>;` names a decision service the
 whole service injects. Like `capability` and `emits` names, decision
 references are **loosely coupled** at the wire layer: they lower into the
 artifact as their last segment exactly as the resolution universe spells
-them, and a plain `compile_ddd_str` never validates them. Only the
-decision-aware library entries (`compile_ddd_str_with_decisions` and
-`compile_ddd_app_str_with_decisions`) validate the links (rule 17
-above) against a caller-provided `(path, DmnModel)` bucket — the same
-shape the `.uc` import buckets use. Decision services pool across every
+them, and a plain `compile_ddd_str` never validates them. Only a compile
+whose `phero_driver::CompileInputs` bundle carries decision models
+validates the links (rule 17 above) against that caller-provided
+`(path, DmnModel)` bucket — the same shape the `.uc` import buckets use. Decision services pool across every
 provided model, so a host gathers the sibling `.dmn` artifacts the way it
 pools actors. An empty bucket is the plain behavior. The `decisionRefs` and
 `decisionDependencyRefs` companions exist for every reference; their
@@ -2127,7 +2127,7 @@ exclusions — is pinned by `crates/phero-driver/tests/ddd/errors.rs` and
 
 The `examples/` side ships `support.ddd` (entity/value/dto designs,
 searches, aggregate and value invariants, capabilities validated against
-`support.actor` through `compile_ddd_str_with_actors`) and `orders.ddd` (the
+`support.actor` through `compile_ddd_str`'s actor bucket) and `orders.ddd` (the
 aggregate-derivation rule over `ecommerce.mox` plus a `children Order`
 block), byte-pinned against `examples/artifacts/` by
 `crates/phero-driver/tests/examples_artifacts.rs`. Its `RefundDecision` is
