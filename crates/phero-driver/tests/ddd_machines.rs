@@ -8,7 +8,7 @@
 //! status-like field on a designed entity is an error, and guard literals
 //! against the machine field must be machine states.
 
-use phero_driver::{compile_ddd_str, Diagnostic, DomainImports};
+use phero_driver::{compile_ddd_str, Diagnostic};
 
 /// The canonical fixture's domain: `PayRun.status: PayRunStatus`,
 /// `PayRun.total: int`.
@@ -22,11 +22,10 @@ fn diagnose_with(design: &str, domain: &str) -> Vec<Diagnostic> {
     let compilation = compile_ddd_str(
         "tests/conformance/ddd/test.ddd",
         design,
-        &[(
+        &phero_driver::CompileInputs::from_domains(&[(
             "tests/conformance/ddd/payrun.mox".to_string(),
             domain.to_string(),
-        )],
-        &DomainImports::default(),
+        )]),
     );
     compilation
         .diagnostics

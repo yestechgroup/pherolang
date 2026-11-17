@@ -1,13 +1,11 @@
 //! Shared fixtures for the `ddd` integration-test target.
 
-//! Integration tests for `.ddd` design compilation (`compile_ddd_str` /
-//! `compile_ddd_str_with_actors`): lowering to the `phero_ir::ddd::DddModel`
+//! Integration tests for `.ddd` design compilation (`compile_ddd_str`):
+//! lowering to the `phero_ir::ddd::DddModel`
 //! and each validation rule against the imported domain models. The
 //! normative contract lives on `compile_ddd_str`; these tests pin it.
 
-pub(crate) use phero_driver::{
-    compile_ddd_str, compile_ddd_str_with_actors, DddCompilation, Diagnostic,
-};
+pub(crate) use phero_driver::{compile_ddd_str, CompileInputs, DddCompilation, Diagnostic};
 pub(crate) use phero_ir::ddd::DDD_MODEL_FORMAT_VERSION;
 pub(crate) use phero_ir::{ActorModel, ActorsDef, CapabilityDef, TypeRef};
 
@@ -110,8 +108,7 @@ pub(crate) fn compile(source: &str, domains: &[(&str, &str)]) -> DddCompilation 
     compile_ddd_str(
         "design.ddd",
         source,
-        &domains,
-        &phero_driver::DomainImports::default(),
+        &phero_driver::CompileInputs::from_domains(&domains),
     )
 }
 
@@ -123,6 +120,22 @@ pub(crate) fn compile_domain(source: &str) -> DddCompilation {
 /// Compiles against the single [`CHAIN_DOMAIN`] import.
 pub(crate) fn compile_chain(source: &str) -> DddCompilation {
     compile(source, &[("chain.mox", CHAIN_DOMAIN)])
+}
+
+/// The compile-input bundle over `domains` with `actors` declared — the
+/// capability-rule tests' shape. The bundle keys actor models by resolved
+/// path, but the `.ddd` capability pass consumes them by content, so one
+/// synthetic key stands in for the tests' in-memory models.
+pub(crate) fn inputs_with_actors(
+    domains: &[(String, String)],
+    actors: &[ActorModel],
+) -> CompileInputs {
+    CompileInputs::from_domains(domains).with_actors(
+        actors
+            .iter()
+            .cloned()
+            .map(|model| ("test.actor".to_string(), model)),
+    )
 }
 
 pub(crate) fn actors_with(capabilities: &[&str]) -> ActorModel {

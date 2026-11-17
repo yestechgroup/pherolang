@@ -25,9 +25,7 @@
 //! contained `PayRunLine[] lines` collection, a contained scalar
 //! `PayRunNote note`, and a `PayRunLineDraft` DTO for parameters.
 
-use phero_driver::{
-    compile_ddd_str, diagnostic::Severity, DddCompilation, Diagnostic, DomainImports,
-};
+use phero_driver::{compile_ddd_str, diagnostic::Severity, DddCompilation, Diagnostic};
 use phero_ir::ddd::{ChildRef, ServiceOperation};
 
 const CHILD_DOMAIN: &str = include_str!("../../../tests/conformance/ddd/childops.mox");
@@ -38,8 +36,10 @@ fn compile(design: &str) -> DddCompilation {
     compile_ddd_str(
         "tests/conformance/ddd/test.ddd",
         design,
-        &[(DOMAIN_PATH.to_string(), CHILD_DOMAIN.to_string())],
-        &DomainImports::default(),
+        &phero_driver::CompileInputs::from_domains(&[(
+            DOMAIN_PATH.to_string(),
+            CHILD_DOMAIN.to_string(),
+        )]),
     )
 }
 
@@ -501,8 +501,7 @@ fn a_reference_escaping_its_aggregate_is_still_refused() {
     let compilation = compile_ddd_str(
         "tests/conformance/ddd/test.ddd",
         &design,
-        &[(DOMAIN_PATH.to_string(), domain)],
-        &DomainImports::default(),
+        &phero_driver::CompileInputs::from_domains(&[(DOMAIN_PATH.to_string(), domain)]),
     );
     assert!(
         compilation

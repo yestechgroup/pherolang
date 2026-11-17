@@ -13,9 +13,8 @@
 use std::path::{Path, PathBuf};
 
 use phero_driver::{
-    compile_actors_str_with_designs, compile_cmmn_str, compile_ddd_app_str_with_decisions,
-    compile_deploy_str, compile_dmn_str, compile_evt_str, compile_usecase_str, DddFragment,
-    SurfaceKind,
+    compile_actors_str, compile_cmmn_str, compile_ddd_app_str, compile_deploy_str, compile_dmn_str,
+    compile_evt_str, compile_usecase_str, DddFragment, SurfaceKind,
 };
 
 use crate::inputs::{
@@ -273,7 +272,7 @@ fn compile_ifml(file: &Path, ctx: &mut CompileContext<'_>) -> Compiled {
 /// J3) and `.dmn` decision links (pherolang#78 rule 17) feed the compile. An
 /// empty pool is exactly the plain `compile_ddd_str` behavior.
 fn compile_ddd(file: &Path, ctx: &mut CompileContext<'_>) -> Compiled {
-    let design = read_ddd_design(file, ctx.project.as_deref_mut())?;
+    let mut design = read_ddd_design(file, ctx.project.as_deref_mut())?;
     let actors = ctx
         .project
         .as_deref_mut()
@@ -282,6 +281,9 @@ fn compile_ddd(file: &Path, ctx: &mut CompileContext<'_>) -> Compiled {
         .project
         .as_deref_mut()
         .map_or_else(Vec::new, |project| project.sibling_decisions(file));
+    design
+        .pair
+        .extend_inputs(|inputs| inputs.with_actors(actors).with_decisions(decisions));
     let fragments: Vec<DddFragment> = design
         .fragments
         .iter()
@@ -290,14 +292,11 @@ fn compile_ddd(file: &Path, ctx: &mut CompileContext<'_>) -> Compiled {
             source: source.clone(),
         })
         .collect();
-    let compilation = compile_ddd_app_str_with_decisions(
+    let compilation = compile_ddd_app_str(
         &design.pair.path,
         &design.pair.source,
         &fragments,
-        &design.pair.domains,
-        &design.pair.imports(),
-        &actors,
-        &decisions,
+        design.pair.inputs(),
     );
     if ctx.renders(compilation.model.is_none()) {
         report_ddd_diagnostics(&design, &compilation);
@@ -305,7 +304,7 @@ fn compile_ddd(file: &Path, ctx: &mut CompileContext<'_>) -> Compiled {
     let Some(model) = compilation.model else {
         return Ok(None);
     };
-    let mut imports = import_paths(&design.pair.domains);
+    let mut imports = import_paths(design.pair.inputs().domains());
     imports.extend(design.fragments.iter().map(|(path, _)| path.clone()));
     imports.sort();
     imports.dedup();
@@ -342,140 +341,110 @@ fn outcome_many(
 /// application-scoped `.ddd` artifacts (pherolang#128 J4). An empty set is
 /// exactly the plain `compile_actors_str` behavior.
 fn compile_actor(file: &Path, ctx: &mut CompileContext<'_>) -> Compiled {
-    let pair = read_actor_pair_in(file, ctx.project.as_deref_mut())?;
+    let mut pair = read_actor_pair_in(file, ctx.project.as_deref_mut())?;
     let designs = ctx
         .project
         .as_deref_mut()
         .map_or_else(Vec::new, |project| project.sibling_designs(file));
-    let compilation = compile_actors_str_with_designs(
-        &pair.path,
-        &pair.source,
-        &pair.domains,
-        &pair.imports(),
-        &designs,
-    );
+    pair.extend_inputs(|inputs| inputs.with_designs(designs));
+    let compilation = compile_actors_str(&pair.path, &pair.source, pair.inputs());
     if ctx.renders(compilation.model.is_none()) {
         report_actor_diagnostics(&pair, &compilation);
     }
     let Some(model) = compilation.model else {
         return Ok(None);
     };
-    let imports = import_paths(&pair.domains);
+    let imports = import_paths(pair.inputs().domains());
     outcome(ctx, file, Artifact::Actor(model), pair.path, imports)
 }
 
 /// The `.evt` pipeline.
 fn compile_evt(file: &Path, ctx: &mut CompileContext<'_>) -> Compiled {
     let pair = read_evt_pair(file, ctx.project.as_deref_mut())?;
-    let compilation = compile_evt_str(&pair.path, &pair.source, &pair.domains, &pair.imports());
+    let compilation = compile_evt_str(&pair.path, &pair.source, pair.inputs());
     if ctx.renders(compilation.model.is_none()) {
         report_evt_diagnostics(&pair, &compilation);
     }
     let Some(model) = compilation.model else {
         return Ok(None);
     };
-    let imports = import_paths(&pair.domains);
+    let imports = import_paths(pair.inputs().domains());
     outcome(ctx, file, Artifact::Event(model), pair.path, imports)
 }
 
 /// The `.deploy` pipeline.
 fn compile_deploy(file: &Path, ctx: &mut CompileContext<'_>) -> Compiled {
     let pair = read_deploy_pair(file, ctx.project.as_deref_mut())?;
-    let compilation = compile_deploy_str(&pair.path, &pair.source, &pair.designs, &pair.flows);
+    let compilation = compile_deploy_str(&pair.path, &pair.source, pair.inputs());
     if ctx.renders(compilation.model.is_none()) {
         report_deploy_diagnostics(&pair, &compilation);
     }
     let Some(model) = compilation.model else {
         return Ok(None);
     };
-    let imports = merge_import_paths(&[import_paths(&pair.designs), import_paths(&pair.flows)]);
+    let imports = merge_import_paths(&[
+        import_paths(pair.inputs().designs()),
+        import_paths(pair.inputs().flows()),
+    ]);
     outcome(ctx, file, Artifact::Deploy(model), pair.path, imports)
 }
 
 /// The `.uc` pipeline.
 fn compile_usecase(file: &Path, ctx: &mut CompileContext<'_>) -> Compiled {
     let pair = read_uc_pair(file, ctx.project.as_deref_mut())?;
-    let compilation = compile_usecase_str(
-        &pair.pair.path,
-        &pair.pair.source,
-        &pair.pair.domains,
-        &pair.pair.imports(),
-        &pair.designs,
-        &pair.actors,
-        &pair.events,
-    );
+    let compilation = compile_usecase_str(&pair.path, &pair.source, pair.inputs());
     if ctx.renders(compilation.model.is_none()) {
-        report_usecase_diagnostics(&pair.pair, &compilation);
+        report_usecase_diagnostics(&pair, &compilation);
     }
     let Some(model) = compilation.model else {
         return Ok(None);
     };
+    let inputs = pair.inputs();
     let imports = merge_import_paths(&[
-        import_paths(&pair.pair.domains),
-        import_paths(&pair.designs),
-        import_paths(&pair.actors),
-        import_paths(&pair.events),
+        import_paths(inputs.domains()),
+        import_paths(inputs.designs()),
+        import_paths(inputs.actors().unwrap_or_default()),
+        import_paths(inputs.events()),
     ]);
-    outcome(ctx, file, Artifact::UseCase(model), pair.pair.path, imports)
+    outcome(ctx, file, Artifact::UseCase(model), pair.path, imports)
 }
 
 /// The `.cmmn` pipeline.
 fn compile_cmmn(file: &Path, ctx: &mut CompileContext<'_>) -> Compiled {
     let pair = read_cmmn_pair(file, ctx.project.as_deref_mut())?;
-    let compilation = compile_cmmn_str(
-        &pair.pair.path,
-        &pair.pair.source,
-        &pair.pair.domains,
-        &pair.pair.imports(),
-        &pair.designs,
-        &pair.actors,
-        &pair.events,
-        &pair.decisions,
-    );
+    let compilation = compile_cmmn_str(&pair.path, &pair.source, pair.inputs());
     if ctx.renders(compilation.model.is_none()) {
-        report_cmmn_diagnostics(&pair.pair, &compilation);
+        report_cmmn_diagnostics(&pair, &compilation);
     }
     let Some(model) = compilation.model else {
         return Ok(None);
     };
+    let inputs = pair.inputs();
     let imports = merge_import_paths(&[
-        import_paths(&pair.pair.domains),
-        import_paths(&pair.designs),
-        import_paths(&pair.actors),
-        import_paths(&pair.events),
-        import_paths(&pair.decisions),
+        import_paths(inputs.domains()),
+        import_paths(inputs.designs()),
+        import_paths(inputs.actors().unwrap_or_default()),
+        import_paths(inputs.events()),
+        import_paths(inputs.decisions()),
     ]);
-    outcome(ctx, file, Artifact::Case(model), pair.pair.path, imports)
+    outcome(ctx, file, Artifact::Case(model), pair.path, imports)
 }
 
 /// The `.dmn` pipeline.
 fn compile_dmn(file: &Path, ctx: &mut CompileContext<'_>) -> Compiled {
     let pair = read_dmn_pair(file, ctx.project.as_deref_mut())?;
-    let compilation = compile_dmn_str(
-        &pair.pair.path,
-        &pair.pair.source,
-        &pair.pair.domains,
-        &pair.pair.imports(),
-        &pair.tables,
-        &pair.events,
-    );
+    let compilation = compile_dmn_str(&pair.path, &pair.source, pair.inputs());
     if ctx.renders(compilation.model.is_none()) {
-        report_dmn_diagnostics(&pair.pair, &compilation);
+        report_dmn_diagnostics(&pair, &compilation);
     }
     let Some(model) = compilation.model else {
         return Ok(None);
     };
     let imports = merge_import_paths(&[
-        import_paths(&pair.pair.domains),
-        written_import_paths(file, &pair.events),
+        import_paths(pair.inputs().domains()),
+        written_import_paths(file, pair.inputs().events()),
     ]);
-    outcome(
-        ctx,
-        file,
-        Artifact::Decision(model),
-        pair.pair.path,
-        imports,
-    )
+    outcome(ctx, file, Artifact::Decision(model), pair.path, imports)
 }
 
 /// The tail every single-artifact surface shares: cache the typed artifact

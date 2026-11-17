@@ -73,11 +73,10 @@ fn diagnose_design(design: &str) -> Vec<Diagnostic> {
     let compilation = compile_ddd_str(
         "tests/conformance/ddd/test.ddd",
         design,
-        &[(
+        &phero_driver::CompileInputs::from_domains(&[(
             "tests/conformance/ddd/domain.mox".to_string(),
             DDD_DOMAIN.to_string(),
-        )],
-        &DomainImports::default(),
+        )]),
     );
     compilation
         .diagnostics
@@ -277,11 +276,10 @@ application Shop {
     let compilation = compile_ddd_str(
         "tests/conformance/ddd/test.ddd",
         design,
-        &[(
+        &phero_driver::CompileInputs::from_domains(&[(
             "tests/conformance/ddd/domain.mox".to_string(),
             DDD_DOMAIN.to_string(),
-        )],
-        &DomainImports::default(),
+        )]),
     );
     assert!(
         compilation.diagnostics.is_empty(),
@@ -315,12 +313,14 @@ fn compile_case(source: &str) -> phero_driver::CmmnCompilation {
     compile_cmmn_str(
         dir.join("case.cmmn").display().to_string().as_str(),
         source,
-        &[(domain_path.display().to_string(), domain_source)],
-        &DomainImports::default(),
-        &[],
-        &[],
-        &[],
-        &[],
+        &phero_driver::CompileInputs::from_domains(&[(
+            domain_path.display().to_string(),
+            domain_source,
+        )])
+        .with_designs([])
+        .with_actors([])
+        .with_events([])
+        .with_decisions([]),
     )
 }
 
@@ -455,11 +455,13 @@ fn compile_uc(source: &str) -> phero_driver::UseCaseCompilation {
     compile_usecase_str(
         "bad.uc",
         source,
-        &[("domain.mox".to_string(), UC_DOMAIN.to_string())],
-        &DomainImports::default(),
-        &[],
-        &[],
-        &[],
+        &phero_driver::CompileInputs::from_domains(&[(
+            "domain.mox".to_string(),
+            UC_DOMAIN.to_string(),
+        )])
+        .with_designs([])
+        .with_actors([])
+        .with_events([]),
     )
 }
 
@@ -568,7 +570,13 @@ fn uc_guard_string_lint_warns_on_the_paren_span() {
 // --- site: `.deploy` policies -------------------------------------------------
 
 fn compile_deploy(source: &str) -> DeployCompilation {
-    compile_deploy_str("bad.deploy", source, &[], &[])
+    compile_deploy_str(
+        "bad.deploy",
+        source,
+        &phero_driver::CompileInputs::new()
+            .with_designs([])
+            .with_flows([]),
+    )
 }
 
 const DEPLOY_HEAD: &str = concat!(
@@ -724,7 +732,7 @@ fn deploy_runs_no_guard_string_lints() {
 // --- site: `.evt` subscription filters ----------------------------------------
 
 fn compile_events(source: &str) -> phero_driver::EventCompilation {
-    compile_evt_str("bad.evt", source, &[], &DomainImports::default())
+    compile_evt_str("bad.evt", source, &phero_driver::CompileInputs::new())
 }
 
 fn evt_diagnostic(compilation: &phero_driver::EventCompilation) -> &Diagnostic {

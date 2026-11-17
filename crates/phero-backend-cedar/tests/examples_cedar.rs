@@ -51,8 +51,10 @@ fn compile_example_pair(name: &str) -> (phero_ir::ActorModel, phero_ir::Model) {
     let compilation = compile_actors_str(
         actor_path.to_str().expect("utf-8 example path"),
         &actor_source,
-        &[(format!("{name}.mox"), domain_source.clone())],
-        &phero_driver::DomainImports::default(),
+        &phero_driver::CompileInputs::from_domains(&[(
+            format!("{name}.mox"),
+            domain_source.clone(),
+        )]),
     );
     assert!(
         compilation.diagnostics.is_empty(),

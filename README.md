@@ -160,18 +160,24 @@ let compilation = phero_driver::compile_files(
     &sources,                                   // (path, source) pairs
     &imports,                                   // DomainImports: schema JSON + sigil rosetta
 );
-// .actor — policy artifact + union domain model; imports bundle for the domains
-let actor = phero_driver::compile_actors_str("policy.actor", &source, &domains, &imports);
-// .ddd — design artifact; the _with_actors variant also validates capabilities
-let design = phero_driver::compile_ddd_str_with_actors("design.ddd", &source, &domains, &imports, &actors);
+// Every artifact entry point takes one typed compile-input bundle: the
+// gathered sources plus the pre-compiled artifacts a surface resolves its
+// imports against. A bucket a surface does not consume is never consulted,
+// and a missing bucket is an empty slice, never a positional argument.
+let inputs = phero_driver::CompileInputs::from_domains(&domains).with_imports(imports);
+// .actor — policy artifact + union domain model; provided designs feed the
+// grant-coverage pass
+let actor = phero_driver::compile_actors_str("policy.actor", &source, &inputs);
+// .ddd — design artifact; provided actors validate capabilities, provided
+// decisions validate `invokes`/`inject decision` links
+let design = phero_driver::compile_ddd_str("design.ddd", &source, &inputs);
 // .evt — event-contract artifact over the imported domains
-let events = phero_driver::compile_evt_str("orders.evt", &source, &domains, &imports);
+let events = phero_driver::compile_evt_str("orders.evt", &source, &inputs);
 // .deploy — deployment projections over compiled designs + flows
-let deploy = phero_driver::compile_deploy_str("svc.deploy", &source, &designs, &flows);
-// .uc — use case patterns over all four buckets (domains, designs, actors, events)
-let uc = phero_driver::compile_usecase_str("support.uc", &source, &domains, &imports, &designs, &actors, &events);
-// .cmmn — case management over the same four buckets
-let cmmn = phero_driver::compile_cmmn_str("support.cmmn", &source, &domains, &imports, &designs, &actors, &events);
+let deploy = phero_driver::compile_deploy_str("svc.deploy", &source, &inputs);
+// .uc / .cmmn — case and use-case patterns over the gatherer's buckets
+let uc = phero_driver::compile_usecase_str("support.uc", &source, &inputs);
+let cmmn = phero_driver::compile_cmmn_str("support.cmmn", &source, &inputs);
 // .ifml — parses directly, no domain needed
 let ifml = phero_ifml::parse_ifml(&source)?;
 ```

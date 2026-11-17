@@ -41,14 +41,13 @@ fn support_model() -> DmnModel {
     let events_compilation = phero_driver::compile_evt_str(
         events_path.to_str().expect("utf-8 example path"),
         &example_file("support.evt"),
-        &domains,
-        &phero_driver::DomainImports::default(),
+        &phero_driver::CompileInputs::from_domains(&domains),
     );
     assert!(
         events_compilation.diagnostics.is_empty(),
         "support.evt must compile clean"
     );
-    let events = vec![(
+    let events = [(
         "support.evt".to_string(),
         events_compilation
             .model
@@ -57,10 +56,9 @@ fn support_model() -> DmnModel {
     let compilation = phero_driver::compile_dmn_str(
         path,
         &example_file("support.dmn"),
-        &domains,
-        &phero_driver::DomainImports::default(),
-        &support_tables(),
-        &events,
+        &phero_driver::CompileInputs::from_domains(&domains)
+            .with_tables(support_tables().to_vec())
+            .with_events(events),
     );
     assert!(
         compilation.diagnostics.is_empty(),

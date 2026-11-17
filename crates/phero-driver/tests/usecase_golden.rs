@@ -50,8 +50,7 @@ fn compile_conformance() -> phero_driver::UseCaseCompilation {
     let design = compile_ddd_str(
         &design_path,
         &design_source,
-        &domain,
-        &phero_driver::DomainImports::default(),
+        &phero_driver::CompileInputs::from_domains(&domain),
     );
     assert!(
         design.diagnostics.is_empty(),
@@ -65,8 +64,7 @@ fn compile_conformance() -> phero_driver::UseCaseCompilation {
     let actors = compile_actors_str(
         &actors_path,
         &actors_source,
-        &domain,
-        &phero_driver::DomainImports::default(),
+        &phero_driver::CompileInputs::from_domains(&domain),
     );
     assert!(
         actors.diagnostics.is_empty(),
@@ -80,8 +78,7 @@ fn compile_conformance() -> phero_driver::UseCaseCompilation {
     let events = compile_evt_str(
         &events_path,
         &events_source,
-        &domain,
-        &phero_driver::DomainImports::default(),
+        &phero_driver::CompileInputs::from_domains(&domain),
     );
     assert!(
         events.diagnostics.is_empty(),
@@ -92,11 +89,10 @@ fn compile_conformance() -> phero_driver::UseCaseCompilation {
     compile_usecase_str(
         uc_absolute.to_str().expect("utf-8 path"),
         &source,
-        &domain,
-        &phero_driver::DomainImports::default(),
-        &[(design_path, design.model.expect("design artifact"))],
-        &[(actors_path, actors.model.expect("actor artifact"))],
-        &[(events_path, events.model.expect("event artifact"))],
+        &phero_driver::CompileInputs::from_domains(&domain)
+            .with_designs([(design_path, design.model.expect("design artifact"))].to_vec())
+            .with_actors([(actors_path, actors.model.expect("actor artifact"))].to_vec())
+            .with_events([(events_path, events.model.expect("event artifact"))].to_vec()),
     )
 }
 
@@ -274,8 +270,7 @@ fn actors_model(body: &str) -> (String, phero_ir::ActorModel) {
     let compilation = compile_actors_str(
         "policy.actor",
         &source,
-        &[domain_pair()],
-        &phero_driver::DomainImports::default(),
+        &phero_driver::CompileInputs::from_domains(&[domain_pair()]),
     );
     assert!(
         compilation.diagnostics.is_empty(),
@@ -307,8 +302,7 @@ fn design_pair() -> (String, phero_ir::ddd::DddModel) {
     let compilation = compile_ddd_str(
         "design.ddd",
         source,
-        &[domain_pair()],
-        &phero_driver::DomainImports::default(),
+        &phero_driver::CompileInputs::from_domains(&[domain_pair()]),
     );
     assert!(
         compilation.diagnostics.is_empty(),
@@ -328,8 +322,7 @@ fn events_pair(event: &str) -> (String, phero_ir::events::EventModel) {
     let compilation = compile_evt_str(
         "events.evt",
         &source,
-        &[domain_pair()],
-        &phero_driver::DomainImports::default(),
+        &phero_driver::CompileInputs::from_domains(&[domain_pair()]),
     );
     assert!(
         compilation.diagnostics.is_empty(),
@@ -354,11 +347,10 @@ fn compile_uc(
     compile_usecase_str(
         "bad.uc",
         source,
-        domains,
-        &phero_driver::DomainImports::default(),
-        designs,
-        actors,
-        events,
+        &phero_driver::CompileInputs::from_domains(domains)
+            .with_designs(designs.to_vec())
+            .with_actors(actors.to_vec())
+            .with_events(events.to_vec()),
     )
 }
 
@@ -633,7 +625,15 @@ fn a_guard_on_a_sigil_typed_subject_still_errors_on_the_step_only() {
         "    }\n",
         "}\n",
     );
-    let compilation = compile_usecase_str("bad.uc", source, &domains, &imports, &[], &[], &[]);
+    let compilation = compile_usecase_str(
+        "bad.uc",
+        source,
+        &phero_driver::CompileInputs::from_domains(&domains)
+            .with_imports(imports)
+            .with_designs([])
+            .with_actors([])
+            .with_events([]),
+    );
     expect_diagnostic(
         &compilation,
         "subject 'R' in use case 'U' must be class-typed to perform steps",
@@ -673,7 +673,15 @@ fn a_step_on_a_sigil_typed_subject_still_errors_with_the_documented_help() {
         "    }\n",
         "}\n",
     );
-    let compilation = compile_usecase_str("bad.uc", source, &domains, &imports, &[], &[], &[]);
+    let compilation = compile_usecase_str(
+        "bad.uc",
+        source,
+        &phero_driver::CompileInputs::from_domains(&domains)
+            .with_imports(imports)
+            .with_designs([])
+            .with_actors([])
+            .with_events([]),
+    );
     expect_diagnostic(
         &compilation,
         "subject 'R' in use case 'U' must be class-typed to perform steps",
@@ -775,8 +783,7 @@ fn an_ambiguous_event_payload_is_an_error() {
     let second = compile_evt_str(
         &second_path,
         second_source,
-        &[domain_pair()],
-        &phero_driver::DomainImports::default(),
+        &phero_driver::CompileInputs::from_domains(&[domain_pair()]),
     );
     let second = (second_path, second.model.expect("event artifact"));
     let compilation = compile_uc(source, &[], &[], &[first, second], &[domain_pair()]);

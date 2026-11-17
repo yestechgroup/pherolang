@@ -2,9 +2,7 @@
 //! salsa-tracked compilation of an actor file against one or more imported
 //! domain models, producing the standalone `phero_ir::ActorModel`.
 
-use phero_driver::{
-    compile_actors_str, compile_actors_str_with_designs, ActorCompilation, Diagnostic, Severity,
-};
+use phero_driver::{compile_actors_str, ActorCompilation, Diagnostic, Severity};
 use phero_ir::{GrantEffect, TypeRef, ACTOR_MODEL_FORMAT_VERSION};
 
 /// A support-style domain: classes to resolve capabilities and conditions
@@ -68,8 +66,7 @@ fn compile(actor_source: &str, domains: &[(&str, &str)]) -> ActorCompilation {
     compile_actors_str(
         "support.actor",
         actor_source,
-        &domains,
-        &phero_driver::DomainImports::default(),
+        &phero_driver::CompileInputs::from_domains(&domains),
     )
 }
 
@@ -743,12 +740,7 @@ actors Support {
 
 #[test]
 fn empty_actor_file_compiles_to_an_empty_artifact() {
-    let compilation = compile_actors_str(
-        "empty.actor",
-        "",
-        &[],
-        &phero_driver::DomainImports::default(),
-    );
+    let compilation = compile_actors_str("empty.actor", "", &phero_driver::CompileInputs::new());
     assert!(
         compilation.diagnostics.is_empty(),
         "unexpected diagnostics: {:?}",
@@ -784,8 +776,7 @@ fn actor_file_syntax_errors_are_tagged_and_block() {
     let compilation = compile_actors_str(
         "broken.actor",
         "import",
-        &[],
-        &phero_driver::DomainImports::default(),
+        &phero_driver::CompileInputs::new(),
     );
     assert!(compilation.model.is_none(), "errors block lowering");
     assert!(
@@ -1337,11 +1328,10 @@ actors ResolvePolicies {
     let compilation = compile_actors_str(
         "project/support.actor",
         source,
-        &[(
+        &phero_driver::CompileInputs::from_domains(&[(
             "project/nested/deep/domain.mox".to_string(),
             DOMAIN_WITH_CURRENCY.to_string(),
-        )],
-        &phero_driver::DomainImports::default(),
+        )]),
     );
     assert!(
         compilation.diagnostics.is_empty(),
@@ -1403,22 +1393,19 @@ fn compile_with_designs(
     let models: Vec<phero_ir::ddd::DddModel> = designs
         .iter()
         .map(|source| {
-            phero_driver::compile_ddd_str(
-                "design.ddd",
-                source,
-                &[],
-                &phero_driver::DomainImports::default(),
-            )
-            .model
-            .expect("standalone design compiles")
+            phero_driver::compile_ddd_str("design.ddd", source, &phero_driver::CompileInputs::new())
+                .model
+                .expect("standalone design compiles")
         })
         .collect();
-    compile_actors_str_with_designs(
+    compile_actors_str(
         "support.actor",
         actor_source,
-        &domains,
-        &phero_driver::DomainImports::default(),
-        &models,
+        &phero_driver::CompileInputs::from_domains(&domains).with_designs(
+            models
+                .into_iter()
+                .map(|model| ("design.ddd".to_string(), model)),
+        ),
     )
 }
 
@@ -1717,19 +1704,20 @@ fn compile_with_aggregate_designs(actor_source: &str, designs: &[&str]) -> Actor
             phero_driver::compile_ddd_str(
                 "design.ddd",
                 source,
-                &domains,
-                &phero_driver::DomainImports::default(),
+                &phero_driver::CompileInputs::from_domains(&domains),
             )
             .model
             .expect("standalone design compiles")
         })
         .collect();
-    compile_actors_str_with_designs(
+    compile_actors_str(
         "support.actor",
         actor_source,
-        &domains,
-        &phero_driver::DomainImports::default(),
-        &models,
+        &phero_driver::CompileInputs::from_domains(&domains).with_designs(
+            models
+                .into_iter()
+                .map(|model| ("design.ddd".to_string(), model)),
+        ),
     )
 }
 

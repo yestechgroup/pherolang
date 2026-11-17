@@ -33,7 +33,7 @@ use crate::imports::walker::{cannot_read, walk, Fetch, ImportPolicy, Site};
 use crate::workspace_imports::{collect_schema_imports, collect_sigil_imports};
 use crate::{
     compile_actors_str, compile_ddd_app_str, compile_dmn_str, compile_evt_str, compile_str, render,
-    Diagnostic, DomainImports,
+    CompileInputs, Diagnostic, DomainImports,
 };
 
 /// One imported `.actor` policy: the source text plus the `.mox` domains its
@@ -228,8 +228,7 @@ impl IfmlClassifier<'_> {
                 let compilation = compile_evt_str(
                     &event_key,
                     &event_text,
-                    &decision.domains,
-                    &DomainImports::default(),
+                    &CompileInputs::from_domains(&decision.domains),
                 );
                 if let Some(model) = compilation.model {
                     decision.events.push((import, model));
@@ -255,8 +254,8 @@ fn push_unique(bucket: &mut Vec<(String, String)>, key: String, text: String) {
 pub fn compile_actor_imports(actors: &[ActorImport]) -> Result<Vec<phero_ir::ActorModel>, String> {
     let mut models = Vec::new();
     for actor in actors {
-        let imports = domain_imports(&actor.domains)?;
-        let compilation = compile_actors_str(&actor.key, &actor.source, &actor.domains, &imports);
+        let inputs = domain_inputs(&actor.domains)?;
+        let compilation = compile_actors_str(&actor.key, &actor.source, &inputs);
         models.push(finish_model(
             "imported actor model",
             &actor.key,
@@ -274,15 +273,10 @@ pub fn compile_decision_imports(
 ) -> Result<Vec<phero_ir::dmn::DmnModel>, String> {
     let mut models = Vec::new();
     for decision in decisions {
-        let imports = domain_imports(&decision.domains)?;
-        let compilation = compile_dmn_str(
-            &decision.key,
-            &decision.source,
-            &decision.domains,
-            &imports,
-            &decision.tables,
-            &decision.events,
-        );
+        let inputs = domain_inputs(&decision.domains)?
+            .with_tables(decision.tables.clone())
+            .with_events(decision.events.clone());
+        let compilation = compile_dmn_str(&decision.key, &decision.source, &inputs);
         models.push(finish_model(
             "imported decision model",
             &decision.key,
@@ -728,11 +722,13 @@ fn gather_decision_model(
     fetch: &mut Fetch<'_>,
 ) -> Result<phero_ir::dmn::DmnModel, String> {
     let domains = gather_domains_required(key, text, &dmn_import_paths, fetch)?;
-    let imports = domain_imports(&domains)?;
     let dir = dir_of(key);
     let tables = gather_tables(text, |table| fetch(&dir.join(table).display().to_string()));
     let events = gather_dmn_events(key, text, fetch)?;
-    let compilation = compile_dmn_str(key, text, &domains, &imports, &tables, &events);
+    let inputs = domain_inputs(&domains)?
+        .with_tables(tables)
+        .with_events(events);
+    let compilation = compile_dmn_str(key, text, &inputs);
     finish_model(
         "imported decision model",
         key,
@@ -833,7 +829,7 @@ fn gather_design_model(
     if let Some(cycle) = gathered.cycles.first() {
         return Err(format!("design import cycle through {cycle}"));
     }
-    let imports = domain_imports(&gathered.domains)?;
+    let inputs = domain_inputs(&gathered.domains)?;
     let fragments: Vec<crate::DddFragment> = gathered
         .fragments
         .iter()
@@ -842,7 +838,7 @@ fn gather_design_model(
             source: source.clone(),
         })
         .collect();
-    let compilation = compile_ddd_app_str(key, text, &fragments, &gathered.domains, &imports);
+    let compilation = compile_ddd_app_str(key, text, &fragments, &inputs);
     finish_model(
         "imported design",
         key,
@@ -1003,8 +999,8 @@ fn gather_event_model(
     fetch: &mut Fetch<'_>,
 ) -> Result<phero_ir::events::EventModel, String> {
     let domains = gather_domains_required(key, text, &|source| event_paths(source), fetch)?;
-    let imports = domain_imports(&domains)?;
-    let compilation = compile_evt_str(key, text, &domains, &imports);
+    let inputs = domain_inputs(&domains)?;
+    let compilation = compile_evt_str(key, text, &inputs);
     finish_model(
         "imported contract",
         key,
@@ -1086,6 +1082,12 @@ fn domain_imports(domains: &[(String, String)]) -> Result<DomainImports, String>
         schemas,
         sigil: sigil.imports,
     })
+}
+
+/// The compile-input bundle a gathered domain set needs: the domains
+/// themselves plus their import content.
+fn domain_inputs(domains: &[(String, String)]) -> Result<CompileInputs, String> {
+    Ok(CompileInputs::from_domains(domains).with_imports(domain_imports(domains)?))
 }
 
 /// A model-less compilation is the pinned failure: `{kind} {key} does not

@@ -94,8 +94,9 @@ compilation_struct!(
 );
 compilation_struct!(
     /// The result of compiling a `.ddd` design file against its imported domain
-    /// models (and, for [`compile_ddd_str_with_actors`](crate::compile_ddd_str_with_actors), an actor-policy
-    /// artifact). Mirrors [`ActorCompilation`].
+    /// models (and, when the [`CompileInputs`](crate::CompileInputs) bundle
+    /// provides them, an actor-policy set and decision models). Mirrors
+    /// [`ActorCompilation`].
     ///
     /// Diagnostics come from every file involved, so each is tagged with its
     /// path; group or render them per file (see [`render`](crate::render)).

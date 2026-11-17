@@ -88,7 +88,13 @@ fn sequence(compilation: &DeployCompilation) -> Vec<(Severity, String, Option<St
 
 #[test]
 fn the_diagnostic_emission_order_is_stable() {
-    let compilation = compile_deploy_str("app.deploy", DEPLOY, &[], &[]);
+    let compilation = compile_deploy_str(
+        "app.deploy",
+        DEPLOY,
+        &phero_driver::CompileInputs::new()
+            .with_designs([])
+            .with_flows([]),
+    );
     let actual = sequence(&compilation);
     // Filled from the current behavior — this test characterizes the
     // emission order so the stage decomposition of `compile_deploy_file`

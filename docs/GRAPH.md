@@ -131,11 +131,12 @@ the compiler's diagnostic, not a guessed binding.
 
 ### One surface table, one compile pipeline
 
-Classification lives in **one surface table**, `phero_driver::SurfaceKind`
-(`crates/phero-driver/src/surface.rs`): the CLI's `is_*_file` helpers, its
+Classification lives in **one surface table**, `phero_parser::Surface`
+(`crates/phero-parser/src/surface.rs`), re-exported by the driver as
+`phero_driver::SurfaceKind`: the CLI's `is_*_file` helpers, its
 project snapshot's written-import dispatch, `verify`'s receipt kinds, and the
-LSP's `surface_for`/`surface_of_path` all delegate to it (the LSP's wrapper
-adds only the "not a Phero Lang surface" case).
+LSP's document/snapshot decode all delegate to it (the LSP's `DocumentSurface`
+classifier adds only the "not a Phero Lang surface" case).
 
 `commands/pipeline.rs::compile_one` is the CLI's single per-surface
 dispatch — an exhaustive match with no `_` arm, pinned by
@@ -146,8 +147,9 @@ cache), `--expand`, JSON serialization, and the reporting mode (`Always` for
 the commands, `OnFailure` for the union pass's re-check, which stays silent
 when it agrees with phase 1).
 
-A new surface is one `of_extension`/`ALL` edit, one pipeline arm, and the
-host's own arm — never a new `is_*_file` tower.
+A new surface is one enum edit (its `of_extension` arm, `ALL` entry, and
+id/display/alias rows) plus one pipeline arm and each host's own arm — never
+a second enum or a new `is_*_file` tower.
 
 ### Display paths and the base rule
 
@@ -768,7 +770,7 @@ surface, the file, and the surface's documentation link. An unresolved
 reference still yields no hover and no location: the artifact's
 "unresolved ⇒ no edge" discipline, applied to the editor.
 
-Dispatch is by URI extension through `SurfaceKind` (`surface_for`,
+Dispatch is by URI extension through the shared surface identity (`surface_for`,
 `crates/phero-lsp/src/server/mod.rs`): `.mox` drives the salsa session and its
 own `NavigationIndex`, `.ifml` the phero-ifml one-shot compile (resolver +
 typed checker) *and* its own outline/hover, and **every other surface**
@@ -776,8 +778,9 @@ typed checker) *and* its own outline/hover, and **every other surface**
 through the graph snapshot [below](#one-snapshot-one-index).
 
 The server classifies open documents and directory siblings through the same
-`phero_driver::SurfaceKind` table the CLI uses (its `Surface` type only adds
-the "not a Phero Lang surface" case); the span tables live in
+shared surface identity the CLI uses (`phero_parser::Surface`, re-exported as
+`phero_driver::SurfaceKind`; the server's `DocumentSurface` classifier only
+adds the "not a Phero Lang surface" case); the span tables live in
 `phero_driver::navigation` (`crates/phero-driver/src/navigation/`): one
 builder per surface, a pure function of source text that yields an empty
 index (never a panic) on a source that does not parse. The graph's node

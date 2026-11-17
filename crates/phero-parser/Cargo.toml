@@ -3,7 +3,7 @@ name = "phero-parser"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
-description = "Shared parser substrate: byte spans, token-slice input, recovery combinators, grammar-doc helpers"
+description = "Shared parser substrate: byte spans, token-slice input, recovery combinators, grammar-doc helpers, and the workspace surface identity"
 repository.workspace = true
 
 # Cannot mix lints.workspace with overrides; mirror the workspace lints
@@ -19,4 +19,5 @@ unsafe_code = "allow"
 
 [dependencies]
 chumsky = { workspace = true }
+serde = { workspace = true }
 thiserror = { workspace = true }

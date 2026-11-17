@@ -24,24 +24,21 @@ fn support_cmmn_lowers_to_the_engine_definition() {
     let events = compile_evt_str(
         &events_path,
         &events_source,
-        &domain,
-        &phero_driver::DomainImports::default(),
+        &phero_driver::CompileInputs::from_domains(&domain),
     );
     let actors_source = read("support.actor");
     let actors_path = dir.join("support.actor").display().to_string();
     let actors = compile_actors_str(
         &actors_path,
         &actors_source,
-        &domain,
-        &phero_driver::DomainImports::default(),
+        &phero_driver::CompileInputs::from_domains(&domain),
     );
     let design_source = read("support.ddd");
     let design_path = dir.join("support.ddd").display().to_string();
     let design = compile_ddd_str(
         &design_path,
         &design_source,
-        &domain,
-        &phero_driver::DomainImports::default(),
+        &phero_driver::CompileInputs::from_domains(&domain),
     );
     for (what, diagnostics) in [
         ("support.evt", &events.diagnostics),
@@ -66,8 +63,7 @@ fn support_cmmn_lowers_to_the_engine_definition() {
     let events = compile_evt_str(
         &events_path,
         &read("support.evt"),
-        &domain,
-        &phero_driver::DomainImports::default(),
+        &phero_driver::CompileInputs::from_domains(&domain),
     );
     assert!(
         events.diagnostics.is_empty(),
@@ -75,20 +71,19 @@ fn support_cmmn_lowers_to_the_engine_definition() {
     );
     // The DMN rule-1 import check matches the bucket keys exactly as
     // written — the authored import string, not the resolved path.
-    let event_bucket = vec![(
+    let event_bucket = [(
         "support.evt".to_string(),
         events.model.clone().expect("event artifact"),
     )];
     let decisions = compile_dmn_str(
         &decisions_path,
         &decisions_source,
-        &domain,
-        &phero_driver::DomainImports::default(),
-        &[(
-            "./tables/refund-authority.md".to_string(),
-            read("tables/refund-authority.md"),
-        )],
-        &event_bucket,
+        &phero_driver::CompileInputs::from_domains(&domain)
+            .with_tables([(
+                "./tables/refund-authority.md".to_string(),
+                read("tables/refund-authority.md"),
+            )])
+            .with_events(event_bucket),
     );
     assert!(
         decisions.diagnostics.is_empty(),
@@ -104,12 +99,11 @@ fn support_cmmn_lowers_to_the_engine_definition() {
     let compilation = compile_cmmn_str(
         &case_path,
         &read("support.cmmn"),
-        &domain,
-        &phero_driver::DomainImports::default(),
-        &[(design_path, design.model.expect("design artifact"))],
-        &[(actors_path, actors.model.expect("actor artifact"))],
-        &[(events_path, events.model.expect("event artifact"))],
-        &[(decisions_path, decisions.model.expect("decision artifact"))],
+        &phero_driver::CompileInputs::from_domains(&domain)
+            .with_designs([(design_path, design.model.expect("design artifact"))])
+            .with_actors([(actors_path, actors.model.expect("actor artifact"))])
+            .with_events([(events_path, events.model.expect("event artifact"))])
+            .with_decisions([(decisions_path, decisions.model.expect("decision artifact"))]),
     );
     assert!(
         compilation.diagnostics.is_empty(),

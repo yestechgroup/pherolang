@@ -392,11 +392,11 @@ fn actor_file_capabilities_resolve_imported_schema_names() {
     let compilation = compile_actors_str(
         "ops.actor",
         actor,
-        &[("demo.mox".to_string(), domain.to_string())],
-        &phero_driver::DomainImports {
-            schemas: imports,
-            sigil: SigilImports::new(),
-        },
+        &phero_driver::CompileInputs::from_domains(&[("demo.mox".to_string(), domain.to_string())])
+            .with_imports(phero_driver::DomainImports {
+                schemas: imports,
+                sigil: SigilImports::new(),
+            }),
     );
     assert!(
         compilation.diagnostics.is_empty(),

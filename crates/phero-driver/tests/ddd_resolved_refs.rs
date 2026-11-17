@@ -16,10 +16,7 @@
 use std::path::{Path, PathBuf};
 use std::sync::OnceLock;
 
-use phero_driver::{
-    compile_actors_str, compile_ddd_str, compile_ddd_str_with_actors,
-    compile_ddd_str_with_decisions, DddCompilation, DomainImports,
-};
+use phero_driver::{compile_actors_str, compile_ddd_str, DddCompilation};
 use phero_ir::ddd::{
     CapabilityRef, DddModel, DecisionRef, EventRef, SearchDef, Service, ServiceOperation,
     TargetKind, TargetRef,
@@ -74,8 +71,7 @@ fn compile_design(source: &str, domains: &[(String, String)]) -> DddCompilation 
     compile_ddd_str(
         &inline_design_path(),
         source,
-        domains,
-        &DomainImports::default(),
+        &phero_driver::CompileInputs::from_domains(domains),
     )
 }
 
@@ -96,8 +92,7 @@ fn library() -> DddModel {
             .to_str()
             .expect("utf-8 path"),
         &read_fixture("tests/conformance/ddd/library.ddd"),
-        &[domain()],
-        &DomainImports::default(),
+        &phero_driver::CompileInputs::from_domains(&[domain()]),
     ))
 }
 
@@ -114,8 +109,7 @@ fn compile_with_library_actors(source: &str) -> DddModel {
             .to_str()
             .expect("utf-8 path"),
         &read_fixture("tests/conformance/ddd/library.actor"),
-        &domains,
-        &DomainImports::default(),
+        &phero_driver::CompileInputs::from_domains(&domains),
     );
     assert!(
         actors.diagnostics.is_empty(),
@@ -123,12 +117,13 @@ fn compile_with_library_actors(source: &str) -> DddModel {
         actors.diagnostics
     );
     let actor_model = actors.model.expect("actor artifact");
-    artifact(compile_ddd_str_with_actors(
+    artifact(compile_ddd_str(
         &inline_design_path(),
         source,
-        &domains,
-        &DomainImports::default(),
-        &[actor_model],
+        &phero_driver::CompileInputs::from_domains(&domains).with_actors([(
+            "tests/conformance/ddd/library.actor".to_string(),
+            actor_model,
+        )]),
     ))
 }
 
@@ -506,12 +501,15 @@ application Library {
             ),
         )),
     ];
-    let model = artifact(compile_ddd_str_with_actors(
+    let model = artifact(compile_ddd_str(
         &inline_design_path(),
         design,
-        &[domain()],
-        &DomainImports::default(),
-        &actors,
+        &phero_driver::CompileInputs::from_domains(&[domain()]).with_actors(
+            actors
+                .iter()
+                .cloned()
+                .map(|model| ("test.actor".to_string(), model)),
+        ),
     ));
     assert_eq!(
         operation(service(&model, "MediaService"), "borrow").capability_refs,
@@ -634,13 +632,12 @@ fn decision_refs_resolve_through_the_decisions_bucket() {
         "decisions.dmn".to_string(),
         decision_model(&["RiskScore", "FraudScreen"], Some("1.4.2")),
     )];
-    let model = artifact(compile_ddd_str_with_decisions(
+    let model = artifact(compile_ddd_str(
         &inline_design_path(),
         DECISION_DESIGN,
-        &[domain()],
-        &DomainImports::default(),
-        &[],
-        &decisions,
+        &phero_driver::CompileInputs::from_domains(&[domain()])
+            .with_actors([])
+            .with_decisions(decisions.to_vec()),
     ));
     let lending = service(&model, "LoanService");
 
@@ -687,13 +684,12 @@ application Library {
             decision_model(&["RiskScore"], Some("2.1.0")),
         ),
     ];
-    let model = artifact(compile_ddd_str_with_decisions(
+    let model = artifact(compile_ddd_str(
         &inline_design_path(),
         design,
-        &[domain()],
-        &DomainImports::default(),
-        &[],
-        &decisions,
+        &phero_driver::CompileInputs::from_domains(&[domain()])
+            .with_actors([])
+            .with_decisions(decisions.to_vec()),
     ));
     let approve = operation(service(&model, "LoanService"), "approve");
     assert_eq!(

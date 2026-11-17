@@ -41,11 +41,10 @@ fn compile_payrun() -> phero_ir::ddd::DddModel {
     let compilation = compile_ddd_str(
         design_absolute.to_str().expect("utf-8 path"),
         &source,
-        &[(
+        &phero_driver::CompileInputs::from_domains(&[(
             domain_absolute.to_str().expect("utf-8 path").to_string(),
             domain,
-        )],
-        &phero_driver::DomainImports::default(),
+        )]),
     );
     assert!(
         compilation.diagnostics.is_empty(),

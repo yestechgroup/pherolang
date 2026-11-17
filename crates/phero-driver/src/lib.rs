@@ -50,6 +50,7 @@ pub mod workspace_imports;
 
 pub use deploy::{is_platform_capability, platform_capability_targets, PLATFORM_CAPABILITIES};
 pub use diagnostic::{render, Diagnostic, DiagnosticCode, Severity};
+pub use inputs::CompileInputs;
 pub use integrity::check_integrity;
 pub use navigation::{
     DefId, Definition, FeatureSymbolKind, Lookup, NavigationIndex, Reference, SymbolKind,
@@ -66,6 +67,7 @@ pub use phero_syntax::Span;
 mod compilation;
 mod entry;
 mod imports;
+mod inputs;
 mod session;
 mod union;
 
@@ -75,11 +77,10 @@ pub use compilation::{
 };
 pub use entry::ddd::DddFragment;
 pub use entry::{
-    compile, compile_actors, compile_actors_str, compile_actors_str_with_designs, compile_cmmn,
-    compile_cmmn_str, compile_ddd, compile_ddd_app_str, compile_ddd_app_str_with_decisions,
-    compile_ddd_str, compile_ddd_str_with_actors, compile_ddd_str_with_decisions,
-    compile_deploy_str, compile_dmn, compile_dmn_str, compile_evt, compile_evt_str, compile_files,
-    compile_str, compile_usecase, compile_usecase_str, compile_with_imports,
+    compile, compile_actors, compile_actors_str, compile_cmmn, compile_cmmn_str, compile_ddd,
+    compile_ddd_app_str, compile_ddd_str, compile_deploy_str, compile_dmn, compile_dmn_str,
+    compile_evt, compile_evt_str, compile_files, compile_str, compile_usecase, compile_usecase_str,
+    compile_with_imports,
 };
 pub use imports::{DomainImports, SchemaImports, SigilImports};
 pub use session::{

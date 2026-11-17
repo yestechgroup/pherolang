@@ -14,7 +14,7 @@
 //! functions) is the spec — `docs/DDD.md`'s diagnostics chapter depends on
 //! it.
 
-use phero_driver::{compile_ddd_str, compile_ddd_str_with_actors, DddCompilation, Severity};
+use phero_driver::{compile_ddd_str, DddCompilation, Severity};
 use phero_ir::{ActorModel, ActorsDef, CapabilityDef, TypeRef};
 
 const DOMAIN: &str = r#"
@@ -167,18 +167,22 @@ fn compile() -> DddCompilation {
     compile_ddd_str(
         "design.ddd",
         DESIGN,
-        &[("order.mox".to_string(), DOMAIN.to_string())],
-        &phero_driver::DomainImports::default(),
+        &phero_driver::CompileInputs::from_domains(&[(
+            "order.mox".to_string(),
+            DOMAIN.to_string(),
+        )]),
     )
 }
 
 fn compile_with_actors(actors: &ActorModel) -> DddCompilation {
-    compile_ddd_str_with_actors(
+    compile_ddd_str(
         "design.ddd",
         DESIGN,
-        &[("order.mox".to_string(), DOMAIN.to_string())],
-        &phero_driver::DomainImports::default(),
-        std::slice::from_ref(actors),
+        &phero_driver::CompileInputs::from_domains(&[(
+            "order.mox".to_string(),
+            DOMAIN.to_string(),
+        )])
+        .with_actors([("ops.actor".to_string(), actors.clone())]),
     )
 }
 

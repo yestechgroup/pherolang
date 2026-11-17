@@ -5,7 +5,7 @@ use salsa::Database as Db;
 
 use crate::compilation::UseCaseCompilation;
 use crate::entry::finish_surface;
-use crate::imports::DomainImports;
+use crate::inputs::CompileInputs;
 use crate::session::{parse_usecase_query, Database, SourceFile};
 use crate::union::{domain_files, lower_domains};
 use crate::usecases;
@@ -29,20 +29,18 @@ pub fn compile_usecase(
     file: SourceFile,
     domains: Vec<SourceFile>,
 ) -> UseCaseCompilation {
-    compile_usecase_with(db, file, domains, &[], &[], &[], &DomainImports::default())
+    compile_usecase_with(db, file, domains, &CompileInputs::default())
 }
 
-/// The body of [`compile_usecase`], parameterized over the pre-compiled
-/// design/actor/event artifacts and the provided import content for the
-/// domain files (see [`compile_file`] for the import shape).
+/// The body of [`compile_usecase`], parameterized over the compile-input
+/// bundle: its pre-compiled `designs`/`actors`/`events` buckets and its
+/// `imports` provider for the domain files (see [`compile_file`] for the
+/// import shape).
 fn compile_usecase_with(
     db: &dyn Db,
     file: SourceFile,
     domains: Vec<SourceFile>,
-    designs: &[(String, phero_ir::ddd::DddModel)],
-    actors: &[(String, phero_ir::ActorModel)],
-    events: &[(String, phero_ir::events::EventModel)],
-    imports: &DomainImports,
+    inputs: &CompileInputs,
 ) -> UseCaseCompilation {
     let path = file.path(db);
     let source = file.text(db);
@@ -55,7 +53,7 @@ fn compile_usecase_with(
         .as_ref()
         .map(|ast| ast.imports.clone())
         .unwrap_or_default();
-    let domains = lower_domains(db, &path, &domain_imports, &domains, imports);
+    let domains = lower_domains(db, &path, &domain_imports, &domains, inputs.imports());
 
     let (model, diagnostics) = usecases::compile_usecase_file(
         &path,
@@ -63,9 +61,9 @@ fn compile_usecase_with(
         parsed.ast.as_ref(),
         &parsed.diagnostics,
         &domains.domain_units,
-        designs,
-        actors,
-        events,
+        inputs.designs(),
+        inputs.actors().unwrap_or_default(),
+        inputs.events(),
     );
     finish_surface(domains, model, diagnostics, UseCaseCompilation::assemble)
 }
@@ -73,12 +71,14 @@ fn compile_usecase_with(
 /// Compiles a `.uc` use case file against its imported domain models and
 /// pre-compiled design, actor, and event artifacts in one call.
 ///
-/// The `domains` pairs are raw `.mox` texts; `designs`, `actors`, and
-/// `events` hold the pre-compiled artifacts the file's imports pull in,
-/// each keyed by the path the host resolved (the `.deploy` pattern). Every
-/// import — whatever its surface — matches a provided entry by exact path
-/// or by lexical resolution relative to the `.uc` file's directory (the
-/// same rule [`compile_actors_str`](crate::compile_actors_str) applies).
+/// `inputs` is the one [`CompileInputs`] bundle the host builds once from
+/// the gathered import closure: its `domains` bucket holds the raw `.mox`
+/// texts and its `designs`/`actors`/`events` buckets the pre-compiled
+/// artifacts the file's imports pull in, each keyed by the path the host
+/// resolved (the `.deploy` pattern). Every import — whatever its surface —
+/// matches a provided entry by exact path or by lexical resolution relative
+/// to the `.uc` file's directory (the same rule
+/// [`compile_actors_str`](crate::compile_actors_str) applies).
 /// Extra entries no import names are ignored; an import no provided entry
 /// names is the error ``imported file "<path>" was not provided``. The
 /// result carries diagnostics from the `.uc` file and each imported domain,
@@ -101,11 +101,7 @@ fn compile_usecase_with(
 /// let compilation = phero_driver::compile_usecase_str(
 ///     "delivery.uc",
 ///     source,
-///     &domains,
-///     &phero_driver::DomainImports::default(),
-///     &[],
-///     &[],
-///     &[],
+///     &phero_driver::CompileInputs::from_domains(&domains),
 /// );
 /// assert!(compilation.diagnostics.is_empty());
 /// assert_eq!(compilation.model.unwrap().use_cases.len(), 1);
@@ -243,17 +239,9 @@ fn compile_usecase_with(
 ///     guard check), messages (payload, then binding), successions
 ///     (resolution, then the graph checks), `requires` coverage,
 ///     `never_both`, `realizes`.
-pub fn compile_usecase_str(
-    path: &str,
-    source: &str,
-    domains: &[(String, String)],
-    imports: &DomainImports,
-    designs: &[(String, phero_ir::ddd::DddModel)],
-    actors: &[(String, phero_ir::ActorModel)],
-    events: &[(String, phero_ir::events::EventModel)],
-) -> UseCaseCompilation {
+pub fn compile_usecase_str(path: &str, source: &str, inputs: &CompileInputs) -> UseCaseCompilation {
     let db = Database::new();
     let file = SourceFile::new(&db, path.to_string(), source.to_string());
-    let files = domain_files(&db, domains);
-    compile_usecase_with(&db, file, files, designs, actors, events, imports)
+    let files = domain_files(&db, inputs.domains());
+    compile_usecase_with(&db, file, files, inputs)
 }
