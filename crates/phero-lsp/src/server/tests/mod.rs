@@ -11,6 +11,7 @@ mod capability_joins;
 mod code_action;
 mod completion;
 mod definition;
+mod diagnostic_split;
 mod dmn;
 mod graph;
 mod graph_cache;
