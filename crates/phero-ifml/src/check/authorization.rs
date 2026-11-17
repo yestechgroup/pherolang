@@ -5,10 +5,11 @@
 
 use std::collections::BTreeSet;
 
+use phero_diagnostics::Diagnostic;
 use phero_ir::ActorModel;
 
 use crate::index::AuthKind;
-use crate::resolve::{IfmlCompilation, IfmlDiagnostic};
+use crate::resolve::IfmlCompilation;
 
 use super::reachability::{instantiated_modules, site_is_instantiated};
 use super::{E_UNKNOWN_CAPABILITY, E_UNKNOWN_ROLE};
@@ -25,7 +26,7 @@ use super::{E_UNKNOWN_CAPABILITY, E_UNKNOWN_ROLE};
 pub(super) fn check_authorization(
     compilation: &IfmlCompilation,
     actors: &[ActorModel],
-) -> Vec<IfmlDiagnostic> {
+) -> Vec<(String, Diagnostic<&'static str>)> {
     if actors.is_empty() {
         return Vec::new();
     }
@@ -74,11 +75,10 @@ pub(super) fn check_authorization(
                 )
             }
         };
-        diags.push(IfmlDiagnostic::error(
-            code,
-            message,
-            site.name_span,
+        diags.push((
             index.files[site.file].path.clone(),
+            Diagnostic::error(message, Some((site.name_span.0..site.name_span.1).into()))
+                .with_code(code),
         ));
     }
     diags

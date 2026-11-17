@@ -11,6 +11,13 @@ pub(crate) use phero_ir::{
 
 pub(crate) const PKG: &str = "nz.example.shop";
 
+/// The byte bounds of a diagnostic's span; every fixture assertion that
+/// slices source text has one.
+pub(crate) fn span_bounds(span: Option<phero_parser::Span>) -> (usize, usize) {
+    let span = span.expect("the fixture diagnostic carries a span");
+    (span.start, span.end)
+}
+
 pub(crate) fn class_ref(name: &str) -> TypeRef {
     TypeRef::Class {
         package: PKG.to_string(),
@@ -98,12 +105,12 @@ pub(crate) fn scored_shop_model() -> Model {
 /// `model`, and keeps the **error-severity** diagnostics: these fixtures
 /// pin the E-band passes; the lint band's warnings have their own tests
 /// ([`lint_diags`] keeps them).
-pub(crate) fn diags(source: &str, model: &Model) -> Vec<IfmlDiagnostic> {
+pub(crate) fn diags(source: &str, model: &Model) -> Vec<(String, Diagnostic<&'static str>)> {
     let compilation = crate::compile_ifml_str("app.ifml", source, &crate::IfmlImports::default())
         .expect("source must parse and resolve");
     check_ifml(&compilation, Some(model))
         .into_iter()
-        .filter(|diagnostic| diagnostic.severity.is_error())
+        .filter(|(_, diagnostic)| diagnostic.severity.is_error())
         .collect()
 }
 
@@ -124,12 +131,12 @@ pub(crate) fn diags_with_actors(
     source: &str,
     model: &Model,
     actors: &[ActorModel],
-) -> Vec<IfmlDiagnostic> {
+) -> Vec<(String, Diagnostic<&'static str>)> {
     let compilation = crate::compile_ifml_str("app.ifml", source, &crate::IfmlImports::default())
         .expect("source must parse and resolve");
     check_ifml_with_actors(&compilation, Some(model), actors)
         .into_iter()
-        .filter(|diagnostic| diagnostic.severity.is_error())
+        .filter(|(_, diagnostic)| diagnostic.severity.is_error())
         .collect()
 }
 
@@ -169,11 +176,11 @@ pub(crate) fn diags_with_decisions(
     source: &str,
     model: &Model,
     decisions: &[DmnModel],
-) -> Vec<IfmlDiagnostic> {
+) -> Vec<(String, Diagnostic<&'static str>)> {
     let compilation = crate::compile_ifml_str("app.ifml", source, &crate::IfmlImports::default())
         .expect("source must parse and resolve");
     check_ifml_with_decisions(&compilation, Some(model), &[], decisions)
         .into_iter()
-        .filter(|diagnostic| diagnostic.severity.is_error())
+        .filter(|(_, diagnostic)| diagnostic.severity.is_error())
         .collect()
 }

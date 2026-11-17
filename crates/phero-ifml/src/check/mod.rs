@@ -184,6 +184,7 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 
+use phero_diagnostics::Diagnostic;
 use phero_expr::{
     BinOp as ExprBinOp, DomainTypes, Expr, ExprKind, Span, Spanned, Ty, TypeChecker,
     UnOp as ExprUnOp,
@@ -197,7 +198,7 @@ use phero_ir::ifml::{
 use phero_ir::{ActorModel, Feature, FeatureKind, Model, Multiplicity, TypeRef};
 
 use crate::index::{IfmlIndex, LiteralKind};
-use crate::resolve::{IfmlCompilation, IfmlDiagnostic};
+use crate::resolve::IfmlCompilation;
 
 pub use phero_diagnostics::ifml_check::{
     E_AMBIGUOUS_DECISION_SERVICE, E_EMPTY_DECISION_SERVICE, E_TYPE_MISMATCH, E_UNKNOWN_ACTION,
@@ -236,7 +237,10 @@ pub use phero_diagnostics::ifml_lints::{
 /// // interaction cross-reference pass still runs.
 /// assert!(check_ifml(&compilation, None).is_empty());
 /// ```
-pub fn check_ifml(compilation: &IfmlCompilation, domains: Option<&Model>) -> Vec<IfmlDiagnostic> {
+pub fn check_ifml(
+    compilation: &IfmlCompilation,
+    domains: Option<&Model>,
+) -> Vec<(String, Diagnostic<&'static str>)> {
     check_ifml_with_decisions(compilation, domains, &[], &[])
 }
 
@@ -252,7 +256,7 @@ pub fn check_ifml_with_actors(
     compilation: &IfmlCompilation,
     domains: Option<&Model>,
     actors: &[ActorModel],
-) -> Vec<IfmlDiagnostic> {
+) -> Vec<(String, Diagnostic<&'static str>)> {
     check_ifml_with_decisions(compilation, domains, actors, &[])
 }
 
@@ -269,7 +273,7 @@ pub fn check_ifml_with_decisions(
     domains: Option<&Model>,
     actors: &[ActorModel],
     decisions: &[DmnModel],
-) -> Vec<IfmlDiagnostic> {
+) -> Vec<(String, Diagnostic<&'static str>)> {
     let mut diags = check_references(compilation);
     diags.extend(check_authorization(compilation, actors));
     diags.extend(decisions::check_decisions(compilation, decisions));
@@ -429,16 +433,18 @@ struct Checker<'a> {
     /// recorded it as an override. The model and the index are built from
     /// one parse, so the spans match exactly.
     override_spans: BTreeMap<(usize, usize), usize>,
-    diags: Vec<IfmlDiagnostic>,
+    diags: Vec<(String, Diagnostic<&'static str>)>,
 }
 
 impl<'a> Checker<'a> {
     fn push(&mut self, code: &'static str, site: &Site, detail: String) {
-        self.diags.push(IfmlDiagnostic::error(
-            code,
-            format!("{}: {}", site.context.join(" "), detail.replace('`', "'")),
-            site.span,
+        self.diags.push((
             self.file.clone(),
+            Diagnostic::error(
+                format!("{}: {}", site.context.join(" "), detail.replace('`', "'")),
+                Some((site.span.0..site.span.1).into()),
+            )
+            .with_code(code),
         ));
     }
 

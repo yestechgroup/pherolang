@@ -31,6 +31,12 @@
 //! file's own parse, unchanged, so artifacts stay byte-identical. See
 //! `resolve` for the semantics and the diagnostic codes.
 //!
+//! Diagnostics are the workspace's one shared record
+//! ([`phero_diagnostics::Diagnostic`]) tagged `(path, record)` per file —
+//! the crate has no diagnostic type of its own (SK2 of epic
+//! pherolang#328); the module docs of `resolve` record the shape and the
+//! file-tag decision.
+//!
 //! # Type-checking
 //!
 //! [`check_ifml`] re-checks the type-checkable expressions of a compiled
@@ -74,12 +80,11 @@ pub use index::{
 };
 pub use manifest::manifest_ifml;
 pub use parser::*;
-pub use phero_diagnostics::{ifml_check, ifml_lints, ifml_resolver, Severity};
+pub use phero_diagnostics::{ifml_check, ifml_lints, ifml_resolver, Diagnostic, Severity};
 pub use phero_ir::ifml::*;
 pub use phero_ir::ifml_manifest::{IfmlManifest, IFML_MANIFEST_FORMAT_VERSION};
 pub use resolve::{
-    compile_ifml_lenient, compile_ifml_str, walk_ifml_imports, IfmlCompilation, IfmlDiagnostic,
-    IfmlImportWalk, IfmlImports, E_AMBIGUOUS_MODULE, E_CIRCULAR, E_DUPLICATE_MODULE,
-    E_IMPORT_NOT_PROVIDED, E_INPUT_TYPE, E_MISSING_INPUT, E_PARSE, E_UNKNOWN_INPUT,
-    E_UNKNOWN_MODULE,
+    compile_ifml_lenient, compile_ifml_str, walk_ifml_imports, IfmlCompilation, IfmlImportWalk,
+    IfmlImports, E_AMBIGUOUS_MODULE, E_CIRCULAR, E_DUPLICATE_MODULE, E_IMPORT_NOT_PROVIDED,
+    E_INPUT_TYPE, E_MISSING_INPUT, E_PARSE, E_UNKNOWN_INPUT, E_UNKNOWN_MODULE,
 };

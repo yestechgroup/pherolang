@@ -12,12 +12,12 @@ view "Edit" {
 "#;
     let diags = diags_with_actors(source, &shop_model(), &[auth_model()]);
     assert_eq!(diags.len(), 1, "{diags:?}");
-    assert_eq!(diags[0].code, E_UNKNOWN_CAPABILITY);
+    assert_eq!(diags[0].1.code.unwrap(), E_UNKNOWN_CAPABILITY);
     assert_eq!(
-            diags[0].message,
+            diags[0].1.message,
             "capability 'Ghost' is not declared — add \"capability Ghost on <Class>;\" to an actors block"
         );
-    let (start, end) = diags[0].span;
+    let (start, end) = span_bounds(diags[0].1.span);
     assert_eq!(&source[start..end], "Ghost");
 }
 
@@ -30,12 +30,12 @@ view "List" {
 "#;
     let diags = diags_with_actors(source, &shop_model(), &[auth_model()]);
     assert_eq!(diags.len(), 1, "{diags:?}");
-    assert_eq!(diags[0].code, E_UNKNOWN_ROLE);
+    assert_eq!(diags[0].1.code.unwrap(), E_UNKNOWN_ROLE);
     assert_eq!(
-        diags[0].message,
+        diags[0].1.message,
         "role 'ghost' is not declared — add \"actor ghost;\" to an actors block"
     );
-    let (start, end) = diags[0].span;
+    let (start, end) = span_bounds(diags[0].1.span);
     assert_eq!(&source[start..end], "ghost");
 }
 
@@ -87,21 +87,21 @@ view "Queue" {
     let (compilation, resolver_diags) =
         crate::compile_ifml_lenient("app.ifml", source, &crate::IfmlImports::default());
     assert_eq!(resolver_diags.len(), 1, "{resolver_diags:?}");
-    assert_eq!(resolver_diags[0].code, crate::E_UNKNOWN_MODULE);
-    assert_eq!(resolver_diags[0].severity, crate::Severity::Error);
-    assert!(resolver_diags[0].severity.is_error());
+    assert_eq!(resolver_diags[0].1.code.unwrap(), crate::E_UNKNOWN_MODULE);
+    assert_eq!(resolver_diags[0].1.severity, crate::Severity::Error);
+    assert!(resolver_diags[0].1.severity.is_error());
 
     let diags = check_ifml(&compilation, None);
     assert!(
         diags
             .iter()
-            .any(|diagnostic| diagnostic.code == E_UNKNOWN_ACTION),
+            .any(|(_, diagnostic)| diagnostic.code == Some(E_UNKNOWN_ACTION)),
         "{diags:?}"
     );
     assert!(
         diags
             .iter()
-            .all(|diagnostic| diagnostic.severity == crate::Severity::Error),
+            .all(|(_, diagnostic)| diagnostic.severity == crate::Severity::Error),
         "{diags:?}"
     );
 }

@@ -35,11 +35,24 @@
 //! (`pherolang explain E0004` renders one). A new code is a table row
 //! there, never a local constant.
 //!
+//! # The record and its file tag
+//!
+//! `.ifml` emits the workspace's one diagnostic record
+//! ([`phero_diagnostics::Diagnostic<&'static str>`]) — no type of its own
+//! (SK2 of epic pherolang#328, ADR 0005). A compilation spans several
+//! files, so results are tagged `(path, Diagnostic)` exactly like every
+//! driver surface's compilation struct: the tag owns the coordinate system,
+//! the record's byte span indexes that file's text, and `code` carries the
+//! stable registry code (`E0002`) so a host prints it without parsing the
+//! message. An import-level finding with no natural span carries `None`
+//! and the importing file's path.
+//!
 //! `compile_ifml_str` over a file with no imports and no uses produces zero
 //! diagnostics.
 
 use std::collections::{BTreeMap, BTreeSet};
 
+use phero_diagnostics::Diagnostic;
 use phero_ir::ifml::IfmlModel;
 
 use crate::index::{IfmlIndex, LiteralKind, ModuleDeclSite, UseOverride};
@@ -48,7 +61,6 @@ pub use phero_diagnostics::ifml_resolver::{
     E_AMBIGUOUS_MODULE, E_CIRCULAR, E_DUPLICATE_MODULE, E_IMPORT_NOT_PROVIDED, E_INPUT_TYPE,
     E_MISSING_INPUT, E_PARSE, E_UNKNOWN_INPUT, E_UNKNOWN_MODULE,
 };
-pub use phero_diagnostics::Severity;
 
 /// The import content provided to a compilation: the `.ifml` source of every
 /// import, keyed `(importing-file path, import path as written)`. The
@@ -98,62 +110,6 @@ impl IfmlImports {
         self.imports
             .get(&(importing_path.to_string(), import_path.to_string()))
             .map(String::as_str)
-    }
-}
-
-/// One diagnostic: a stable code (see the module docs for the
-/// table), a human message, the byte-offset span it points at, and the file
-/// (compilation path key) the span indexes into. Import-level diagnostics
-/// that have no natural span carry `(0, 0)` and the importing file's path.
-/// Every diagnostic carries a [`Severity`] class: resolver and checker
-/// diagnostics are errors, the lint pass's findings are warnings.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct IfmlDiagnostic {
-    /// Stable diagnostic code (`E0001` .. `E0009`).
-    pub code: &'static str,
-    /// Human-readable message.
-    pub message: String,
-    /// Byte span `(start, end)` into `file`'s text.
-    pub span: (usize, usize),
-    /// The file the span belongs to (path as the compilation keys it).
-    pub file: String,
-    /// How severe the diagnostic is.
-    pub severity: Severity,
-}
-
-impl IfmlDiagnostic {
-    /// An error-severity diagnostic — the class every resolver and checker
-    /// code carries.
-    pub fn error(
-        code: &'static str,
-        message: impl Into<String>,
-        span: (usize, usize),
-        file: impl Into<String>,
-    ) -> Self {
-        Self {
-            code,
-            message: message.into(),
-            span,
-            file: file.into(),
-            severity: Severity::Error,
-        }
-    }
-
-    /// A warning-severity diagnostic — the lint band (`W0150`–`W0199`).
-    /// Warnings render but never fail a compilation.
-    pub fn warning(
-        code: &'static str,
-        message: impl Into<String>,
-        span: (usize, usize),
-        file: impl Into<String>,
-    ) -> Self {
-        Self {
-            code,
-            message: message.into(),
-            span,
-            file: file.into(),
-            severity: Severity::Warning,
-        }
     }
 }
 
@@ -294,7 +250,7 @@ pub fn compile_ifml_str(
     path: &str,
     text: &str,
     imports: &IfmlImports,
-) -> Result<IfmlCompilation, Vec<IfmlDiagnostic>> {
+) -> Result<IfmlCompilation, Vec<(String, Diagnostic<&'static str>)>> {
     let (compilation, diagnostics) = compile_ifml_lenient(path, text, imports);
     if diagnostics.is_empty() {
         Ok(compilation)
@@ -313,15 +269,13 @@ pub fn compile_ifml_lenient(
     path: &str,
     text: &str,
     imports: &IfmlImports,
-) -> (IfmlCompilation, Vec<IfmlDiagnostic>) {
+) -> (IfmlCompilation, Vec<(String, Diagnostic<&'static str>)>) {
     let mut diags = Vec::new();
     let ((model, mut index), issues) = crate::parser::parse_model_recovering_with_path(path, text);
     for issue in issues {
-        diags.push(IfmlDiagnostic::error(
-            E_PARSE,
-            issue.message,
-            (issue.span.start, issue.span.end),
+        diags.push((
             path.to_string(),
+            Diagnostic::error(issue.message, Some(issue.span)).with_code(E_PARSE),
         ));
     }
 
@@ -353,18 +307,20 @@ fn resolve_imports(
     active: &mut Vec<String>,
     visited: &mut BTreeSet<String>,
     index: &mut IfmlIndex,
-    diags: &mut Vec<IfmlDiagnostic>,
+    diags: &mut Vec<(String, Diagnostic<&'static str>)>,
 ) {
     for import_path in import_paths {
         if !import_path.ends_with(".ifml") {
             continue;
         }
         if active.iter().any(|seen| seen == import_path) {
-            diags.push(IfmlDiagnostic::error(
-                E_CIRCULAR,
-                format!("circular ifml import involving '{import_path}'"),
-                (0, 0),
+            diags.push((
                 importing_path.to_string(),
+                Diagnostic::error(
+                    format!("circular ifml import involving '{import_path}'"),
+                    None,
+                )
+                .with_code(E_CIRCULAR),
             ));
             continue;
         }
@@ -372,22 +328,22 @@ fn resolve_imports(
             continue;
         }
         let Some(import_text) = imports.get(importing_path, import_path) else {
-            diags.push(IfmlDiagnostic::error(
-                E_IMPORT_NOT_PROVIDED,
-                format!("imported ifml '{import_path}' was not provided"),
-                (0, 0),
+            diags.push((
                 importing_path.to_string(),
+                Diagnostic::error(
+                    format!("imported ifml '{import_path}' was not provided"),
+                    None,
+                )
+                .with_code(E_IMPORT_NOT_PROVIDED),
             ));
             continue;
         };
         let ((import_model, import_index), issues) =
             crate::parser::parse_model_recovering_with_path(import_path, import_text);
         for issue in issues {
-            diags.push(IfmlDiagnostic::error(
-                E_PARSE,
-                issue.message,
-                (issue.span.start, issue.span.end),
+            diags.push((
                 import_path.to_string(),
+                Diagnostic::error(issue.message, Some(issue.span)).with_code(E_PARSE),
             ));
         }
         let file = index.files.len();
@@ -411,7 +367,10 @@ fn resolve_imports(
 /// files in compilation order) and resolves/validates every use site in the
 /// main file against it. Resolution results are written back into
 /// `index.module_uses`.
-pub(crate) fn resolve_module_uses(index: &mut IfmlIndex, diags: &mut Vec<IfmlDiagnostic>) {
+pub(crate) fn resolve_module_uses(
+    index: &mut IfmlIndex,
+    diags: &mut Vec<(String, phero_diagnostics::Diagnostic<&'static str>)>,
+) {
     let main_path = index.files[0].path.clone();
 
     // name -> (file, decl index within that file)
@@ -429,11 +388,14 @@ pub(crate) fn resolve_module_uses(index: &mut IfmlIndex, diags: &mut Vec<IfmlDia
         for (position, &global) in globals.iter().enumerate() {
             let name = index.module_decls[global].name.clone();
             if !seen.insert(name.clone()) {
-                diags.push(IfmlDiagnostic::error(
-                    E_DUPLICATE_MODULE,
-                    format!("duplicate module '{name}'"),
-                    index.module_decls[global].span,
+                let span = index.module_decls[global].span;
+                diags.push((
                     index.files[file].path.clone(),
+                    Diagnostic::error(
+                        format!("duplicate module '{name}'"),
+                        Some((span.0..span.1).into()),
+                    )
+                    .with_code(E_DUPLICATE_MODULE),
                 ));
                 continue;
             }
@@ -447,14 +409,17 @@ pub(crate) fn resolve_module_uses(index: &mut IfmlIndex, diags: &mut Vec<IfmlDia
                 continue;
             } else if let Some(&(first_file, _)) = table.get(&name) {
                 let first_path = index.files[first_file].path.clone();
-                diags.push(IfmlDiagnostic::error(
-                    E_AMBIGUOUS_MODULE,
-                    format!(
-                        "ambiguous module '{name}' (declared in '{first_path}' and '{}')",
-                        index.files[file].path
-                    ),
-                    index.module_decls[global].span,
+                let span = index.module_decls[global].span;
+                diags.push((
                     index.files[file].path.clone(),
+                    Diagnostic::error(
+                        format!(
+                            "ambiguous module '{name}' (declared in '{first_path}' and '{}')",
+                            index.files[file].path
+                        ),
+                        Some((span.0..span.1).into()),
+                    )
+                    .with_code(E_AMBIGUOUS_MODULE),
                 ));
                 table.remove(&name);
                 ambiguous.insert(name);
@@ -483,11 +448,13 @@ pub(crate) fn resolve_module_uses(index: &mut IfmlIndex, diags: &mut Vec<IfmlDia
         }
         let Some(&(decl_file, decl_position)) = table.get(&target) else {
             if use_file == 0 {
-                diags.push(IfmlDiagnostic::error(
-                    E_UNKNOWN_MODULE,
-                    format!("unknown module '{target}'"),
-                    span,
+                diags.push((
                     main_path.clone(),
+                    Diagnostic::error(
+                        format!("unknown module '{target}'"),
+                        Some((span.0..span.1).into()),
+                    )
+                    .with_code(E_UNKNOWN_MODULE),
                 ));
             }
             continue;
@@ -511,7 +478,7 @@ fn validate_use(
     use_span: (usize, usize),
     overrides: &[UseOverride],
     main_path: &str,
-    diags: &mut Vec<IfmlDiagnostic>,
+    diags: &mut Vec<(String, Diagnostic<&'static str>)>,
 ) {
     for override_item in overrides {
         let input = decl
@@ -524,38 +491,46 @@ fn validate_use(
                 .iter()
                 .any(|name| name == &override_item.name)
         {
-            diags.push(IfmlDiagnostic::error(
-                E_UNKNOWN_INPUT,
-                format!(
-                    "unknown input '{}' for module '{target}'",
-                    override_item.name
-                ),
-                override_item.span,
+            let span = override_item.span;
+            diags.push((
                 main_path.to_string(),
+                Diagnostic::error(
+                    format!(
+                        "unknown input '{}' for module '{target}'",
+                        override_item.name
+                    ),
+                    Some((span.0..span.1).into()),
+                )
+                .with_code(E_UNKNOWN_INPUT),
             ));
             continue;
         }
         if let (Some(param), Some(literal)) = (input, override_item.literal) {
             if !literal_suits_type(&param.type_ref, literal) {
-                diags.push(IfmlDiagnostic::error(
-                    E_INPUT_TYPE,
-                    format!(
-                        "input '{}' of module '{target}' expects {}",
-                        override_item.name, param.type_ref
-                    ),
-                    override_item.span,
+                let span = override_item.span;
+                diags.push((
                     main_path.to_string(),
+                    Diagnostic::error(
+                        format!(
+                            "input '{}' of module '{target}' expects {}",
+                            override_item.name, param.type_ref
+                        ),
+                        Some((span.0..span.1).into()),
+                    )
+                    .with_code(E_INPUT_TYPE),
                 ));
             }
         }
     }
     for param in &decl.input_params {
         if !param.has_default && !overrides.iter().any(|o| o.name == param.name) {
-            diags.push(IfmlDiagnostic::error(
-                E_MISSING_INPUT,
-                format!("module '{target}' requires input '{}'", param.name),
-                use_span,
+            diags.push((
                 main_path.to_string(),
+                Diagnostic::error(
+                    format!("module '{target}' requires input '{}'", param.name),
+                    Some((use_span.0..use_span.1).into()),
+                )
+                .with_code(E_MISSING_INPUT),
             ));
         }
     }

@@ -40,6 +40,11 @@ fn bundle(entries: &[(&str, &str, &str)]) -> IfmlImports {
     imports
 }
 
+fn span_bounds(span: Option<phero_parser::Span>) -> (usize, usize) {
+    let span = span.expect("the diagnostic carries a span");
+    (span.start, span.end)
+}
+
 fn compile_ok(path: &str, text: &str, imports: &IfmlImports) -> IfmlCompilation {
     let compilation =
         compile_ifml_str(path, text, imports).expect("compilation must produce no diagnostics");
@@ -115,13 +120,16 @@ fn import_not_provided() {
     )
     .expect_err("missing import content must be a diagnostic");
     assert_eq!(diags.len(), 1);
-    assert_eq!(diags[0].code, E_IMPORT_NOT_PROVIDED);
+    assert_eq!(diags[0].1.code.unwrap(), E_IMPORT_NOT_PROVIDED);
     assert_eq!(
-        diags[0].message,
+        diags[0].1.message,
         "imported ifml 'pager.ifml' was not provided"
     );
-    assert_eq!(diags[0].span, (0, 0));
-    assert_eq!(diags[0].file, "app.ifml");
+    assert_eq!(
+        diags[0].1.span, None,
+        "an import-level finding has no natural span"
+    );
+    assert_eq!(diags[0].0, "app.ifml");
 }
 
 #[test]
@@ -171,7 +179,7 @@ command "customers" {
     assert!(
         diagnostics
             .iter()
-            .any(|diagnostic| diagnostic.code == E_MISSING_INPUT),
+            .any(|(_, diagnostic)| diagnostic.code == Some(E_MISSING_INPUT)),
         "{diagnostics:?}"
     );
 
@@ -184,7 +192,7 @@ command "customers" {
     assert!(
         unknown
             .iter()
-            .any(|diagnostic| diagnostic.code == E_UNKNOWN_MODULE),
+            .any(|(_, diagnostic)| diagnostic.code == Some(E_UNKNOWN_MODULE)),
         "{unknown:?}"
     );
 }
@@ -201,10 +209,10 @@ view "Home" {
     let diags = compile_ifml_str("app.ifml", text, &IfmlImports::default())
         .expect_err("unknown module must be a diagnostic");
     assert_eq!(diags.len(), 1);
-    assert_eq!(diags[0].code, E_UNKNOWN_MODULE);
-    assert_eq!(diags[0].message, "unknown module 'Missing'");
-    assert_eq!(diags[0].file, "app.ifml");
-    let (start, end) = diags[0].span;
+    assert_eq!(diags[0].1.code.unwrap(), E_UNKNOWN_MODULE);
+    assert_eq!(diags[0].1.message, "unknown module 'Missing'");
+    assert_eq!(diags[0].0, "app.ifml");
+    let (start, end) = span_bounds(diags[0].1.span);
     assert_eq!(&text[start..end], "use \"Missing\" as gone;");
 }
 
@@ -224,13 +232,14 @@ import "pager.ifml";
     let diags = compile_ifml_str("app.ifml", text, &imports)
         .expect_err("unknown override name must be a diagnostic");
     assert_eq!(diags.len(), 1);
-    assert_eq!(diags[0].code, E_UNKNOWN_INPUT);
+    assert_eq!(diags[0].1.code.unwrap(), E_UNKNOWN_INPUT);
     assert_eq!(
-        diags[0].message,
+        diags[0].1.message,
         "unknown input 'bogus' for module 'Pagination'"
     );
-    assert_eq!(&text[diags[0].span.0..diags[0].span.1], "bogus: 1;");
-    assert_eq!(diags[0].file, "app.ifml");
+    let (start, end) = span_bounds(diags[0].1.span);
+    assert_eq!(&text[start..end], "bogus: 1;");
+    assert_eq!(diags[0].0, "app.ifml");
 }
 
 #[test]
@@ -277,13 +286,13 @@ view "Home" {
     let diags = compile_ifml_str("app.ifml", text, &imports)
         .expect_err("default-less input without override must be a diagnostic");
     assert_eq!(diags.len(), 1);
-    assert_eq!(diags[0].code, E_MISSING_INPUT);
+    assert_eq!(diags[0].1.code.unwrap(), E_MISSING_INPUT);
     assert_eq!(
-        diags[0].message,
+        diags[0].1.message,
         "module 'Pagination' requires input 'pageSize'"
     );
-    assert_eq!(diags[0].file, "app.ifml");
-    let (start, end) = diags[0].span;
+    assert_eq!(diags[0].0, "app.ifml");
+    let (start, end) = span_bounds(diags[0].1.span);
     assert!(text[start..end].starts_with("use \"Pagination\""));
 }
 
@@ -302,15 +311,13 @@ view "Home" {
     let diags = compile_ifml_str("app.ifml", text, &imports)
         .expect_err("string literal for Int input must be a diagnostic");
     assert_eq!(diags.len(), 1);
-    assert_eq!(diags[0].code, E_INPUT_TYPE);
+    assert_eq!(diags[0].1.code.unwrap(), E_INPUT_TYPE);
     assert_eq!(
-        diags[0].message,
+        diags[0].1.message,
         "input 'pageSize' of module 'Pagination' expects Int"
     );
-    assert_eq!(
-        &text[diags[0].span.0..diags[0].span.1],
-        "pageSize: \"many\";"
-    );
+    let (start, end) = span_bounds(diags[0].1.span);
+    assert_eq!(&text[start..end], "pageSize: \"many\";");
 }
 
 #[test]
@@ -352,11 +359,12 @@ view "Home" {
         1,
         "the use itself is not re-reported: {diags:?}"
     );
-    assert_eq!(diags[0].code, E_AMBIGUOUS_MODULE);
+    assert_eq!(diags[0].1.code.unwrap(), E_AMBIGUOUS_MODULE);
     assert!(diags[0]
+        .1
         .message
         .starts_with("ambiguous module 'Pagination'"),);
-    assert_eq!(diags[0].file, "b.ifml");
+    assert_eq!(diags[0].0, "b.ifml");
 }
 
 #[test]
@@ -410,9 +418,9 @@ module "Dup" {
     let diags = compile_ifml_str("app.ifml", text, &IfmlImports::default())
         .expect_err("duplicate module in one file must be a diagnostic");
     assert_eq!(diags.len(), 1);
-    assert_eq!(diags[0].code, E_DUPLICATE_MODULE);
-    assert_eq!(diags[0].message, "duplicate module 'Dup'");
-    assert_eq!(diags[0].file, "app.ifml");
+    assert_eq!(diags[0].1.code.unwrap(), E_DUPLICATE_MODULE);
+    assert_eq!(diags[0].1.message, "duplicate module 'Dup'");
+    assert_eq!(diags[0].0, "app.ifml");
 }
 
 #[test]
@@ -423,9 +431,12 @@ fn circular_import_detected() {
     let diags = compile_ifml_str("app.ifml", "import \"a.ifml\";", &imports)
         .expect_err("circular import must be a diagnostic");
     assert_eq!(diags.len(), 1);
-    assert_eq!(diags[0].code, E_CIRCULAR);
-    assert_eq!(diags[0].message, "circular ifml import involving 'a.ifml'");
-    assert_eq!(diags[0].file, "b.ifml");
+    assert_eq!(diags[0].1.code.unwrap(), E_CIRCULAR);
+    assert_eq!(
+        diags[0].1.message,
+        "circular ifml import involving 'a.ifml'"
+    );
+    assert_eq!(diags[0].0, "b.ifml");
 }
 
 #[test]
@@ -433,12 +444,12 @@ fn self_import_is_circular() {
     let diags = compile_ifml_str("app.ifml", "import \"app.ifml\";", &IfmlImports::default())
         .expect_err("self-import must be a diagnostic");
     assert_eq!(diags.len(), 1);
-    assert_eq!(diags[0].code, E_CIRCULAR);
+    assert_eq!(diags[0].1.code.unwrap(), E_CIRCULAR);
     assert_eq!(
-        diags[0].message,
+        diags[0].1.message,
         "circular ifml import involving 'app.ifml'"
     );
-    assert_eq!(diags[0].file, "app.ifml");
+    assert_eq!(diags[0].0, "app.ifml");
 }
 
 #[test]
@@ -496,12 +507,22 @@ fn parse_error_in_import_is_a_diagnostic() {
     let diags = compile_ifml_str("app.ifml", "import \"broken.ifml\";", &imports)
         .expect_err("unparseable import must be a diagnostic");
     assert!(!diags.is_empty(), "a broken import must report");
-    assert!(diags.iter().all(|diag| diag.code == E_PARSE), "{diags:?}");
-    assert!(diags.iter().all(|diag| diag.file == "broken.ifml"));
-    // Recovered parse errors point at real byte positions, never (0, 0).
-    assert!(diags.iter().all(|diag| diag.span != (0, 0)), "{diags:?}");
     assert!(
-        diags.iter().any(|diag| diag.message.contains("expected")),
+        diags.iter().all(|(_, diag)| diag.code == Some(E_PARSE)),
+        "{diags:?}"
+    );
+    assert!(diags.iter().all(|(file, _)| file == "broken.ifml"));
+    // Recovered parse errors point at real byte positions, never (0, 0).
+    assert!(
+        diags.iter().all(|(_, diag)| diag
+            .span
+            .is_some_and(|span| span.start != 0 || span.end != 0)),
+        "{diags:?}"
+    );
+    assert!(
+        diags
+            .iter()
+            .any(|(_, diag)| diag.message.contains("expected")),
         "{diags:?}"
     );
 }
@@ -511,8 +532,8 @@ fn parse_error_in_main_file_is_a_diagnostic() {
     let diags = compile_ifml_str("app.ifml", "view \"Broken\"", &IfmlImports::default())
         .expect_err("unparseable main file must be a diagnostic");
     assert_eq!(diags.len(), 1);
-    assert_eq!(diags[0].code, E_PARSE);
-    assert_eq!(diags[0].file, "app.ifml");
+    assert_eq!(diags[0].1.code.unwrap(), E_PARSE);
+    assert_eq!(diags[0].0, "app.ifml");
 }
 
 #[test]

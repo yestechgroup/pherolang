@@ -1,7 +1,7 @@
 //! Characterization (SK2, epic pherolang#328, issue pherolang#330): the
 //! resolver + checker diagnostic order of one multi-file `.ifml`
-//! compilation, pinned **before** the shared diagnostic record replaces
-//! `IfmlDiagnostic`.
+//! compilation, pinned before and preserved through the shared diagnostic
+//! record (SK2), with the per-file `(path, record)` tag.
 //!
 //! The SK2 refactor is behavior-preserving, so this sequence — codes,
 //! files, severity, messages, and spans — must not move. The compile order
@@ -9,7 +9,7 @@
 //! validation), then the checker's passes (cross-reference, authorization,
 //! decisions, lints) in `check_ifml_with_decisions`'s order.
 
-use phero_ifml::{check_ifml, compile_ifml_lenient, IfmlDiagnostic, IfmlImports, Severity};
+use phero_ifml::{check_ifml, compile_ifml_lenient, Diagnostic, IfmlImports, Severity};
 
 /// A syntactically valid imported file with two module declarations of the
 /// same name: one deterministic resolver error (`E0004`, duplicate module)
@@ -33,7 +33,12 @@ action "Orphan" {
 }
 "#;
 
-fn diagnostics() -> Vec<IfmlDiagnostic> {
+fn span_bounds(span: Option<phero_parser::Span>) -> (usize, usize) {
+    let span = span.expect("the diagnostic carries a span");
+    (span.start, span.end)
+}
+
+fn diagnostics() -> Vec<(String, Diagnostic<&'static str>)> {
     let mut imports = IfmlImports::default();
     imports.provide("app.ifml", "broken.ifml", BROKEN_MODULE);
     let (compilation, mut diagnostics) = compile_ifml_lenient("app.ifml", APP, &imports);
@@ -46,7 +51,7 @@ fn multi_file_diagnostics_keep_their_compilation_order() {
     let diagnostics = diagnostics();
     let seen: Vec<(&str, &str)> = diagnostics
         .iter()
-        .map(|diagnostic| (diagnostic.code, diagnostic.file.as_str()))
+        .map(|(file, diagnostic)| (diagnostic.code.unwrap(), file.as_str()))
         .collect();
     assert_eq!(
         seen,
@@ -61,7 +66,7 @@ fn multi_file_diagnostics_keep_their_compilation_order() {
 
     let messages: Vec<&str> = diagnostics
         .iter()
-        .map(|diagnostic| diagnostic.message.as_str())
+        .map(|(_, diagnostic)| diagnostic.message.as_str())
         .collect();
     assert_eq!(
         messages,
@@ -75,7 +80,7 @@ fn multi_file_diagnostics_keep_their_compilation_order() {
 
     let severities: Vec<Severity> = diagnostics
         .iter()
-        .map(|diagnostic| diagnostic.severity)
+        .map(|(_, diagnostic)| diagnostic.severity)
         .collect();
     assert_eq!(
         severities,
@@ -89,17 +94,19 @@ fn multi_file_diagnostics_keep_their_compilation_order() {
     );
 
     // Every span stays in its own file's byte coordinates; an import-level
-    // finding with no natural span stays at 0..0.
-    let (start, end) = diagnostics[0].span;
-    assert_eq!((start, end), (0, 0));
-    let (start, end) = diagnostics[1].span;
+    // finding with no natural span carries `None` (it renders at 0..0).
+    assert!(
+        diagnostics[0].1.span.is_none(),
+        "an import-level finding has no span: {diagnostics:#?}"
+    );
+    let (start, end) = span_bounds(diagnostics[1].1.span);
     assert_eq!(
         &BROKEN_MODULE[start..end],
         "module \"Panel\" { input { page: Int } output { total: Int } }",
         "the duplicate-module finding points at the second declaration"
     );
-    let (start, end) = diagnostics[2].span;
+    let (start, end) = span_bounds(diagnostics[2].1.span);
     assert_eq!(&APP[start..end], "use \"Ghost\" as ghost { };");
-    let (start, end) = diagnostics[3].span;
+    let (start, end) = span_bounds(diagnostics[3].1.span);
     assert_eq!(&APP[start..end], "\"Orphan\"");
 }
