@@ -864,9 +864,11 @@ does not register them, so there is no second highlighting path in the browser.
 
 ### Release binary status
 
-The latest published release, **v0.3.0, predates `pherolang highlight`** — and
-also the DD9 examples on this tree. The release **acceptance for SH8 is
-explicitly blocked on the v0.4.0 tag**; nothing below claims otherwise.
+The latest published release, **v0.4.0, is the source of the committed site
+data**: it contains `pherolang highlight` and can check the DD9 examples on this
+tree. `site/data/highlighting/spans.json` was regenerated with the released
+asset and `git diff --exit-code site/data` was empty, so SH8's release
+acceptance is satisfied.
 
 The site does not silently use the wrong binary:
 
@@ -879,13 +881,13 @@ The site does not silently use the wrong binary:
    (`cargo build -q -p phero-cli`, then `target/debug/pherolang`).
 
 The same `resolveSiteBinary` governs `sync-model`, `sync-highlight`, and the
-command executor the gate runs, so one binary produces all site data. Step 4
-is a **temporary exception**, documented here rather than described as
-released-binary freshness. `scripts/fetch-pherolang.mjs` pins `0.4.0`; while
-that tag is unpublished an unset `PHEROLANG_VERSION` falls back to the latest
-published release with a warning (an explicit pin never falls back). The
-`Site` workflow installs Rust for its freshness/drift jobs, exports the
-resolved binary, and prints the exception every run.
+command executor the gate runs, so one binary produces all site data. Step 4 is
+now an **offline/development fallback** for a checkout that has not fetched a
+release, not how the committed data is produced: `scripts/fetch-pherolang.mjs`
+pins `0.4.0`, which is published, and an explicit pin never falls back to
+another release. The `Site` workflow installs Rust so the fallback can still run
+without a download, exports the resolved binary, and prints which one it used
+every run.
 
 Two further release gates make the window honest:
 
@@ -895,9 +897,11 @@ Two further release gates make the window honest:
 - the `deploy` job requires the latest release version to equal the workspace
   version, so production never advertises a download that does not exist.
 
-After v0.4.0 is tagged: run `node site/scripts/fetch-pherolang.mjs`, regenerate
-with the released binary, commit the (should-be-identical) data, and update
-this section to remove the source-built exception. The operator sequence is
+After v0.4.0 is published: `node site/scripts/fetch-pherolang.mjs`,
+`node site/scripts/sync-model.mjs`, and `node site/scripts/sync-highlight.mjs`
+run against the released asset, and the committed data is expected to stay
+byte-identical. v0.4.0 was published on 2026-11-17 from `ba2b267`; the executed
+sequence and its empty diff are recorded in
 [RELEASE-0.4.0.md](RELEASE-0.4.0.md).
 
 ### Theme tokens

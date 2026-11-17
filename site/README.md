@@ -24,7 +24,7 @@ cd site
 fnm use                      # or: nvm use  (respects .nvmrc)
 pnpm install
 
-node scripts/fetch-pherolang.mjs   # pinned v0.4.0 (falls back to the latest published release while untagged), sha256-verified
+node scripts/fetch-pherolang.mjs   # pinned v0.4.0, sha256-verified
 
 pnpm dev                     # both apps: :4321 (web) and :4322 (docs)
 ```
@@ -49,14 +49,13 @@ bytes)` pair, covering every Phero fence in `docs/**/*.md`, every
 through `site/packages/highlighting/src/`; no app runs the compiler at build
 time and nothing is generated per request.
 
-**Release-binary status:** the latest release, v0.3.0, predates both
-`pherolang highlight` and the DD9 examples. The tree is prepared for **v0.4.0
-(the first release with the command)**; the tag/publish is the operator step
-in [`docs/RELEASE-0.4.0.md`](../docs/RELEASE-0.4.0.md). Until then:
+**Release-binary status:** the latest release, **v0.4.0**, provides
+`pherolang highlight` and can check the DD9 examples, so the committed site data
+is released-binary-fresh: it was regenerated with the released asset and
+`git diff --exit-code site/data` was empty. The mechanics:
 
-- `scripts/fetch-pherolang.mjs` pins `0.4.0`; while that tag is unpublished an
-  unset `PHEROLANG_VERSION` falls back to the latest published release with a
-  warning (an explicit pin never falls back).
+- `scripts/fetch-pherolang.mjs` pins `0.4.0`, which is published; an explicit
+  pin never falls back to another release.
 - the shared resolver (`scripts/highlighting/runner.mjs`) refuses a binary that
   cannot check `examples/support/support.ddd` or lacks `highlight`
   (`PHEROLANG_BIN` first, then the fetched `.bin`, then `PATH`) and otherwise
@@ -65,12 +64,12 @@ in [`docs/RELEASE-0.4.0.md`](../docs/RELEASE-0.4.0.md). Until then:
   produces the model data, the highlight artifact, and the commands the gate
   executes.
 
-This is a temporary exception, not released-binary freshness; the `Site`
-workflow installs Rust for the freshness/drift jobs and warns when the fallback
-runs. Its `deploy` job waits until the latest release version equals the
-workspace version, so production never advertises a download that does not
-exist. After the tag, regenerate with the released binary and update
-[`docs/HIGHLIGHTING.md`](../docs/HIGHLIGHTING.md#release-binary-status).
+The `Site` workflow still installs Rust so the offline fallback can run, and
+exports the resolved binary on every run. Its `deploy` job waits until the
+latest release version equals the workspace version, so production never
+advertises a download that does not exist — satisfied now by v0.4.0. The
+post-publish regeneration is recorded in
+[`docs/RELEASE-0.4.0.md`](../docs/RELEASE-0.4.0.md).
 
 The docs app integration is an Expressive Code plugin
 (`site/phero-docs/ec.config.mjs`) that adds the compiler's `hl-*` classes inside
