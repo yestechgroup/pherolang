@@ -1,6 +1,9 @@
 {
   "$schema": "node_modules/wrangler/config-schema.json",
   "name": "pherolang-docs",
+  // Cloudflare's version-preview build runs `wrangler preview`; an empty
+  // block is the required opt-in (assets and compatibility stay top-level).
+  "previews": {},
   "compatibility_date": "2026-11-01",
   "assets": {
     "directory": "./dist/client",
