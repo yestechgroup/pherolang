@@ -236,8 +236,7 @@ pub fn actor_graph(display: &str) -> GraphModel {
     let compilation = phero_driver::compile_actors_str(
         &disk(display).display().to_string(),
         &source,
-        &domains,
-        &phero_driver::DomainImports::default(),
+        &phero_driver::CompileInputs::from_domains(&domains),
     );
     let model = lowered(display, compilation.model, &compilation.diagnostics);
     let mut inputs = GraphInputs::default();
@@ -252,8 +251,7 @@ pub fn ddd_graph(display: &str, domain: &str) -> GraphModel {
     let compilation = phero_driver::compile_ddd_str(
         &disk(display).display().to_string(),
         &fixture(display),
-        &domains,
-        &phero_driver::DomainImports::default(),
+        &phero_driver::CompileInputs::from_domains(&domains),
     );
     let model = lowered(display, compilation.model, &compilation.diagnostics);
     let mut inputs = GraphInputs::default();
@@ -267,8 +265,7 @@ pub fn evt_graph(display: &str, domain: &str) -> GraphModel {
     let compilation = phero_driver::compile_evt_str(
         &disk(display).display().to_string(),
         &fixture(display),
-        &domains,
-        &phero_driver::DomainImports::default(),
+        &phero_driver::CompileInputs::from_domains(&domains),
     );
     let model = lowered(display, compilation.model, &compilation.diagnostics);
     let mut inputs = GraphInputs::default();
@@ -296,8 +293,10 @@ fn fixture_inputs() -> GraphInputs {
         &disk(actor_display).display().to_string(),
         &fixture(actor_display),
         // The `.actor` compile keys its imports by the string as written.
-        &[("app.mox".to_string(), domain_source.clone())],
-        &phero_driver::DomainImports::default(),
+        &phero_driver::CompileInputs::from_domains(&[(
+            "app.mox".to_string(),
+            domain_source.clone(),
+        )]),
     );
     let actor = lowered(actor_display, compilation.model, &compilation.diagnostics);
 
@@ -305,8 +304,7 @@ fn fixture_inputs() -> GraphInputs {
     let compilation = phero_driver::compile_ddd_str(
         &disk(ddd_display).display().to_string(),
         &fixture(ddd_display),
-        &domains,
-        &phero_driver::DomainImports::default(),
+        &phero_driver::CompileInputs::from_domains(&domains),
     );
     let design = lowered(ddd_display, compilation.model, &compilation.diagnostics);
 
@@ -314,8 +312,7 @@ fn fixture_inputs() -> GraphInputs {
     let compilation = phero_driver::compile_evt_str(
         &disk(evt_display).display().to_string(),
         &fixture(evt_display),
-        &domains,
-        &phero_driver::DomainImports::default(),
+        &phero_driver::CompileInputs::from_domains(&domains),
     );
     let events = lowered(evt_display, compilation.model, &compilation.diagnostics);
 
@@ -323,11 +320,10 @@ fn fixture_inputs() -> GraphInputs {
     let compilation = phero_driver::compile_dmn_str(
         &disk(dmn_display).display().to_string(),
         &fixture(dmn_display),
-        &domains,
-        &phero_driver::DomainImports::default(),
-        &[],
-        // The decision model's import keys are the strings as written.
-        &[("app.evt".to_string(), events.clone())],
+        &phero_driver::CompileInputs::from_domains(&domains)
+            .with_tables([])
+            // The decision model's import keys are the strings as written.
+            .with_events([("app.evt".to_string(), events.clone())]),
     );
     let decision = lowered(dmn_display, compilation.model, &compilation.diagnostics);
 
@@ -345,11 +341,10 @@ fn fixture_inputs() -> GraphInputs {
     let compilation = phero_driver::compile_usecase_str(
         &disk(uc_display).display().to_string(),
         &fixture(uc_display),
-        &domains,
-        &phero_driver::DomainImports::default(),
-        &[(disk(ddd_display).display().to_string(), design.clone())],
-        &[(disk(actor_display).display().to_string(), actor.clone())],
-        &[(disk(evt_display).display().to_string(), events.clone())],
+        &phero_driver::CompileInputs::from_domains(&domains)
+            .with_designs([(disk(ddd_display).display().to_string(), design.clone())].to_vec())
+            .with_actors([(disk(actor_display).display().to_string(), actor.clone())].to_vec())
+            .with_events([(disk(evt_display).display().to_string(), events.clone())].to_vec()),
     );
     let use_cases = lowered(uc_display, compilation.model, &compilation.diagnostics);
 
@@ -357,12 +352,11 @@ fn fixture_inputs() -> GraphInputs {
     let compilation = phero_driver::compile_cmmn_str(
         &disk(cmmn_display).display().to_string(),
         &fixture(cmmn_display),
-        &domains,
-        &phero_driver::DomainImports::default(),
-        &[(disk(ddd_display).display().to_string(), design.clone())],
-        &[(disk(actor_display).display().to_string(), actor.clone())],
-        &[(disk(evt_display).display().to_string(), events.clone())],
-        &[(disk(dmn_display).display().to_string(), decision.clone())],
+        &phero_driver::CompileInputs::from_domains(&domains)
+            .with_designs([(disk(ddd_display).display().to_string(), design.clone())].to_vec())
+            .with_actors([(disk(actor_display).display().to_string(), actor.clone())].to_vec())
+            .with_events([(disk(evt_display).display().to_string(), events.clone())].to_vec())
+            .with_decisions([(disk(dmn_display).display().to_string(), decision.clone())].to_vec()),
     );
     let case = lowered(cmmn_display, compilation.model, &compilation.diagnostics);
 
@@ -370,8 +364,9 @@ fn fixture_inputs() -> GraphInputs {
     let compilation = phero_driver::compile_deploy_str(
         &disk(deploy_display).display().to_string(),
         &fixture(deploy_display),
-        &[(disk(ddd_display).display().to_string(), design.clone())],
-        &[(ifml_key, flow.clone())],
+        &phero_driver::CompileInputs::new()
+            .with_designs([(disk(ddd_display).display().to_string(), design.clone())].to_vec())
+            .with_flows([(ifml_key, flow.clone())].to_vec()),
     );
     let deployment = lowered(deploy_display, compilation.model, &compilation.diagnostics);
 
@@ -457,8 +452,10 @@ pub fn support_graph() -> &'static GraphModel {
             &disk(actor_display).display().to_string(),
             &fixture(actor_display),
             // The `.actor` compile keys its imports by the string as written.
-            &[("support.mox".to_string(), domain_source)],
-            &phero_driver::DomainImports::default(),
+            &phero_driver::CompileInputs::from_domains(&[(
+                "support.mox".to_string(),
+                domain_source,
+            )]),
         );
         let actor = lowered(actor_display, compilation.model, &compilation.diagnostics);
 
@@ -466,8 +463,7 @@ pub fn support_graph() -> &'static GraphModel {
         let compilation = phero_driver::compile_ddd_str(
             &disk(ddd_display).display().to_string(),
             &fixture(ddd_display),
-            &domains,
-            &phero_driver::DomainImports::default(),
+            &phero_driver::CompileInputs::from_domains(&domains),
         );
         let design = lowered(ddd_display, compilation.model, &compilation.diagnostics);
 
@@ -475,8 +471,7 @@ pub fn support_graph() -> &'static GraphModel {
         let compilation = phero_driver::compile_evt_str(
             &disk(evt_display).display().to_string(),
             &fixture(evt_display),
-            &domains,
-            &phero_driver::DomainImports::default(),
+            &phero_driver::CompileInputs::from_domains(&domains),
         );
         let events = lowered(evt_display, compilation.model, &compilation.diagnostics);
 
@@ -484,13 +479,15 @@ pub fn support_graph() -> &'static GraphModel {
         let compilation = phero_driver::compile_dmn_str(
             &disk(dmn_display).display().to_string(),
             &fixture(dmn_display),
-            &domains,
-            &phero_driver::DomainImports::default(),
-            &[(
-                "./tables/refund-authority.md".to_string(),
-                fixture(fixtures::REFUND_AUTHORITY_TABLE),
-            )],
-            &[("support.evt".to_string(), events.clone())],
+            &phero_driver::CompileInputs::from_domains(&domains)
+                .with_tables(
+                    [(
+                        "./tables/refund-authority.md".to_string(),
+                        fixture(fixtures::REFUND_AUTHORITY_TABLE),
+                    )]
+                    .to_vec(),
+                )
+                .with_events([("support.evt".to_string(), events.clone())].to_vec()),
         );
         let decision = lowered(dmn_display, compilation.model, &compilation.diagnostics);
 
@@ -502,11 +499,10 @@ pub fn support_graph() -> &'static GraphModel {
         let compilation = phero_driver::compile_usecase_str(
             &disk(uc_display).display().to_string(),
             &fixture(uc_display),
-            &domains,
-            &phero_driver::DomainImports::default(),
-            &[(disk(ddd_display).display().to_string(), design.clone())],
-            &[(disk(actor_display).display().to_string(), actor.clone())],
-            &[(disk(evt_display).display().to_string(), events.clone())],
+            &phero_driver::CompileInputs::from_domains(&domains)
+                .with_designs([(disk(ddd_display).display().to_string(), design.clone())].to_vec())
+                .with_actors([(disk(actor_display).display().to_string(), actor.clone())].to_vec())
+                .with_events([(disk(evt_display).display().to_string(), events.clone())].to_vec()),
         );
         let use_cases = lowered(uc_display, compilation.model, &compilation.diagnostics);
 
@@ -514,12 +510,13 @@ pub fn support_graph() -> &'static GraphModel {
         let compilation = phero_driver::compile_cmmn_str(
             &disk(cmmn_display).display().to_string(),
             &fixture(cmmn_display),
-            &domains,
-            &phero_driver::DomainImports::default(),
-            &[(disk(ddd_display).display().to_string(), design.clone())],
-            &[(disk(actor_display).display().to_string(), actor.clone())],
-            &[(disk(evt_display).display().to_string(), events.clone())],
-            &[(disk(dmn_display).display().to_string(), decision.clone())],
+            &phero_driver::CompileInputs::from_domains(&domains)
+                .with_designs([(disk(ddd_display).display().to_string(), design.clone())].to_vec())
+                .with_actors([(disk(actor_display).display().to_string(), actor.clone())].to_vec())
+                .with_events([(disk(evt_display).display().to_string(), events.clone())].to_vec())
+                .with_decisions(
+                    [(disk(dmn_display).display().to_string(), decision.clone())].to_vec(),
+                ),
         );
         let case = lowered(cmmn_display, compilation.model, &compilation.diagnostics);
 
@@ -527,8 +524,9 @@ pub fn support_graph() -> &'static GraphModel {
         let compilation = phero_driver::compile_deploy_str(
             &disk(deploy_display).display().to_string(),
             &fixture(deploy_display),
-            &[(disk(ddd_display).display().to_string(), design.clone())],
-            &[(ifml_key, flow.clone())],
+            &phero_driver::CompileInputs::new()
+                .with_designs([(disk(ddd_display).display().to_string(), design.clone())].to_vec())
+                .with_flows([(ifml_key, flow.clone())].to_vec()),
         );
         let deployment = lowered(deploy_display, compilation.model, &compilation.diagnostics);
 
@@ -587,8 +585,7 @@ pub fn single_file_graph(display: &str, domain: &str) -> GraphModel {
         let compilation = phero_driver::compile_actors_str(
             &path,
             &source,
-            &domains,
-            &phero_driver::DomainImports::default(),
+            &phero_driver::CompileInputs::from_domains(&domains),
         );
         let model = lowered(display, compilation.model, &compilation.diagnostics);
         inputs.actors.push(graph_file(display, model));
@@ -599,8 +596,7 @@ pub fn single_file_graph(display: &str, domain: &str) -> GraphModel {
             let compilation = phero_driver::compile_ddd_str(
                 &path,
                 &source,
-                &domains,
-                &phero_driver::DomainImports::default(),
+                &phero_driver::CompileInputs::from_domains(&domains),
             );
             let model = lowered(display, compilation.model, &compilation.diagnostics);
             inputs.designs.push(graph_file(display, model));
@@ -608,8 +604,7 @@ pub fn single_file_graph(display: &str, domain: &str) -> GraphModel {
             let compilation = phero_driver::compile_evt_str(
                 &path,
                 &source,
-                &domains,
-                &phero_driver::DomainImports::default(),
+                &phero_driver::CompileInputs::from_domains(&domains),
             );
             let model = lowered(display, compilation.model, &compilation.diagnostics);
             inputs.events.push(graph_file(display, model));

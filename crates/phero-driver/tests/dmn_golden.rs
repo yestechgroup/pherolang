@@ -57,14 +57,13 @@ fn compile_event(
     let compilation = phero_driver::compile_evt_str(
         event_absolute.to_str().expect("utf-8 contract path"),
         &source,
-        &[(
+        &phero_driver::CompileInputs::from_domains(&[(
             domain_absolute
                 .to_str()
                 .expect("utf-8 domain path")
                 .to_string(),
             domain.to_string(),
-        )],
-        &phero_driver::DomainImports::default(),
+        )]),
     );
     assert!(
         compilation.diagnostics.is_empty(),
@@ -92,7 +91,7 @@ fn compile_conformance() -> DmnCompilation {
     let domain = std::fs::read_to_string(&domain_absolute)
         .unwrap_or_else(|error| panic!("read conformance domain {DOMAIN_PATH}: {error}"));
 
-    let events = vec![compile_event(model_dir, &domain_absolute, &domain)];
+    let events = [compile_event(model_dir, &domain_absolute, &domain)];
 
     let mut tables: Vec<(String, String)> = Vec::new();
     for relative in TABLE_PATHS {
@@ -112,13 +111,12 @@ fn compile_conformance() -> DmnCompilation {
     compile_dmn_str(
         model_absolute.to_str().expect("utf-8 path"),
         &source,
-        &[(
+        &phero_driver::CompileInputs::from_domains(&[(
             domain_absolute.to_str().expect("utf-8 path").to_string(),
             domain,
-        )],
-        &phero_driver::DomainImports::default(),
-        &tables,
-        &events,
+        )])
+        .with_tables(tables.to_vec())
+        .with_events(events.to_vec()),
     )
 }
 
@@ -197,10 +195,9 @@ fn minimal_decision_model_matches_golden_artifact() {
     let compilation = compile_dmn_str(
         model_absolute.to_str().expect("utf-8 path"),
         &source,
-        &[],
-        &phero_driver::DomainImports::default(),
-        &[],
-        &[],
+        &phero_driver::CompileInputs::new()
+            .with_tables([])
+            .with_events([]),
     );
     assert!(
         compilation.diagnostics.is_empty(),
@@ -259,10 +256,9 @@ fn the_versioned_lending_pair_matches_golden_artifacts() {
         let compilation = compile_dmn_str(
             model_absolute.to_str().expect("utf-8 path"),
             &source,
-            &[],
-            &phero_driver::DomainImports::default(),
-            &[],
-            &[],
+            &phero_driver::CompileInputs::new()
+                .with_tables([])
+                .with_events([]),
         );
         assert!(
             compilation.diagnostics.is_empty(),
@@ -344,10 +340,9 @@ fn compile_with_events(
     compile_dmn_str(
         "model.dmn",
         source,
-        &domains,
-        &phero_driver::DomainImports::default(),
-        &tables,
-        events,
+        &phero_driver::CompileInputs::from_domains(&domains)
+            .with_tables(tables.to_vec())
+            .with_events(events.to_vec()),
     )
 }
 
@@ -953,8 +948,10 @@ fn event_contract(source: &str) -> (String, phero_ir::events::EventModel) {
     let compilation = phero_driver::compile_evt_str(
         "events.evt",
         source,
-        &[("events.mox".to_string(), EVENT_DOMAIN.to_string())],
-        &phero_driver::DomainImports::default(),
+        &phero_driver::CompileInputs::from_domains(&[(
+            "events.mox".to_string(),
+            EVENT_DOMAIN.to_string(),
+        )]),
     );
     assert!(
         compilation.diagnostics.is_empty(),

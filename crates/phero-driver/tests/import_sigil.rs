@@ -910,8 +910,7 @@ fn a_domain_with_a_sigil_import_errors_cleanly_in_the_actor_path() {
     let compilation = phero_driver::compile_actors_str(
         "ops.actor",
         actor,
-        &[("demo.mox".to_string(), domain.to_string())],
-        &phero_driver::DomainImports::default(),
+        &phero_driver::CompileInputs::from_domains(&[("demo.mox".to_string(), domain.to_string())]),
     );
     assert!(compilation.model.is_none());
     assert!(
@@ -948,11 +947,11 @@ fn actor_pipeline_resolves_sigil_domain_types() {
     let compilation = phero_driver::compile_actors_str(
         "ops.actor",
         &actor_source(),
-        &[(MOX.to_string(), mox_with_sigil())],
-        &phero_driver::DomainImports {
-            schemas: phero_driver::SchemaImports::new(),
-            sigil: sigil_imports(),
-        },
+        &phero_driver::CompileInputs::from_domains(&[(MOX.to_string(), mox_with_sigil())])
+            .with_imports(phero_driver::DomainImports {
+                schemas: phero_driver::SchemaImports::new(),
+                sigil: sigil_imports(),
+            }),
     );
     // Clean except the use-based guard lint (issue #142): `id` is a plain
     // String rosetta feature compared to a literal in the capability
@@ -1019,11 +1018,11 @@ fn ddd_pipeline_designs_sigil_domain_types() {
     let compilation = phero_driver::compile_ddd_str(
         "design.ddd",
         design,
-        &[(MOX.to_string(), mox_with_sigil())],
-        &phero_driver::DomainImports {
-            schemas: phero_driver::SchemaImports::new(),
-            sigil: sigil_imports(),
-        },
+        &phero_driver::CompileInputs::from_domains(&[(MOX.to_string(), mox_with_sigil())])
+            .with_imports(phero_driver::DomainImports {
+                schemas: phero_driver::SchemaImports::new(),
+                sigil: sigil_imports(),
+            }),
     );
     assert!(
         compilation.diagnostics.is_empty(),
@@ -1047,8 +1046,7 @@ fn missing_sigil_content_blocks_the_actor_domain() {
     let compilation = phero_driver::compile_actors_str(
         "ops.actor",
         &actor_source(),
-        &[(MOX.to_string(), mox_with_sigil())],
-        &phero_driver::DomainImports::default(),
+        &phero_driver::CompileInputs::from_domains(&[(MOX.to_string(), mox_with_sigil())]),
     );
     assert!(
         compilation
@@ -1092,15 +1090,15 @@ fn actor_pipeline_resolves_declared_schema_and_sigil_names_from_one_domain() {
     let compilation = phero_driver::compile_actors_str(
         "ops.actor",
         actor,
-        &[(MOX.to_string(), domain.to_string())],
-        &phero_driver::DomainImports {
-            schemas: phero_driver::SchemaImports::new().provide(
-                MOX,
-                "schemas/todo_item.json",
-                "{\"title\": \"Todo item\"}",
-            ),
-            sigil: sigil_imports(),
-        },
+        &phero_driver::CompileInputs::from_domains(&[(MOX.to_string(), domain.to_string())])
+            .with_imports(phero_driver::DomainImports {
+                schemas: phero_driver::SchemaImports::new().provide(
+                    MOX,
+                    "schemas/todo_item.json",
+                    "{\"title\": \"Todo item\"}",
+                ),
+                sigil: sigil_imports(),
+            }),
     );
     assert!(
         compilation.diagnostics.is_empty(),
@@ -1152,11 +1150,11 @@ fn sigil_content_errors_surface_tagged_with_the_rosetta_path() {
             "    }\n",
             "}\n",
         ),
-        &[(MOX.to_string(), mox_with_sigil())],
-        &phero_driver::DomainImports {
-            schemas: phero_driver::SchemaImports::new(),
-            sigil: phero_driver::SigilImports::new().provide(MOX, TRADE, broken),
-        },
+        &phero_driver::CompileInputs::from_domains(&[(MOX.to_string(), mox_with_sigil())])
+            .with_imports(phero_driver::DomainImports {
+                schemas: phero_driver::SchemaImports::new(),
+                sigil: phero_driver::SigilImports::new().provide(MOX, TRADE, broken),
+            }),
     );
     assert!(
         compilation
@@ -1206,14 +1204,14 @@ fn two_domain_actor(
     phero_driver::compile_actors_str(
         "ops.actor",
         &actor,
-        &[
+        &phero_driver::CompileInputs::from_domains(&[
             ("a.mox".to_string(), domain_a.to_string()),
             ("b.mox".to_string(), domain_b.to_string()),
-        ],
-        &phero_driver::DomainImports {
+        ])
+        .with_imports(phero_driver::DomainImports {
             schemas: phero_driver::SchemaImports::new(),
             sigil: sigil.clone(),
-        },
+        }),
     )
 }
 
@@ -1337,18 +1335,18 @@ fn a_domain_without_sigil_imports_survives_another_domains_sigil_failure() {
     let compilation = phero_driver::compile_actors_str(
         "ops.actor",
         actor,
-        &[
+        &phero_driver::CompileInputs::from_domains(&[
             ("a.mox".to_string(), domain_a),
             ("b.mox".to_string(), domain_b),
-        ],
-        &phero_driver::DomainImports {
+        ])
+        .with_imports(phero_driver::DomainImports {
             schemas: phero_driver::SchemaImports::new(),
             sigil: phero_driver::SigilImports::new().provide(
                 "b.mox",
                 "bad.rosetta",
                 "namespace oracle.bad\n\ntype Broken:\n    who NoSuchType (1..1)\n",
             ),
-        },
+        }),
     );
     assert_only_the_rosetta_error_remains(&compilation, "bad.rosetta", "NoSuchType");
 }
@@ -1382,11 +1380,11 @@ fn references_into_a_failed_namespace_error_on_the_referencing_file() {
     let compilation = phero_driver::compile_actors_str(
         "ops.actor",
         actor,
-        &[
+        &phero_driver::CompileInputs::from_domains(&[
             ("a.mox".to_string(), domain_a),
             ("b.mox".to_string(), domain_b),
-        ],
-        &phero_driver::DomainImports {
+        ])
+        .with_imports(phero_driver::DomainImports {
             schemas: phero_driver::SchemaImports::new(),
             sigil: phero_driver::SigilImports::new()
                 .provide("a.mox", "good.rosetta", good_rosetta())
@@ -1395,7 +1393,7 @@ fn references_into_a_failed_namespace_error_on_the_referencing_file() {
                     "bad.rosetta",
                     "namespace oracle.bad\n\ntype Broken:\n    who NoSuchType (1..1)\n",
                 ),
-        },
+        }),
     );
     assert!(compilation.model.is_none());
     // beta's own reference error, tagged with its file; the sigil content

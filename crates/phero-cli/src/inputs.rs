@@ -15,8 +15,8 @@ use walkdir::WalkDir;
 use phero_driver::{
     compile_actor_imports, compile_decision_imports, compile_domain_union, compile_files,
     compile_str, gather_case_imports, gather_deploy_imports, gather_domain_sources,
-    gather_ifml_project, gather_usecase_imports, ActorImport, DecisionImport, DomainImports,
-    MultiCompilation, SchemaImports, SurfaceKind,
+    gather_ifml_project, gather_usecase_imports, ActorImport, CmmnBuckets, CompileInputs,
+    DecisionImport, DomainImports, MultiCompilation, SurfaceKind, UcBuckets,
 };
 
 use crate::imports::{collect_schema_imports, collect_sigil_imports, SigilSources};
@@ -394,35 +394,37 @@ fn dir_of(path: &Path) -> PathBuf {
 
 /// A surface file plus the domain sources it imports, ready for the driver's
 /// `compile_*_str` entry points. `.actor`/`.ddd`/`.evt` take this bundle
-/// directly; `.uc`/`.cmmn`/`.dmn` wrap it with their pre-compiled buckets.
+/// directly; `.uc`/`.cmmn`/`.dmn` extend it with their pre-compiled
+/// buckets.
 pub(crate) struct DomainPair {
     /// The surface file's path as given on the command line.
     pub(crate) path: String,
     /// The surface file's source text.
     pub(crate) source: String,
-    /// Each imported domain as `(resolved path, source)`; the driver matches a
-    /// surface-file import by exact string or by lexical resolution relative
-    /// to the importing file's directory, so resolved paths keep vocabulary
-    /// snapshots anchored to the declaring file.
-    pub(crate) domains: Vec<(String, String)>,
+    /// The compile-input bundle the driver entry point takes: each imported
+    /// domain as `(resolved path, source)` plus the domains'
+    /// `import schema`/`import sigil` content, extended by the readers that
+    /// gather pre-compiled artifacts.
+    inputs: CompileInputs,
     /// Each imported domain as `(import string as written, source)` — the
     /// driver tags a domain's diagnostics with its `DomainUnit` path (the
     /// import string), so rendering needs both keys.
     import_keys: Vec<(String, String)>,
-    /// The domains' `import schema` content, keyed by domain path.
-    schemas: SchemaImports,
     /// The domains' `import sigil` content, plus the rosetta sources for
     /// rendering sigil diagnostics.
     sigil: SigilSources,
 }
 
 impl DomainPair {
-    /// The import bundle the driver entry point takes.
-    pub(crate) fn imports(&self) -> DomainImports {
-        DomainImports {
-            schemas: self.schemas.clone(),
-            sigil: self.sigil.imports.clone(),
-        }
+    /// The compile-input bundle the driver entry point takes.
+    pub(crate) fn inputs(&self) -> &CompileInputs {
+        &self.inputs
+    }
+
+    /// Extends the bundle with the buckets the caller gathered after reading
+    /// (the project's pooled `.actor`/`.ddd`/`.dmn` artifacts).
+    pub(crate) fn extend_inputs(&mut self, extend: impl FnOnce(CompileInputs) -> CompileInputs) {
+        self.inputs = extend(std::mem::take(&mut self.inputs));
     }
 
     /// The source text of the file with the given driver path, if it is the
@@ -432,7 +434,8 @@ impl DomainPair {
         if path == self.path {
             return Some(&self.source);
         }
-        self.domains
+        self.inputs
+            .domains()
             .iter()
             .find(|(name, _)| name == path)
             .map(|(_, source)| source.as_str())
@@ -478,29 +481,48 @@ fn read_surface(
 }
 
 impl SurfaceInput {
-    /// The domain pair over `domains`: schema/sigil content plus the written
-    /// import → gathered text map the reporter resolves domain diagnostics
-    /// through.
+    /// The domain pair over `domains`: one compile-input bundle (the domain
+    /// sources plus their schema/sigil content) and the written import →
+    /// gathered text map the reporter resolves domain diagnostics through.
     fn pair(self, domains: Vec<(String, String)>) -> anyhow::Result<DomainPair> {
-        let keys = render_keys(&self.file, &self.imports, &domains);
-        self.pair_with_keys(keys, domains)
+        self.pair_built(domains, |inputs| inputs)
     }
 
-    /// [`SurfaceInput::pair`] with the render keys already assembled — the
-    /// `.ddd` reader adds each fragment's own domain spellings.
+    /// [`SurfaceInput::pair`] with `extend` applied to the bundle — the
+    /// artifact surfaces add their pre-compiled buckets here, so each reader
+    /// builds the bundle once.
+    fn pair_built(
+        self,
+        domains: Vec<(String, String)>,
+        extend: impl FnOnce(CompileInputs) -> CompileInputs,
+    ) -> anyhow::Result<DomainPair> {
+        let keys = render_keys(&self.file, &self.imports, &domains);
+        self.pair_with_keys(keys, domains, extend)
+    }
+
+    /// [`SurfaceInput::pair_built`] with the render keys already assembled —
+    /// the `.ddd` reader adds each fragment's own domain spellings.
     fn pair_with_keys(
         self,
         import_keys: Vec<(String, String)>,
         domains: Vec<(String, String)>,
+        extend: impl FnOnce(CompileInputs) -> CompileInputs,
     ) -> anyhow::Result<DomainPair> {
         let schemas = collect_schema_imports(&domains)?;
         let sigil = collect_sigil_imports(&domains)?;
+        let imports = DomainImports {
+            schemas,
+            sigil: sigil.imports.clone(),
+        };
         Ok(DomainPair {
             path: self.path,
             source: self.source,
+            inputs: extend(
+                CompileInputs::new()
+                    .with_domains(domains)
+                    .with_imports(imports),
+            ),
             import_keys,
-            domains,
-            schemas,
             sigil,
         })
     }
@@ -601,7 +623,7 @@ pub(crate) fn read_actor_pair_in(
 }
 
 /// A `.ddd` design root plus the domain sources and `.ddd` fragments it
-/// imports, ready for [`phero_driver::compile_ddd_app_str_with_decisions`]
+/// imports, ready for [`phero_driver::compile_ddd_app_str`]
 /// (DD8, issue pherolang#305).
 pub(crate) struct DddDesignPair {
     /// The root file and its `.mox` imports.
@@ -666,7 +688,7 @@ pub(crate) fn read_ddd_design(
         }
     }
     Ok(DddDesignPair {
-        pair: read.pair_with_keys(import_keys, domains)?,
+        pair: read.pair_with_keys(import_keys, domains, |inputs| inputs)?,
         fragments: gathered.fragments,
     })
 }
@@ -686,30 +708,17 @@ pub(crate) fn read_evt_pair(file: &Path, project: Option<&mut Project>) -> anyho
     read_domain_pair(file, surface_imports(SurfaceKind::Evt), project)
 }
 
-/// A `.dmn` decision-model file and its compiled inputs, ready for
-/// [`phero_driver::compile_dmn_str`].
-pub(crate) struct DmnPair {
-    /// The decision-model file plus its raw imported domains.
-    pub(crate) pair: DomainPair,
-    /// Each `logic table "<path>"` clause's markdown content, keyed by the
-    /// path **as written** — the driver matches table paths exactly as
-    /// written.
-    pub(crate) tables: Vec<(String, String)>,
-    /// Each imported `.evt` contract, compiled, keyed by the import string
-    /// **as written** (rule 14's bucket).
-    pub(crate) events: Vec<(String, phero_ir::events::EventModel)>,
-}
-
 /// Reads a `.dmn` file plus every import it declares: `.mox` paths join the
 /// domain pair, each `import "<x>.evt"` compiles into the events bucket under
 /// its written path, and each `logic table "<path>"` markdown file is read
 /// relative to the `.dmn` file. An unreadable table is simply not provided (the
 /// driver's unprovided-table diagnostic names the written path); a missing or
-/// non-compiling `.evt` import is a clean error naming it.
+/// non-compiling `.evt` import is a clean error naming it. The bundle is the
+/// one [`phero_driver::compile_dmn_str`] takes.
 pub(crate) fn read_dmn_pair(
     file: &Path,
     mut project: Option<&mut Project>,
-) -> anyhow::Result<DmnPair> {
+) -> anyhow::Result<DomainPair> {
     let read = read_surface(file, &dmn_domain_imports)?;
     let tables = table_sources(file, &read.source);
     let events = phero_driver::project::gather_dmn_events(
@@ -726,10 +735,8 @@ pub(crate) fn read_dmn_pair(
     if let Some(error) = read_error {
         return Err(error);
     }
-    Ok(DmnPair {
-        pair: read.pair(domains)?,
-        tables,
-        events,
+    read.pair_built(domains, |inputs| {
+        inputs.with_tables(tables).with_events(events)
     })
 }
 
@@ -767,76 +774,65 @@ fn fetch_disk(resolved: &str) -> Option<String> {
     std::fs::read_to_string(resolved).ok()
 }
 
-/// A `.uc` file and its imports, ready for
-/// [`phero_driver::compile_usecase_str`].
-pub(crate) struct UcPair {
-    /// The use case file plus its raw imported domains.
-    pub(crate) pair: DomainPair,
-    /// Each imported `.ddd` design, compiled, keyed by its resolved path.
-    pub(crate) designs: Vec<(String, phero_ir::ddd::DddModel)>,
-    /// Each imported `.actor` policy, compiled, keyed by its resolved path.
-    pub(crate) actors: Vec<(String, phero_ir::ActorModel)>,
-    /// Each imported `.evt` contract, compiled, keyed by its resolved path.
-    pub(crate) events: Vec<(String, phero_ir::events::EventModel)>,
-}
-
 /// Reads a `.uc` file plus every import it declares, gathered through
 /// [`gather_usecase_imports`]: paths resolve relative to the use case file's
 /// own directory, bucketed by resolved extension, duplicates gathered once. A
 /// missing import file is a clean error naming the resolved path (the driver's
-/// message).
-pub(crate) fn read_uc_pair(file: &Path, project: Option<&mut Project>) -> anyhow::Result<UcPair> {
+/// message). The returned bundle is the one
+/// [`phero_driver::compile_usecase_str`] takes: the gatherer's four buckets
+/// plus the domains' import content.
+pub(crate) fn read_uc_pair(
+    file: &Path,
+    project: Option<&mut Project>,
+) -> anyhow::Result<DomainPair> {
     let read = read_surface(file, &surface_imports(SurfaceKind::Uc))?;
-    let buckets = gather_usecase_imports(
+    let UcBuckets {
+        domains,
+        designs,
+        actors,
+        events,
+    } = gather_usecase_imports(
         &read.path,
         &read.source,
         surface_imports(SurfaceKind::Uc),
         &mut project_fetch(project),
     )
     .map_err(|message| anyhow::anyhow!(message))?;
-    Ok(UcPair {
-        pair: read.pair(buckets.domains)?,
-        designs: buckets.designs,
-        actors: buckets.actors,
-        events: buckets.events,
+    read.pair_built(domains, |inputs| {
+        inputs
+            .with_designs(designs)
+            .with_actors(actors)
+            .with_events(events)
     })
 }
 
-/// A `.cmmn` file and its compiled imports — the [`UcPair`] counterpart.
-pub(crate) struct CmmnPair {
-    /// The case file plus its raw imported domains.
-    pub(crate) pair: DomainPair,
-    /// Each imported `.ddd` design, compiled, keyed by its resolved path.
-    pub(crate) designs: Vec<(String, phero_ir::ddd::DddModel)>,
-    /// Each imported `.actor` policy, compiled, keyed by its resolved path.
-    pub(crate) actors: Vec<(String, phero_ir::ActorModel)>,
-    /// Each imported `.evt` contract, compiled, keyed by its resolved path.
-    pub(crate) events: Vec<(String, phero_ir::events::EventModel)>,
-    /// Each imported `.dmn` decision model, compiled, keyed by its resolved
-    /// path. Empty when the file imports no decision models.
-    pub(crate) decisions: Vec<(String, phero_ir::dmn::DmnModel)>,
-}
-
 /// Reads a `.cmmn` file and gathers its imports exactly like [`read_uc_pair`],
-/// through [`gather_case_imports`].
+/// through [`gather_case_imports`] — the same bundle shape with the decision
+/// bucket added.
 pub(crate) fn read_cmmn_pair(
     file: &Path,
     project: Option<&mut Project>,
-) -> anyhow::Result<CmmnPair> {
+) -> anyhow::Result<DomainPair> {
     let read = read_surface(file, &surface_imports(SurfaceKind::Cmmn))?;
-    let buckets = gather_case_imports(
+    let CmmnBuckets {
+        domains,
+        designs,
+        actors,
+        events,
+        decisions,
+    } = gather_case_imports(
         &read.path,
         &read.source,
         &surface_imports(SurfaceKind::Cmmn),
         &mut project_fetch(project),
     )
     .map_err(|message| anyhow::anyhow!(message))?;
-    Ok(CmmnPair {
-        pair: read.pair(buckets.domains)?,
-        designs: buckets.designs,
-        actors: buckets.actors,
-        events: buckets.events,
-        decisions: buckets.decisions,
+    read.pair_built(domains, |inputs| {
+        inputs
+            .with_designs(designs)
+            .with_actors(actors)
+            .with_events(events)
+            .with_decisions(decisions)
     })
 }
 
@@ -847,13 +843,17 @@ pub(crate) struct DeployPair {
     pub(crate) path: String,
     /// The deployment file's source text.
     pub(crate) source: String,
-    /// Each imported `.ddd` design, compiled, keyed by its resolved path.
-    pub(crate) designs: Vec<(String, phero_ir::ddd::DddModel)>,
-    /// Each imported `.ifml` flow, compiled, keyed by its resolved path.
-    pub(crate) flows: Vec<(String, phero_ir::ifml::IfmlModel)>,
+    /// The compile-input bundle the driver entry point takes: the imported
+    /// `.ddd` designs and `.ifml` flows keyed by resolved path.
+    inputs: CompileInputs,
 }
 
 impl DeployPair {
+    /// The compile-input bundle the driver entry point takes.
+    pub(crate) fn inputs(&self) -> &CompileInputs {
+        &self.inputs
+    }
+
     /// The source text of the file with the given driver path — the deploy file
     /// itself (import artifacts arrive pre-compiled, so their diagnostics were
     /// rendered when they were gathered).
@@ -881,8 +881,7 @@ pub(crate) fn read_deploy_pair(
     Ok(DeployPair {
         path: read.path,
         source: read.source,
-        designs: pairs.designs,
-        flows: pairs.flows,
+        inputs: CompileInputs::from(pairs),
     })
 }
 

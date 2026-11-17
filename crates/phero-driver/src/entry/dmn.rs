@@ -7,7 +7,7 @@ use salsa::Database as Db;
 use crate::compilation::DmnCompilation;
 use crate::dmn;
 use crate::entry::finish_surface;
-use crate::imports::DomainImports;
+use crate::inputs::CompileInputs;
 use crate::session::{parse_dmn_query, Database, SourceFile};
 use crate::union::{domain_files, lower_domains};
 
@@ -17,8 +17,8 @@ use crate::union::{domain_files, lower_domains};
 /// file, lower every named domain through the ordinary domain pipeline, then
 /// lower and validate the decision model.
 ///
-/// The tracked surface carries **no tables, no import bundle, and no
-/// events bucket** (the [`compile_evt`](fn.compile_evt) empty-import-bundle
+/// The tracked surface carries the **empty bundle**: no tables, no import
+/// content, and no events bucket (the [`compile_evt`](fn.compile_evt) empty-import-bundle
 /// precedent): every referenced markdown table errors as unprovided under
 /// this query, `import schema`/`import sigil` imports of the domains
 /// resolve to nothing, and an `import "<path>.evt"` contract errors as
@@ -26,16 +26,18 @@ use crate::union::{domain_files, lower_domains};
 /// validation.
 #[salsa::tracked(returns(clone))]
 pub fn compile_dmn(db: &dyn Db, model: SourceFile, domains: Vec<SourceFile>) -> DmnCompilation {
-    compile_dmn_with(db, model, domains, &[], &DomainImports::default(), &[])
+    compile_dmn_with(db, model, domains, &CompileInputs::default())
 }
 
+/// The body of [`compile_dmn`], parameterized over the compile-input
+/// bundle: its `tables` bucket (the external decision-table contents keyed
+/// as written), its `events` contracts bucket, and its `imports` provider
+/// for the domain files.
 fn compile_dmn_with(
     db: &dyn Db,
     model: SourceFile,
     domains: Vec<SourceFile>,
-    tables: &[(String, String)],
-    imports: &DomainImports,
-    events: &[(String, phero_ir::events::EventModel)],
+    inputs: &CompileInputs,
 ) -> DmnCompilation {
     let model_path = model.path(db);
     let parsed = parse_dmn_query(db, model);
@@ -55,15 +57,15 @@ fn compile_dmn_with(
                 .collect()
         })
         .unwrap_or_default();
-    let domains = lower_domains(db, &model_path, &domain_imports, &domains, imports);
+    let domains = lower_domains(db, &model_path, &domain_imports, &domains, inputs.imports());
 
     let (artifact, diagnostics) = dmn::compile_dmn_file(
         &model_path,
         parsed.ast.as_ref(),
         &parsed.diagnostics,
         &domains.domain_units,
-        tables,
-        events,
+        inputs.tables(),
+        inputs.events(),
     );
     finish_surface(domains, artifact, diagnostics, DmnCompilation::assemble)
 }
@@ -91,9 +93,10 @@ fn compile_dmn_with(
 /// — which is dropped on any error anyway.
 ///
 /// **Table paths** (`logic table "<path>"`) resolve exactly as written
-/// against the provided `tables` contents — the driver stays
-/// filesystem-free; the host (CLI, LSP, tests) reads the markdown files
-/// relative to the `.dmn` file and keys them by the authored path.
+/// against the bundle's [`tables`](CompileInputs::tables) contents — the
+/// driver stays filesystem-free; the host (CLI, LSP, tests) reads the
+/// markdown files relative to the `.dmn` file and keys them by the authored
+/// path.
 ///
 /// **Emitted events** (`emits` entries) resolve by bare name against the
 /// union of every provided contract's declared events (rule 14).
@@ -168,16 +171,9 @@ fn compile_dmn_with(
 /// decision). Every diagnostic is tagged with its file's path. On any
 /// error the result's `model` is `None`; `domains_model` still carries the
 /// imported domains when they lowered.
-pub fn compile_dmn_str(
-    path: &str,
-    source: &str,
-    domains: &[(String, String)],
-    imports: &DomainImports,
-    tables: &[(String, String)],
-    events: &[(String, phero_ir::events::EventModel)],
-) -> DmnCompilation {
+pub fn compile_dmn_str(path: &str, source: &str, inputs: &CompileInputs) -> DmnCompilation {
     let db = Database::new();
     let model = SourceFile::new(&db, path.to_string(), source.to_string());
-    let files = domain_files(&db, domains);
-    compile_dmn_with(&db, model, files, tables, imports, events)
+    let files = domain_files(&db, inputs.domains());
+    compile_dmn_with(&db, model, files, inputs)
 }

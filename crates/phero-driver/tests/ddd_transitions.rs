@@ -15,7 +15,7 @@
 //! binding pins the machine's class as the op's own-record condition
 //! scope, which is what admits a scoped guard in a multi-machine module.
 
-use phero_driver::{compile_ddd_str, diagnostic::Severity, Diagnostic, DomainImports};
+use phero_driver::{compile_ddd_str, diagnostic::Severity, Diagnostic};
 use phero_ir::ddd::ConditionScope;
 
 /// The shared fixture domain: `PayRun.status: PayRunStatus`, `int total`;
@@ -28,11 +28,10 @@ fn diagnose(design: &str) -> Vec<Diagnostic> {
     let compilation = compile_ddd_str(
         "tests/conformance/ddd/test.ddd",
         design,
-        &[(
+        &phero_driver::CompileInputs::from_domains(&[(
             "tests/conformance/ddd/timesheet.mox".to_string(),
             TIMESHEET_DOMAIN.to_string(),
-        )],
-        &DomainImports::default(),
+        )]),
     );
     compilation
         .diagnostics
@@ -68,11 +67,10 @@ fn operations_of(design: &str) -> Vec<phero_ir::ddd::ServiceOperation> {
     let compilation = compile_ddd_str(
         "tests/conformance/ddd/test.ddd",
         design,
-        &[(
+        &phero_driver::CompileInputs::from_domains(&[(
             "tests/conformance/ddd/timesheet.mox".to_string(),
             TIMESHEET_DOMAIN.to_string(),
-        )],
-        &DomainImports::default(),
+        )]),
     );
     let model = compilation.model.expect("expected an artifact");
     model.modules[0].services[0].operations.clone()

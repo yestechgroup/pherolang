@@ -34,12 +34,9 @@ pub mod evt;
 pub mod mox;
 pub mod uc;
 
-pub use actors::{compile_actors, compile_actors_str, compile_actors_str_with_designs};
+pub use actors::{compile_actors, compile_actors_str};
 pub use cmmn::{compile_cmmn, compile_cmmn_str};
-pub use ddd::{
-    compile_ddd, compile_ddd_app_str, compile_ddd_app_str_with_decisions, compile_ddd_str,
-    compile_ddd_str_with_actors, compile_ddd_str_with_decisions,
-};
+pub use ddd::{compile_ddd, compile_ddd_app_str, compile_ddd_str};
 pub use deploy::compile_deploy_str;
 pub use dmn::{compile_dmn, compile_dmn_str};
 pub use evt::{compile_evt, compile_evt_str};

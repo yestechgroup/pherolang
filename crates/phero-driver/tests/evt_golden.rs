@@ -48,11 +48,10 @@ fn conformance_evt_contract_matches_golden_artifact() {
     let compilation = compile_evt_str(
         contract_absolute.to_str().expect("utf-8 path"),
         &source,
-        &[(
+        &phero_driver::CompileInputs::from_domains(&[(
             domain_absolute.to_str().expect("utf-8 path").to_string(),
             domain,
-        )],
-        &phero_driver::DomainImports::default(),
+        )]),
     );
     assert!(
         compilation.diagnostics.is_empty(),
@@ -182,8 +181,7 @@ fn publish_to_unknown_event_is_an_error() {
     let compilation = compile_evt_str(
         "bad-publish.evt",
         source,
-        &[("orders.mox".to_string(), order_domain())],
-        &phero_driver::DomainImports::default(),
+        &phero_driver::CompileInputs::from_domains(&[("orders.mox".to_string(), order_domain())]),
     );
     assert!(
         compilation.model.is_none(),
@@ -208,8 +206,7 @@ fn unresolvable_field_type_is_an_error() {
     let compilation = compile_evt_str(
         "bad-type.evt",
         source,
-        &[("orders.mox".to_string(), order_domain())],
-        &phero_driver::DomainImports::default(),
+        &phero_driver::CompileInputs::from_domains(&[("orders.mox".to_string(), order_domain())]),
     );
     assert!(
         compilation.model.is_none(),
@@ -232,8 +229,7 @@ fn evt_with_domain(path: &str, source: &str) -> phero_driver::EventCompilation {
     compile_evt_str(
         path,
         source,
-        &[("orders.mox".to_string(), order_domain())],
-        &phero_driver::DomainImports::default(),
+        &phero_driver::CompileInputs::from_domains(&[("orders.mox".to_string(), order_domain())]),
     )
 }
 

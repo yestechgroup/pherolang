@@ -145,8 +145,7 @@ fn compile_conformance_actor_file(relative_path: &str) -> phero_ir::ActorModel {
     let compilation = phero_driver::compile_actors_str(
         absolute.to_str().expect("utf-8 path"),
         &source,
-        &domains,
-        &phero_driver::DomainImports::default(),
+        &phero_driver::CompileInputs::from_domains(&domains),
     );
     assert!(
         compilation.diagnostics.is_empty(),

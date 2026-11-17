@@ -401,7 +401,7 @@ impl Project {
     /// (pherolang#128's J3). One gather per artifact kind; a sibling that
     /// fails to compile contributes nothing (parity with the union pass,
     /// which keeps only the successful artifacts).
-    pub(crate) fn sibling_actors(&mut self, file: &Path) -> Vec<phero_ir::ActorModel> {
+    pub(crate) fn sibling_actors(&mut self, file: &Path) -> Vec<(String, phero_ir::ActorModel)> {
         let key = file.display().to_string();
         let members = self.application_of(&key);
         let mut models = Vec::new();
@@ -411,21 +411,17 @@ impl Project {
                 continue;
             }
             match self.peek(&member) {
-                Some(Artifact::Actor(model)) => models.push(model),
+                Some(Artifact::Actor(model)) => models.push((member.clone(), model)),
                 Some(_) => {}
                 None => {
                     let Ok(pair) = read_actor_pair_in(Path::new(&member), Some(self)) else {
                         continue;
                     };
-                    let compilation = phero_driver::compile_actors_str(
-                        &pair.path,
-                        &pair.source,
-                        &pair.domains,
-                        &pair.imports(),
-                    );
+                    let compilation =
+                        phero_driver::compile_actors_str(&pair.path, &pair.source, pair.inputs());
                     if let Some(model) = compilation.model {
                         self.store(&member, &Artifact::Actor(model.clone()));
-                        models.push(model);
+                        models.push((member, model));
                     }
                 }
             }
@@ -455,14 +451,8 @@ impl Project {
                     let Ok(pair) = read_dmn_pair(Path::new(&member), Some(self)) else {
                         continue;
                     };
-                    let compilation = phero_driver::compile_dmn_str(
-                        &pair.pair.path,
-                        &pair.pair.source,
-                        &pair.pair.domains,
-                        &pair.pair.imports(),
-                        &pair.tables,
-                        &pair.events,
-                    );
+                    let compilation =
+                        phero_driver::compile_dmn_str(&pair.path, &pair.source, pair.inputs());
                     if let Some(model) = compilation.model {
                         self.store(&member, &Artifact::Decision(model.clone()));
                         models.push((member, model));
@@ -477,7 +467,10 @@ impl Project {
     /// the file itself excluded) — the carrier set an actor policy's grant
     /// coverage resolves against (pherolang#128's J4). Gathered exactly like
     /// [`Project::sibling_actors`].
-    pub(crate) fn sibling_designs(&mut self, file: &Path) -> Vec<phero_ir::ddd::DddModel> {
+    pub(crate) fn sibling_designs(
+        &mut self,
+        file: &Path,
+    ) -> Vec<(String, phero_ir::ddd::DddModel)> {
         let key = file.display().to_string();
         let members = self.application_of(&key);
         let mut models = Vec::new();
@@ -486,7 +479,7 @@ impl Project {
                 continue;
             }
             match self.peek(&member) {
-                Some(Artifact::Design(model)) => models.push(model),
+                Some(Artifact::Design(model)) => models.push((member.clone(), model)),
                 Some(_) => {}
                 None => {
                     let Ok(design) = read_ddd_design(Path::new(&member), Some(self)) else {
@@ -512,12 +505,11 @@ impl Project {
                         &design.pair.path,
                         &design.pair.source,
                         &fragments,
-                        &design.pair.domains,
-                        &design.pair.imports(),
+                        design.pair.inputs(),
                     );
                     if let Some(model) = compilation.model {
                         self.store(&member, &Artifact::Design(model.clone()));
-                        models.push(model);
+                        models.push((member, model));
                     }
                 }
             }

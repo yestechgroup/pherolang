@@ -1321,8 +1321,7 @@ fn a_standalone_dto_artifact_passes_the_union_checks() {
     let compilation = phero_driver::compile_ddd_str(
         "library.ddd",
         source,
-        &domains,
-        &phero_driver::DomainImports::default(),
+        &phero_driver::CompileInputs::from_domains(&domains),
     );
     assert!(
         compilation.diagnostics.is_empty(),

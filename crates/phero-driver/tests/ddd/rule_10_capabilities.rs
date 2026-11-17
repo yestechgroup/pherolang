@@ -36,12 +36,10 @@ fn capabilities_must_exist_in_the_actor_model() {
         "}\n",
     );
     let domains = [("library.mox".to_string(), DOMAIN.to_string())];
-    let compilation = compile_ddd_str_with_actors(
+    let compilation = compile_ddd_str(
         "design.ddd",
         source,
-        &domains,
-        &phero_driver::DomainImports::default(),
-        &[actors_with(&["BorrowBooks"])],
+        &inputs_with_actors(&domains, &[actors_with(&["BorrowBooks"])]),
     );
     let diagnostic = single(
         &compilation,
@@ -72,12 +70,10 @@ fn declared_capabilities_are_accepted_by_the_actors_variant() {
         "}\n",
     );
     let domains = [("library.mox".to_string(), DOMAIN.to_string())];
-    let compilation = compile_ddd_str_with_actors(
+    let compilation = compile_ddd_str(
         "design.ddd",
         source,
-        &domains,
-        &phero_driver::DomainImports::default(),
-        &[actors_with(&["Declared"])],
+        &inputs_with_actors(&domains, &[actors_with(&["Declared"])]),
     );
     assert_clean(&compilation);
 }
@@ -94,12 +90,10 @@ fn capabilities_against_an_empty_actor_model_list_nothing() {
         "}\n",
     );
     let domains = [("library.mox".to_string(), DOMAIN.to_string())];
-    let compilation = compile_ddd_str_with_actors(
+    let compilation = compile_ddd_str(
         "design.ddd",
         source,
-        &domains,
-        &phero_driver::DomainImports::default(),
-        &[ActorModel::new()],
+        &inputs_with_actors(&domains, &[ActorModel::new()]),
     );
     let diagnostic = single(&compilation, "unknown capability 'Anything'");
     assert!(
@@ -125,12 +119,10 @@ fn rule_10_suggests_the_nearest_declared_name() {
         "}\n",
     );
     let domains = [("library.mox".to_string(), DOMAIN.to_string())];
-    let compilation = compile_ddd_str_with_actors(
+    let compilation = compile_ddd_str(
         "design.ddd",
         source,
-        &domains,
-        &phero_driver::DomainImports::default(),
-        &[actors_with(&["BorrowBooks"])],
+        &inputs_with_actors(&domains, &[actors_with(&["BorrowBooks"])]),
     );
     let diagnostic = single(&compilation, "unknown capability 'BorrowBookss'");
     assert_eq!(diagnostic.span, Some(span_of(source, "BorrowBookss", 0)));
@@ -171,12 +163,10 @@ fn rule_10_suggests_the_case_variant() {
         "}\n",
     );
     let domains = [("library.mox".to_string(), DOMAIN.to_string())];
-    let compilation = compile_ddd_str_with_actors(
+    let compilation = compile_ddd_str(
         "design.ddd",
         source,
-        &domains,
-        &phero_driver::DomainImports::default(),
-        &[actors_with(&["BorrowBooks"])],
+        &inputs_with_actors(&domains, &[actors_with(&["BorrowBooks"])]),
     );
     let diagnostic = single(&compilation, "unknown capability 'borrowbooks'");
     assert_eq!(
@@ -198,12 +188,10 @@ fn rule_10_without_a_suggestion_lists_the_declared_names() {
         "}\n",
     );
     let domains = [("library.mox".to_string(), DOMAIN.to_string())];
-    let compilation = compile_ddd_str_with_actors(
+    let compilation = compile_ddd_str(
         "design.ddd",
         source,
-        &domains,
-        &phero_driver::DomainImports::default(),
-        &[actors_with(&["BorrowBooks"])],
+        &inputs_with_actors(&domains, &[actors_with(&["BorrowBooks"])]),
     );
     let diagnostic = single(&compilation, "unknown capability 'WhollyUnrelated'");
     assert!(
@@ -236,12 +224,13 @@ fn rule_10_pools_capabilities_across_actor_models() {
         "}\n",
     );
     let domains = [("library.mox".to_string(), DOMAIN.to_string())];
-    let compilation = compile_ddd_str_with_actors(
+    let compilation = compile_ddd_str(
         "design.ddd",
         source,
-        &domains,
-        &phero_driver::DomainImports::default(),
-        &[actors_with(&["BorrowBooks"]), actors_with(&["RenewLoans"])],
+        &inputs_with_actors(
+            &domains,
+            &[actors_with(&["BorrowBooks"]), actors_with(&["RenewLoans"])],
+        ),
     );
     assert_clean(&compilation);
 }

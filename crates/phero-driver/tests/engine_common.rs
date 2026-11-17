@@ -13,9 +13,8 @@
 //! fixture files are needed.
 
 use phero_driver::{
-    check_integrity, compile_actors_str, compile_cmmn_str, compile_ddd_str,
-    compile_ddd_str_with_actors, compile_deploy_str, compile_evt_str, compile_str,
-    compile_usecase_str, DomainImports,
+    check_integrity, compile_actors_str, compile_cmmn_str, compile_ddd_str, compile_deploy_str,
+    compile_evt_str, compile_str, compile_usecase_str, DomainImports,
 };
 use phero_ir::ddd::DddModel;
 use phero_ir::{ActorModel, Multiplicity, Upper};
@@ -51,7 +50,11 @@ fn compile_designs() -> Vec<(String, DddModel)> {
     design_sources()
         .into_iter()
         .map(|(path, source)| {
-            let design = compile_ddd_str(path, source, &domain, &DomainImports::default());
+            let design = compile_ddd_str(
+                path,
+                source,
+                &phero_driver::CompileInputs::from_domains(&domain),
+            );
             assert!(
                 design.diagnostics.is_empty(),
                 "inline design {path} must compile clean: {:?}",
@@ -70,8 +73,7 @@ fn compile_actors() -> (String, ActorModel) {
     let actors = compile_actors_str(
         "team.actor",
         ACTOR_SOURCE,
-        &domain(),
-        &DomainImports::default(),
+        &phero_driver::CompileInputs::from_domains(&domain()),
     );
     assert!(
         actors.diagnostics.is_empty(),
@@ -121,11 +123,10 @@ fn uc_alias_on_non_design_names_realizes() {
     let compilation = compile_usecase_str(
         "app.uc",
         source,
-        &domain(),
-        &DomainImports::default(),
-        &[],
-        &[],
-        &[],
+        &phero_driver::CompileInputs::from_domains(&domain())
+            .with_designs([])
+            .with_actors([])
+            .with_events([]),
     );
     let diagnostic = one_diagnostic(
         &compilation.diagnostics,
@@ -148,11 +149,10 @@ fn uc_alias_on_actor_import_is_rejected_too() {
     let compilation = compile_usecase_str(
         "app.uc",
         source,
-        &domain(),
-        &DomainImports::default(),
-        &[],
-        &[(actor_path, actor_model)],
-        &[],
+        &phero_driver::CompileInputs::from_domains(&domain())
+            .with_designs([])
+            .with_actors([(actor_path, actor_model)].to_vec())
+            .with_events([]),
     );
     let diagnostic = one_diagnostic(
         &compilation.diagnostics,
@@ -170,12 +170,11 @@ fn cmmn_alias_on_non_design_names_execute() {
     let compilation = compile_cmmn_str(
         "case.cmmn",
         source,
-        &domain(),
-        &DomainImports::default(),
-        &[],
-        &[],
-        &[],
-        &[],
+        &phero_driver::CompileInputs::from_domains(&domain())
+            .with_designs([])
+            .with_actors([])
+            .with_events([])
+            .with_decisions([]),
     );
     let diagnostic = one_diagnostic(
         &compilation.diagnostics,
@@ -201,11 +200,10 @@ fn uc_missing_import_is_bare() {
     let compilation = compile_usecase_str(
         "app.uc",
         source,
-        &domain(),
-        &DomainImports::default(),
-        &[],
-        &[],
-        &[],
+        &phero_driver::CompileInputs::from_domains(&domain())
+            .with_designs([])
+            .with_actors([])
+            .with_events([]),
     );
     let diagnostic = one_diagnostic(
         &compilation.diagnostics,
@@ -223,7 +221,13 @@ fn uc_missing_import_is_bare() {
 #[test]
 fn deploy_missing_import_carries_its_own_help() {
     let source = "import \"nowhere.ddd\"\n\napplication A {\n    component web: api {\n        port: 1\n    }\n}\n";
-    let compilation = compile_deploy_str("app.deploy", source, &[], &[]);
+    let compilation = compile_deploy_str(
+        "app.deploy",
+        source,
+        &phero_driver::CompileInputs::new()
+            .with_designs([])
+            .with_flows([]),
+    );
     let diagnostic = one_diagnostic(
         &compilation.diagnostics,
         "imported file \"nowhere.ddd\" was not provided",
@@ -249,11 +253,10 @@ fn uc_realizes_resolves_against_first_aliased_import() {
     let compilation = compile_usecase_str(
         "app.uc",
         source,
-        &domain(),
-        &DomainImports::default(),
-        &designs,
-        &[],
-        &[],
+        &phero_driver::CompileInputs::from_domains(&domain())
+            .with_designs(designs.to_vec())
+            .with_actors([])
+            .with_events([]),
     );
     assert!(
         compilation.diagnostics.is_empty(),
@@ -273,12 +276,11 @@ fn cmmn_execute_resolves_against_first_aliased_import() {
     let compilation = compile_cmmn_str(
         "case.cmmn",
         source,
-        &domain(),
-        &DomainImports::default(),
-        &designs,
-        &[],
-        &[],
-        &[],
+        &phero_driver::CompileInputs::from_domains(&domain())
+            .with_designs(designs.to_vec())
+            .with_actors([])
+            .with_events([])
+            .with_decisions([]),
     );
     assert!(
         compilation.diagnostics.is_empty(),
@@ -298,12 +300,11 @@ fn cmmn_execute_still_reports_operation_missing_from_first() {
     let compilation = compile_cmmn_str(
         "case.cmmn",
         source,
-        &domain(),
-        &DomainImports::default(),
-        &designs,
-        &[],
-        &[],
-        &[],
+        &phero_driver::CompileInputs::from_domains(&domain())
+            .with_designs(designs.to_vec())
+            .with_actors([])
+            .with_events([])
+            .with_decisions([]),
     );
     let diagnostic = one_diagnostic(&compilation.diagnostics, "unknown operation 'second'");
     assert_eq!(
@@ -323,12 +324,11 @@ fn cmmn_unknown_role_actor_help_lists_provided_models() {
     let compilation = compile_cmmn_str(
         "case.cmmn",
         source,
-        &domain(),
-        &DomainImports::default(),
-        &[],
-        &[(actor_path, actor_model)],
-        &[],
-        &[],
+        &phero_driver::CompileInputs::from_domains(&domain())
+            .with_designs([])
+            .with_actors([(actor_path, actor_model)].to_vec())
+            .with_events([])
+            .with_decisions([]),
     );
     let diagnostic = one_diagnostic(&compilation.diagnostics, "unknown actor 'Ghost'");
     assert_eq!(
@@ -348,12 +348,11 @@ fn cmmn_unknown_role_actor_with_no_models_says_so() {
     let compilation = compile_cmmn_str(
         "case.cmmn",
         source,
-        &domain(),
-        &DomainImports::default(),
-        &[],
-        &[],
-        &[],
-        &[],
+        &phero_driver::CompileInputs::from_domains(&domain())
+            .with_designs([])
+            .with_actors([])
+            .with_events([])
+            .with_decisions([]),
     );
     let diagnostic = one_diagnostic(&compilation.diagnostics, "unknown actor 'Ghost'");
     assert_help(diagnostic, Some("no `.actor` models were provided"));
@@ -367,11 +366,10 @@ fn uc_unknown_participant_actor_help() {
     let compilation = compile_usecase_str(
         "app.uc",
         source,
-        &domain(),
-        &DomainImports::default(),
-        &[],
-        &[(actor_path, actor_model)],
-        &[],
+        &phero_driver::CompileInputs::from_domains(&domain())
+            .with_designs([])
+            .with_actors([(actor_path, actor_model)].to_vec())
+            .with_events([]),
     );
     let diagnostic = one_diagnostic(&compilation.diagnostics, "unknown actor 'Ghost'");
     assert_eq!(diagnostic.message, "unknown actor 'Ghost' in use case 'U'");
@@ -387,11 +385,10 @@ fn uc_unknown_participant_actor_with_no_models_says_so() {
     let compilation = compile_usecase_str(
         "app.uc",
         source,
-        &domain(),
-        &DomainImports::default(),
-        &[],
-        &[],
-        &[],
+        &phero_driver::CompileInputs::from_domains(&domain())
+            .with_designs([])
+            .with_actors([])
+            .with_events([]),
     );
     let diagnostic = one_diagnostic(&compilation.diagnostics, "unknown actor 'Ghost'");
     assert_help(diagnostic, Some("no `.actor` models were provided"));
@@ -405,12 +402,11 @@ const CAPABILITY_DESIGN: &str = "import \"domain.mox\";\napplication Demo {\n   
 #[test]
 fn ddd_unknown_capability_help_lists_declared() {
     let (actor_path, actor_model) = compile_actors();
-    let compilation = compile_ddd_str_with_actors(
+    let compilation = compile_ddd_str(
         "a.ddd",
         CAPABILITY_DESIGN,
-        &domain(),
-        &DomainImports::default(),
-        &[actor_model],
+        &phero_driver::CompileInputs::from_domains(&domain())
+            .with_actors([(actor_path, actor_model)]),
     );
     let diagnostic = one_diagnostic(&compilation.diagnostics, "unknown capability 'Zzz'");
     assert_eq!(
@@ -429,8 +425,7 @@ fn integrity_unknown_capability_help_lists_declared() {
     let design = compile_ddd_str(
         "a.ddd",
         CAPABILITY_DESIGN,
-        &domain(),
-        &DomainImports::default(),
+        &phero_driver::CompileInputs::from_domains(&domain()),
     );
     assert!(design.diagnostics.is_empty(), "{:?}", design.diagnostics);
     let diagnostics = check_integrity(
@@ -497,7 +492,11 @@ fn ddd_return_multiplicity_maps_bounds() {
             "import \"domain.mox\";\napplication Demo {{\n    base demo\n    module core {{\n        service Alpha {{\n            Widget{} fetch();\n        }}\n    }}\n}}\n",
             annotation
         );
-        let compilation = compile_ddd_str("a.ddd", &source, &domain(), &DomainImports::default());
+        let compilation = compile_ddd_str(
+            "a.ddd",
+            &source,
+            &phero_driver::CompileInputs::from_domains(&domain()),
+        );
         assert!(
             compilation.diagnostics.is_empty(),
             "annotation {annotation}: {:?}",
@@ -532,7 +531,11 @@ fn ddd_return_multiplicity_maps_bounds() {
 #[test]
 fn ddd_absent_return_multiplicity_stays_none() {
     let source = "import \"domain.mox\";\napplication Demo {\n    base demo\n    module core {\n        service Alpha {\n            Widget fetch();\n        }\n    }\n}\n";
-    let compilation = compile_ddd_str("a.ddd", source, &domain(), &DomainImports::default());
+    let compilation = compile_ddd_str(
+        "a.ddd",
+        source,
+        &phero_driver::CompileInputs::from_domains(&domain()),
+    );
     assert!(
         compilation.diagnostics.is_empty(),
         "{:?}",
@@ -550,12 +553,11 @@ fn cmmn_case_file_multiplicity_maps_bounds() {
     let compilation = compile_cmmn_str(
         "case.cmmn",
         source,
-        &domain(),
-        &DomainImports::default(),
-        &[],
-        &[],
-        &[],
-        &[],
+        &phero_driver::CompileInputs::from_domains(&domain())
+            .with_designs([])
+            .with_actors([])
+            .with_events([])
+            .with_decisions([]),
     );
     assert!(
         compilation.diagnostics.is_empty(),
@@ -605,12 +607,11 @@ fn duplicate_case_diagnostic() {
     let compilation = compile_cmmn_str(
         "case.cmmn",
         source,
-        &domain(),
-        &DomainImports::default(),
-        &[],
-        &[],
-        &[],
-        &[],
+        &phero_driver::CompileInputs::from_domains(&domain())
+            .with_designs([])
+            .with_actors([])
+            .with_events([])
+            .with_decisions([]),
     );
     let diagnostic = one_diagnostic(&compilation.diagnostics, "duplicate case 'C'");
     assert_eq!(diagnostic.message, "duplicate case 'C'");
@@ -623,11 +624,10 @@ fn duplicate_uc_participant_namespace_diagnostic() {
     let compilation = compile_usecase_str(
         "app.uc",
         source,
-        &domain(),
-        &DomainImports::default(),
-        &[],
-        &[],
-        &[],
+        &phero_driver::CompileInputs::from_domains(&domain())
+            .with_designs([])
+            .with_actors([])
+            .with_events([]),
     );
     let diagnostic = one_diagnostic(&compilation.diagnostics, "duplicate name 'W'");
     assert_eq!(diagnostic.message, "duplicate name 'W' in use case 'U'");
@@ -643,11 +643,10 @@ fn duplicate_use_case_diagnostic() {
     let compilation = compile_usecase_str(
         "app.uc",
         source,
-        &domain(),
-        &DomainImports::default(),
-        &[],
-        &[],
-        &[],
+        &phero_driver::CompileInputs::from_domains(&domain())
+            .with_designs([])
+            .with_actors([])
+            .with_events([]),
     );
     let diagnostic = one_diagnostic(&compilation.diagnostics, "duplicate use case 'U'");
     assert_eq!(diagnostic.message, "duplicate use case 'U'");
@@ -657,7 +656,13 @@ fn duplicate_use_case_diagnostic() {
 #[test]
 fn duplicate_component_setting_diagnostic() {
     let source = "import \"nowhere.ddd\"\n\napplication A {\n    component web: api {\n        port: 1\n        port: 2\n    }\n}\n";
-    let compilation = compile_deploy_str("app.deploy", source, &[], &[]);
+    let compilation = compile_deploy_str(
+        "app.deploy",
+        source,
+        &phero_driver::CompileInputs::new()
+            .with_designs([])
+            .with_flows([]),
+    );
     let diagnostic = one_diagnostic(
         &compilation.diagnostics,
         "duplicate setting 'port' on component 'web'",
@@ -672,7 +677,13 @@ fn duplicate_component_setting_diagnostic() {
 #[test]
 fn duplicate_application_diagnostic() {
     let source = "application A {\n    component web: api {\n        port: 1\n    }\n}\n\napplication A {\n    component web: api {\n        port: 1\n    }\n}\n";
-    let compilation = compile_deploy_str("app.deploy", source, &[], &[]);
+    let compilation = compile_deploy_str(
+        "app.deploy",
+        source,
+        &phero_driver::CompileInputs::new()
+            .with_designs([])
+            .with_flows([]),
+    );
     let diagnostic = one_diagnostic(&compilation.diagnostics, "duplicate application 'A'");
     assert_eq!(diagnostic.message, "duplicate application 'A'");
     assert_help(diagnostic, Some("'A' is already declared in this file"));
@@ -681,7 +692,11 @@ fn duplicate_application_diagnostic() {
 #[test]
 fn duplicate_event_diagnostic() {
     let source = "import \"domain.mox\"\n\nevent E {\n    payload: Widget;\n}\n\nevent E {\n    payload: Widget;\n}\n";
-    let compilation = compile_evt_str("app.evt", source, &domain(), &DomainImports::default());
+    let compilation = compile_evt_str(
+        "app.evt",
+        source,
+        &phero_driver::CompileInputs::from_domains(&domain()),
+    );
     let diagnostic = one_diagnostic(&compilation.diagnostics, "duplicate event 'E'");
     assert_eq!(diagnostic.message, "duplicate event 'E'");
     assert_help(diagnostic, Some("'E' is already declared in this file"));

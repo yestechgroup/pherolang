@@ -1,12 +1,12 @@
 //! Integration tests for the `.ddd` decision-link dimension
-//! (`compile_ddd_str_with_decisions`, rule 17): the `invokes` clauses and
+//! (`compile_ddd_str` with a `decisions` bucket, rule 17): the `invokes` clauses and
 //! `inject decision` dependencies validated against caller-provided
 //! `.dmn` decision models, the `.dmn` import provision check, and the
 //! plain-compile records-unvalidated behavior. The normative contract
-//! lives on `compile_ddd_str` and `compile_ddd_str_with_decisions`; these
+//! lives on `compile_ddd_str`; these
 //! tests pin it.
 
-use phero_driver::{compile_ddd_str, compile_ddd_str_with_decisions, DddCompilation, Severity};
+use phero_driver::{compile_ddd_str, DddCompilation, Severity};
 use phero_ir::dmn::{DecisionService, DmnModel, MetadataKind, ModelMetadata};
 
 const DOMAIN: &str = r#"
@@ -74,13 +74,12 @@ fn domains() -> Vec<(String, String)> {
 }
 
 fn compile_with_decisions(source: &str, decisions: &[(String, DmnModel)]) -> DddCompilation {
-    compile_ddd_str_with_decisions(
+    compile_ddd_str(
         "design.ddd",
         source,
-        &domains(),
-        &phero_driver::DomainImports::default(),
-        &[],
-        decisions,
+        &phero_driver::CompileInputs::from_domains(&domains())
+            .with_actors([])
+            .with_decisions(decisions.to_vec()),
     )
 }
 
@@ -240,8 +239,7 @@ fn plain_compiles_record_decision_names_unvalidated() {
     let compilation = compile_ddd_str(
         "design.ddd",
         DESIGN,
-        &domains(),
-        &phero_driver::DomainImports::default(),
+        &phero_driver::CompileInputs::from_domains(&domains()),
     );
     assert_clean(&compilation);
     let model = compilation.model.expect("artifact compiles");
@@ -260,8 +258,7 @@ fn an_empty_decisions_slice_is_the_plain_behavior() {
     let plain = compile_ddd_str(
         "design.ddd",
         DESIGN,
-        &domains(),
-        &phero_driver::DomainImports::default(),
+        &phero_driver::CompileInputs::from_domains(&domains()),
     );
     let with_decisions = compile_with_decisions(DESIGN, &[]);
     assert_eq!(plain.model, with_decisions.model);
@@ -349,8 +346,7 @@ application Library {
     let compilation = compile_ddd_str(
         "design.ddd",
         source,
-        &domains(),
-        &phero_driver::DomainImports::default(),
+        &phero_driver::CompileInputs::from_domains(&domains()),
     );
     assert_clean(&compilation);
     assert!(compilation.model.is_some());

@@ -7,7 +7,6 @@
 //! lowers the resolved shapes the consumer acts on.
 
 use phero_driver::compile_ddd_str;
-use phero_driver::DomainImports;
 use phero_ir::ddd::{RepositoryOperation, SortDirection};
 use phero_ir::{PrimitiveType, TypeRef};
 
@@ -60,8 +59,10 @@ fn compile(op: &str) -> phero_driver::DddCompilation {
     compile_ddd_str(
         "app.ddd",
         &design(op),
-        &[("domain.mox".to_string(), DOMAIN.to_string())],
-        &DomainImports::default(),
+        &phero_driver::CompileInputs::from_domains(&[(
+            "domain.mox".to_string(),
+            DOMAIN.to_string(),
+        )]),
     )
 }
 
@@ -185,8 +186,10 @@ fn a_query_returns_a_dto_projection() {
     let compilation = compile_ddd_str(
         "app.ddd",
         source,
-        &[("domain.mox".to_string(), DOMAIN.to_string())],
-        &DomainImports::default(),
+        &phero_driver::CompileInputs::from_domains(&[(
+            "domain.mox".to_string(),
+            DOMAIN.to_string(),
+        )]),
     );
     assert!(
         compilation.diagnostics.is_empty(),

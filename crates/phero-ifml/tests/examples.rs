@@ -190,8 +190,7 @@ fn load(stem: &str) -> Example {
                                     resolved.display()
                                 )
                             }),
-                            &decision.domains,
-                            &phero_driver::DomainImports::default(),
+                            &phero_driver::CompileInputs::from_domains(&decision.domains),
                         );
                         if let Some(model) = event_compilation.model {
                             decision.events.push((import, model));

@@ -638,8 +638,7 @@ impl PheroBackend {
     ) -> (Option<SnapshotArtifact>, Vec<Diagnostic>) {
         let key = path.display().to_string();
         let map = PositionMap::new(text);
-        let domain_imports =
-            |domains: &[(String, String)]| super::pipeline::domain_import_bundle(domains);
+        let domain_inputs = |domains: &[(String, String)]| super::pipeline::domain_inputs(domains);
         let mut fetch = |resolved: &str| -> Option<String> { self.fetch_open_or_disk(resolved) };
         match surface {
             Surface::Known(SurfaceKind::Mox) => {
@@ -672,12 +671,8 @@ impl PheroBackend {
                     },
                     &mut fetch,
                 );
-                let compilation = phero_driver::compile_actors_str(
-                    &key,
-                    text,
-                    &domains,
-                    &domain_imports(&domains),
-                );
+                let compilation =
+                    phero_driver::compile_actors_str(&key, text, &domain_inputs(&domains));
                 (
                     compilation.model.map(SnapshotArtifact::Actor),
                     keyed_diagnostics(&compilation.diagnostics, &key, &map),
@@ -710,14 +705,9 @@ impl PheroBackend {
                         source: source.clone(),
                     })
                     .collect();
-                let imports = super::pipeline::domain_import_bundle(&gathered.domains);
-                let compilation = phero_driver::compile_ddd_app_str(
-                    &root_path,
-                    &root_text,
-                    &fragments,
-                    &gathered.domains,
-                    &imports,
-                );
+                let inputs = super::pipeline::domain_inputs(&gathered.domains);
+                let compilation =
+                    phero_driver::compile_ddd_app_str(&root_path, &root_text, &fragments, &inputs);
                 (
                     (!fragment)
                         .then(|| compilation.model.map(SnapshotArtifact::Design))
@@ -738,7 +728,7 @@ impl PheroBackend {
                     &mut fetch,
                 );
                 let compilation =
-                    phero_driver::compile_evt_str(&key, text, &domains, &domain_imports(&domains));
+                    phero_driver::compile_evt_str(&key, text, &domain_inputs(&domains));
                 (
                     compilation.model.map(SnapshotArtifact::Event),
                     keyed_diagnostics(&compilation.diagnostics, &key, &map),
@@ -758,8 +748,8 @@ impl PheroBackend {
                 ) else {
                     return (None, Vec::new());
                 };
-                let compilation =
-                    phero_driver::compile_deploy_str(&key, text, &pair.designs, &pair.flows);
+                let inputs = phero_driver::CompileInputs::from(pair);
+                let compilation = phero_driver::compile_deploy_str(&key, text, &inputs);
                 (
                     compilation.model.map(SnapshotArtifact::Deploy),
                     keyed_diagnostics(&compilation.diagnostics, &key, &map),
@@ -790,15 +780,8 @@ impl PheroBackend {
                 ) else {
                     return (None, Vec::new());
                 };
-                let compilation = phero_driver::compile_usecase_str(
-                    &key,
-                    text,
-                    &buckets.domains,
-                    &domain_imports(&buckets.domains),
-                    &buckets.designs,
-                    &buckets.actors,
-                    &buckets.events,
-                );
+                let inputs = phero_driver::CompileInputs::from(buckets);
+                let compilation = phero_driver::compile_usecase_str(&key, text, &inputs);
                 (
                     compilation.model.map(SnapshotArtifact::UseCase),
                     keyed_diagnostics(&compilation.diagnostics, &key, &map),
@@ -818,16 +801,8 @@ impl PheroBackend {
                 ) else {
                     return (None, Vec::new());
                 };
-                let compilation = phero_driver::compile_cmmn_str(
-                    &key,
-                    text,
-                    &buckets.domains,
-                    &domain_imports(&buckets.domains),
-                    &buckets.designs,
-                    &buckets.actors,
-                    &buckets.events,
-                    &buckets.decisions,
-                );
+                let inputs = phero_driver::CompileInputs::from(buckets);
+                let compilation = phero_driver::compile_cmmn_str(&key, text, &inputs);
                 (
                     compilation.model.map(SnapshotArtifact::Case),
                     keyed_diagnostics(&compilation.diagnostics, &key, &map),
@@ -835,14 +810,7 @@ impl PheroBackend {
             }
             Surface::Known(SurfaceKind::Dmn) => {
                 let sources = self.dmn_sources_for(uri, text);
-                let compilation = phero_driver::compile_dmn_str(
-                    &key,
-                    text,
-                    &sources.domains,
-                    &sources.imports,
-                    &sources.tables,
-                    &sources.events,
-                );
+                let compilation = phero_driver::compile_dmn_str(&key, text, &sources.inputs);
                 (
                     compilation.model.map(SnapshotArtifact::Decision),
                     keyed_diagnostics(&compilation.diagnostics, &key, &map),

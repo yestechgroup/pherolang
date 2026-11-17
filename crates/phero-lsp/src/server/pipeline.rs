@@ -39,16 +39,13 @@ pub(super) struct IfmlImportClosure {
 }
 
 /// The gathered compile inputs of one open `.dmn` document (see
-/// [`PheroBackend::dmn_sources_for`]): the imported `.mox` domain sources,
-/// the import bundle their own `import schema`/`import sigil` declarations
-/// need, the decision-table contents the `logic table` clauses name, and
-/// the compiled `.evt` contracts the `import "<path>.evt"` lines name
-/// (rule 14's bucket).
+/// [`PheroBackend::dmn_sources_for`]): one compile-input bundle carrying the
+/// imported `.mox` domain sources, the `import schema`/`import sigil`
+/// content they declare, the decision-table contents the `logic table`
+/// clauses name, and the compiled `.evt` contracts the `import
+/// "<path>.evt"` lines name (rule 14's bucket).
 pub(super) struct DmnSources {
-    pub(super) domains: Vec<(String, String)>,
-    pub(super) imports: phero_driver::DomainImports,
-    pub(super) tables: Vec<(String, String)>,
-    pub(super) events: Vec<(String, phero_ir::events::EventModel)>,
+    pub(super) inputs: phero_driver::CompileInputs,
 }
 
 /// The compiled state of one open `.ifml` document for the navigation
@@ -162,45 +159,34 @@ impl PheroBackend {
                         source: source.clone(),
                     })
                     .collect();
-                let imports = domain_import_bundle(&gathered.domains);
-                phero_driver::compile_ddd_app_str_with_decisions(
-                    &root_path,
-                    &root_text,
-                    &fragments,
-                    &gathered.domains,
-                    &imports,
-                    &actors,
-                    &decisions,
-                )
-                .diagnostics
-                .iter()
-                .filter(|(file, _)| file == &driver_path)
-                .map(|(_, diagnostic)| to_lsp_diagnostic(diagnostic, &map))
-                .collect()
+                let inputs = domain_inputs(&gathered.domains)
+                    .with_actors(actors)
+                    .with_decisions(decisions);
+                phero_driver::compile_ddd_app_str(&root_path, &root_text, &fragments, &inputs)
+                    .diagnostics
+                    .iter()
+                    .filter(|(file, _)| file == &driver_path)
+                    .map(|(_, diagnostic)| to_lsp_diagnostic(diagnostic, &map))
+                    .collect()
             }
             Surface::Known(SurfaceKind::Actor) => {
                 let driver_path = uri
                     .to_file_path()
                     .map(|path| path.display().to_string())
                     .unwrap_or_else(|| uri.as_str().to_string());
-                let (domains, imports) = self.actor_sources_for(uri, &text);
+                let inputs = self.actor_sources_for(uri, &text);
                 // pherolang#128 (J4 at compile time): grant coverage resolves
                 // against every `.ddd` artifact of the open policy's
                 // directory — the empty slice is the exact
                 // `compile_actors_str` behavior.
                 let designs = self.sibling_design_models(uri);
-                phero_driver::compile_actors_str_with_designs(
-                    &driver_path,
-                    &text,
-                    &domains,
-                    &imports,
-                    &designs,
-                )
-                .diagnostics
-                .iter()
-                .filter(|(file, _)| file == &driver_path)
-                .map(|(_, diagnostic)| to_lsp_diagnostic(diagnostic, &map))
-                .collect()
+                let inputs = inputs.with_designs(designs);
+                phero_driver::compile_actors_str(&driver_path, &text, &inputs)
+                    .diagnostics
+                    .iter()
+                    .filter(|(file, _)| file == &driver_path)
+                    .map(|(_, diagnostic)| to_lsp_diagnostic(diagnostic, &map))
+                    .collect()
             }
             Surface::Known(SurfaceKind::Dmn) => {
                 // The driver keys by the disk path when the document lives
@@ -214,19 +200,12 @@ impl PheroBackend {
                     .map(|path| path.display().to_string())
                     .unwrap_or_else(|| uri.as_str().to_string());
                 let sources = self.dmn_sources_for(uri, &text);
-                phero_driver::compile_dmn_str(
-                    &driver_path,
-                    &text,
-                    &sources.domains,
-                    &sources.imports,
-                    &sources.tables,
-                    &sources.events,
-                )
-                .diagnostics
-                .iter()
-                .filter(|(file, _)| file == &driver_path)
-                .map(|(_, diagnostic)| to_lsp_diagnostic(diagnostic, &map))
-                .collect()
+                phero_driver::compile_dmn_str(&driver_path, &text, &sources.inputs)
+                    .diagnostics
+                    .iter()
+                    .filter(|(file, _)| file == &driver_path)
+                    .map(|(_, diagnostic)| to_lsp_diagnostic(diagnostic, &map))
+                    .collect()
             }
             // The four artifact surfaces compile only inside the graph
             // snapshot (pherolang#243/#254): publish the diagnostics its
@@ -364,13 +343,10 @@ impl PheroBackend {
         Some((root_path, root_text, fragments))
     }
 
-    /// The `.mox` domains one open `.actor` policy imports (open documents
-    /// win over disk), plus the import bundle its compile resolves against.
-    pub(super) fn actor_sources_for(
-        &self,
-        uri: &Uri,
-        text: &str,
-    ) -> (Vec<(String, String)>, phero_driver::DomainImports) {
+    /// The compile-input bundle of one open `.actor` policy: the `.mox`
+    /// domains it imports (open documents win over disk) plus their import
+    /// content.
+    pub(super) fn actor_sources_for(&self, uri: &Uri, text: &str) -> phero_driver::CompileInputs {
         let mut domains: Vec<(String, String)> = Vec::new();
         if let Some(path) = uri.to_file_path() {
             let path_key = path.display().to_string();
@@ -388,8 +364,7 @@ impl PheroBackend {
                 &mut fetch,
             );
         }
-        let imports = domain_import_bundle(&domains);
-        (domains, imports)
+        domain_inputs(&domains)
     }
 
     /// The `.mox` domains one open `.dmn` decision model imports (open
@@ -429,10 +404,9 @@ impl PheroBackend {
             }
         }
         DmnSources {
-            imports: domain_import_bundle(&domains),
-            domains,
-            tables,
-            events,
+            inputs: domain_inputs(&domains)
+                .with_tables(tables)
+                .with_events(events),
         }
     }
 
@@ -569,7 +543,7 @@ impl PheroBackend {
     /// (pherolang#128's J3). An empty set is exactly the plain
     /// `compile_ddd_str` behavior. A sibling that fails to compile
     /// contributes nothing — its own open editor shows its diagnostics.
-    fn sibling_actor_models(&self, except: &Uri) -> Vec<phero_ir::ActorModel> {
+    fn sibling_actor_models(&self, except: &Uri) -> Vec<(String, phero_ir::ActorModel)> {
         let Some(path) = except.to_file_path() else {
             return Vec::new();
         };
@@ -597,7 +571,7 @@ impl PheroBackend {
             if let Ok(compiled) =
                 phero_driver::project::compile_actor_imports(std::slice::from_ref(&actor))
             {
-                models.extend(compiled);
+                models.extend(compiled.into_iter().map(|model| (key.clone(), model)));
             }
         }
         models
@@ -609,7 +583,7 @@ impl PheroBackend {
     /// exactly like [`PheroBackend::sibling_actor_models`] — an empty set is
     /// the plain `compile_actors_str` behavior; a sibling that fails to
     /// compile contributes nothing.
-    fn sibling_design_models(&self, except: &Uri) -> Vec<phero_ir::ddd::DddModel> {
+    fn sibling_design_models(&self, except: &Uri) -> Vec<(String, phero_ir::ddd::DddModel)> {
         let Some(path) = except.to_file_path() else {
             return Vec::new();
         };
@@ -635,15 +609,10 @@ impl PheroBackend {
                     source: source.clone(),
                 })
                 .collect();
-            let compilation = phero_driver::compile_ddd_app_str(
-                &key,
-                &text,
-                &fragments,
-                &gathered.domains,
-                &domain_import_bundle(&gathered.domains),
-            );
+            let inputs = domain_inputs(&gathered.domains);
+            let compilation = phero_driver::compile_ddd_app_str(&key, &text, &fragments, &inputs);
             if let Some(model) = compilation.model {
-                models.push(model);
+                models.push((key, model));
             }
         }
         models
@@ -685,14 +654,10 @@ impl PheroBackend {
                 .parent()
                 .map(|dir| dmn_table_sources(dir, &text))
                 .unwrap_or_default();
-            let compilation = phero_driver::compile_dmn_str(
-                &key,
-                &text,
-                &domains,
-                &domain_import_bundle(&domains),
-                &tables,
-                &events,
-            );
+            let inputs = domain_inputs(&domains)
+                .with_tables(tables)
+                .with_events(events);
+            let compilation = phero_driver::compile_dmn_str(&key, &text, &inputs);
             if let Some(model) = compilation.model {
                 models.push((key, model));
             }
@@ -954,18 +919,18 @@ fn normalize_path(path: &std::path::Path) -> String {
         .unwrap_or_else(|_| path.display().to_string())
 }
 
-/// The import bundle for gathered domain sources: the domains' own
-/// `import schema`/`import sigil` content resolves from disk relative to
-/// each domain file (the domains' driver paths are disk paths, so no
-/// re-keying is needed).
-pub(super) fn domain_import_bundle(domains: &[(String, String)]) -> phero_driver::DomainImports {
+/// The compile-input bundle for gathered domain sources: the domains
+/// themselves plus their own `import schema`/`import sigil` content, which
+/// resolves from disk relative to each domain file (the domains' driver
+/// paths are disk paths, so no re-keying is needed).
+pub(super) fn domain_inputs(domains: &[(String, String)]) -> phero_driver::CompileInputs {
     let schemas =
         phero_driver::workspace_imports::collect_schema_imports(domains).unwrap_or_default();
     let sigil = phero_driver::workspace_imports::collect_sigil_imports(domains).ok();
-    phero_driver::DomainImports {
+    phero_driver::CompileInputs::from_domains(domains).with_imports(phero_driver::DomainImports {
         schemas,
         sigil: sigil.map(|sigil| sigil.imports).unwrap_or_default(),
-    }
+    })
 }
 
 /// Converts an `.ifml` diagnostic — the workspace's shared record tagged
