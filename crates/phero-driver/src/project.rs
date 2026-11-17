@@ -4,7 +4,7 @@
 //! closure (Phase B of #117; one walker since SK3, pherolang#331).
 //!
 //! Traversal, path resolution, dedupe bookkeeping and fetch invocation live
-//! once in [`crate::imports::walker`]. Each gatherer here is a **policy**
+//! once in `crate::imports::walker`. Each gatherer here is a **policy**
 //! over it: which extensions route to which bucket, what a miss means, and
 //! what a hit compiles into. Two contracts are special cases and keep their
 //! own walks, because they are different contracts rather than flags:
@@ -16,7 +16,7 @@
 //! written) -> (host-resolved key, text)`) for `.ifml`, and **path-keyed**
 //! (`resolved path -> text`) for every other surface — where the walker
 //! resolves relative to the importing file's directory first
-//! ([`crate::imports::walker::Site`], the CLI rule), so dedupe is by resolved
+//! (`crate::imports::walker::Site`, the CLI rule), so dedupe is by resolved
 //! key.
 //!
 //! The pinned messages (``cannot read imported file {resolved} (imported by
@@ -370,8 +370,8 @@ pub struct DddFragments {
 ///
 /// This is the `.ddd` **special case**: a root plus its fragments is one unit
 /// of compilation, so it walks depth-first with a visiting stack instead of
-/// the shared per-file loop. It keeps that walker's resolution ([`Site`]) and
-/// message ([`cannot_read`]) vocabulary, so keys and texts are identical.
+/// the shared per-file loop. It keeps that walker's resolution (`Site`) and
+/// message (`cannot_read`) vocabulary, so keys and texts are identical.
 pub fn gather_ddd_fragments(path_key: &str, source: &str, fetch: &mut Fetch<'_>) -> DddFragments {
     fn walk_fragments(
         path: &str,
