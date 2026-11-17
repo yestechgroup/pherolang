@@ -82,7 +82,7 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends \
-            gcc-aarch64-linux-gnu libc6-dev-arm64-cross
+            gcc-aarch64-linux-gnu libc6-dev-arm64-cross qemu-user-static
 
       - uses: dtolnay/rust-toolchain@stable
         with:
@@ -118,12 +118,19 @@ jobs:
         run: |
           set -euo pipefail
           bin="target/${{ matrix.target }}/release/pherolang"
-          json="$(printf 'class A { }\n' | "$bin" highlight --surface mox --format json -)"
+          # A cross-built aarch64 binary cannot execute on the x86_64 runner.
+          # Run it through qemu-user with the target sysroot installed above,
+          # so the published archive is still proven, not merely inspected.
+          run=()
+          if [ '${{ matrix.target }}' = 'aarch64-unknown-linux-gnu' ]; then
+            run=(qemu-aarch64-static -L /usr/aarch64-linux-gnu)
+          fi
+          json="$(printf 'class A { }\n' | "${run[@]}" "$bin" highlight --surface mox --format json -)"
           printf '%s\n' "$json" | grep -q '"formatVersion": 1'
           printf '%s\n' "$json" | grep -q '"surface": "mox"'
           grammars="$(mktemp -d)"
-          "$bin" grammar --out "$grammars" >/dev/null
-          "$bin" grammar --check "$grammars" >/dev/null
+          "${run[@]}" "$bin" grammar --out "$grammars" >/dev/null
+          "${run[@]}" "$bin" grammar --check "$grammars" >/dev/null
           echo "highlight + grammar contract verified in $bin"
 
       - name: Package archive

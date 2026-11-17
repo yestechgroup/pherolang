@@ -1,6 +1,9 @@
 {
   "$schema": "node_modules/wrangler/config-schema.json",
   "name": "pherolang-web",
+  // Cloudflare's version-preview build runs `wrangler preview`; an empty
+  // block is the required opt-in (assets and compatibility stay top-level).
+  "previews": {},
   "compatibility_date": "2026-11-01",
   // The Astro Cloudflare adapter emits `dist/client` (assets) and `dist/server`
   // (the entry Worker). Static output means the server bundle only carries the
