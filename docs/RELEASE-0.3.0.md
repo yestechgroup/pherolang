@@ -102,9 +102,9 @@ gh pr close 237 --comment "Superseded: site/brand landed in main."
 ## 5. Tag and publish
 
 The tag is the release trigger; `.github/workflows/release.yml` builds the
-supported targets, checksums them into `SHA256SUMS`, and publishes the GitHub
-Release. The matrix is two rows and no more: linux x86_64 and linux aarch64,
-both on `ubuntu-latest`. That is the whole supported set
+supported target, checksums it into `SHA256SUMS`, and publishes the GitHub
+Release. The matrix is one row and no more: linux x86_64 on `ubuntu-latest`.
+That is the whole supported set
 ([adr/0002](adr/0004-supported-platforms-linux-only.md)); Windows and macOS
 are not built, not published, and not tested.
 
@@ -143,19 +143,19 @@ gh release download v0.3.0 --dir /tmp/pherolang-0.3.0
 (cd /tmp/pherolang-0.3.0 && sha256sum -c SHA256SUMS)
 ```
 
-Expected names at version `0.3.0` — the two linux archives plus the manifest,
-and nothing else:
+Expected names at version `0.3.0` — the linux x86_64 archive plus the
+manifest, and nothing else:
 
 ```
 pherolang-0.3.0-x86_64-unknown-linux-gnu.tar.gz
-pherolang-0.3.0-aarch64-unknown-linux-gnu.tar.gz
 SHA256SUMS
 ```
 
 The `v0.3.0` that was published before the Linux-only decision also carried
-`pherolang-0.3.0-x86_64-pc-windows-msvc.zip`. That asset was withdrawn, and
-its line removed from `SHA256SUMS` (issue #295); the tag and the two linux
-assets were not touched.
+`pherolang-0.3.0-x86_64-pc-windows-msvc.zip` and
+`pherolang-0.3.0-aarch64-unknown-linux-gnu.tar.gz`. Those assets were
+withdrawn, and their lines removed from `SHA256SUMS` (issues #295 and #321);
+the tag and the x86_64 asset were not touched.
 
 ## 6. Install smoke test
 

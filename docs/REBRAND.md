@@ -206,7 +206,7 @@ Actions that do not appear in a repository diff:
       — owner:
 - [ ] Tag `v0.3.0` "Phero Lang" and publish release notes from the
       changelog — owner:
-- [ ] Publish renamed release assets (the two linux targets, plus
+- [ ] Publish renamed release assets (the linux x86_64 target, plus
       `SHA256SUMS`) — owner:
 - [ ] 301 `rexlang.com` → `pherolang.com`, and `docs.rexlang.com` →
       `docs.pherolang.com` — owner:

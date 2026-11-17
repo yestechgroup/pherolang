@@ -45,15 +45,14 @@ jobs:
         # changes, that pattern changes in the same commit or the site's
         # binary download silently 404s.
         #
-        # Linux only — x86_64 and aarch64, both on the same runner — is the
-        # supported set (docs/adr/0004-supported-platforms-linux-only.md).
-        # A row here is a support claim, not a build experiment: the archive
-        # is built, published, and documented. Adding a platform is a
-        # maintainer decision that comes with a CI job which *executes* the
-        # binary; a leg nobody runs is a claim we cannot back.
+        # Linux x86_64 only is the supported set
+        # (docs/adr/0004-supported-platforms-linux-only.md). A row here is a
+        # support claim, not a build experiment: the archive is built,
+        # published, and documented. Adding a platform is a maintainer
+        # decision that comes with a CI job which *executes* the binary; a
+        # leg nobody runs is a claim we cannot back.
         include:
           - target: x86_64-unknown-linux-gnu
-          - target: aarch64-unknown-linux-gnu
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -73,17 +72,6 @@ jobs:
           fi
           echo "version=$version" >> "$GITHUB_OUTPUT"
 
-      # The cross leg needs the target's C toolchain *and* its libc headers:
-      # the compiler alone links, but `ring`'s build script includes
-      # <bits/libc-header-start.h> from the target sysroot and fails without
-      # libc6-dev-<arch>-cross.
-      - name: Install aarch64 cross toolchain
-        if: matrix.target == 'aarch64-unknown-linux-gnu'
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y --no-install-recommends \
-            gcc-aarch64-linux-gnu libc6-dev-arm64-cross qemu-user-static
-
       - uses: dtolnay/rust-toolchain@stable
         with:
           targets: ${{ matrix.target }}
@@ -91,10 +79,6 @@ jobs:
 
       - name: Build
         shell: bash
-        env:
-          # Consumed only by the aarch64-unknown-linux-gnu target; an empty
-          # value on the other legs is inert.
-          CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_LINKER: ${{ matrix.target == 'aarch64-unknown-linux-gnu' && 'aarch64-linux-gnu-gcc' || '' }}
         run: cargo build --release --locked -p phero-cli --target '${{ matrix.target }}'
 
       # Packaging below names the binary by path. Assert it exists here so a
@@ -118,19 +102,12 @@ jobs:
         run: |
           set -euo pipefail
           bin="target/${{ matrix.target }}/release/pherolang"
-          # A cross-built aarch64 binary cannot execute on the x86_64 runner.
-          # Run it through qemu-user with the target sysroot installed above,
-          # so the published archive is still proven, not merely inspected.
-          run=()
-          if [ '${{ matrix.target }}' = 'aarch64-unknown-linux-gnu' ]; then
-            run=(qemu-aarch64-static -L /usr/aarch64-linux-gnu)
-          fi
-          json="$(printf 'class A { }\n' | "${run[@]}" "$bin" highlight --surface mox --format json -)"
+          json="$(printf 'class A { }\n' | "$bin" highlight --surface mox --format json -)"
           printf '%s\n' "$json" | grep -q '"formatVersion": 1'
           printf '%s\n' "$json" | grep -q '"surface": "mox"'
           grammars="$(mktemp -d)"
-          "${run[@]}" "$bin" grammar --out "$grammars" >/dev/null
-          "${run[@]}" "$bin" grammar --check "$grammars" >/dev/null
+          "$bin" grammar --out "$grammars" >/dev/null
+          "$bin" grammar --check "$grammars" >/dev/null
           echo "highlight + grammar contract verified in $bin"
 
       - name: Package archive

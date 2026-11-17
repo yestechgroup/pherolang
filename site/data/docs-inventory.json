@@ -133,7 +133,7 @@
       "slug": "rebrand",
       "title": "Rebranding: rexlang → Phero Lang",
       "description": "rexlang is now **Phero Lang**. From 0.3.0 the compiler is `pherolang`, the",
-      "bytes": 9136,
+      "bytes": 9138,
       "lines": 217
     },
     {
@@ -151,7 +151,7 @@
       "slug": "release-0.3.0",
       "title": "Release runbook: v0.3.0 (Phero Lang)",
       "description": "The operator sequence for cutting **v0.3.0**, in the order the work actually",
-      "bytes": 7292,
+      "bytes": 7284,
       "lines": 200
     },
     {

@@ -5,9 +5,9 @@ all welcome. This page is the path from a clone to a merged pull request.
 
 ## Prerequisites
 
-- **Linux.** The supported set is `x86_64` and `aarch64` GNU (glibc), and
-  `ubuntu-latest` is the only runner the gate executes on — Windows and macOS
-  are unsupported and untested. See
+- **Linux x86_64.** `x86_64-unknown-linux-gnu` (glibc) is the supported
+  target, and `ubuntu-latest` is the only runner the gate executes on —
+  Windows, macOS, and Linux aarch64 are unsupported and untested. See
   [docs/adr/0004-supported-platforms-linux-only.md](docs/adr/0004-supported-platforms-linux-only.md).
 - A stable Rust toolchain, installed through [rustup](https://rustup.rs).
 - `git`.

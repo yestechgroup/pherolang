@@ -1,4 +1,4 @@
-# 0004 — Supported platforms are Linux x86_64 and aarch64 only
+# 0004 — Supported platform is Linux x86_64 only
 
 - **Status:** Accepted, 2026-11-16
 - **Issue:** pherolang#295
@@ -9,7 +9,9 @@
 ## Context
 
 `v0.3.0` published three assets: two Linux archives and a Windows zip. Only
-the Linux pair was ever executed. The Windows leg built once, was smoke-tested
+the Linux x86_64 archive was actually run by the project. The aarch64 leg
+cross-built a second archive without a distinct consumer or runner, and the
+Windows leg built once, was smoke-tested
 by no job, and carried no test coverage — `cargo-hack` and the test suite have
 never run on Windows. The macOS rows in the matrix never built at all: the
 organization's runner configuration answers
@@ -27,9 +29,9 @@ someone may have scripted around.
 
 | # | Decision | Rationale |
 |---|---|---|
-| P1 | The supported set is `x86_64-unknown-linux-gnu` and `aarch64-unknown-linux-gnu`, glibc | Both are built, published, and smoke-tested today; that is the only pair the project can actually stand behind. |
+| P1 | The supported set is `x86_64-unknown-linux-gnu`, glibc | It is the one target built, published, and smoke-tested by the project. aarch64 had no separate consumer, runner, or smoke test, so it was removed with the other unbacked claims. |
 | P2 | "Supported" means **built, tested, documented** — the release workflow produces an archive per target, CI runs the binary on `ubuntu-latest`, and `README.md`/`CONTRIBUTING.md` state the set | Each leg is checked by a different mechanism; dropping any one of them turns the claim back into an assumption. |
-| P3 | Windows and macOS are **unsupported and untested**, said in one place instead of accumulating per-platform branches | The release matrix, the packaging steps, and the docs shrink to one shape: no `runner.os` guards, no `fromJSON` conditional, no per-platform archive format. |
+| P3 | Windows, macOS, and Linux aarch64 are **unsupported and untested**, said in one place instead of accumulating branches | The release matrix, the packaging steps, and the docs shrink to one shape: one target, no `runner.os` guards, no cross toolchain, no per-platform archive format. |
 | P4 | Adding a platform is a maintainer decision that ships with a CI job which **executes** the binary | The failure this ADR records is precisely a build leg with no execution behind it; requiring the job makes that failure impossible to repeat. |
 | P5 | `Cargo.lock` keeps its `windows-sys`/`windows-link` entries | They are transitive facts of `anstyle`, `tokio`, `dirs` and friends. The dependency graph is not a support claim, and purging it is churn with no product effect. |
 
@@ -46,21 +48,21 @@ someone may have scripted around.
 
 ## Consequences
 
-- **The release matrix is two rows, both `ubuntu-latest`.** No `runner.os`
-  conditionals, no per-architecture `binary` key, no zip packaging step, and
-  no `shasum` fallback for a runner we do not use. The archive contract is
-  `pherolang-<version>-<target>.tar.gz` plus `SHA256SUMS`
-  (`.github/workflows/release.yml`); `site.yml`'s
+- **The release matrix is one row, `ubuntu-latest`.** No `runner.os`
+  conditionals, no cross toolchain, no per-architecture `binary` key, no zip
+  packaging step, and no `shasum` fallback for a runner we do not use. The
+  archive contract is `pherolang-<version>-<target>.tar.gz` plus
+  `SHA256SUMS` (`.github/workflows/release.yml`); `site.yml`'s
   `PHEROLANG_ASSET_PATTERN` matches the x86_64 Linux asset and is unaffected.
-- **`v0.3.0`'s Windows zip is withdrawn.** The asset is deleted and
-  `SHA256SUMS` regenerated over the two Linux archives, so the documented
-  `sha256sum -c SHA256SUMS` flow keeps passing. The tag and the Linux assets
-  are untouched — no re-tag, no history rewrite.
+- **`v0.3.0`'s Windows zip and aarch64 archive are withdrawn.** Both assets
+  are deleted and `SHA256SUMS` regenerated over the one x86_64 Linux archive,
+  so the documented `sha256sum -c SHA256SUMS` flow keeps passing. The tag and
+  the x86_64 asset are untouched — no re-tag, no history rewrite.
 - **The gate is unchanged.** `scripts/ci-local.sh` already runs on one Linux
   runner; this decision removes requests for platforms it never ran on rather
   than adding a job.
 - **The tree can be grepped for the claim.** `git grep -niE
-  'windows|macos|darwin'` should return only: `Cargo.lock` and
+  'windows|macos|darwin|aarch64'` should return only: `Cargo.lock` and
   `site/pnpm-lock.yaml` transitivity, `slice::windows(` call sites,
   platform-neutral icon/font names (`apple-touch-icon.png`, `-apple-system`),
   and the deliberate "unsupported" statements in `README.md`,
