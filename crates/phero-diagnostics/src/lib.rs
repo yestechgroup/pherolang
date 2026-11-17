@@ -29,8 +29,20 @@
 //! `ENTRIES`, and add the band's ledger row if it is new. A numeric
 //! band's next-free pointer is one past its highest registered code (or
 //! the band start when empty); the registry tests pin ledger honesty and
-//! regenerate `docs/DIAGNOSTICS.md`. The crate is dependency-free on
-//! purpose, so every surface can depend on it.
+//! regenerate `docs/DIAGNOSTICS.md`.
+//!
+//! # What this crate may depend on
+//!
+//! This crate carries two things: the code registry ([`Entry`], [`Band`],
+//! [`Severity`]) and the one diagnostic record every surface emits
+//! ([`Diagnostic`], SK2 of epic pherolang#328). A record must carry a byte
+//! span, so the crate depends on `phero-parser` for
+//! [`Span`](phero_parser::Span) and nothing
+//! else: `phero-parser` is the span/token substrate every surface already
+//! sits on and has no dependency back on any surface, so every surface can
+//! keep depending on this crate without a cycle ([record] has the full
+//! decision, including why the code payload is a type parameter).
+//!
 
 use std::sync::LazyLock;
 
@@ -42,6 +54,7 @@ pub mod ifml_check;
 pub mod ifml_lints;
 pub mod ifml_resolver;
 pub mod integrity;
+pub mod record;
 pub mod suggest;
 
 pub use ddd::*;
@@ -52,6 +65,7 @@ pub use ifml_check::*;
 pub use ifml_lints::*;
 pub use ifml_resolver::*;
 pub use integrity::*;
+pub use record::Diagnostic;
 pub use suggest::*;
 
 /// How severe a diagnostic is — each registry entry's severity class.

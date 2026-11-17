@@ -1,5 +1,13 @@
 //! Diagnostics (errors and warnings) and their rendering with [ariadne].
 //!
+//! The record itself and its severity live in `phero-diagnostics` (the
+//! one shared [`Diagnostic`] every surface emits — SK2 of epic
+//! pherolang#328); this module owns the driver's code payload
+//! ([`DiagnosticCode`]) and the report renderer. The registry crate cannot
+//! name [`DiagnosticCode`] (this crate depends on it), so the shared
+//! record is generic over its code and the driver's spelling is the
+//! [`Diagnostic`] alias below.
+//!
 //! [ariadne]: https://crates.io/crates/ariadne
 
 use ariadne::{Config, IndexType, Label, Report, ReportKind, Source};
@@ -7,14 +15,13 @@ use ariadne::{Config, IndexType, Label, Report, ReportKind, Source};
 /// Byte-offset span into the source text.
 pub use phero_syntax::Span;
 
-/// Severity of a [`Diagnostic`].
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum Severity {
-    /// A problem that prevents compilation; no IR artifact is produced.
-    Error,
-    /// A suspicious construct that does not prevent compilation.
-    Warning,
-}
+/// How severe a diagnostic is — the registry's one severity class,
+/// re-exported so driver call sites keep their historical spelling.
+pub use phero_diagnostics::Severity;
+
+/// The driver's diagnostic record: the shared record carrying this
+/// surface family's machine-readable code payload.
+pub type Diagnostic = phero_diagnostics::Diagnostic<DiagnosticCode>;
 
 /// Machine-readable diagnostic codes, serializable for structured LSP
 /// payloads (e.g. quick-fix `data`).
@@ -156,69 +163,17 @@ impl serde::Serialize for DiagnosticCode {
     }
 }
 
-/// A single compiler diagnostic: a severity, a message, an optional span,
-/// an optional help hint, and an optional machine-readable code.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct Diagnostic {
-    /// How severe the diagnostic is.
-    pub severity: Severity,
-    /// Human-readable description of the problem.
-    pub message: String,
-    /// Byte span the diagnostic refers to, if any.
-    pub span: Option<Span>,
-    /// Optional actionable hint shown below the report.
-    pub help: Option<String>,
-    /// Optional machine-readable code for structured tooling (LSP quick
-    /// fixes and the like). Absent unless explicitly attached.
-    pub code: Option<DiagnosticCode>,
-}
-
-impl Diagnostic {
-    /// Creates an error diagnostic.
-    pub fn error(message: impl Into<String>, span: Option<Span>) -> Self {
-        Self {
-            severity: Severity::Error,
-            message: message.into(),
-            span,
-            help: None,
-            code: None,
-        }
-    }
-
-    /// Creates a warning diagnostic.
-    pub fn warning(message: impl Into<String>, span: Option<Span>) -> Self {
-        Self {
-            severity: Severity::Warning,
-            message: message.into(),
-            span,
-            help: None,
-            code: None,
-        }
-    }
-
-    /// Attaches a help hint to this diagnostic.
-    pub fn with_help(mut self, help: impl Into<String>) -> Self {
-        self.help = Some(help.into());
-        self
-    }
-
-    /// Attaches a machine-readable code to this diagnostic.
-    pub fn with_code(mut self, code: DiagnosticCode) -> Self {
-        self.code = Some(code);
-        self
-    }
-
-    /// `true` when the severity is [`Severity::Error`].
-    pub fn is_error(&self) -> bool {
-        self.severity == Severity::Error
-    }
-}
-
 /// Renders diagnostics into a plain-text (colorless) ariadne report string,
 /// sorted by source span. Parse errors and semantic diagnostics can be mixed;
-/// they are merged and ordered here.
-pub fn render(path: &str, source: &str, diagnostics: &[Diagnostic]) -> String {
-    let mut ordered: Vec<&Diagnostic> = diagnostics.iter().collect();
+/// they are merged and ordered here. Generic over the code payload because
+/// rendering never reads `code` — the CLI renders `.ifml` records
+/// (`&'static str` codes) through the same path as driver ones.
+pub fn render<C>(
+    path: &str,
+    source: &str,
+    diagnostics: &[phero_diagnostics::Diagnostic<C>],
+) -> String {
+    let mut ordered: Vec<&phero_diagnostics::Diagnostic<C>> = diagnostics.iter().collect();
     ordered.sort_by_key(|diagnostic| diagnostic.span.map(|span| (span.start, span.end)));
 
     let mut out: Vec<u8> = Vec::new();
