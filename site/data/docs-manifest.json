@@ -189,6 +189,13 @@
       "collection": "adr",
       "target": "adr/0003-compiler-backed-highlighting-is-the-source-of-truth.md",
       "url": "/adr/0003-compiler-backed-highlighting-is-the-source-of-truth/"
+    },
+    {
+      "source": "docs/adr/0004-supported-platforms-linux-only.md",
+      "slug": "0004-supported-platforms-linux-only",
+      "collection": "adr",
+      "target": "adr/0004-supported-platforms-linux-only.md",
+      "url": "/adr/0004-supported-platforms-linux-only/"
     }
   ]
 }
