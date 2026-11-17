@@ -749,8 +749,12 @@ classes, nor the DTO member typing, which reads the source class.
     direct features that are not class references. Document field names are
     unique per search, and every document expression is parsed and
     type-checked with the entity as `self` (any value type is legal; the
-    consumer decides the rendered form). Pagination bounds satisfy
-    `1 ≤ limit ≤ max`.
+    consumer decides the rendered form). A **named** document
+    (`document DtoName;`) resolves to a same-module dto boundary whose source
+    is this search's entity; a standalone boundary, a cross-module boundary,
+    a projection of another class, and an inline-plus-named combination are
+    each a spanned error (`E0400`–`E0402`), and the two forms are mutually
+    exclusive. Pagination bounds satisfy `1 ≤ limit ≤ max`.
 12. **Value contract** — a `value` design is a strictly immutable value
     object (Sculptor's ValueObject with no `!immutable` opt-out, issue
     [#299](https://github.com/yestechgroup/pherolang/issues/299)): no
@@ -1477,8 +1481,13 @@ aggregate member, and carries no invariants; its members are data only.
 **Shared projection AST.** A DTO projection's assignment and a search
 `document` entry are the same AST node (`DddProjectionMember::Assign`)
 with the same raw-expression capture; parsing and typing are the driver's.
-Converging the two surfaces further — `document DtoName;` as a search's
-document shape — is a follow-up, not shipped.
+A search may also name a boundary directly (`document DtoName;`, DF3, issue
+[#326](https://github.com/yestechgroup/pherolang/issues/326)): the boundary
+must be a same-module dto whose source is the search's `entity` (a mirror or
+projection, never standalone), and its members *are* the document shape. The
+artifact carries `documentRef` (`{"dto":"Name"}`) and no inline entries; the
+inline `document { ... }` block stays legal for a one-off shape. The two
+forms are mutually exclusive.
 
 ## Aggregate derivation
 

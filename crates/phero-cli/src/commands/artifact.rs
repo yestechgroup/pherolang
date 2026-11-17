@@ -80,7 +80,7 @@ fn load_domain_fingerprint(
     for file in domain_files {
         models.push(read_domain_model(file)?);
     }
-    Ok(Some(phero_driver::ddd::domain_fingerprint(&models)))
+    Ok(Some(phero_driver::domain_fingerprint(&models)))
 }
 
 fn read_domain_model(file: &Path) -> anyhow::Result<phero_ir::Model> {

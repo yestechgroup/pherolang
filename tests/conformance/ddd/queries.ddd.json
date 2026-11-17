@@ -325,6 +325,41 @@
             ]
           }
         }
+      ],
+      "searches": [
+        {
+          "name": "OpenOrders",
+          "description": "The named document form (DF3, issue pherolang#326): the projection\nboundary below *is* the document shape — declared once, reused.",
+          "entity": "Order",
+          "entityRef": {
+            "type": "class",
+            "value": {
+              "package": "demo.queries",
+              "name": "Order"
+            }
+          },
+          "text": [
+            {
+              "property": "orderNo",
+              "typeRef": {
+                "type": "primitive",
+                "value": "string"
+              }
+            }
+          ],
+          "sort": [
+            {
+              "property": "orderNo",
+              "typeRef": {
+                "type": "primitive",
+                "value": "string"
+              }
+            }
+          ],
+          "documentRef": {
+            "dto": "OrderSummary"
+          }
+        }
       ]
     }
   ]

@@ -108,6 +108,12 @@ an actor artifact).
   (`phero_backend_ddd::check_pairing`); `pherolang artifact check
   <design.json> --domain <domain.json>` is the reference implementation. It
   is a staleness check, not a signature.
+- **DDD search documents (DF3, issue #326).** A `SearchDef` carries exactly
+  one document shape: the inline `document` list (`DocumentField` entries) or
+  a sparse `documentRef` (`{"dto":"Name"}`) naming a same-module `dtoShape`
+  whose `source` equals the search's `entityRef`. The named form emits no
+  inline entries; a search without it is byte-identical. The artifact-only
+  check validates the reference, the source match, and the mutual exclusion.
 - **DDD error vocabulary (DD7, issue #304).** An `ErrorDecl` is
   `{"name": …, "description"?: …, "fields"?: [{name, type, multiplicity?}]}`
   — the payload reuses the `DddParam` signature slot. `DddModel.errors` holds

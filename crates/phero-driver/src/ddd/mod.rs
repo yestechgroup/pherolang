@@ -429,6 +429,7 @@ pub(crate) fn compile_ddd_file(
             &packages,
             base.as_deref(),
             union.as_ref(),
+            &design_prep,
             &mut registries,
         );
         local.extend(stage_diags);

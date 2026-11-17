@@ -16,7 +16,7 @@
       "formatVersion": 2,
       "kind": "dddDesign",
       "path": "support.ddd.json",
-      "sha256": "e163f6f86a9ffb485a0b2541e1a4202abe3bea1a5f0edb4132ff2088e0cd756e"
+      "sha256": "e1560e99214a3af20d2917d7de873fb23317e7f570f046daaaaec58cef142b8c"
     },
     {
       "formatVersion": 2,
@@ -293,7 +293,7 @@
         "trigger": "shrinking the trusted set is always a welcome PR (#90's spirit); a creusot-std bump that re-establishes the consolidated invariant across a raw `Vec` borrow (release notes) retires the primitives"
       },
       {
-        "claim": "Wire rule 3: a feature's stable id equals its 0-based declaration index; `assign_feature_ids` establishes it and changes nothing else",
+        "claim": "Wire rule 3: a feature's id is its 0-based declaration index within one publication (an intra-publication ordinal, never a cross-publication identity); `assign_feature_ids` establishes it and changes nothing else",
         "evidence": [
           {
             "kind": "mirror",
@@ -306,6 +306,10 @@
           {
             "kind": "test",
             "pointer": "crates/phero-ir/tests/feature_ids.rs:ids_equal_declaration_indices"
+          },
+          {
+            "kind": "test",
+            "pointer": "crates/phero-ir/tests/feature_ids.rs:inserting_a_feature_renumbers_later_ids"
           }
         ],
         "id": "V10",
@@ -493,7 +497,7 @@
         "trigger": null
       }
     ],
-    "sha256": "919b13c20f949686b5e9d2a36ab6cca0dc1d0e5ace41ad6d5a2128fecdd9f5bc",
+    "sha256": "9838db14917e51ddf16e184055df378c14def25b99083e0460e06a3beefb6964",
     "source": "docs/verification/register.json"
   },
   "sources": [

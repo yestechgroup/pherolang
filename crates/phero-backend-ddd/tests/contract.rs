@@ -10,10 +10,10 @@ use phero_backend_ddd::{
 };
 use phero_driver::{compile_actors_str, compile_ddd_str, Severity};
 use phero_ir::ddd::{
-    BuiltinRepositoryOp, CapabilityRef, DddModel, DddTypeRef, Design, DomainFingerprint,
-    DtoDirection, DtoMember, DtoMemberKind, DtoShape, EqualityPolicy, ErrorRef, IdentityPolicy,
-    QueryPagination, QuerySortKey, QuerySpec, RepositoryOperation, SortDirection, StateMachine,
-    Stereotype, TargetKind, TargetRef, ValueSemantics, DDD_MODEL_FORMAT_VERSION,
+    BuiltinRepositoryOp, CapabilityRef, DddModel, DddTypeRef, Design, DocumentField,
+    DomainFingerprint, DtoDirection, DtoMember, DtoMemberKind, DtoShape, EqualityPolicy, ErrorRef,
+    IdentityPolicy, QueryPagination, QuerySortKey, QuerySpec, RepositoryOperation, SortDirection,
+    StateMachine, Stereotype, TargetKind, TargetRef, ValueSemantics, DDD_MODEL_FORMAT_VERSION,
 };
 use phero_ir::{Multiplicity, PrimitiveType, TypeRef};
 
@@ -43,6 +43,20 @@ fn compiled() -> DddModel {
     compilation
         .model
         .expect("library.ddd lowers to a design artifact")
+}
+
+fn compiled_queries() -> DddModel {
+    let (design_path, design) = fixture("queries.ddd");
+    let (domain_path, domain) = fixture("queries.mox");
+    let compilation = compile_ddd_str(
+        &design_path,
+        &design,
+        &phero_driver::CompileInputs::from_domains(&[(domain_path, domain)]),
+    );
+    assert_clean(&compilation.diagnostics);
+    compilation
+        .model
+        .expect("queries.ddd lowers to a design artifact")
 }
 
 /// A focused design over `library.mox` whose capability names all exist in
@@ -198,10 +212,10 @@ fn a_malformed_domain_fingerprint_is_reported() {
 #[test]
 fn pairing_accepts_the_compiled_domain_and_names_a_mismatch() {
     let model = compiled();
-    let matching = phero_driver::ddd::domain_fingerprint(&[domain_model("library.mox")]);
+    let matching = phero_driver::domain_fingerprint(&[domain_model("library.mox")]);
     assert_eq!(check_pairing(&model, &matching), Ok(()));
 
-    let other = phero_driver::ddd::domain_fingerprint(&[domain_model("queries.mox")]);
+    let other = phero_driver::domain_fingerprint(&[domain_model("queries.mox")]);
     let violation = check_pairing(&model, &other).expect_err("the pair is stale");
     assert_eq!(violation.path, "domainFingerprint");
     assert!(
@@ -1564,6 +1578,87 @@ fn capabilities_require_a_query() {
         violations
             .iter()
             .any(|violation| violation.message.contains("only when it carries a query")),
+        "{violations:?}"
+    );
+}
+
+// --- named search documents (DF3, pherolang#326) -----------------------------
+
+fn named_document_path() -> String {
+    // queries.ddd's module 0 declares one search with `document OrderSummary;`.
+    "modules[0].searches[0].documentRef".to_string()
+}
+
+#[test]
+fn a_compiled_named_document_is_contract_complete() {
+    let model = compiled_queries();
+    assert_eq!(check_contract(&model), Vec::new());
+    let search = &model.modules[0].searches[0];
+    assert_eq!(
+        search.document_ref,
+        Some(DddTypeRef::Dto {
+            dto: "OrderSummary".to_string()
+        }),
+        "the named form lowers the reference"
+    );
+    assert!(
+        search.document.is_empty(),
+        "the named form lowers no inline entries"
+    );
+}
+
+#[test]
+fn a_named_document_must_resolve_in_its_module() {
+    let mut model = compiled_queries();
+    model.modules[0].searches[0].document_ref = Some(DddTypeRef::Dto {
+        dto: "Missing".to_string(),
+    });
+    let violations = check_contract(&model);
+    assert!(
+        violations
+            .iter()
+            .any(|violation| violation.path == named_document_path()
+                && violation
+                    .message
+                    .contains("not a dto boundary declared in module")),
+        "{violations:?}"
+    );
+}
+
+#[test]
+fn a_named_document_source_must_match_the_search_entity() {
+    let mut model = compiled_queries();
+    let shape = model.modules[0]
+        .designs
+        .iter_mut()
+        .find_map(|design| design.dto_shape.as_mut())
+        .expect("OrderSummary lowers");
+    shape.source = Some(TypeRef::Class {
+        package: "demo.queries".to_string(),
+        name: "Customer".to_string(),
+    });
+    let violations = check_contract(&model);
+    assert!(
+        violations
+            .iter()
+            .any(|violation| violation.path == named_document_path()
+                && violation.message.contains("but the search targets")),
+        "{violations:?}"
+    );
+}
+
+#[test]
+fn a_named_document_cannot_carry_inline_entries() {
+    let mut model = compiled_queries();
+    model.modules[0].searches[0]
+        .document
+        .push(DocumentField::new("headline", "orderNo"));
+    let violations = check_contract(&model);
+    assert!(
+        violations
+            .iter()
+            .any(|violation| violation.path == named_document_path()
+                && violation.message.contains("exactly one document shape")),
         "{violations:?}"
     );
 }

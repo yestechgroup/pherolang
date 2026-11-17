@@ -27,6 +27,13 @@ version.
   recomputes it and refuses a stale pair with a diagnostic naming both
   package sets; `phero-backend-ddd` requires a well-formed block and exposes
   `check_pairing` for consumers. It is a staleness check, not a signature.
+- **Search document shapes can reuse a DTO boundary** (DF3, issue
+  [#326](https://github.com/yestechgroup/pherolang/issues/326)): a search
+  may write `document BookSummary;` instead of repeating an inline block.
+  The boundary must be a same-module mirror/projection of the search's
+  entity; the artifact carries `documentRef` and no inline entries, and the
+  inline/named forms are mutually exclusive (`E0400`–`E0402`). A search and
+  a response DTO now share one declaration without drift.
 - **Quality gates, checked corpus and release readiness for highlighting**
   (SH8, issue [#294](https://github.com/yestechgroup/pherolang/issues/294),
   epic #286): `tests/highlight/corpus/` now covers every surface with valid,

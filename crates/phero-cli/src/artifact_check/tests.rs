@@ -51,6 +51,10 @@ fn classification_table_over_all_artifact_kinds() {
             name: "DDD design artifact (serialized DddModel)",
             json: serde_json::to_string(
                 &phero_ir::ddd::DddModel::new()
+                    .with_domain_fingerprint(phero_ir::ddd::DomainFingerprint::sha256(
+                        "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+                        Vec::new(),
+                    ))
                     .application(phero_ir::ddd::Application::new("Library"))
                     .module(phero_ir::ddd::Module::new("core")),
             )
@@ -563,22 +567,23 @@ fn unknown_root_type_is_rejected() {
 
 #[test]
 fn application_or_modules_keys_classify_as_ddd_model() {
+    let fingerprint = r#""domainFingerprint": {"algorithm": "sha256", "value": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855", "packages": []}"#;
     assert_eq!(
-        check(
-            r#"{"formatVersion": 2, "pheroVersion": "0.3.0", "application": {"name": "Library"}, "modules": []}"#
-        ),
+        check(&format!(
+            r#"{{"formatVersion": 2, "pheroVersion": "0.3.0", {fingerprint}, "application": {{"name": "Library"}}, "modules": []}}"#
+        )),
         Ok(ArtifactKind::DddModel)
     );
     assert_eq!(
-        check(
-            r#"{"formatVersion": 2, "pheroVersion": "0.3.0", "application": {"name": "Library"}}"#
-        ),
+        check(&format!(
+            r#"{{"formatVersion": 2, "pheroVersion": "0.3.0", {fingerprint}, "application": {{"name": "Library"}}}}"#
+        )),
         Ok(ArtifactKind::DddModel)
     );
     assert_eq!(
-        check(
-            r#"{"formatVersion": 2, "pheroVersion": "0.3.0", "application": {"name": "Library"}, "modules": [{"name": "core"}]}"#
-        ),
+        check(&format!(
+            r#"{{"formatVersion": 2, "pheroVersion": "0.3.0", {fingerprint}, "application": {{"name": "Library"}}, "modules": [{{"name": "core"}}]}}"#
+        )),
         Ok(ArtifactKind::DddModel)
     );
 }
@@ -1053,6 +1058,11 @@ fn legacy_detection_matrix_covers_every_classified_artifact_kind() {
             current: json!({
                 "formatVersion": 2,
                 "pheroVersion": "0.3.0",
+                "domainFingerprint": {
+                    "algorithm": "sha256",
+                    "value": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+                    "packages": [],
+                },
                 "application": {"name": "Library"},
                 "modules": [{"name": "core"}],
             }),
@@ -1233,6 +1243,11 @@ fn legacy_detection_matrix_covers_every_classified_artifact_kind() {
 const GOOD_DTO_ARTIFACT: &str = r#"{
   "formatVersion": 2,
   "pheroVersion": "0.3.0",
+  "domainFingerprint": {
+    "algorithm": "sha256",
+    "value": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "packages": []
+  },
   "application": { "name": "Library" },
   "modules": [
     {

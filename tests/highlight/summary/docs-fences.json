@@ -42,7 +42,7 @@
     },
     {
       "file": "docs/DDD.md",
-      "line": 997,
+      "line": 1014,
       "surface": "ddd",
       "degraded": false,
       "spans": 118,
@@ -63,7 +63,7 @@
     },
     {
       "file": "docs/DDD.md",
-      "line": 1919,
+      "line": 1945,
       "surface": "ddd",
       "degraded": false,
       "spans": 270,

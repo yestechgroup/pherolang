@@ -971,7 +971,14 @@ impl<'src> Formatter<'src> {
             }
             Some(ddd::SearchMemberKind::Document) => {
                 self.advance();
-                self.scan_body(BodyKind::DddSearchDocument);
+                if matches!(self.peek_tok(), Some(Token::LBrace)) {
+                    self.scan_body(BodyKind::DddSearchDocument);
+                } else {
+                    // `document DtoName;` (DF3, issue pherolang#326): the
+                    // named form is one canonical line, like an `entity` line.
+                    self.scan_qname();
+                    self.take_if(|token| matches!(token, Token::Other(';')));
+                }
             }
             Some(ddd::SearchMemberKind::Ranking) => {
                 self.advance();

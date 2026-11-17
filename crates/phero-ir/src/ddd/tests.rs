@@ -1315,6 +1315,33 @@ fn empty_model_bytes_are_unchanged_by_dd3() {
     assert_eq!(DDD_MODEL_FORMAT_VERSION, 2);
 }
 
+/// DF1 (issue pherolang#324): the pairing block round-trips, and a hand-built
+/// model without it still deserializes (the artifact-only contract, not the
+/// reader, requires the key).
+#[test]
+fn the_domain_fingerprint_round_trips_and_is_optional_on_read() {
+    let fingerprint = DomainFingerprint::sha256(
+        "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        Vec::new(),
+    );
+    let model = DddModel::new().with_domain_fingerprint(fingerprint.clone());
+    let json = model.to_json().expect("serialize");
+    let read = DddModel::from_json(&json).expect("deserialize");
+    assert_eq!(read.domain_fingerprint, Some(fingerprint));
+    assert!(read
+        .domain_fingerprint
+        .as_ref()
+        .expect("present")
+        .value_is_sha256_hex());
+
+    assert_eq!(
+        DddModel::from_json(&empty_model_json())
+            .expect("a fingerprint-less artifact still reads")
+            .domain_fingerprint,
+        None
+    );
+}
+
 #[test]
 fn boost_orders_like_total_cmp() {
     let mut values = [

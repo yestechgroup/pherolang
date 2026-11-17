@@ -76,6 +76,12 @@
 //!   **standalone** DTO has no `.mox` source at all, so [`Design::class`]
 //!   and [`Design::type_ref`] are `None` — the keys are omitted — and the
 //!   shape's `source` is `None` too.
+//! - **Named search documents.** A [`SearchDef`] carries exactly one
+//!   document shape: the inline [`SearchDef::document`] list or the sparse
+//!   [`SearchDef::document_ref`] naming a same-module DTO boundary whose
+//!   source is the search's entity (DF3, issue pherolang#326). The named
+//!   form emits no inline entries, so an inline-form search stays
+//!   byte-identical.
 //! - **State machines.** A [`Design`] may carry a [`StateMachine`] (`machine`
 //!   block). The state set is derived — `initial` + `terminals` + transition
 //!   endpoints — never serialized as a separate list; terminalness is

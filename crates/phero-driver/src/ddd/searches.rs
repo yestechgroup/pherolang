@@ -7,9 +7,14 @@ use phero_ir::ddd::{
 };
 use phero_syntax::ast as dsl;
 
+use phero_diagnostics::ddd::{
+    E_DOCUMENT_FORM_CONFLICT, E_DOCUMENT_REF, E_DOCUMENT_SOURCE_MISMATCH,
+};
+
 use crate::diagnostic::Diagnostic;
 use crate::lower::{self, DomainPackage};
 
+use super::dtos::DtoForm;
 use super::*;
 
 /// Rule 11 — the search→entity binding: the entity design must exist in
@@ -69,6 +74,7 @@ pub(crate) fn lower_module_searches<'a>(
     packages: &[DomainPackage],
     base: Option<&str>,
     union: Option<&phero_ir::Model>,
+    design_prep: &DesignPrep,
     registries: &mut Registries<'a>,
 ) -> (Vec<SearchDef>, Vec<Diagnostic>) {
     let mut local: Vec<Diagnostic> = Vec::new();
@@ -165,6 +171,97 @@ pub(crate) fn lower_module_searches<'a>(
                 context: format!("search '{}'", search.name.text),
                 capability,
             });
+        }
+
+        // The named document boundary (DF3, issue pherolang#326): a
+        // same-module mirror/projection DTO whose source is the search
+        // entity. The artifact carries the reference only — the boundary's
+        // members are the document shape.
+        if let Some(document_ref) = &search.document_ref {
+            if !search.document.is_empty() {
+                local.push(
+                    Diagnostic::error(
+                        format!(
+                            "{E_DOCUMENT_FORM_CONFLICT} search '{}' declares both an inline \
+                             document block and a named document reference",
+                            search.name.text
+                        ),
+                        Some(document_ref.span),
+                    )
+                    .with_help(
+                        "keep `document DtoName;` or the inline `document { ... }` block, not both",
+                    ),
+                );
+            } else {
+                let name = document_ref.full_name();
+                match design_prep.dtos.iter().find(|dto| dto.name == name) {
+                    None => local.push(
+                        Diagnostic::error(
+                            format!(
+                                "{E_DOCUMENT_REF} invalid document reference '{name}' in search \
+                                 '{}': no dto design with that name",
+                                search.name.text
+                            ),
+                            Some(document_ref.span),
+                        )
+                        .with_help(
+                            "declare the boundary (`dto Name { ... }` or `dto Name from Source { ... }`) \
+                             in this module, or use an inline `document { ... }` block",
+                        ),
+                    ),
+                    Some(dto) if dto.module != module.name.text => local.push(
+                        Diagnostic::error(
+                            format!(
+                                "{E_DOCUMENT_REF} invalid document reference '{name}' in search \
+                                 '{}': the dto is declared in module '{}', not '{}'",
+                                search.name.text, dto.module, module.name.text
+                            ),
+                            Some(document_ref.span),
+                        )
+                        .with_help("a search document boundary must be declared in the search's own module"),
+                    ),
+                    Some(dto) if dto.form == DtoForm::Standalone || dto.source.is_none() => {
+                        local.push(
+                            Diagnostic::error(
+                                format!(
+                                    "{E_DOCUMENT_REF} invalid document reference '{name}' in search \
+                                     '{}': a standalone dto has no source class",
+                                    search.name.text
+                                ),
+                                Some(document_ref.span),
+                            )
+                            .with_help(
+                                "a document boundary is a mirror or projection of the search entity, \
+                                 not a source-less transport shape",
+                            ),
+                        )
+                    }
+                    Some(dto) => {
+                        if let (Some(source), Some(entity)) = (&dto.source, &resolved_entity) {
+                            if source != entity {
+                                local.push(
+                                    Diagnostic::error(
+                                        format!(
+                                            "{E_DOCUMENT_SOURCE_MISMATCH} document reference \
+                                             '{name}' of search '{}' projects '{}.{}', but the \
+                                             search targets '{}.{}'",
+                                            search.name.text, source.0, source.1, entity.0, entity.1
+                                        ),
+                                        Some(document_ref.span),
+                                    )
+                                    .with_help(
+                                        "name a boundary projected from the search's entity, or use \
+                                         an inline `document { ... }` block",
+                                    ),
+                                );
+                            } else {
+                                search_out.document_ref =
+                                    Some(phero_ir::ddd::DddTypeRef::Dto { dto: name.clone() });
+                            }
+                        }
+                    }
+                }
+            }
         }
 
         if let Some(features) = entity_features {

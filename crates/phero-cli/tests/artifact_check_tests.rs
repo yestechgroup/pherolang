@@ -120,6 +120,11 @@ const GOOD_INSTANCE: &str = r#"{
 const GOOD_DDD_ARTIFACT: &str = r#"{
   "formatVersion": 2,
   "pheroVersion": "0.3.0",
+  "domainFingerprint": {
+    "algorithm": "sha256",
+    "value": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "packages": []
+  },
   "application": {
     "name": "Demo"
   },
@@ -595,6 +600,11 @@ fn graph_edges_carry_non_empty_endpoints() {
 const GOOD_DTO_DDD_ARTIFACT: &str = r#"{
   "formatVersion": 2,
   "pheroVersion": "0.3.0",
+  "domainFingerprint": {
+    "algorithm": "sha256",
+    "value": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "packages": []
+  },
   "application": { "name": "Library" },
   "modules": [
     {

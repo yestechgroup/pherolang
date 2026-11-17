@@ -593,7 +593,7 @@ fn validate_modules(
                     format!("duplicate search '{}' in the application", search.name),
                 ));
             }
-            validate_search(search, &search_path, violations);
+            validate_search(search, &search_path, module, violations);
         }
     }
 }
@@ -1758,7 +1758,12 @@ fn validate_delegation_throws(
     }
 }
 
-fn validate_search(search: &SearchDef, path: &str, violations: &mut Vec<Violation>) {
+fn validate_search(
+    search: &SearchDef,
+    path: &str,
+    module: &phero_ir::ddd::Module,
+    violations: &mut Vec<Violation>,
+) {
     check_class_ref(
         violations,
         &format!("{path}.entityRef"),
@@ -1766,6 +1771,64 @@ fn validate_search(search: &SearchDef, path: &str, violations: &mut Vec<Violatio
         search.entity_ref.as_ref(),
         "search",
     );
+
+    // The named document boundary (DF3, pherolang#326): a same-module dto
+    // boundary whose source class is this search's entity, mutually exclusive
+    // with the inline document list.
+    if let Some(document_ref) = &search.document_ref {
+        if !search.document.is_empty() {
+            violations.push(Violation::new(
+                format!("{path}.documentRef"),
+                "is set alongside inline \"document\" entries; a search carries exactly one document shape",
+            ));
+        }
+        match document_ref {
+            DddTypeRef::Dto { dto } => {
+                let shape = module
+                    .designs
+                    .iter()
+                    .filter_map(|design| design.dto_shape.as_ref())
+                    .find(|shape| &shape.name == dto);
+                match shape {
+                    None => violations.push(Violation::new(
+                        format!("{path}.documentRef"),
+                        format!(
+                            "names '{dto}', which is not a dto boundary declared in module '{}'",
+                            module.name
+                        ),
+                    )),
+                    Some(shape) => match (&shape.source, &search.entity_ref) {
+                        (None, _) => violations.push(Violation::new(
+                            format!("{path}.documentRef"),
+                            format!(
+                                "names the standalone dto '{dto}', which has no source class to \
+                                 project as a document shape"
+                            ),
+                        )),
+                        (Some(source), Some(entity)) if source == entity => {}
+                        (Some(source), Some(entity)) => violations.push(Violation::new(
+                            format!("{path}.documentRef"),
+                            format!(
+                                "names '{dto}', which projects {}, but the search targets {}",
+                                describe_type_ref(source),
+                                describe_type_ref(entity)
+                            ),
+                        )),
+                        (Some(_), None) => violations.push(Violation::new(
+                            format!("{path}.documentRef"),
+                            format!(
+                                "names '{dto}', but the search has no resolved entity to match"
+                            ),
+                        )),
+                    },
+                }
+            }
+            _ => violations.push(Violation::new(
+                format!("{path}.documentRef"),
+                "must be a dto reference ({\"dto\": \"<Name>\"})",
+            )),
+        }
+    }
 
     if search.capabilities.len() != search.capability_refs.len() {
         violations.push(Violation::new(
@@ -1829,6 +1892,14 @@ fn validate_search(search: &SearchDef, path: &str, violations: &mut Vec<Violatio
                 format!("missing resolved type for sort '{}'", sort.property),
             ));
         }
+    }
+}
+
+/// A readable class name for a resolved type reference in a diagnostic.
+fn describe_type_ref(type_ref: &TypeRef) -> String {
+    match type_ref {
+        TypeRef::Class { package, name } => format!("{package}.{name}"),
+        other => format!("{other:?}"),
     }
 }
 
