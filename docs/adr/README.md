@@ -9,3 +9,4 @@ file per decision, `NNNN-kebab-case-title.md`; the status line is the index.
 | [0002](0002-static-hover-reference-panels.md) | Static hover reference panels, not a browser IDE | Accepted | 2026-11-16 |
 | [0003](0003-compiler-backed-highlighting-is-the-source-of-truth.md) | Compiler-backed highlighting is the source of truth | Accepted | 2026-11-17 |
 | [0004](0004-supported-platforms-linux-only.md) | Support Linux x86_64 only; drop Windows, macOS, and aarch64 | Accepted | 2026-11-16 |
+| [0005](0005-shared-surface-kernel-layering.md) | The surface kernel stays shared; the model stays typed per surface (SK1 layering audit) | Accepted | 2026-11-17 |

@@ -52,14 +52,14 @@ view "Refunds" {
 "#;
     let diags = diags_with_decisions(source, &shop_model(), &[shop_decision()]);
     assert_eq!(diags.len(), 1, "{diags:?}");
-    assert_eq!(diags[0].code, E_UNKNOWN_ENTITY);
+    assert_eq!(diags[0].1.code.unwrap(), E_UNKNOWN_ENTITY);
     assert_eq!(
-        diags[0].message,
+        diags[0].1.message,
         "view 'Refunds' component 'assessment': unknown data entity 'AssessRefrund'; did you mean 'AssessRefund'?"
     );
     // The expression walk's data diagnostic keeps its existing span (the
     // whole property assignment — the E0100 convention).
-    let (start, end) = diags[0].span;
+    let (start, end) = span_bounds(diags[0].1.span);
     assert_eq!(&source[start..end], "data: AssessRefrund;");
 }
 
@@ -76,7 +76,7 @@ view "Refunds" {
     let diags = diags_with_decisions(source, &shop_model(), &[shop_decision()]);
     assert_eq!(diags.len(), 1, "{diags:?}");
     assert_eq!(
-        diags[0].message,
+        diags[0].1.message,
         "view 'Refunds' component 'assessment': unknown data entity 'Ghost'"
     );
 }
@@ -96,7 +96,7 @@ view "Refunds" {
     let diags = diags(source, &shop_model());
     assert_eq!(diags.len(), 1, "{diags:?}");
     assert_eq!(
-        diags[0].message,
+        diags[0].1.message,
         "view 'Refunds' component 'assessment': unknown data entity 'AssessRefrund'"
     );
 }
@@ -115,12 +115,12 @@ view "Refunds" {
 "#;
     let diags = diags_with_decisions(source, &shop_model(), &[outputless]);
     assert_eq!(diags.len(), 1, "{diags:?}");
-    assert_eq!(diags[0].code, E_EMPTY_DECISION_SERVICE);
+    assert_eq!(diags[0].1.code.unwrap(), E_EMPTY_DECISION_SERVICE);
     assert_eq!(
-        diags[0].message,
+        diags[0].1.message,
         "decision service 'AssessRefund' declares no outputs"
     );
-    let (start, end) = diags[0].span;
+    let (start, end) = span_bounds(diags[0].1.span);
     assert_eq!(&source[start..end], "AssessRefund");
 }
 
@@ -138,9 +138,9 @@ view "Refunds" {
 "#;
     let diags = diags_with_decisions(source, &shop_model(), &[shop_decision(), billing]);
     assert_eq!(diags.len(), 1, "{diags:?}");
-    assert_eq!(diags[0].code, E_AMBIGUOUS_DECISION_SERVICE);
+    assert_eq!(diags[0].1.code.unwrap(), E_AMBIGUOUS_DECISION_SERVICE);
     assert_eq!(
-        diags[0].message,
+        diags[0].1.message,
         "decision service 'AssessRefund' is declared by two models — 'ShopDecisions' and 'BillingDecisions'"
     );
 }
@@ -168,7 +168,7 @@ view "Refunds" {
     let diags = diags_with_decisions(source, &model, &[shop_decision()]);
     assert_eq!(diags.len(), 1, "{diags:?}");
     assert_eq!(
-        diags[0].message,
+        diags[0].1.message,
         "view 'Refunds' component 'grid': ambiguous data entity 'Order'"
     );
 }
@@ -217,7 +217,7 @@ view "Refunds" {
     let diags: Vec<_> =
         check_ifml_with_decisions(&compile(), Some(&shop_model()), &[], &[shop_decision()])
             .into_iter()
-            .filter(|diagnostic| diagnostic.severity.is_error())
+            .filter(|(_, diagnostic)| diagnostic.severity.is_error())
             .collect();
     assert!(diags.is_empty(), "{diags:?}");
 
@@ -229,19 +229,19 @@ view "Refunds" {
     let diags: Vec<_> =
         check_ifml_with_decisions(&compilation, Some(&shop_model()), &[], &[outputless])
             .into_iter()
-            .filter(|diagnostic| diagnostic.severity.is_error())
+            .filter(|(_, diagnostic)| diagnostic.severity.is_error())
             .collect();
     assert_eq!(diags.len(), 1, "{diags:?}");
-    assert_eq!(diags[0].code, E_EMPTY_DECISION_SERVICE);
+    assert_eq!(diags[0].1.code.unwrap(), E_EMPTY_DECISION_SERVICE);
     assert_eq!(
-        diags[0].message,
+        diags[0].1.message,
         "decision service 'AssessRefund' declares no outputs"
     );
     assert_eq!(
-        diags[0].file, "panels.ifml",
+        diags[0].0, "panels.ifml",
         "the span lives in the module file"
     );
-    let (start, end) = diags[0].span;
+    let (start, end) = span_bounds(diags[0].1.span);
     assert_eq!(
         &source_text(&compilation, "panels.ifml")[start..end],
         "AssessRefund"
@@ -262,9 +262,9 @@ view "Refunds" {
 "#;
     let diags = diags(source, &shop_model());
     assert_eq!(diags.len(), 1, "{diags:?}");
-    assert_eq!(diags[0].code, E_UNKNOWN_ENTITY);
+    assert_eq!(diags[0].1.code.unwrap(), E_UNKNOWN_ENTITY);
     assert_eq!(
-        diags[0].message,
+        diags[0].1.message,
         "view 'Refunds' component 'assessment': unknown data entity 'AssessRefund'"
     );
 }

@@ -118,8 +118,8 @@ impl PheroBackend {
                 let (_snapshot, diagnostics) = self.compile_ifml(uri, &text);
                 diagnostics
                     .iter()
-                    .filter(|diagnostic| diagnostic.file == uri.as_str())
-                    .map(|diagnostic| to_ifml_diagnostic(diagnostic, &map))
+                    .filter(|(path, _)| path == uri.as_str())
+                    .map(|(_, diagnostic)| to_lsp_ifml_diagnostic(diagnostic, &map))
                     .collect()
             }
             Surface::Known(SurfaceKind::Ddd) => {
@@ -258,7 +258,10 @@ impl PheroBackend {
         &self,
         uri: &Uri,
         text: &str,
-    ) -> (Option<IfmlSnapshot>, Vec<phero_ifml::IfmlDiagnostic>) {
+    ) -> (
+        Option<IfmlSnapshot>,
+        Vec<(String, phero_ifml::Diagnostic<&'static str>)>,
+    ) {
         let closure = self.import_closure(uri, text);
         let main_path = uri.to_string();
         // Lenient: diagnostics ride along, the index stays navigable on
@@ -965,22 +968,30 @@ pub(super) fn domain_import_bundle(domains: &[(String, String)]) -> phero_driver
     }
 }
 
-/// Converts an `.ifml` diagnostic into its LSP shape: the code string as
-/// `code`, the span mapped through the position map, and the severity
-/// class mapped — checker/resolver errors stay errors, the lint band
-/// (`W0150`–) publishes as warnings. The resolver's byte-offset spans
-/// convert directly.
-pub(super) fn to_ifml_diagnostic(
-    diagnostic: &phero_ifml::IfmlDiagnostic,
+/// Converts an `.ifml` diagnostic — the workspace's shared record tagged
+/// with the registry's stable string code — into its LSP shape: the code
+/// string as `code`, the span mapped through the position map, and the
+/// severity class mapped (checker/resolver errors stay errors, the lint
+/// band (`W0150`–) publishes as warnings). Import-level findings with no
+/// span publish at the document start, exactly as their `0..0` used to
+/// map. The record's own fields are read directly; there is no parallel
+/// `.ifml` type to rebuild from (SK2 of epic pherolang#328).
+pub(super) fn to_lsp_ifml_diagnostic(
+    diagnostic: &phero_ifml::Diagnostic<&'static str>,
     map: &PositionMap,
 ) -> Diagnostic {
     Diagnostic {
-        range: map.range_for((diagnostic.span.0..diagnostic.span.1).into()),
+        range: diagnostic
+            .span
+            .map(|span| map.range_for(span))
+            .unwrap_or_default(),
         severity: Some(match diagnostic.severity {
             phero_ifml::Severity::Error => DiagnosticSeverity::ERROR,
             phero_ifml::Severity::Warning => DiagnosticSeverity::WARNING,
         }),
-        code: Some(NumberOrString::String(diagnostic.code.to_string())),
+        code: diagnostic
+            .code
+            .map(|code| NumberOrString::String(code.to_string())),
         code_description: None,
         source: Some(SOURCE_NAME.to_string()),
         message: diagnostic.message.clone(),

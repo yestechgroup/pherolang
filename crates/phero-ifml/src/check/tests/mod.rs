@@ -3,6 +3,8 @@
 
 use super::*;
 
+use phero_diagnostics::Diagnostic;
+
 mod support;
 
 mod authorization;

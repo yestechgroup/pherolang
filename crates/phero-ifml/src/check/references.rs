@@ -4,7 +4,9 @@
 
 use std::collections::BTreeSet;
 
-use crate::resolve::{IfmlCompilation, IfmlDiagnostic};
+use phero_diagnostics::Diagnostic;
+
+use crate::resolve::IfmlCompilation;
 
 use super::reachability::{instantiated_modules, site_is_instantiated};
 use super::{E_UNKNOWN_ACTION, E_UNKNOWN_COMPONENT, E_UNKNOWN_VIEW};
@@ -30,7 +32,9 @@ use super::{E_UNKNOWN_ACTION, E_UNKNOWN_COMPONENT, E_UNKNOWN_VIEW};
 /// closes the silently-missing-control class for pattern compositions.
 /// An uninstantiated module keeps its references to its own
 /// compilation's report.
-pub(super) fn check_references(compilation: &IfmlCompilation) -> Vec<IfmlDiagnostic> {
+pub(super) fn check_references(
+    compilation: &IfmlCompilation,
+) -> Vec<(String, Diagnostic<&'static str>)> {
     let index = &compilation.index;
     let actions: BTreeSet<&str> = index
         .actions
@@ -87,11 +91,10 @@ pub(super) fn check_references(compilation: &IfmlCompilation) -> Vec<IfmlDiagnos
         if known {
             continue;
         }
-        diags.push(IfmlDiagnostic::error(
-            code,
-            message,
-            site.name_span,
+        diags.push((
             index.files[site.file].path.clone(),
+            Diagnostic::error(message, Some((site.name_span.0..site.name_span.1).into()))
+                .with_code(code),
         ));
     }
     diags

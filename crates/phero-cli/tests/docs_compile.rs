@@ -512,7 +512,13 @@ fn compile_fence(fence: &Fence, workspace: &Path) -> String {
                     let label = fence_label(fence);
                     errors
                         .iter()
-                        .map(|error| format!("{label}: {}: {}", error.code, error.message))
+                        .map(|(_, error)| {
+                            format!(
+                                "{label}: {}: {}",
+                                error.code.unwrap_or("<none>"),
+                                error.message
+                            )
+                        })
                         .collect::<Vec<_>>()
                         .join("; ")
                 }

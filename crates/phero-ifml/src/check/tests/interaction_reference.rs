@@ -18,15 +18,15 @@ view "Queue" {
 "#;
     let diags = diags(source, &shop_model());
     assert_eq!(diags.len(), 1, "{diags:?}");
-    assert_eq!(diags[0].code, E_UNKNOWN_ACTION);
-    assert_eq!(diags[0].file, "app.ifml");
+    assert_eq!(diags[0].1.code.unwrap(), E_UNKNOWN_ACTION);
+    assert_eq!(diags[0].0, "app.ifml");
     assert_eq!(
-        diags[0].message,
+        diags[0].1.message,
         "action 'RaiseRefund' is not declared — add action \"RaiseRefund\" { target: <Entity>; }"
     );
     // The span is the referenced string token itself, ready for an
     // editor squiggle.
-    let (start, end) = diags[0].span;
+    let (start, end) = span_bounds(diags[0].1.span);
     assert_eq!(&source[start..end], "\"RaiseRefund\"");
 }
 
@@ -67,11 +67,11 @@ action "Outer" {
 "#;
     let diags = diags(source, &shop_model());
     assert_eq!(diags.len(), 1, "{diags:?}");
-    assert_eq!(diags[0].code, E_UNKNOWN_ACTION);
+    assert_eq!(diags[0].1.code.unwrap(), E_UNKNOWN_ACTION);
     assert!(
-        diags[0].message.contains("'MissingInner'"),
+        diags[0].1.message.contains("'MissingInner'"),
         "{}",
-        diags[0].message
+        diags[0].1.message
     );
 }
 
@@ -140,7 +140,7 @@ view "Queue" {
         .expect("source must parse and resolve");
     let diags = check_ifml(&compilation, None);
     assert_eq!(diags.len(), 1, "{diags:?}");
-    assert_eq!(diags[0].code, E_UNKNOWN_ACTION);
+    assert_eq!(diags[0].1.code.unwrap(), E_UNKNOWN_ACTION);
 }
 
 #[test]
@@ -165,12 +165,12 @@ view "Detail" {
     let dangling = source.replace("navigate(\"Detail\"", "navigate(\"Missing\"");
     let diags = diags(&dangling, &shop_model());
     assert_eq!(diags.len(), 1, "{diags:?}");
-    assert_eq!(diags[0].code, E_UNKNOWN_VIEW);
+    assert_eq!(diags[0].1.code.unwrap(), E_UNKNOWN_VIEW);
     assert_eq!(
-        diags[0].message,
+        diags[0].1.message,
         "navigate target 'Missing' is not a declared view or container"
     );
-    let (start, end) = diags[0].span;
+    let (start, end) = span_bounds(diags[0].1.span);
     assert_eq!(&dangling[start..end], "\"Missing\"");
 }
 
@@ -202,12 +202,12 @@ module "Panel" {
     let dangling = source.replace("refresh(\"rows\")", "refresh(\"nope\")");
     let diags = diags(&dangling, &shop_model());
     assert_eq!(diags.len(), 1, "{diags:?}");
-    assert_eq!(diags[0].code, E_UNKNOWN_COMPONENT);
+    assert_eq!(diags[0].1.code.unwrap(), E_UNKNOWN_COMPONENT);
     assert_eq!(
-        diags[0].message,
+        diags[0].1.message,
         "refresh target 'nope' is not a declared component"
     );
-    let (start, end) = diags[0].span;
+    let (start, end) = span_bounds(diags[0].1.span);
     assert_eq!(&dangling[start..end], "\"nope\"");
 }
 
@@ -220,10 +220,10 @@ command "customers" {
 "#;
     let diags = diags(source, &shop_model());
     assert_eq!(diags.len(), 1, "{diags:?}");
-    assert_eq!(diags[0].code, E_UNKNOWN_VIEW);
+    assert_eq!(diags[0].1.code.unwrap(), E_UNKNOWN_VIEW);
     assert!(
-        diags[0].message.contains("'Missing'"),
+        diags[0].1.message.contains("'Missing'"),
         "{}",
-        diags[0].message
+        diags[0].1.message
     );
 }

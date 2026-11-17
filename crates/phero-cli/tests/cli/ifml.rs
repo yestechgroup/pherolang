@@ -114,6 +114,50 @@ fn check_reports_ifml_type_errors_with_site_context() {
 }
 
 #[test]
+fn check_renders_ifml_codes_and_severities_on_the_report_line() {
+    // Characterization (SK2, epic pherolang#328 / issue pherolang#330): the
+    // report header is `"{Error|Warning}: {code} {message}"` and the same
+    // `"{code} {message}"` text labels the squiggle. The shared-diagnostic
+    // refactor must join the code at render time and keep both lines
+    // byte-identical.
+    let _ = write_source("ifml-domain.mox", IFML_DOMAIN);
+    let error_flow = write_source("broken.ifml", BROKEN_IFML);
+    let output = pherolang()
+        .args(["check", error_flow.to_str().unwrap()])
+        .output()
+        .expect("run pherolang check");
+    assert!(!output.status.success());
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    let message = "view 'Catalogue' component 'grid' property 'filter': \
+                   unknown feature 'pric' on class 'Product'";
+    assert!(
+        stderr.starts_with(&format!("Error: E0102 {message}\n")),
+        "an error renders as `Error: {{code}} {{message}}`: {stderr}"
+    );
+    assert_eq!(
+        stderr.matches(&format!("E0102 {message}")).count(),
+        2,
+        "the header and the label both carry `{{code}} {{message}}`: {stderr}"
+    );
+
+    let warning_flow = write_source("warned.ifml", LINT_WARNING_IFML);
+    let output = pherolang()
+        .args(["check", warning_flow.to_str().unwrap()])
+        .output()
+        .expect("run pherolang check");
+    assert!(output.status.success(), "a lint warning never fails check");
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(
+        stderr.starts_with("Warning: W0150 action 'Orphan' is declared but never invoked\n"),
+        "a warning renders as `Warning: {{code}} {{message}}`: {stderr}"
+    );
+    assert_eq!(
+        String::from_utf8_lossy(&output.stdout),
+        format!("OK {}\n", warning_flow.display())
+    );
+}
+
+#[test]
 fn ir_emits_ifml_artifact_json() {
     let _ = write_source("ifml-domain.mox", IFML_DOMAIN);
     let _ = write_source("pager.ifml", PAGER_IFML);

@@ -12,12 +12,12 @@ fn diags_with_import(
     source: &str,
     imports: &crate::IfmlImports,
     model: &Model,
-) -> Vec<IfmlDiagnostic> {
+) -> Vec<(String, Diagnostic<&'static str>)> {
     let compilation = crate::compile_ifml_str("app.ifml", source, imports)
         .expect("source must parse and resolve");
     check_ifml(&compilation, Some(model))
         .into_iter()
-        .filter(|diagnostic| diagnostic.severity.is_error())
+        .filter(|(_, diagnostic)| diagnostic.severity.is_error())
         .collect()
 }
 
@@ -62,9 +62,9 @@ module "Pager" {
     let dangling = source.replace("navigate(\"stepTwo\")", "navigate(\"Missing\")");
     let diags = diags(&dangling, &shop_model());
     assert_eq!(diags.len(), 1, "{diags:?}");
-    assert_eq!(diags[0].code, E_UNKNOWN_VIEW);
+    assert_eq!(diags[0].1.code.unwrap(), E_UNKNOWN_VIEW);
     assert_eq!(
-        diags[0].message,
+        diags[0].1.message,
         "navigate target 'Missing' is not a declared view or container"
     );
 }
@@ -100,19 +100,24 @@ view "Queue" {
 }"#,
     );
     let mut diags = diags_with_import(source, &imports, &shop_model());
-    diags.sort_by(|a, b| a.code.cmp(b.code).then(a.message.cmp(&b.message)));
+    diags.sort_by(|a, b| {
+        a.1.code
+            .unwrap()
+            .cmp(b.1.code.unwrap())
+            .then(a.1.message.cmp(&b.1.message))
+    });
     assert_eq!(diags.len(), 3, "{diags:?}");
-    assert_eq!(diags[0].code, E_UNKNOWN_ACTION);
+    assert_eq!(diags[0].1.code.unwrap(), E_UNKNOWN_ACTION);
     assert!(
-        diags[0].message.contains("'MarkRead'"),
+        diags[0].1.message.contains("'MarkRead'"),
         "{}",
-        diags[0].message
+        diags[0].1.message
     );
-    assert_eq!(diags[1].code, E_UNKNOWN_VIEW);
-    assert_eq!(diags[2].code, E_UNKNOWN_COMPONENT);
-    for diag in &diags {
-        assert_eq!(diag.file, "lib.ifml", "{diag:?}");
-        let (start, end) = diag.span;
+    assert_eq!(diags[1].1.code.unwrap(), E_UNKNOWN_VIEW);
+    assert_eq!(diags[2].1.code.unwrap(), E_UNKNOWN_COMPONENT);
+    for (file, diag) in &diags {
+        assert_eq!(file, "lib.ifml", "{diag:?}");
+        let (start, end) = span_bounds(diag.span);
         assert!(start < end, "the span is the referenced token");
     }
 }
@@ -193,8 +198,8 @@ module "Inner" {
     );
     let diags = diags_with_import(source, &imports, &shop_model());
     assert_eq!(diags.len(), 1, "{diags:?}");
-    assert_eq!(diags[0].code, E_UNKNOWN_VIEW);
-    assert_eq!(diags[0].file, "lib.ifml");
+    assert_eq!(diags[0].1.code.unwrap(), E_UNKNOWN_VIEW);
+    assert_eq!(diags[0].0, "lib.ifml");
 }
 
 #[test]
@@ -304,17 +309,19 @@ view "Queue" {
         .expect("source must parse and resolve");
     let diags = check_ifml_with_actors(&compilation, Some(&shop_model()), &[auth_model()]);
     assert_eq!(diags.len(), 2, "{diags:?}");
-    let unknown_view = diags.iter().find(|d| d.code == E_UNKNOWN_VIEW);
-    let unknown_capability = diags.iter().find(|d| d.code == E_UNKNOWN_CAPABILITY);
+    let unknown_view = diags.iter().find(|(_, d)| d.code == Some(E_UNKNOWN_VIEW));
+    let unknown_capability = diags
+        .iter()
+        .find(|(_, d)| d.code == Some(E_UNKNOWN_CAPABILITY));
     let capability = unknown_capability.expect("the capability site is diagnosed");
     assert!(
-        capability.message.contains("'Missing'"),
+        capability.1.message.contains("'Missing'"),
         "{}",
-        capability.message
+        capability.1.message
     );
-    assert_eq!(capability.file, "lib.ifml");
+    assert_eq!(capability.0, "lib.ifml");
     let view = unknown_view.expect("the navigate site is diagnosed");
-    assert_eq!(view.file, "lib.ifml");
+    assert_eq!(view.0, "lib.ifml");
 }
 
 #[test]

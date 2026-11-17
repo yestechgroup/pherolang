@@ -45,7 +45,7 @@ use phero_driver::SurfaceKind;
 use phero_ir::graph::{kinds, GraphModel, GraphNode};
 use tower_lsp_server::ls_types::*;
 
-use super::pipeline::{to_ifml_diagnostic, to_lsp_diagnostic};
+use super::pipeline::{to_lsp_diagnostic, to_lsp_ifml_diagnostic};
 use super::{PheroBackend, Surface};
 use crate::position::PositionMap;
 
@@ -771,8 +771,8 @@ impl PheroBackend {
                     snapshot.map(|snapshot| SnapshotArtifact::Flow(snapshot.compilation.model)),
                     diagnostics
                         .iter()
-                        .filter(|diagnostic| diagnostic.file == uri.as_str())
-                        .map(|diagnostic| to_ifml_diagnostic(diagnostic, &map))
+                        .filter(|(path, _)| path == uri.as_str())
+                        .map(|(_, diagnostic)| to_lsp_ifml_diagnostic(diagnostic, &map))
                         .collect(),
                 )
             }

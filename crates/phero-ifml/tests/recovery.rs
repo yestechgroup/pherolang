@@ -1,34 +1,40 @@
 //! The lenient recovery contract: a broken document still produces a partial
 //! model, a navigable index, and one span-accurate `E_PARSE` per error.
 
-use phero_ifml::{compile_ifml_lenient, IfmlCompilation, IfmlDiagnostic, IfmlImports, E_PARSE};
+use phero_ifml::{compile_ifml_lenient, Diagnostic, IfmlCompilation, IfmlImports, E_PARSE};
 
-fn lenient(source: &str) -> (IfmlCompilation, Vec<IfmlDiagnostic>) {
+fn lenient(source: &str) -> (IfmlCompilation, Vec<(String, Diagnostic<&'static str>)>) {
     compile_ifml_lenient("app.ifml", source, &IfmlImports::default())
 }
 
-fn span_text<'a>(source: &'a str, diagnostic: &IfmlDiagnostic) -> &'a str {
-    &source[diagnostic.span.0..diagnostic.span.1]
+fn span_bounds(span: Option<phero_parser::Span>) -> (usize, usize) {
+    let span = span.expect("the diagnostic carries a span");
+    (span.start, span.end)
 }
 
-fn assert_all_parse_errors(diagnostics: &[IfmlDiagnostic]) {
+fn span_text<'a>(source: &'a str, diagnostic: &Diagnostic<&'static str>) -> &'a str {
+    let (start, end) = span_bounds(diagnostic.span);
+    &source[start..end]
+}
+
+fn assert_all_parse_errors(diagnostics: &[(String, Diagnostic<&'static str>)]) {
     assert!(!diagnostics.is_empty(), "expected at least one diagnostic");
     assert!(
         diagnostics
             .iter()
-            .all(|diagnostic| diagnostic.code == E_PARSE),
+            .all(|(_, diagnostic)| diagnostic.code == Some(E_PARSE)),
         "{diagnostics:?}"
     );
     assert!(
-        diagnostics
-            .iter()
-            .all(|diagnostic| diagnostic.span != (0, 0)),
+        diagnostics.iter().all(|(_, diagnostic)| diagnostic
+            .span
+            .is_some_and(|span| span.start != 0 || span.end != 0)),
         "every recovered span must be non-zero: {diagnostics:?}"
     );
     assert!(
         diagnostics
             .windows(2)
-            .all(|pair| pair[0].span.0 <= pair[1].span.0),
+            .all(|pair| span_bounds(pair[0].1.span).0 <= span_bounds(pair[1].1.span).0),
         "diagnostics are in source order: {diagnostics:?}"
     );
 }
@@ -46,7 +52,7 @@ view "V" {
     let (compilation, diagnostics) = lenient(source);
     assert_all_parse_errors(&diagnostics);
     assert_eq!(diagnostics.len(), 1, "{diagnostics:?}");
-    assert!(diagnostics[0].message.contains("type"), "{diagnostics:?}");
+    assert!(diagnostics[0].1.message.contains("type"), "{diagnostics:?}");
     let component = &compilation.model.views[0].components[0];
     // `type` is promoted out of the property bag, so its recovery shows up as
     // the component type; `data` proves the next member was not swallowed.
@@ -85,7 +91,7 @@ view "B" {
     assert!(
         diagnostics
             .iter()
-            .any(|diagnostic| diagnostic.message.contains('}')),
+            .any(|(_, diagnostic)| diagnostic.message.contains('}')),
         "{diagnostics:?}"
     );
 }
@@ -145,7 +151,7 @@ view "V" {
     let (compilation, diagnostics) = lenient(source);
     assert_all_parse_errors(&diagnostics);
     assert_eq!(diagnostics.len(), 2, "{diagnostics:?}");
-    for diagnostic in &diagnostics {
+    for (_, diagnostic) in &diagnostics {
         // Missing-`;` diagnostics highlight the value they follow.
         assert!(!span_text(source, diagnostic).is_empty(), "{diagnostic:?}");
     }
@@ -177,7 +183,7 @@ view "V" {
     assert!(
         diagnostics
             .iter()
-            .any(|diagnostic| diagnostic.file == "pager.ifml" && diagnostic.code == E_PARSE),
+            .any(|(file, diagnostic)| file == "pager.ifml" && diagnostic.code == Some(E_PARSE)),
         "{diagnostics:?}"
     );
     assert_eq!(compilation.index.module_decls.len(), 1, "{diagnostics:?}");
@@ -193,9 +199,9 @@ fn deep_nesting_is_a_guard_diagnostic_not_a_stack_overflow() {
     let source = "view \"V\" { ".to_string() + &"(".repeat(10_000) + &")".repeat(10_000) + " }";
     let (compilation, diagnostics) = lenient(&source);
     assert_eq!(diagnostics.len(), 1, "{diagnostics:?}");
-    assert_eq!(diagnostics[0].code, E_PARSE);
+    assert_eq!(diagnostics[0].1.code.unwrap(), E_PARSE);
     assert!(
-        diagnostics[0].message.contains("nesting depth"),
+        diagnostics[0].1.message.contains("nesting depth"),
         "{diagnostics:?}"
     );
     assert!(compilation.model.views.is_empty());

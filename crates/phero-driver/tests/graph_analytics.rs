@@ -237,9 +237,9 @@ fn flow_model() -> phero_ir::ifml::IfmlModel {
             .unwrap_or_else(|diagnostics| panic!("app.ifml must compile: {diagnostics:#?}"));
     let domain = domain_model("tests/conformance/graph/app.mox");
     let diagnostics = phero_ifml::check_ifml_with_actors(&compilation, Some(&domain), &[]);
-    let errors: Vec<&phero_ifml::IfmlDiagnostic> = diagnostics
+    let errors: Vec<&(String, phero_ifml::Diagnostic<&'static str>)> = diagnostics
         .iter()
-        .filter(|diagnostic| diagnostic.severity == phero_ifml::Severity::Error)
+        .filter(|(_, diagnostic)| diagnostic.severity == phero_ifml::Severity::Error)
         .collect();
     assert!(
         errors.is_empty(),

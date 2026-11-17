@@ -8,9 +8,10 @@
 
 use std::collections::BTreeMap;
 
+use phero_diagnostics::Diagnostic;
 use phero_ir::dmn::{DecisionService, DmnModel};
 
-use crate::resolve::{IfmlCompilation, IfmlDiagnostic};
+use crate::resolve::IfmlCompilation;
 
 use super::reachability::{instantiated_modules, site_is_instantiated};
 use super::{E_AMBIGUOUS_DECISION_SERVICE, E_EMPTY_DECISION_SERVICE};
@@ -117,7 +118,7 @@ fn model_display_name(model: &DmnModel) -> &str {
 pub(super) fn check_decisions(
     compilation: &IfmlCompilation,
     decisions: &[DmnModel],
-) -> Vec<IfmlDiagnostic> {
+) -> Vec<(String, Diagnostic<&'static str>)> {
     if decisions.is_empty() {
         return Vec::new();
     }
@@ -134,25 +135,29 @@ pub(super) fn check_decisions(
             DecisionData::None => {}
             DecisionData::Service { has_outputs } => {
                 if !has_outputs {
-                    diags.push(IfmlDiagnostic::error(
-                        E_EMPTY_DECISION_SERVICE,
-                        format!("decision service '{}' declares no outputs", site.name),
-                        site.name_span,
+                    diags.push((
                         file,
+                        Diagnostic::error(
+                            format!("decision service '{}' declares no outputs", site.name),
+                            Some((site.name_span.0..site.name_span.1).into()),
+                        )
+                        .with_code(E_EMPTY_DECISION_SERVICE),
                     ));
                 }
             }
             DecisionData::Ambiguous(models) => {
-                diags.push(IfmlDiagnostic::error(
-                    E_AMBIGUOUS_DECISION_SERVICE,
-                    format!(
-                        "decision service '{}' is declared by {} — {}",
-                        site.name,
-                        plural_models(models.len()),
-                        model_list(&models),
-                    ),
-                    site.name_span,
+                diags.push((
                     file,
+                    Diagnostic::error(
+                        format!(
+                            "decision service '{}' is declared by {} — {}",
+                            site.name,
+                            plural_models(models.len()),
+                            model_list(&models),
+                        ),
+                        Some((site.name_span.0..site.name_span.1).into()),
+                    )
+                    .with_code(E_AMBIGUOUS_DECISION_SERVICE),
                 ));
             }
         }

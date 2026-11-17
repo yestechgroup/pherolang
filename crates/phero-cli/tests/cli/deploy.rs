@@ -163,3 +163,25 @@ fn ir_deploy_file_writes_deploy_model_artifact() {
 fn fmt_deploy_is_a_fixpoint_on_the_fixture() {
     fmt_rewrites_in_place_and_check_then_passes(&deploy());
 }
+
+/// SK3 characterization: a missing `.ifml` flow import is the pinned
+/// driver message, byte for byte.
+#[test]
+fn missing_deploy_import_error_text_is_pinned() {
+    let path = write_source(
+        "exact-missing.deploy",
+        "import \"missing-flow.ifml\"\n\napplication Svc {\n    component web: frontend {}\n}\n",
+    );
+    let output = pherolang()
+        .args(["check", path.to_str().unwrap()])
+        .output()
+        .expect("run pherolang check");
+    assert_eq!(output.status.code(), Some(1));
+    let expected = format!(
+        "error: cannot read imported file {} (imported by {})\n",
+        scratch_dir().join("missing-flow.ifml").display(),
+        path.display()
+    );
+    assert_eq!(String::from_utf8_lossy(&output.stderr).as_ref(), expected);
+    assert_eq!(String::from_utf8_lossy(&output.stdout), "");
+}

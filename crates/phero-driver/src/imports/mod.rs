@@ -1,6 +1,9 @@
-//! The import-content provider types: [`SchemaImports`] and [`SigilImports`]
-//! — twin `(mox path, import path)` providers — bundled in
-//! [`DomainImports`], which every compile entry point takes.
+//! Imports in two halves: [`walker`], the one import-closure walker every
+//! surface's gatherer is a policy over; and the [`SchemaImports`]/[`SigilImports`]
+//! content providers bundled in [`DomainImports`], which every compile entry
+//! point takes.
+
+pub(crate) mod walker;
 
 /// The private `(mox path, import path, content)` entry store behind
 /// [`SchemaImports`] and [`SigilImports`]: entries in first-appearance

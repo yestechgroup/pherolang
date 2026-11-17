@@ -470,7 +470,7 @@ view "List" {
         .expect("resolution succeeds; the checker reports the dangling action");
     let diags = phero_ifml::check_ifml(&compilation, None);
     assert_eq!(diags.len(), 1);
-    assert_eq!(diags[0].code, "E0104");
+    assert_eq!(diags[0].1.code.unwrap(), "E0104");
 }
 
 #[test]
