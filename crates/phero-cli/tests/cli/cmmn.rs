@@ -109,3 +109,26 @@ fn ir_cmmn_file_writes_case_model_artifact() {
 fn fmt_cmmn_files_rewrites_in_place_and_check_then_passes() {
     fmt_rewrites_in_place_and_check_then_passes(&cmmn());
 }
+
+/// SK3 characterization: the `.cmmn` decision pass reports the pinned
+/// missing-import message (the four-bucket pass runs first, so a `.dmn`
+/// miss is the only miss here).
+#[test]
+fn missing_cmmn_import_error_text_is_pinned() {
+    let path = write_source(
+        "exact-missing.cmmn",
+        "import \"missing-decisions.dmn\"\n\ncase C {\n    stage S {}\n}\n",
+    );
+    let output = pherolang()
+        .args(["check", path.to_str().unwrap()])
+        .output()
+        .expect("run pherolang check");
+    assert_eq!(output.status.code(), Some(1));
+    let expected = format!(
+        "error: cannot read imported file {} (imported by {})\n",
+        scratch_dir().join("missing-decisions.dmn").display(),
+        path.display()
+    );
+    assert_eq!(String::from_utf8_lossy(&output.stderr).as_ref(), expected);
+    assert_eq!(String::from_utf8_lossy(&output.stdout), "");
+}

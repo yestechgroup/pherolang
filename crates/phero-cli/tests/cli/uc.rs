@@ -117,3 +117,26 @@ fn ir_uc_file_writes_use_case_model_artifact() {
 fn fmt_uc_files_rewrites_in_place_and_check_then_passes() {
     fmt_rewrites_in_place_and_check_then_passes(&uc());
 }
+
+/// SK3 characterization: the missing-import error text is the driver's
+/// pinned message, byte for byte (no io suffix — the CLI's `.uc` fetch is a
+/// plain miss and the gatherer owns the wording).
+#[test]
+fn missing_uc_import_error_text_is_pinned() {
+    let path = write_source(
+        "exact-missing.uc",
+        "import \"missing-domain.mox\"\n\nusecase U {}\n",
+    );
+    let output = pherolang()
+        .args(["check", path.to_str().unwrap()])
+        .output()
+        .expect("run pherolang check");
+    assert_eq!(output.status.code(), Some(1));
+    let expected = format!(
+        "error: cannot read imported file {} (imported by {})\n",
+        scratch_dir().join("missing-domain.mox").display(),
+        path.display()
+    );
+    assert_eq!(String::from_utf8_lossy(&output.stderr).as_ref(), expected);
+    assert_eq!(String::from_utf8_lossy(&output.stdout), "");
+}
