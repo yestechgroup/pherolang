@@ -1,7 +1,7 @@
 name: Release
 
 # Tag-driven release (epic #270, R3). Cutting a release is a tag, not a
-# branch: the operator runbook is docs/RELEASE-0.3.0.md.
+# branch: the operator runbook is docs/RELEASE-0.4.0.md.
 #
 # `workflow_dispatch` exists for re-running a release after a fix. It must be
 # dispatched ON THE TAG REF (`gh workflow run release.yml --ref v0.3.0`),
