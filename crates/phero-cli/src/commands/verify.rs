@@ -283,7 +283,7 @@ fn ifml_manifest_json(file: &Path) -> anyhow::Result<Option<String>> {
     );
     let errors = binding
         .iter()
-        .filter(|diagnostic| diagnostic.severity.is_error())
+        .filter(|(_, diagnostic)| diagnostic.severity.is_error())
         .count();
     if !binding.is_empty() {
         let sources: Vec<(String, String)> = compilation
