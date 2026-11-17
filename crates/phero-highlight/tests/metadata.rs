@@ -2,6 +2,7 @@
 //! word tables and the site's surface catalogue.
 
 use std::collections::{BTreeMap, BTreeSet};
+use std::path::Path;
 
 use phero_highlight::{
     all_metadata, class_scope, keyword_class, lsp_modifier, lsp_token_type, metadata_for,
@@ -67,6 +68,31 @@ fn metadata_order_is_the_compiler_order_and_deterministic() {
         Surface::ALL.map(Surface::id),
         ["mox", "ifml", "ddd", "actor", "evt", "deploy", "uc", "cmmn", "dmn"]
     );
+}
+
+#[test]
+fn every_shared_surface_has_metadata_and_round_trips() {
+    // Iterates the shared identity's `ALL` (not the registry's), so a surface
+    // added to `phero_parser::Surface` fails here until it has a registry row.
+    assert_eq!(all_metadata().len(), Surface::ALL.len());
+    for surface in Surface::ALL {
+        let entry = metadata_for(surface);
+        assert_eq!(entry.surface, surface);
+        assert_eq!(entry.id, surface.id());
+        assert_eq!(entry.extension, surface.extension());
+        assert_eq!(entry.display_name, surface.display_name());
+        assert_eq!(entry.aliases, surface.aliases());
+        assert!(!entry.documentation.is_empty());
+        assert_eq!(Surface::of_extension(surface.extension()), Some(surface));
+        let path = Path::new("support").with_extension(surface.extension());
+        assert_eq!(Surface::of_path(&path), Some(surface));
+        assert_eq!(Surface::from_path(&path), Some(surface));
+        assert_eq!(Surface::from_id(surface.id()), Some(surface));
+        assert_eq!(
+            Surface::from_id(&surface.id().to_ascii_uppercase()),
+            Some(surface)
+        );
+    }
 }
 
 #[test]

@@ -10,6 +10,7 @@ repository.workspace = true
 workspace = true
 
 [dependencies]
+phero-parser = { workspace = true }
 phero-syntax = { workspace = true }
 phero-ifml = { workspace = true }
 serde = { workspace = true }
