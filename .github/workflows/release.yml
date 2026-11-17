@@ -82,7 +82,7 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends \
-            gcc-aarch64-linux-gnu libc6-dev-arm64-cross qemu-user-static
+            gcc-aarch64-linux-gnu libc6-dev-arm64-cross qemu-user
 
       - uses: dtolnay/rust-toolchain@stable
         with:
@@ -121,9 +121,16 @@ jobs:
           # A cross-built aarch64 binary cannot execute on the x86_64 runner.
           # Run it through qemu-user with the target sysroot installed above,
           # so the published archive is still proven, not merely inspected.
+          # Ubuntu 26 ships `qemu-aarch64` from the `qemu-user` package; older
+          # images used the statically named binary. Accept either.
           run=()
           if [ '${{ matrix.target }}' = 'aarch64-unknown-linux-gnu' ]; then
-            run=(qemu-aarch64-static -L /usr/aarch64-linux-gnu)
+            qemu="$(command -v qemu-aarch64-static || command -v qemu-aarch64)"
+            if [ -z "$qemu" ]; then
+              echo '::error::qemu-aarch64 not found; install qemu-user'
+              exit 1
+            fi
+            run=("$qemu" -L /usr/aarch64-linux-gnu)
           fi
           json="$(printf 'class A { }\n' | "${run[@]}" "$bin" highlight --surface mox --format json -)"
           printf '%s\n' "$json" | grep -q '"formatVersion": 1'
