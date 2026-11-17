@@ -24,8 +24,8 @@ export const REPO = resolve(SITE, '..');
  * `minPages` is the floor, not the target: it is the number of routes the
  * Phase-1 scope commits to (nine language pages + catalogue + homepage +
  * platform x2 + getting started + install + architecture + demo + about + 404
- * for marketing; 21 ingested documents + landing + 404 + the ADR index for
- * docs). A page that disappears takes the count under the floor.
+ * for marketing; the 27 generated documents plus their 404 for docs). A page
+ * that disappears takes the count under the floor.
  */
 export const APPS = {
   web: {
@@ -42,7 +42,7 @@ export const APPS = {
     packageDir: join(SITE, 'phero-docs'),
     dist: join(SITE, 'phero-docs', 'dist', 'client'),
     origin: 'https://docs.pherolang.com',
-    minPages: 24,
+    minPages: 28,
   },
 };
 
