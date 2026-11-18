@@ -44,8 +44,10 @@ install -m 0755 pherolang "$HOME/.local/bin/pherolang"
 export PATH="$HOME/.local/bin:$PATH"   # if ~/.local/bin is not on your PATH yet
 ```
 
-The archive contains a single file — the binary, at the archive root. There
-is no installer, no service, and no configuration file.
+The archive contains four files at the archive root — the `pherolang` binary
+plus `README.md`, `LICENSE`, and `CHANGELOG.md`. There is no installer, no
+service, and no configuration file; after `tar -xzf`, `./pherolang` runs
+directly from the archive root.
 
 ## Verify the install
 
