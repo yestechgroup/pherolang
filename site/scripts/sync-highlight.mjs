@@ -7,17 +7,15 @@
  * `examples/support/support.*` models, and the exact excerpts in
  * `site/packages/highlighting/excerpts.json`.
  *
- * Binary policy:
- *   1. `PHEROLANG_BIN` when set (it must provide `pherolang highlight`);
- *   2. the fetched release at `site/.bin/pherolang`, only if it provides the
- *      command;
- *   3. `pherolang` on PATH, only if it provides the command;
- *   4. a source build (`cargo build -q -p phero-cli` then
- *      `target/debug/pherolang`).
- *
- * The latest release (v0.3.0) predates `pherolang highlight`. Step 4 is the
- * documented temporary exception, never a claim of released-binary freshness
- * — see docs/HIGHLIGHTING.md.
+ * Binary policy (#343 — released-binary freshness, no source build):
+ *   1. `PHEROLANG_BIN` when set (it must provide `pherolang highlight` and
+ *      compile `examples/`);
+ *   2. the fetched release at `site/.bin/pherolang`, only if it can;
+ *   3. `pherolang` on PATH, only if it can;
+ *   4. otherwise the artifact is not regenerated: the named skip (tag +
+ *      failing file) is printed and the command exits 1. A release that
+ *      predates the DSL on main skips — it never falls back to a build of
+ *      this commit, which would make the artifact track unreleased DSL.
  *
  * Usage:
  *   node scripts/sync-highlight.mjs            # write the artifact
@@ -53,7 +51,11 @@ function fail(message) {
 
 function resolveRunner() {
   try {
-    return resolveSiteBinary(ROOT, SITE, { requireHighlight: true, log });
+    const resolved = resolveSiteBinary(ROOT, SITE, { requireHighlight: true, log });
+    if (resolved.kind === 'unavailable') {
+      fail(`skipped — ${resolved.reason}`);
+    }
+    return resolved;
   } catch (error) {
     fail(error.message);
   }

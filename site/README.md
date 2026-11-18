@@ -59,15 +59,21 @@ is released-binary-fresh: it was regenerated with the released asset and
 - the shared resolver (`scripts/highlighting/runner.mjs`) refuses a binary that
   cannot check `examples/support/support.ddd` or lacks `highlight`
   (`PHEROLANG_BIN` first, then the fetched `.bin`, then `PATH`) and otherwise
-  builds the CLI from the checkout (`cargo build -q -p phero-cli`).
+  reports the **named skip** (#343) — tag + failing file — and nothing is
+  regenerated. There is no source build: a release that predates the DSL on
+  main skips, because building the checkout would make the site data track
+  unreleased DSL.
 - `sync-model` and `sync-highlight` both use that resolver, so one binary
   produces the model data, the highlight artifact, and the commands the gate
   executes.
 
-The `Site` workflow still installs Rust so the offline fallback can run, and
-exports the resolved binary on every run. Its `deploy` job waits until the
-latest release version equals the workspace version, so production never
-advertises a download that does not exist — satisfied now by v0.4.0. The
+The `Site` workflow downloads the released archive and probes it against
+`examples/` (`site/scripts/probe-release.mjs`, unit-tested) before
+regenerating; on incompatibility it prints the named skip, sets
+`freshness`'s `skipped` output, and `deploy` — which requires both
+`freshness` success *and* the output's absence — cannot publish that ref. Its
+`deploy` job also waits until the latest release version equals the workspace
+version, so production never advertises a download that does not exist. The
 post-publish regeneration is recorded in
 [`docs/RELEASE-0.4.0.md`](../docs/RELEASE-0.4.0.md).
 
@@ -130,7 +136,9 @@ sources. `budget` proves every marketing page except the documented graph
 island on `/demo` is zero-JS, and keeps the island under 12 KB gzip. `hover`
 proves the prototype's index resolves, its page emits no `<script>`, its
 stylesheet stays under 8 KiB gzip, and hover/focus/Enter work in a browser.
-`freshness` reruns both sync scripts and fails on any `site/data` diff. The
+`freshness` reruns both sync scripts and fails on any `site/data` diff —
+unless the release predates the DSL on main, in which case it reports the
+named skip (#343) and passes without regenerating. The
 code-token colours are part of `contrast`/`a11y` in both modes.
 
 The Node suite (`pnpm test` → `node --test scripts/test/*.test.mjs`) covers the

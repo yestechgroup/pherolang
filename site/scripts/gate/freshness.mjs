@@ -1,5 +1,5 @@
 /**
- * Check 10 — freshness: the committed `site/data` is what the pinned/released
+ * Check 10 — freshness: the committed `site/data` is what the released
  * toolchain produces.
  *
  * `site/data/**` is generated (see `site/data/CONTRACT.md`) and committed. The
@@ -11,20 +11,17 @@
  *   - `node scripts/sync-highlight.mjs` regenerates the compiler-backed
  *     highlight artifact.
  *
- * Each uses the resolved site binary: the sha256-verified release when it can
- * check the current examples and provides the capabilities the script needs,
- * otherwise a source build of this checkout. The release v0.3.0 predates both
- * the DD9 examples and `pherolang highlight`, so the fallback is the documented
- * temporary exception — never released-binary freshness (`docs/HIGHLIGHTING.md`).
+ * Each uses the resolved site binary: the checksum-verified release when it
+ * can check the current examples and provides the capabilities the script
+ * needs. There is no source build (#343): a release that predates the DSL on
+ * main is the *named skip* — this check reports it and passes, exactly like
+ * the workflow's `freshness` job, whose `skipped` output blocks `deploy`.
  *
- * So this check runs both and then asks git.
+ * So this check runs both scripts and then asks git.
  *
  * It restores nothing on failure. A dirty tree *is* the finding: reverting it
  * would delete the evidence the integrator needs, and `git diff` is already the
  * report.
- *
- * A source build is only used when the release cannot do the job, and the
- * report says so.
  */
 
 import { join } from 'node:path';
@@ -66,6 +63,15 @@ export const check = {
       lines.push(`FAIL no usable pherolang binary: ${error.message}`);
       lines.push('     fetch the release with: node scripts/fetch-pherolang.mjs, or set PHEROLANG_BIN');
       return { status: 'fail', lines };
+    }
+    // The named skip (#343): the release predates the DSL on main, so there is
+    // nothing to verify and nothing was regenerated. Report it and pass — the
+    // workflow's `freshness` behaves the same, and its `skipped` output is
+    // what blocks `deploy`.
+    if (modelBinary.kind === 'unavailable' || highlightBinary.kind === 'unavailable') {
+      const skipped = modelBinary.kind === 'unavailable' ? modelBinary : highlightBinary;
+      lines.push(`ok   skipped — ${skipped.reason}`);
+      return { status: 'pass', lines };
     }
 
     lines.push(
@@ -113,17 +119,6 @@ export const check = {
         if (result.stderr.trim()) lines.push(tail(result.stderr, 20).replace(/^/gm, '     | '));
         return { status: 'fail', lines };
       }
-    }
-
-    if (modelBinary.kind === 'source-build') {
-      lines.push(
-        'note: model data was regenerated from a source build because the latest release predates the current examples',
-      );
-    }
-    if (highlightBinary.kind === 'source-build') {
-      lines.push(
-        'note: the highlight artifact was generated from a source build because the latest release predates `pherolang highlight`',
-      );
     }
 
     // The plan's sentence is `git diff --exit-code -- site/data`; that exit code

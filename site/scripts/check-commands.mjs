@@ -8,9 +8,8 @@
  * This script is the executor: it runs each entry from the repository root with
  * the resolved binary's directory in front of `PATH`. By default that is the
  * *released* binary at `site/.bin` (fetched by
- * `scripts/fetch-pherolang.mjs`). `PHEROLANG_BIN` overrides it; the site gate
- * passes a source build while the release predates the current examples
- * (documented temporary exception — docs/HIGHLIGHTING.md).
+ * `scripts/fetch-pherolang.mjs`). `PHEROLANG_BIN` overrides it — the site gate
+ * passes the released binary; there is no source build in the contract (#343).
  *
  * Usage:
  *   node scripts/check-commands.mjs           # run everything the gate can run

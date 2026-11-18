@@ -106,8 +106,8 @@
       "slug": "highlighting",
       "title": "Compiler-backed syntax highlighting",
       "description": "Phero Lang source is highlighted by the compiler, not by a hand-written",
-      "bytes": 64950,
-      "lines": 1269
+      "bytes": 65138,
+      "lines": 1271
     },
     {
       "path": "docs/IFML.md",
