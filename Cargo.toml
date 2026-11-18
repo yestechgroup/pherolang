@@ -90,7 +90,6 @@ dsntk-recognizer = { git = "https://github.com/yestechgroup/dsntk-rs.git", rev =
 dsntk-model = { git = "https://github.com/yestechgroup/dsntk-rs.git", rev = "b926458c089085fb59e9178d549f27a8119e45ff" }
 dsntk-model-evaluator = { git = "https://github.com/yestechgroup/dsntk-rs.git", rev = "b926458c089085fb59e9178d549f27a8119e45ff" }
 dsntk-common = { git = "https://github.com/yestechgroup/dsntk-rs.git", rev = "b926458c089085fb59e9178d549f27a8119e45ff" }
-phero-backend-dmn = { path = "crates/phero-backend-dmn" }
 dsntk-feel = { git = "https://github.com/yestechgroup/dsntk-rs.git", rev = "b926458c089085fb59e9178d549f27a8119e45ff" }
 dsntk-feel-parser = { git = "https://github.com/yestechgroup/dsntk-rs.git", rev = "b926458c089085fb59e9178d549f27a8119e45ff" }
 dsntk-feel-evaluator = { git = "https://github.com/yestechgroup/dsntk-rs.git", rev = "b926458c089085fb59e9178d549f27a8119e45ff" }

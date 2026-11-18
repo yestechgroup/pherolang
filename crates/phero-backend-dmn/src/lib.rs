@@ -9,6 +9,12 @@
 //! is consumed: every type the artifact carries is already resolved, and
 //! the FEEL mapping below is decided from the artifact alone.
 //!
+//! **There is no in-tree consumer by decision (issue #222).** This crate is
+//! the reference execution path a downstream host depends on directly — the
+//! artifact and the dsntk engine model are the product, and workspace
+//! membership keeps the seam compiled and tested (`tests/examples.rs` is its
+//! executable contract). `docs/BACKENDS.md` records the consumption story.
+//!
 //! # The seam
 //!
 //! * [`lower`] builds one dsntk [`Definitions`]: inputs, knowledge

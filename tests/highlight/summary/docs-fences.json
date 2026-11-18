@@ -106,7 +106,7 @@
     },
     {
       "file": "docs/DMN.md",
-      "line": 40,
+      "line": 45,
       "surface": "dmn",
       "degraded": false,
       "spans": 36,

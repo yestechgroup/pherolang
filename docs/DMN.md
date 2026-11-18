@@ -19,7 +19,12 @@ and validated by **phero-driver** (`compile_dmn_str`) against the imported
 `.mox` domains, and emitted as the versioned `phero_ir::dmn::DmnModel`
 artifact (the phero-ir crate).
 
-**No in-tree backend exists yet**: downstream consumers ingest the artifact
+**Downstream hosts execute it.** `phero-backend-dmn` lowers the artifact
+plus the host-provided table contents into the dsntk engine model and
+evaluates it, returning the value with a provenance record — a reference
+execution seam with **no in-tree consumer by decision** (issue #222; the
+story is in [BACKENDS.md](BACKENDS.md#the-dmn-execution-seam-a-reference-path-with-no-in-tree-consumer)),
+not a `pherolang gen` target. Without that seam the artifact is consumed
 exactly like the `DddModel`, `EventModel`, and `UseCaseModel` artifacts.
 
 The normative grammar lives exactly once — the *`.dmn` decision-model
@@ -659,10 +664,14 @@ model demands it:
    `itemDefinition` machinery; the domain model is the type universe.
 5. **No DRD/DI** — no diagram interchange; `views` declare presentation
    intent (what to show, which direction), not graphics.
-6. **No evaluation engine in-tree** — the artifact carries the
-   architecture; execution is a backend/consumer concern (the table
-   engine, the FEEL evaluator, are downstream choices — dsntk
-   compatibility is the table format's north star, not a dependency).
+6. **No evaluation engine in the surface** — the artifact carries the
+   architecture; execution is a consumer concern. The in-tree
+   `phero-backend-dmn` library seam (no CLI target, no in-tree consumer
+   by decision — issue #222) lowers the artifact to the dsntk engine
+   model and evaluates it, but the `.dmn` *surface* depends only on the
+   rev-pinned `dsntk-recognizer` (table ingest) and `dsntk-feel*`
+   (syntax) crates; dsntk compatibility is the table format's north
+   star, not a compiler dependency.
 
 The dsntk crates the surface does use (`dsntk-recognizer` for table
 ingest, `dsntk-feel-parser`/`dsntk-feel` for syntax) are **rev-pinned in
