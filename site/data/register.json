@@ -220,9 +220,9 @@
     },
     {
       "id": "V10",
-      "claim": "Wire rule 3: a feature's stable id equals its 0-based declaration index; `assign_feature_ids` establishes it and changes nothing else",
+      "claim": "Wire rule 3: a feature's id is its 0-based declaration index within one publication (an intra-publication ordinal, never a cross-publication identity); `assign_feature_ids` establishes it and changes nothing else",
       "statement": "`phero_verify::feature_ids::assign_ids` `ensures` (length unchanged, `id(i) == i` for all slots, within the `u32` bound)",
-      "implementation": "proved over the spec mirror `phero_verify::feature_ids` (identical loop shape + trusted one-statement primitive `set_id`); `phero-ir`'s `ClassDef::assign_feature_ids` pinned executably by `crates/phero-ir/tests/feature_ids.rs`",
+      "implementation": "proved over the spec mirror `phero_verify::feature_ids` (identical loop shape + trusted one-statement primitive `set_id`); `phero-ir`'s `ClassDef::assign_feature_ids` pinned executably by `crates/phero-ir/tests/feature_ids.rs`, including the DF2 renumbering characterization (`inserting_a_feature_renumbers_later_ids`): cross-publication identity is `(package, class name, feature name)`, not the id",
       "status": "proved",
       "evidence": [
         {
@@ -236,9 +236,13 @@
         {
           "kind": "test",
           "pointer": "crates/phero-ir/tests/feature_ids.rs:ids_equal_declaration_indices"
+        },
+        {
+          "kind": "test",
+          "pointer": "crates/phero-ir/tests/feature_ids.rs:inserting_a_feature_renumbers_later_ids"
         }
       ],
-      "statusNote": "in-crate `phero-ir` translation blocked upstream (see avoidances)",
+      "statusNote": "in-crate `phero-ir` translation blocked upstream (see avoidances); the identity contract is an intra-publication ordinal, not a cross-publication key (DF2, issue pherolang#325)",
       "trigger": "the next creusot-std/Creusot toolchain bump — its release notes are the trigger: watch them for the derive-gap family closing, then move the mirror in-crate",
       "review": "2027-05-14",
       "mirror": {
