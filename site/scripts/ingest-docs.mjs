@@ -87,6 +87,8 @@ const GROUPS = ['reference', 'engineering', 'migration', 'adr'];
  */
 const PLACEMENT = {
   // Reference — the language manual, in the order a reader meets it.
+  install: ['reference', 1],
+  editors: ['reference', 2],
   language: ['reference', 10],
   expressions: ['reference', 20],
   ddd: ['reference', 30],
