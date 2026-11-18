@@ -118,12 +118,41 @@ jobs:
           target='${{ matrix.target }}'
           asset="pherolang-${version}-${target}.tar.gz"
           mkdir -p dist
-          # The binary sits at the archive root, so `tar -xzf` followed by
-          # `./pherolang` works without a cd into a target-named directory.
-          tar -czf "dist/${asset}" -C "target/${target}/release" 'pherolang'
+          # The archive root holds the binary and the three repository
+          # documents (G1-03's decided shape — #236): `tar -xzf` followed by
+          # `./pherolang` works without a cd into a target-named directory,
+          # and README/LICENSE/CHANGELOG ride along at the same root. The
+          # binary keeps its name and location — site.yml's
+          # `PHEROLANG_ASSET_PATTERN` and `fetch-pherolang.mjs` extract and
+          # execute `pherolang` from the archive root, so neither may move.
+          tar -czf "dist/${asset}" \
+            -C "target/${target}/release" 'pherolang' \
+            -C "${GITHUB_WORKSPACE}" 'README.md' 'LICENSE' 'CHANGELOG.md'
           # "<hex>  <name>" is the only format `sha256sum -c` reads.
           (cd dist && sha256sum "$asset" > "$asset.sha256")
           cat "dist/${asset}.sha256"
+
+      # G1-04: the packaged archive is what users run — smoke-test a clean
+      # extraction of *that* tarball before it uploads, not merely the
+      # `target/` binary the previous steps used. `--version` proves the
+      # binary starts and names its provenance; `explain --list` exercises
+      # the embedded diagnostic registry without a model; `check` compiles
+      # the canonical example from this checkout against the packaged
+      # binary. A tag is cut from a green main, so the example parses by
+      # construction — the point is that the *archive* runs.
+      - name: Smoke test the packaged archive
+        shell: bash
+        run: |
+          set -euo pipefail
+          version='${{ steps.version.outputs.version }}'
+          target='${{ matrix.target }}'
+          asset="dist/pherolang-${version}-${target}.tar.gz"
+          smoke="$(mktemp -d)"
+          tar -xzf "$asset" -C "$smoke"
+          "$smoke/pherolang" --version
+          "$smoke/pherolang" explain --list >/dev/null
+          "$smoke/pherolang" check examples/support/support.mox
+          echo "smoke-tested a clean extraction of $asset"
 
       - uses: actions/upload-artifact@v4
         with:
