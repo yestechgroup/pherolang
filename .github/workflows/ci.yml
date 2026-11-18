@@ -71,11 +71,13 @@ jobs:
       - uses: Swatinem/rust-cache@v2
       - name: Build
         run: scripts/ci-local.sh build
-      # The rebrand guard (epic #270, P0-03): a revived pre-0.3 spelling is
-      # a documentation/identifier regression no other gate can see. Cheap,
-      # so it runs before the expensive test step. The contract it enforces
-      # is docs/NAMING.md; the allowlist is scripts/check-rebrand.sh itself.
-      - name: Rebrand guard
+      # The platform guard (ADR 0004, issue #284) and the rebrand guard
+      # (epic #270, P0-03): revived non-Linux platform tokens and revived
+      # pre-0.3 spellings are documentation/identifier regressions no build
+      # or test can see. Cheap, so both run before the expensive test step.
+      # The contracts are docs/adr/0004 and docs/NAMING.md; the allowlists
+      # live in scripts/check-platforms.sh and scripts/check-rebrand.sh.
+      - name: Platform and rebrand guards
         run: scripts/ci-local.sh rebrand
       # Every gate below invokes scripts/ci-local.sh — the single source
       # of truth for the gate sequence and the fixture-glob list (issue
