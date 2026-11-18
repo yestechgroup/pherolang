@@ -47,6 +47,7 @@ Root shapes, as actually serialized:
 | Event contract (`events::EventModel`) | `{"formatVersion": N, "events"?: […], "channels"?: […], "subscriptions"?: […]}` (all omitted when empty) |
 | Deployment (`deploy::DeployModel`) | `{"formatVersion": N, "applications"?: […], "profiles"?: […], "deployments"?: […]}` (all omitted when empty) |
 | Use case (`usecases::UseCaseModel`) | `{"formatVersion": N, "useCases"?: […]}` (omitted when empty) |
+| Decision model (`dmn::DmnModel`) | `{"formatVersion": N, "name"?: …, "namespace"?: …, "metadata"?: […], "inputs"?: […], "knowledgeSources"?: […], "businessKnowledgeModels"?: […], "decisions"?: […], "informationRequirements"?: […], "knowledgeRequirements"?: […], "authorityRequirements"?: […], "services"?: […], "views"?: […]}` (every section omitted when empty; it carries no provenance key) |
 | Case management (`cmmn::CmmnModel`) | `{"formatVersion": N, "cases"?: […]}` (omitted when empty) |
 | Semantic graph (`graph::GraphModel`) | `{"formatVersion": N, "applications"?: […], "nodes"?: […], "edges"?: […]}` (all omitted when empty; built by `pherolang graph build`) |
 | Canonical instance | `{"$type": "phero.instance", "formatVersion": N, "model": "…", "objects": […]}` |
@@ -215,6 +216,31 @@ an actor artifact).
   spec: an emitter change that shifts a byte is a contract change. When
   developing *in* this workspace, `PHERO_UPDATE_FIXTURES=1` regenerates them
   and the diff is reviewed as a spec change.
+
+### The DMN execution seam: a reference path with no in-tree consumer
+
+`phero-backend-dmn` is an **execution seam, not an emitter**: there is no
+`pherolang gen` target and, by decision (issue #222), no in-tree consumer at
+all. It consumes only a compiled `DmnModel` plus the markdown
+decision-table contents the artifact references (provided by the host,
+keyed by the path as written — the backend stays filesystem-free), and
+lowers them to the dsntk `Definitions` model
+(`phero_backend_dmn::lower`). `DecisionEngine::evaluate` runs one decision
+service against a JSON input context and returns the value together with a
+`Provenance` record — model identity, service, inputs, outputs, the matched
+table rules, and the injected timestamp — so regulated applications can
+answer "why did the system decide this". The clock is a parameter, which
+makes the record deterministic and lets its golden
+(`examples/artifacts/support.decision.json`) pin it byte-for-byte.
+
+The **product is the artifact and the dsntk engine model**, not a CLI
+surface: downstream hosts execute decisions against the artifact themselves.
+The crate stays a workspace member (and in every CI run) precisely to keep
+that seam compiled and tested, and its `tests/examples.rs` is the executable
+contract. Contrast `phero-backend-cmmn`, which has the same
+library-only shape for the same reason. The language side of the seam is
+normative in [DMN.md](DMN.md); the lowering/rejection rules and the FEEL
+type mapping are the crate's module docs.
 
 ## The `preserve_order` gotcha
 
