@@ -135,6 +135,13 @@
       "url": "/engineering/receipts/"
     },
     {
+      "source": "docs/GOLDENS.md",
+      "slug": "goldens",
+      "collection": "engineering",
+      "target": "engineering/goldens.md",
+      "url": "/engineering/goldens/"
+    },
+    {
       "source": "docs/RUNE-BODIES.md",
       "slug": "rune-bodies",
       "collection": "engineering",
@@ -196,6 +203,13 @@
       "collection": "adr",
       "target": "adr/0004-supported-platforms-linux-only.md",
       "url": "/adr/0004-supported-platforms-linux-only/"
+    },
+    {
+      "source": "docs/adr/0005-shared-surface-kernel-layering.md",
+      "slug": "0005-shared-surface-kernel-layering",
+      "collection": "adr",
+      "target": "adr/0005-shared-surface-kernel-layering.md",
+      "url": "/adr/0005-shared-surface-kernel-layering/"
     }
   ]
 }

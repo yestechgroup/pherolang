@@ -110,6 +110,9 @@ const PLACEMENT = {
   // A landed design RFC: compiler internals, not a user-facing surface, and
   // not one of the numbered decisions — engineering is its only honest home.
   'rune-bodies': ['engineering', 40],
+  // The byte-contract fixtures: what a golden is, the one regeneration
+  // command, and the read-the-diff rule (docs/GOLDENS.md, #223).
+  goldens: ['engineering', 35],
 
   // Migration — moving a 0.2 consumer, then cutting the release.
   rebrand: ['migration', 10],

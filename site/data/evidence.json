@@ -227,7 +227,7 @@
       "docs": {
         "path": "docs/DDD.md",
         "exists": true,
-        "bytes": 128575
+        "bytes": 130573
       },
       "example": {
         "path": "examples/support/support.ddd",
@@ -242,7 +242,7 @@
       "golden": {
         "path": "examples/artifacts/support.ddd.json",
         "exists": true,
-        "bytes": 23055
+        "bytes": 23244
       },
       "backends": [],
       "status": "validated"
@@ -285,7 +285,7 @@
       "docs": {
         "path": "docs/DMN.md",
         "exists": true,
-        "bytes": 32355
+        "bytes": 33001
       },
       "example": {
         "path": "examples/support/support.dmn",
@@ -403,7 +403,7 @@
       "docs": {
         "path": "docs/IFML.md",
         "exists": true,
-        "bytes": 40994
+        "bytes": 43753
       },
       "example": {
         "path": "examples/support/support.ifml",
