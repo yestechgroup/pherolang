@@ -25,6 +25,8 @@ artifact. This index routes to the right document.
 | Document | Read it when… |
 |---|---|
 | [../README.md](../README.md) | you want the overview: what Phero Lang is, status, CLI usage, integration styles |
+| [INSTALL.md](INSTALL.md) | you are installing the toolchain — the one normative install page: released binary + checksums, `cargo install --git`, upgrade, uninstall, and `--version` provenance |
+| [EDITORS.md](EDITORS.md) | you are wiring an editor to `pherolang lsp` — what the stdio server provides, and the Neovim / VS Code / Zed setups (untested ones marked) |
 | [../examples/README.md](../examples/README.md) | you learn from working code — the canonical examples compile one domain through every surface, CI-enforced |
 | [BACKENDS.md](BACKENDS.md) | you write a backend (in or out of tree) that consumes Phero Lang artifacts |
 | [GOLDENS.md](GOLDENS.md) | you changed an emitter, a fixture, or a version number — what a golden is, the one regeneration command, the writer inventory, and the byte-shape rules |

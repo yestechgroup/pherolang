@@ -2,6 +2,20 @@
   "formatVersion": 1,
   "generated": [
     {
+      "source": "docs/INSTALL.md",
+      "slug": "install",
+      "collection": "reference",
+      "target": "reference/install.md",
+      "url": "/reference/install/"
+    },
+    {
+      "source": "docs/EDITORS.md",
+      "slug": "editors",
+      "collection": "reference",
+      "target": "reference/editors.md",
+      "url": "/reference/editors/"
+    },
+    {
       "source": "docs/LANGUAGE.md",
       "slug": "language",
       "collection": "reference",

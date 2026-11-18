@@ -75,13 +75,6 @@
       "expectExit": 0
     },
     {
-      "id": "install-linux-cd",
-      "label": "Download step: work in a temporary directory",
-      "run": "cd \"$(mktemp -d)\"",
-      "expectExit": 0,
-      "network": true
-    },
-    {
       "id": "install-linux-curl-asset",
       "label": "Download step: fetch the x86_64 Linux archive",
       "run": "curl -LO https://github.com/yestechgroup/pherolang/releases/download/v0.4.0/pherolang-0.4.0-x86_64-unknown-linux-gnu.tar.gz",
@@ -113,20 +106,6 @@
       "id": "install-linux-install",
       "label": "Download step: put the binary on PATH",
       "run": "sudo install -m 0755 pherolang /usr/local/bin/pherolang",
-      "expectExit": 0,
-      "network": true
-    },
-    {
-      "id": "install-linux-install-local",
-      "label": "Download step: put the binary in your home directory instead",
-      "run": "install -m 0755 pherolang \"$HOME/.local/bin/pherolang\"",
-      "expectExit": 0,
-      "network": true
-    },
-    {
-      "id": "install-cargo",
-      "label": "Fallback: build and install from the git tag",
-      "run": "cargo install --git https://github.com/yestechgroup/pherolang --tag v0.4.0 --locked phero-cli",
       "expectExit": 0,
       "network": true
     }

@@ -83,6 +83,9 @@ export const EXEMPT_DOC_LANGS = new Set([
   'yaml',
   'yml',
   'toml',
+  // Neovim editor setup (docs/EDITORS.md): the language-server registration
+  // snippet is Lua, left to Shiki like every other non-Phero fence.
+  'lua',
   'xml',
   'diff',
   'sql',
