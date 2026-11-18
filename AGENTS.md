@@ -50,7 +50,7 @@ cargo test -p phero-highlight                                # taxonomy, engine,
 cargo run -p phero-cli -- verify <files...> -o <receipt.json>                 # emit a verification receipt: source closure + artifact hashes + the register's rows, canonical and deterministic
 cargo run -p phero-cli -- verify --check <receipt.json>                       # validate a receipt standalone — no register, models, toolchain, or network
 cargo run -p phero-cli -- verify --check-fresh <receipt.json>                 # regenerate from the receipt's own inputs and byte-compare (the CI freshness gate)
-PHERO_UPDATE_FIXTURES=1 cargo test --workspace    # regenerate golden files
+scripts/regen-goldens.sh         # regenerate every golden in one pass (`--check`: fail if the tree goes dirty); the writer inventory and byte-shape rules are docs/GOLDENS.md
 PHERO_UPDATE_FIXTURES=1 cargo test -p phero-verify  # regenerate the register tables in docs/VERIFICATION.md (hand-edit register.json, never the tables)
 ```
 

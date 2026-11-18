@@ -11,20 +11,17 @@
 # Mirrors CI's env: CARGO_INCREMENTAL=0 and RUSTFLAGS="-C debuginfo=0"
 # (the dsntk disk-budget tweak, workflow env block), and the Tests step
 # runs under TMPDIR=$PWD/target/tmp with --jobs 2 (the doctest SIGBUS
-# remedy — the AGENTS.md testing-quirks gotcha). Small-machine guardrails:
-# nice, orphaned rustc/lld killed between steps, plus the informational
-# disk-budget print/warning before the build (issue #261). On a beefier
-# machine you can drop the nice and the job cap.
+# remedy — the AGENTS.md testing-quirks gotcha). That env block lives once,
+# in scripts/ci-env.sh, shared with scripts/regen-goldens.sh so a
+# regenerated golden is byte-identical to the one this gate compares.
+# Small-machine guardrails: nice, orphaned rustc/lld killed between steps,
+# plus the informational disk-budget print/warning before the build (issue
+# #261). On a beefier machine you can drop the nice and the job cap.
 #
 # Usage: scripts/ci-local.sh [all|build|rebrand|test|clippy|fmt|receipt|docs|audit]
 #        (default: all — the full sequence; ~30-60 min cold)
 set -u
-cd "$(dirname "$0")/.." || exit 1
-mkdir -p target/tmp
-export TMPDIR="$PWD/target/tmp"
-export CARGO_TERM_COLOR=always
-export CARGO_INCREMENTAL=0
-export RUSTFLAGS="-C debuginfo=0"
+. "$(dirname "$0")/ci-env.sh" || exit 1
 
 step() { echo; echo "=== $1 ==="; }
 kill_orphans() {
