@@ -1,10 +1,11 @@
 #!/bin/bash
 # The platform guard (ADR 0004, issue pherolang#284).
 #
-# Phero Lang publishes one platform: x86_64/aarch64 Linux. Windows and macOS
-# were deliberately dropped, and the only thing that notices a revived
-# instruction is this gate — no build or test would fail if the install page
-# grew a PowerShell chain again, because nothing here runs on Windows.
+# Phero Lang publishes one platform: x86_64 Linux (glibc). aarch64, Windows
+# and macOS were deliberately dropped, and the only thing that notices a
+# revived instruction is this gate — no build or test would fail if the
+# install page grew a PowerShell chain again, because nothing here runs on
+# Windows.
 #
 # The detector is deliberately blunt, with exactly two shape exclusions so it
 # can be blunt without false-positiving on ordinary Rust:
@@ -28,6 +29,10 @@
 #   site .../index.astro            the same statement on the landing page
 #   site/scripts/fetch-*.mjs        the named failure that tells a Windows
 #                                   contributor the archive does not exist
+#   docs/INSTALL.md                 the normative install page's honest
+#                                   "unsupported and untested" statement
+#                                   (ADR 0004) — the same prose install.astro
+#                                   carries
 #   docs/RELEASE-0.3.0.md           history: v0.3.0 shipped a Windows archive
 #   docs/adr/0004-*.md, adr/README  the decision record and its index row
 #   CHANGELOG.md                    past release notes are history
@@ -54,6 +59,7 @@ ALLOWED_PATHS=(
   ':(exclude)site/phero-web/src/pages/install.astro'
   ':(exclude)site/phero-web/src/pages/index.astro'
   ':(exclude)site/scripts/fetch-pherolang.mjs'
+  ':(exclude)docs/INSTALL.md'
   ':(exclude)docs/RELEASE-0.3.0.md'
   ':(exclude)docs/adr/0004-supported-platforms-linux-only.md'
   ':(exclude)docs/adr/README.md'
@@ -87,8 +93,8 @@ if hits=$(git grep -nIEi "$PATTERN" -- . "${ALLOWED_PATHS[@]}"); then
       echo "… and $((count - 60)) more."
     fi
     echo
-    echo "The supported-platform decision is docs/adr/0004: Linux x86_64 and"
-    echo "aarch64 only. Windows, macOS and aarch64-macOS are unsupported and"
+    echo "The supported-platform decision is docs/adr/0004: x86_64"
+    echo "Linux (glibc) only. aarch64, Windows and macOS are unsupported and"
     echo "the release pipeline publishes no archive for them."
     echo
     echo "If the occurrence is history or a deliberate unsupported-platform"
