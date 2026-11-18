@@ -98,12 +98,15 @@ step_build() {
   kill_orphans
 }
 
-# The rebrand guard (epic #270, task P0-03): fail on a revived pre-0.3
-# spelling. It runs early and cheaply — before the expensive test step —
-# because a reintroduced old name is a documentation/identifier regression
-# that no other gate can see. The contract it enforces is docs/NAMING.md.
+# The platform and rebrand guards (issue pherolang#284, epic pherolang#270):
+# fail on a revived non-Linux platform token or a revived pre-0.3 name.
+# Both run early and cheaply — before the expensive test step — because a
+# reintroduced platform claim or old name is a documentation/identifier
+# regression no other gate can see. The contracts they enforce are
+# docs/adr/0004 and docs/NAMING.md.
 step_rebrand() {
-  step "CI 2/7: rebrand guard (scripts/check-rebrand.sh)"
+  step "CI 2/7: platform + rebrand guards (scripts/check-platforms.sh, scripts/check-rebrand.sh)"
+  ./scripts/check-platforms.sh && echo "PLATFORMS-STEP-OK" || echo "PLATFORMS-STEP-FAIL"
   ./scripts/check-rebrand.sh && echo "REBRAND-STEP-OK" || echo "REBRAND-STEP-FAIL"
 }
 
