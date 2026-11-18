@@ -721,6 +721,14 @@ for what the interaction model lowers to, derived from the compilation
   (`tickets.show`), with typed arguments, options and prompts (defaults
   included), `requires:` gates, and descriptions.
 
+The command checks with the full decisions-aware pass
+(`check_ifml_with_decisions`: domains, actors, and decision services), so
+a `data:` naming a decision service is in scope and the command exits
+cleanly — only `resolvedData` stays domain-only, as above. The actors-only
+pass reported `AssessRefund` in `examples/support/support.ifml` as an
+unknown domain entity (E0100, issue #283); that regression is pinned by
+`crates/phero-cli/tests/cli/manifest.rs`.
+
 The derivation contract is the manifest's reason to exist: **every edge's
 target is declaration-backed by construction**. The checker
 (`E0104`–`E0106`, instantiated modules included) gates emission, so a

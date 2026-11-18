@@ -29,8 +29,16 @@ pub(crate) fn run(files: Vec<PathBuf>, out: Option<PathBuf>) -> anyhow::Result<E
                 return Ok(ExitCode::FAILURE);
             }
         };
-    let binding =
-        phero_ifml::check_ifml_with_actors(&compilation, inputs.domains.as_ref(), &inputs.actors);
+    // The full decisions-aware pass: domains + actors + decision services.
+    // A `data:` naming a decision service (e.g. `AssessRefund` in
+    // `support.dmn`) is only in scope through it — the actors-only check
+    // reports it as an unknown domain entity (E0100, issue #283).
+    let binding = phero_ifml::check_ifml_with_decisions(
+        &compilation,
+        inputs.domains.as_ref(),
+        &inputs.actors,
+        &inputs.decisions,
+    );
     if !binding.is_empty() {
         let sources: Vec<(String, String)> = compilation
             .index
