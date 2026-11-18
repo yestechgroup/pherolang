@@ -124,8 +124,8 @@
       "slug": "install",
       "title": "Installing Phero Lang",
       "description": "`pherolang` ships as a single native binary and reads nothing from the network",
-      "bytes": 4350,
-      "lines": 118
+      "bytes": 4475,
+      "lines": 120
     },
     {
       "path": "docs/LANGUAGE.md",
