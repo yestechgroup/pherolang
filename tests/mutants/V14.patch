@@ -1,0 +1,15 @@
+# V14 — recorded mutant for register row V14.
+# Inverts the obligation-vocabulary membership test, so unknown obligation names pass silently and declared ones are rejected.
+diff --git a/crates/phero-driver/src/lower/actors.rs b/crates/phero-driver/src/lower/actors.rs
+index 2163c5a..df044d2 100644
+--- a/crates/phero-driver/src/lower/actors.rs
++++ b/crates/phero-driver/src/lower/actors.rs
+@@ -751,7 +751,7 @@ pub(crate) fn validate_actor_obligations(
+         .collect();
+     for record in records {
+         for reference in &record.obligation_refs {
+-            if !declared.contains(reference.name.as_str()) {
++            if declared.contains(reference.name.as_str()) {
+                 let help = if declared.is_empty() {
+                     "no obligations are declared; declare `obligation <name>;` in an                      actors block"
+                         .to_string()

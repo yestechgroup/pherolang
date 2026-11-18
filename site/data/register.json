@@ -106,8 +106,13 @@
         {
           "kind": "test",
           "pointer": "crates/phero-driver/tests/compile.rs"
+        },
+        {
+          "kind": "mutant",
+          "pointer": "tests/mutants/V4.patch"
         }
-      ]
+      ],
+      "mutantKilled": true
     },
     {
       "id": "V5",
@@ -276,8 +281,21 @@
         {
           "kind": "test",
           "pointer": "crates/phero-verify/tests/invariants.rs:p11_invocation_edges_terminate_at_declaration_backed_nodes"
+        },
+        {
+          "kind": "test",
+          "pointer": "crates/phero-ifml/src/check/tests/interaction_reference.rs:dangling_action_invocation_is_reported"
+        },
+        {
+          "kind": "test",
+          "pointer": "crates/phero-ifml/src/check/tests/instantiated_modules.rs:instantiated_module_dangling_references_are_diagnosed"
+        },
+        {
+          "kind": "mutant",
+          "pointer": "tests/mutants/V11.patch"
         }
       ],
+      "mutantKilled": true,
       "statusNote": "honest staging per V4's precedent — the kernel tracks no node metadata yet; the graph-level `proved` form belongs in `phero-verify` once the ingest stops synthesizing endpoints from invocations, the codegraph companion — which the manifest boundary now makes structurally impossible on the artifact path"
     },
     {
@@ -310,8 +328,13 @@
         {
           "kind": "test",
           "pointer": "crates/phero-lsp/src/server/tests/capability_joins.rs"
+        },
+        {
+          "kind": "mutant",
+          "pointer": "tests/mutants/V12.patch"
         }
       ],
+      "mutantKilled": true,
       "statusNote": "enforcement landed; the kernel/proptest staging follows V11's precedent once the graph ingest stops synthesizing endpoints — the same codegraph companion"
     },
     {
@@ -332,8 +355,13 @@
         {
           "kind": "test",
           "pointer": "crates/phero-driver/tests/ddd_machines.rs"
+        },
+        {
+          "kind": "mutant",
+          "pointer": "tests/mutants/V13.patch"
         }
-      ]
+      ],
+      "mutantKilled": true
     },
     {
       "id": "V14",
@@ -349,8 +377,13 @@
         {
           "kind": "test",
           "pointer": "crates/phero-driver/tests/actors/obligations.rs"
+        },
+        {
+          "kind": "mutant",
+          "pointer": "tests/mutants/V14.patch"
         }
-      ]
+      ],
+      "mutantKilled": true
     },
     {
       "id": "V15",
@@ -432,8 +465,13 @@
         {
           "kind": "test",
           "pointer": "tests/conformance/artifacts/name_uniqueness.phero.json"
+        },
+        {
+          "kind": "mutant",
+          "pointer": "tests/mutants/V17.patch"
         }
-      ]
+      ],
+      "mutantKilled": true
     }
   ],
   "pipeline": [

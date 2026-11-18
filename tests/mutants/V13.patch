@@ -1,0 +1,15 @@
+# V13 — recorded mutant for register row V13.
+# Inverts the enum-literal membership test in lower_design_machine, so typo'd machine states pass and declared literals are rejected.
+diff --git a/crates/phero-driver/src/ddd/machines.rs b/crates/phero-driver/src/ddd/machines.rs
+index 4e6c6c8..12d28b3 100644
+--- a/crates/phero-driver/src/ddd/machines.rs
++++ b/crates/phero-driver/src/ddd/machines.rs
+@@ -396,7 +396,7 @@ pub(crate) fn lower_design_machine(
+     // state.
+     if let Some(literals) = enum_literals(union, &enum_type) {
+         for state in &states {
+-            if !literals.contains(state) {
++            if literals.contains(state) {
+                 local.push(
+                     Diagnostic::error(
+                         format!(

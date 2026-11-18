@@ -1,0 +1,15 @@
+# V4 — recorded mutant for register row V4.
+# Removes the same-package guard in resolve_single, so a cross-package type reference silently resolves to the local name.
+diff --git a/crates/phero-driver/src/lower/resolve.rs b/crates/phero-driver/src/lower/resolve.rs
+index 28fc7cb..411589e 100644
+--- a/crates/phero-driver/src/lower/resolve.rs
++++ b/crates/phero-driver/src/lower/resolve.rs
+@@ -26,7 +26,7 @@ pub(crate) fn resolve_single(
+ 
+     let local = match segments.len() {
+         1 => &segments[0].text,
+-        2 if segments[0].text == *package => &segments[1].text,
++        2 => &segments[1].text,
+         _ => {
+             diags.push(Diagnostic::error(
+                 "cross-package type references are not supported yet",

@@ -1,0 +1,15 @@
+# V12 — recorded mutant for register row V12.
+# Drops the case-insensitive mirror in check_action_bindings, so a flow action no longer binds to a service operation of any casing.
+diff --git a/crates/phero-driver/src/integrity.rs b/crates/phero-driver/src/integrity.rs
+index 695849b..49ac37b 100644
+--- a/crates/phero-driver/src/integrity.rs
++++ b/crates/phero-driver/src/integrity.rs
+@@ -498,7 +498,7 @@ fn check_action_bindings(
+     let mut diagnostics = Vec::new();
+     for (path, flow) in flows {
+         for action in &flow.actions {
+-            let bound = carriers.get(&action.name.to_ascii_lowercase());
++            let bound = carriers.get(&action.name);
+             match bound.map(Vec::as_slice) {
+                 // Exactly one carrier: the binding is unique — pass.
+                 Some([_]) => {}

@@ -72,9 +72,7 @@
     "examples/support/support.uc"
   ],
   "kind": "verificationReceipt",
-  "limits": [
-    "mutants-unrecorded"
-  ],
+  "limits": [],
   "register": {
     "reviewedAt": "2026-11-14",
     "rows": [
@@ -178,10 +176,14 @@
           {
             "kind": "test",
             "pointer": "crates/phero-driver/tests/compile.rs"
+          },
+          {
+            "kind": "mutant",
+            "pointer": "tests/mutants/V4.patch"
           }
         ],
         "id": "V4",
-        "mutantKilled": null,
+        "mutantKilled": true,
         "review": null,
         "status": "tested",
         "trigger": null
@@ -340,10 +342,22 @@
           {
             "kind": "test",
             "pointer": "crates/phero-verify/tests/invariants.rs:p11_invocation_edges_terminate_at_declaration_backed_nodes"
+          },
+          {
+            "kind": "test",
+            "pointer": "crates/phero-ifml/src/check/tests/interaction_reference.rs:dangling_action_invocation_is_reported"
+          },
+          {
+            "kind": "test",
+            "pointer": "crates/phero-ifml/src/check/tests/instantiated_modules.rs:instantiated_module_dangling_references_are_diagnosed"
+          },
+          {
+            "kind": "mutant",
+            "pointer": "tests/mutants/V11.patch"
           }
         ],
         "id": "V11",
-        "mutantKilled": null,
+        "mutantKilled": true,
         "review": null,
         "status": "tested",
         "trigger": null
@@ -374,10 +388,14 @@
           {
             "kind": "test",
             "pointer": "crates/phero-lsp/src/server/tests/capability_joins.rs"
+          },
+          {
+            "kind": "mutant",
+            "pointer": "tests/mutants/V12.patch"
           }
         ],
         "id": "V12",
-        "mutantKilled": null,
+        "mutantKilled": true,
         "review": null,
         "status": "tested",
         "trigger": null
@@ -396,10 +414,14 @@
           {
             "kind": "test",
             "pointer": "crates/phero-driver/tests/ddd_machines.rs"
+          },
+          {
+            "kind": "mutant",
+            "pointer": "tests/mutants/V13.patch"
           }
         ],
         "id": "V13",
-        "mutantKilled": null,
+        "mutantKilled": true,
         "review": null,
         "status": "tested",
         "trigger": null
@@ -414,10 +436,14 @@
           {
             "kind": "test",
             "pointer": "crates/phero-driver/tests/actors/obligations.rs"
+          },
+          {
+            "kind": "mutant",
+            "pointer": "tests/mutants/V14.patch"
           }
         ],
         "id": "V14",
-        "mutantKilled": null,
+        "mutantKilled": true,
         "review": null,
         "status": "tested",
         "trigger": null
@@ -488,16 +514,20 @@
           {
             "kind": "test",
             "pointer": "tests/conformance/artifacts/name_uniqueness.phero.json"
+          },
+          {
+            "kind": "mutant",
+            "pointer": "tests/mutants/V17.patch"
           }
         ],
         "id": "V17",
-        "mutantKilled": null,
+        "mutantKilled": true,
         "review": null,
         "status": "tested",
         "trigger": null
       }
     ],
-    "sha256": "9838db14917e51ddf16e184055df378c14def25b99083e0460e06a3beefb6964",
+    "sha256": "30f6dc10320046f95d0048c1ba10276982e5efa73c7f93fbf3aa9d12d8d58ea0",
     "source": "docs/verification/register.json"
   },
   "sources": [

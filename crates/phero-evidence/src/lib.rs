@@ -43,11 +43,13 @@
 //!
 //! [`register::validate`] enforces the closed vocabularies (statuses
 //! `proved`/`tested`/`argued`/`assumed` — the value `"verified"` is never
-//! legal — and evidence kinds `proof`/`test`/`mirror`/`doc`/`code`), the
-//! pointer grammar, the review-schedule discipline (argued/assumed/mirror
+//! legal — and evidence kinds `proof`/`test`/`mirror`/`doc`/`code`/`mutant`),
+//! the pointer grammar, the review-schedule discipline (argued/assumed/mirror
 //! rows carry `trigger` + ISO `review` ≥ `reviewedAt`), the status↔evidence
 //! joins (`proved` needs a proof-or-mirror pointer, `tested` needs a test
-//! pointer), hold-row completeness, and trusted-row references. Every
+//! pointer plus exactly one `mutant` pointer and `mutantKilled: true`, while
+//! `proved`/`argued`/`assumed` carry neither of the mutant facts — the v1
+//! exemption), hold-row completeness, and trusted-row references. Every
 //! violation names its rule, so a failing gate points at the edit that
 //! caused it. [`receipt::check`] enforces the receipt's own closed sets
 //! (artifact kinds, limits), its canonical byte form, and re-hashes every
