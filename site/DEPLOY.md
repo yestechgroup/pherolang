@@ -160,10 +160,12 @@ build time and never fetch a grammar or a tokenizer at request time.
   fails on a hand edit; `node site/scripts/check-grammars.mjs` proves they load
   and tokenize in Shiki.
 - Both `sync-model` and `sync-highlight` resolve one binary through
-  `site/scripts/highlighting/runner.mjs`: a release that can check
-  `examples/support/support.ddd` and provides `pherolang highlight`, else a
-  source build. v0.4.0 provides both, and the committed data was regenerated
-  with the released asset — released-binary freshness, not a source build.
+  `site/scripts/highlighting/runner.mjs`: the released binary — the one that
+  can check `examples/support/support.ddd` and provides `pherolang highlight`.
+  There is no source build (#343): a release that predates the DSL on main
+  yields the **named skip** (tag + failing file) and nothing is regenerated.
+  The workflow's `freshness`/`drift` run the same decision as a probe step
+  (`site/scripts/probe-release.mjs`, unit-tested) before regenerating.
 - `site/scripts/fetch-pherolang.mjs` pins `0.4.0`, which is published; an
   explicit pin never falls back to another release.
 - **The release gate**: `site.yml` `detect` reports the workspace version (from
@@ -171,6 +173,18 @@ build time and never fetch a grammar or a tokenizer at request time.
   requires them to be equal. A 0.4.0 bump PR merges before its tag, so
   production keeps serving the previous release instead of advertising a
   download that 404s. Preview deploys still run on the PR.
+- **The named skip and the deploy gate (#343)**: before regenerating,
+  `freshness` and `drift` probe the released binary against `examples/`
+  (`site/scripts/probe-release.mjs`). A release that predates the DSL on main
+  makes the job emit the **named skip** — `the latest release (vX.Y.Z)
+  predates the DSL on main: <file> uses syntax it does not parse — regenerate
+  after the next release` — succeed *without regenerating*, and set
+  `freshness`'s `skipped` output. `deploy` requires both
+  `needs.freshness.result == 'success'` **and** `skipped != 'true'`: a
+  skipped run cannot publish. This is a tightening, not a relaxation — the
+  release-binary-freshness claim stays absolute, and the skip keeps the
+  nightly run green (a legible "wait for the next release", never a generic
+  red or a silent fallback build).
 
 The zero-JS rule is part of the same gate: every marketing page except the
 documented graph island on `/demo` must reference no executable script and

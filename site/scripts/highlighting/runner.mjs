@@ -1,25 +1,26 @@
 /**
  * Resolve the `pherolang` binary the site tooling runs.
  *
- * The released v0.3.0 binary predates both `pherolang highlight` and the DD9
- * examples on this tree, so it cannot be used to regenerate or verify the
- * committed site data. This module makes that explicit:
+ * The site contract (#343) is **released-binary freshness with no source
+ * build**: the committed data is what the released binary generates, and a
+ * release that predates the DSL on main produces the *named skip* — never a
+ * fallback build that would make the data track unreleased DSL. Resolution:
  *
  *   1. `PHEROLANG_BIN`, when set, is the caller's deliberate choice and must
  *      satisfy the requested capability;
- *   2. `site/.bin/pherolang` is used only when it can check the current support
- *      example (model data) and, when required, provides `highlight`;
+ *   2. `site/.bin/pherolang` (the checksum-verified release) when it can check
+ *      the current examples and, when required, provides `highlight`;
  *   3. `pherolang` on PATH under the same rules;
- *   4. otherwise the CLI is built from this checkout
- *      (`cargo build -q -p phero-cli`).
- *
- * Step 4 is the documented temporary exception, never a claim of
- * released-binary freshness. See docs/HIGHLIGHTING.md and site/README.md.
+ *   4. otherwise the result is `{ binary: null, kind: 'unavailable', reason }`
+ *      and `reason` carries the named skip (tag + failing file). There is no
+ *      step 4 build — the caller reports the skip.
  */
 
 import { execFileSync } from 'node:child_process';
 import { existsSync } from 'node:fs';
 import { join } from 'node:path';
+
+import { probeRelease, skipMessage } from '../probe-release.mjs';
 
 export function which(command) {
   try {
@@ -52,43 +53,30 @@ export function supportsHighlight(binary) {
   }
 }
 
-/**
- * True when the binary can check the current support design.
- *
- * `support.ddd` imports `support.mox`, so this is a cheap, representative
- * probe of the DSL the tree uses. A release that predates the tree fails; a
- * source build of the same commit passes.
- */
-export function canCheckTree(binary, root) {
+/** The binary's own provenance line (`pherolang X.Y.Z (target)`) as a `vX.Y.Z` tag. */
+export function versionTag(binary) {
   try {
-    execFileSync(binary, ['check', 'examples/support/support.ddd'], {
-      cwd: root,
-      stdio: 'ignore',
-      timeout: 120_000,
-    });
-    return true;
+    const banner = execFileSync(binary, ['--version'], { encoding: 'utf8', timeout: 30_000 });
+    const match = /(\d+\.\d+\.\d+)/.exec(banner);
+    return match ? `v${match[1]}` : 'the latest release';
   } catch {
-    return false;
+    return 'the latest release';
   }
 }
 
-function sourceBuild(root, log) {
-  log(
-    'the fetched release cannot check the current examples (or lacks `pherolang highlight`); ' +
-      'building the CLI from this commit (temporary exception — docs/HIGHLIGHTING.md)',
-  );
-  try {
-    execFileSync('cargo', ['build', '-q', '-p', 'phero-cli'], {
-      cwd: root,
-      stdio: 'inherit',
-      timeout: 900_000,
-    });
-  } catch (error) {
-    throw new Error(`source build failed: ${error.message}`);
+/**
+ * Why a binary cannot regenerate the site data: the named skip when it
+ * cannot compile `examples/`, otherwise the missing capability.
+ */
+export function incapabilityReason(binary, root, { requireHighlight }) {
+  if (requireHighlight && !supportsHighlight(binary)) {
+    return 'the binary does not provide `pherolang highlight`';
   }
-  const binary = join(root, 'target', 'debug', process.platform === 'win32' ? 'pherolang.exe' : 'pherolang');
-  if (!existsSync(binary)) throw new Error(`source build produced no binary at ${binary}`);
-  return binary;
+  const verdict = probeRelease({ binary, examplesDir: join(root, 'examples') });
+  if (!verdict.compatible) {
+    return skipMessage({ tag: versionTag(binary), failingFile: verdict.failingFile });
+  }
+  return null;
 }
 
 /**
@@ -98,35 +86,41 @@ function sourceBuild(root, log) {
  * `source-build`. Throws when an explicit `PHEROLANG_BIN` cannot do the job.
  */
 export function resolveSiteBinary(root, site, { requireHighlight = false, log = console.log } = {}) {
-  const capability = (binary) =>
-    (!requireHighlight || supportsHighlight(binary)) && canCheckTree(binary, root);
-
   const explicit = process.env.PHEROLANG_BIN;
   if (explicit) {
     const binary = resolveExecutable(explicit);
     if (!binary) throw new Error(`PHEROLANG_BIN='${explicit}' does not exist`);
-    if (!capability(binary)) {
+    const reason = incapabilityReason(binary, root, { requireHighlight });
+    if (reason) {
       throw new Error(
-        `PHEROLANG_BIN='${explicit}' cannot ` +
-          `${requireHighlight ? 'provide `pherolang highlight` and ' : ''}check the current examples. ` +
-          'Point it at a build of this commit, or unset it to use the documented source fallback.',
+        `PHEROLANG_BIN='${explicit}' cannot regenerate the site data: ${reason} ` +
+          'Point it at a capable build — there is no source-build fallback (#343).',
       );
     }
     return { binary, kind: 'PHEROLANG_BIN' };
   }
 
+  const candidates = [];
   const release = join(site, '.bin', process.platform === 'win32' ? 'pherolang.exe' : 'pherolang');
-  if (existsSync(release) && capability(release)) return { binary: release, kind: 'release' };
-  if (existsSync(release)) {
-    log(
-      'the fetched release predates the current examples' +
-        (requireHighlight ? ' or `pherolang highlight`' : '') +
-        '; not using it.',
-    );
+  if (existsSync(release)) candidates.push({ binary: release, kind: 'release' });
+  const onPath = which('pherolang');
+  if (onPath) candidates.push({ binary: onPath, kind: 'PATH' });
+
+  let firstFailure = null;
+  for (const candidate of candidates) {
+    const reason = incapabilityReason(candidate.binary, root, { requireHighlight });
+    if (!reason) return candidate;
+    if (!firstFailure) {
+      firstFailure = reason;
+      log(`${candidate.kind} binary cannot regenerate the site data: ${reason}`);
+    }
   }
 
-  const onPath = which('pherolang');
-  if (onPath && capability(onPath)) return { binary: onPath, kind: 'PATH' };
-
-  return { binary: sourceBuild(root, log), kind: 'source-build' };
+  return {
+    binary: null,
+    kind: 'unavailable',
+    reason:
+      firstFailure ??
+      'no pherolang binary found — fetch the release with: node scripts/fetch-pherolang.mjs',
+  };
 }

@@ -13,9 +13,8 @@
  * unset `PHEROLANG_VERSION` falls back to the latest published release with a
  * loud warning; an explicit pin never falls back. The resolver in
  * `scripts/highlighting/runner.mjs` then refuses a release that cannot check
- * the current examples, so the site tooling builds this checkout instead —
- * the documented temporary exception (docs/HIGHLIGHTING.md), never a claim of
- * released-binary freshness.
+ * the current examples — the named skip (#343): the site tooling skips the
+ * regeneration, it never builds this checkout instead.
  *
  * Usage:
  *   node scripts/fetch-pherolang.mjs            # pinned release, or latest published while the pin is pending
