@@ -27,6 +27,7 @@ artifact. This index routes to the right document.
 | [../README.md](../README.md) | you want the overview: what Phero Lang is, status, CLI usage, integration styles |
 | [../examples/README.md](../examples/README.md) | you learn from working code — the canonical examples compile one domain through every surface, CI-enforced |
 | [BACKENDS.md](BACKENDS.md) | you write a backend (in or out of tree) that consumes Phero Lang artifacts |
+| [GOLDENS.md](GOLDENS.md) | you changed an emitter, a fixture, or a version number — what a golden is, the one regeneration command, the writer inventory, and the byte-shape rules |
 | [GRAPH.md](GRAPH.md) | you want one queryable artifact spanning every surface — the semantic graph's node/edge vocabulary, its import-connected applications, `pherolang graph build`, the artifact-only `graph query` surface and cross-policy analytics, and the node table the editor shares with it (the union integrity pass, the navigation span tables, the LSP contract) |
 | [HIGHLIGHTING.md](HIGHLIGHTING.md) | you consume compiler-backed highlighting — the class/modifier taxonomy, the nine-surface registry, span and engine guarantees, the `pherolang highlight` JSON/HTML contract, and the CSS seam the sites and editors build on |
 | [RUNE-BODIES.md](RUNE-BODIES.md) | you care about executing imported Rune (`.rosetta`) logic — the design RFC for lowering Rune bodies |
