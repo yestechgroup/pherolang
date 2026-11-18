@@ -7,8 +7,8 @@
       "slug": "backends",
       "title": "Writing a backend for Phero Lang",
       "description": "Phero Lang is a DSL for **modelling**. Backends are consumers of the Core IR —",
-      "bytes": 20142,
-      "lines": 319
+      "bytes": 21781,
+      "lines": 341
     },
     {
       "path": "docs/CMMN.md",
@@ -25,8 +25,8 @@
       "slug": "ddd",
       "title": "DDD design DSL (.ddd)",
       "description": "A Sculptor-style domain-driven-design layer over `.mox` domain models. The",
-      "bytes": 128575,
-      "lines": 2173
+      "bytes": 130573,
+      "lines": 2199
     },
     {
       "path": "docs/DEPLOY.md",
@@ -43,8 +43,8 @@
       "slug": "diagnostics",
       "title": "Diagnostic codes",
       "description": "Every diagnostic a pherolang surface emits carries a stable string code. The codes live in one place — the `phero-diagnostics` crate — and this page is generated from that registry: a new code is a table row in `phero-diagnostics`, never a local constant. Two schemes are registered side by side: the numeric bands (`E####` errors, `W####` warnings, `X####` cross-surface integrity) are surface-local, human-facing codes the CLI prints, while the driver's camelCase names are payload-carrying LSP diagnostic codes (`phero_driver::DiagnosticCode`); both are first-class registry entries, cross-referenced by band. To allocate a code, claim (or find) your band in the ledger and add the constant plus its entry to the band module. Run `pherolang explain <code>` for one entry, or `pherolang explain --list` for everything.",
-      "bytes": 48833,
-      "lines": 167
+      "bytes": 50166,
+      "lines": 170
     },
     {
       "path": "docs/DMN.md",
@@ -79,8 +79,8 @@
       "slug": "graph",
       "title": "The unified semantic graph",
       "description": "`pherolang graph build` compiles a tree of model files into **one queryable,",
-      "bytes": 62138,
-      "lines": 992
+      "bytes": 62372,
+      "lines": 995
     },
     {
       "path": "docs/HIGHLIGHTING.md",
@@ -88,7 +88,7 @@
       "slug": "highlighting",
       "title": "Compiler-backed syntax highlighting",
       "description": "Phero Lang source is highlighted by the compiler, not by a hand-written",
-      "bytes": 64863,
+      "bytes": 64950,
       "lines": 1269
     },
     {
@@ -97,8 +97,8 @@
       "slug": "ifml",
       "title": "IFML DSL",
       "description": "A Domain-Specific Language that is semantically aligned with OMG IFML 1.0(https://www.omg.org/spec/IFML/) but uses a modern, C-like expression-heavy syntax instead of XML/XMI. Lexed by a **logos** lexer and parsed by **chumsky** into a spanned syntax tree, then lowered into a versioned `IfmlModel` artifact; the same parser and byte-offset spans back the language server.",
-      "bytes": 40994,
-      "lines": 871
+      "bytes": 43753,
+      "lines": 912
     },
     {
       "path": "docs/LANGUAGE.md",
@@ -196,7 +196,7 @@
       "slug": "verification",
       "title": "Verification (proof-obligation register)",
       "description": "Phero Lang's formal-verification strategy follows",
-      "bytes": 32479,
+      "bytes": 32931,
       "lines": 232
     },
     {
