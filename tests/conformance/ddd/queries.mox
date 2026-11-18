@@ -17,7 +17,6 @@ class Order {
     date createdDate
     OrderStatus status
     refers Customer customer
-
     derived boolean big {
         expr { total > 1000 }
     }

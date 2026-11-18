@@ -61,18 +61,20 @@ disk_budget() {
 # The `pherolang fmt --check` fixture gate — the one copy of the list.
 #
 # Directory arguments are used where the gate set is provably identical to
-# the expansion (examples/, patterns/ifml/, and the conformance surface
-# directories whose only model files are the gated ones — the formatter-
-# golden `X.fmt.<ext>` skip is built into directory mode). Deliberate
-# globs remain where a directory would WIDEN the gate:
+# the expansion (examples/, patterns/ifml/, and every conformance surface
+# directory whose model files are all canonical — the formatter-golden
+# `X.fmt.<ext>` skip is built into directory mode). A deliberate glob
+# remains where a directory would WIDEN the gate:
 # - tests/conformance/models/: holds the formatter's non-canonical golden
-#   sources (models/events.evt, models/deploy.deploy, ...) next to the two
-#   gated canonical files — a directory scan here would fail by design.
-# - tests/conformance/{ddd,usecases,cmmn,dmn}/: the imported companion
-#   domains (.mox/.actor/.evt) are committed canonically but are not part
-#   of today's gate; widening is a deliberate future PR, not a side effect.
-# - tests/conformance/ifml/phero/: decisions.dmn is not currently gated;
-#   gate app/cli/auth explicitly.
+#   sources (models/events.evt, models/deploy.deploy, models/usecases.uc,
+#   models/cmmn.cmmn, models/dmn.dmn) next to the canonical files the globs
+#   name — a directory scan here would fail by design (issue #224). Moving
+#   those sources to their own directory would let this become a directory
+#   argument; that rename is a follow-up, not a side effect.
+# Every other `tests/conformance/<surface>/` directory is recruited whole
+# (ddd, usecases, cmmn, dmn, ifml), including the imported companion
+# domains, policies, and contracts — they are committed canonical and are
+# gated as such (issue #224).
 FIXTURE_FORMAT_GLOBS=(
   examples
   patterns/ifml
@@ -82,15 +84,11 @@ FIXTURE_FORMAT_GLOBS=(
   tests/conformance/sigil
   tests/conformance/models/*.mox
   tests/conformance/models/*.actor
-  tests/conformance/ddd/*.ddd
-  tests/conformance/ddd/app
-  tests/conformance/usecases/*.uc
-  tests/conformance/cmmn/*.cmmn
-  tests/conformance/dmn/*.dmn
-  tests/conformance/ifml/app.ifml
-  tests/conformance/ifml/cli.ifml
-  tests/conformance/ifml/phero/auth.mox
-  tests/conformance/ifml/phero/auth.actor
+  tests/conformance/ddd
+  tests/conformance/usecases
+  tests/conformance/cmmn
+  tests/conformance/dmn
+  tests/conformance/ifml
 )
 
 step_build() {
