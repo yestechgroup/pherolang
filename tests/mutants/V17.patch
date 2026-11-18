@@ -1,0 +1,14 @@
+# V17 — recorded mutant for register row V17.
+# Skips the stripped-module-name collision pass in check_name_uniqueness, so two names stripping alike (e.g. PayRun/PayRunType) are never reported as E0300.
+diff --git a/crates/phero-driver/src/lower/names.rs b/crates/phero-driver/src/lower/names.rs
+index 5ae67bf..2d80dd0 100644
+--- a/crates/phero-driver/src/lower/names.rs
++++ b/crates/phero-driver/src/lower/names.rs
+@@ -201,7 +201,6 @@ pub(crate) fn check_name_uniqueness(records: &[NameRecord]) -> Vec<(String, Diag
+     }
+     for package in &package_order {
+         let in_package = &scoped[package.as_str()];
+-        diagnose_collisions(in_package, Key::Module, &mut tagged);
+         diagnose_collisions(in_package, Key::Table, &mut tagged);
+     }
+     tagged

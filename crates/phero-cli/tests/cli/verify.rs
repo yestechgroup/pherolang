@@ -117,7 +117,8 @@ fn the_flagship_receipt_reports_the_register_and_its_closure() {
     );
 
     // The register is reported, never reinterpreted: every row, the closed
-    // status vocabulary, and the interim `mutantKilled: null`.
+    // status vocabulary, and the delivered #208 mutant fact — `true` on a
+    // `tested` row, `null` on every other status.
     assert_eq!(
         receipt["register"]["source"],
         "docs/verification/register.json"
@@ -134,15 +135,28 @@ fn the_flagship_receipt_reports_the_register_and_its_closure() {
             row["id"]
         );
         assert_ne!(status, "verified");
-        assert!(
-            row["mutantKilled"].is_null(),
-            "row {} must record a null mutant fact until #208",
-            row["id"]
-        );
+        if status == "tested" {
+            assert_eq!(
+                row["mutantKilled"],
+                serde_json::json!(true),
+                "tested row {} must record its killed mutant (#208)",
+                row["id"]
+            );
+        } else {
+            assert!(
+                row["mutantKilled"].is_null(),
+                "row {} claims no executable mutant evidence",
+                row["id"]
+            );
+        }
         assert!(!row["claim"].as_str().unwrap_or_default().is_empty());
         assert!(!row["evidence"].as_array().expect("evidence").is_empty());
     }
-    assert_eq!(receipt["limits"], serde_json::json!(["mutants-unrecorded"]));
+    assert_eq!(
+        receipt["limits"],
+        serde_json::json!([]),
+        "the delivered limits vocabulary is empty (#208 retired mutants-unrecorded)"
+    );
 
     // Trusted assumptions: every register item, mapped to a real row.
     let trusted = receipt["trusted"].as_array().expect("trusted");

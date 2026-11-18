@@ -18,7 +18,11 @@ pub const FORMAT_VERSION: u32 = 1;
 pub const STATUSES: [&str; 4] = ["proved", "tested", "argued", "assumed"];
 
 /// The closed evidence-kind vocabulary: what a pointer is evidence *of*.
-pub const EVIDENCE_KINDS: [&str; 5] = ["proof", "test", "mirror", "doc", "code"];
+///
+/// A `mutant` pointer names a recorded mutation file
+/// (`tests/mutants/<row>.patch`) whose kill the row's own pinned tests must
+/// produce — the falsifiability fact a `tested` row carries (#208).
+pub const EVIDENCE_KINDS: [&str; 6] = ["proof", "test", "mirror", "doc", "code", "mutant"];
 
 /// The whole register document: the obligations, the pipeline rows, the
 /// deliberate holds, and the trusted-item list.
@@ -71,6 +75,12 @@ pub struct Obligation {
     /// What backs the row — at least one entry.
     #[serde(default)]
     pub evidence: Vec<Evidence>,
+    /// Whether a recorded mutant of this row's checking code was killed by
+    /// the row's own pinned tests (#208). Required `true` on `tested` rows;
+    /// absent on every other status (the v1 exemption: proved rows' story is
+    /// the proof run, argued/assumed rows claim no executable evidence).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub mutant_killed: Option<bool>,
     /// Human-summary residue beyond the derived status (open residue,
     /// staging caveats); appended to the rendered Status column.
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -402,6 +412,61 @@ fn validate_obligation(
             "tested-needs-test",
             format!("obligation {id} claims tested but carries no test evidence"),
         ));
+    }
+
+    // The delivered mutant contract (#208): a `tested` row's falsifiability is
+    // recorded, never assumed — exactly one mutation file plus the killed
+    // fact; every other status claims no executable mutant evidence.
+    let mutant_count = kinds.iter().filter(|kind| **kind == "mutant").count();
+    if obligation.status == "tested" {
+        if mutant_count == 0 {
+            out.push(Violation::new(
+                "mutant-required",
+                format!(
+                    "obligation {id} claims tested but carries no mutant evidence — a tested row \
+                     names exactly one recorded mutation file (tests/mutants/{id}.patch)"
+                ),
+            ));
+        } else if mutant_count > 1 {
+            out.push(Violation::new(
+                "mutant-count",
+                format!(
+                    "obligation {id} carries {mutant_count} mutant evidence pointers — a tested row \
+                     records exactly one mutation file"
+                ),
+            ));
+        }
+        if obligation.mutant_killed != Some(true) {
+            out.push(Violation::new(
+                "mutant-required",
+                format!(
+                    "obligation {id} claims tested but mutantKilled is {:?} — a tested row must \
+                     record that its mutant was killed (true)",
+                    obligation.mutant_killed
+                ),
+            ));
+        }
+    } else if matches!(obligation.status.as_str(), "proved" | "argued" | "assumed") {
+        if mutant_count > 0 {
+            out.push(Violation::new(
+                "mutant-forbidden",
+                format!(
+                    "obligation {id} is {} but carries {mutant_count} mutant evidence pointer(s) — \
+                     only a tested row records a mutant",
+                    obligation.status
+                ),
+            ));
+        }
+        if obligation.mutant_killed.is_some() {
+            out.push(Violation::new(
+                "mutant-forbidden",
+                format!(
+                    "obligation {id} is {} but records mutantKilled {:?} — only a tested row \
+                     records a mutant fact",
+                    obligation.status, obligation.mutant_killed
+                ),
+            ));
+        }
     }
 
     let needs_schedule =

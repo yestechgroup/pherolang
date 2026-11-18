@@ -18,7 +18,7 @@
 # plus the informational disk-budget print/warning before the build (issue
 # #261). On a beefier machine you can drop the nice and the job cap.
 #
-# Usage: scripts/ci-local.sh [all|build|rebrand|test|clippy|fmt|receipt|docs|audit]
+# Usage: scripts/ci-local.sh [all|build|rebrand|test|clippy|fmt|receipt|docs|audit|mutants]
 #        (default: all — the full sequence; ~30-60 min cold)
 set -u
 . "$(dirname "$0")/ci-env.sh" || exit 1
@@ -190,6 +190,22 @@ if [ "${1:-}" = "audit" ]; then
   exit 0
 fi
 
+# Optional subcommand (issue #208): the anti-vacuity mutant harness CI runs as
+# its own fast job. A survivor must turn the job red without blocking the
+# seven-step gate, so unlike the gate steps this one exits non-zero on a red
+# run — CI invokes it directly (`scripts/ci-local.sh mutants`). It mutates the
+# tree per row and builds test binaries, which is why it is never part of
+# `all` and why it insists on a clean tree.
+step_mutants() {
+  step "mutants: #208 anti-vacuity (scripts/mutants.sh)"
+  if nice -n 19 ./scripts/mutants.sh; then
+    echo "MUTANTS-OK"
+  else
+    echo "MUTANTS-FAIL"
+    exit 1
+  fi
+}
+
 case "${1:-all}" in
   build)  step_build ;;
   rebrand) step_rebrand ;;
@@ -198,6 +214,7 @@ case "${1:-all}" in
   fmt)    step_fmt ;;
   receipt) step_receipt ;;
   docs)   step_docs ;;
+  mutants) step_mutants ;;
   all)
     step_build
     step_rebrand
@@ -210,7 +227,7 @@ case "${1:-all}" in
     echo "ALL SEVEN STEPS MUST END IN *-OK BEFORE PUSHING."
     ;;
   *)
-    echo "usage: scripts/ci-local.sh [all|build|rebrand|test|clippy|fmt|receipt|docs|audit]" >&2
+    echo "usage: scripts/ci-local.sh [all|build|rebrand|test|clippy|fmt|receipt|docs|audit|mutants]" >&2
     exit 2
     ;;
 esac

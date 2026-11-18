@@ -20,9 +20,12 @@ env:
   RUSTFLAGS: "-C debuginfo=0"
 
 jobs:
-  # Advisory + license/supply-chain gates (WI-5 of v0.2, issue #173).
-  # Kept as separate fast jobs: a red audit must not block unrelated test
-  # signal, and neither job builds the workspace.
+  # Advisory + license/supply-chain gates (WI-5 of v0.2, issue #173), plus the
+  # #208 anti-vacuity mutant harness. Kept as separate fast jobs: a red audit
+  # must not block unrelated test signal, and a surviving mutant must be red
+  # without blocking the seven-step gate. Only the mutants job builds (the
+  # rows' test binaries), so it carries its own cache key — never the `test`
+  # job's cache.
   audit:
     runs-on: ubuntu-latest
     steps:
@@ -44,6 +47,32 @@ jobs:
       - uses: EmbarkStudios/cargo-deny-action@v2
         with:
           command: check
+
+  # Issue #208: a `tested` row is only worth what its own tests can falsify.
+  # The harness applies the row's recorded mutant patch, runs only that row's
+  # pinned tests, and reverts; a survivor means the tests are green but
+  # vacuous, which must be red here. Its own job for the same reason as
+  # audit/deny (a red mutant must not block the gate's signal), and its own
+  # cache key because it builds test binaries.
+  mutants:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      # Verbatim from the test job: the mutant run builds phero-driver and
+      # phero-ifml test binaries, and the runner's preinstalled toolchains we
+      # don't use are tens of GB (the SIGBUS-when-the-disk-fills failure).
+      - name: Free disk space
+        run: |
+          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc             /usr/local/.ghcup /opt/hostedtoolcache/CodeQL || true
+          sudo rm -rf /usr/share/swift /usr/local/share/powershell /usr/local/julia /usr/local/lib/R /usr/local/share/chromium /opt/microsoft || true
+          sudo apt-get clean || true
+          sudo docker image prune -af || true
+          df -h / /tmp
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: mutants
+      - run: scripts/ci-local.sh mutants
 
   test:
     runs-on: ubuntu-latest

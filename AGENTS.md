@@ -36,6 +36,7 @@ Surfaces are parsed in `phero-syntax` (logos lexer + chumsky parser, one parse/f
 scripts/ci-local.sh              # THE gate: build, rebrand, test, clippy, fmt, receipt, docs — every step must report *-OK before pushing
 scripts/ci-local.sh audit        # the supply-chain gates (cargo deny check + cargo audit) — CI runs them as separate fast jobs
 scripts/ci-local.sh build|rebrand|test|clippy|fmt|receipt|docs    # one CI step at a time
+scripts/mutants.sh [--list]      # #208 anti-vacuity mutants: apply each tested row's recorded mutant, run only its pinned tests, revert; a survivor is red naming the row
 scripts/dev-test.sh [args...]    # `cargo test` with the CI env (debuginfo=0, no incremental, TMPDIR=target/tmp, --jobs 2) — the cheap path for "just run the tests" (issue #261)
 cargo test -p phero-driver --test navigation      # one test suite
 cargo run -p phero-cli -- check tests/conformance/                            # project mode + the union integrity pass: one snapshot of every supported surface under a dir; each file checks independently with its imports resolving map-first from the snapshot, then the standalone artifacts cluster into import-connected applications and the cross-layer wiring is diagnosed per application (formatter-golden `X.fmt.<ext>` artifacts are skipped — they are outputs whose imports/vocab resolve next to their sources, not standalone models)

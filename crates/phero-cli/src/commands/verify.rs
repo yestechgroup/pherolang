@@ -666,11 +666,10 @@ fn register_snapshot() -> anyhow::Result<(RegisterSnapshot, Vec<TrustedRef>)> {
                     .collect(),
                 trigger: obligation.trigger.clone(),
                 review: obligation.review.clone(),
-                // Issue #197 asks for a mutant fact per tested row; the
-                // anti-vacuity mutant pipeline (#208) that produces it does
-                // not exist yet, so the honest interim is `null` plus the
-                // `mutants-unrecorded` limit — never a silent `true`.
-                mutant_killed: None,
+                // #208: the mutant fact is copied from the register, never
+                // inferred here — a `tested` row's killed mutant is the
+                // register's own claim.
+                mutant_killed: obligation.mutant_killed,
             })
             .collect(),
     };

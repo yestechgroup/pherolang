@@ -31,29 +31,30 @@ and `receipt::check` rejects it by name (the register's own discipline:
 - **Not a proof of the impossible-to-record.** The `limits` array names
   what the receipt explicitly does not know (see below).
 
-## The interim mutant fact (`mutantKilled: null`)
+## The mutant fact (`mutantKilled`)
 
 Issue #197 asks for a `mutantKilled` fact per `tested` row: evidence that
 the row's tests are falsifiable rather than merely green. The anti-vacuity
-mutant pipeline that produces that fact is **#208**, and it does not exist
-yet. Until it lands, every row carries `"mutantKilled": null` and the
-receipt declares the gap out loud:
+mutant pipeline that produces it is **#208**, and it has landed:
 
-```json
-"limits": ["mutants-unrecorded"]
-```
+- every `tested` register row carries exactly one `mutant` evidence pointer
+  (`tests/mutants/<row>.patch`) — a recorded, 1–5 line mutation of the
+  code the row's `implementation` names — and `"mutantKilled": true`;
+- the row's own pinned tests must **kill** that mutant: `scripts/mutants.sh`
+  applies the patch, runs only the row's `test` evidence, and reverts; a
+  surviving mutant is red CI naming the row (`MUTANTS-FAIL`, the CI job
+  `mutants`);
+- `proved` rows are exempt (their anti-vacuity story is the proof run), and
+  `argued`/`assumed` rows are exempt because they claim no executable
+  evidence — the register validator rejects a mutant pointer or a
+  `mutantKilled` value on those statuses.
 
-`limits` is a closed vocabulary of stable lowercase slugs; the interim set
-is exactly one entry:
-
-| Slug | Meaning | Retired by |
-|---|---|---|
-| `mutants-unrecorded` | No mutant kill data exists for this receipt's rows; every `mutantKilled` is `null`. | #208 |
-
-The validator couples the two: a non-null `mutantKilled` while `limits`
-still declares `mutants-unrecorded` is a failure at
-`register.rows[i].mutantKilled`. Dropping the limit (when #208 lands) is the
-only way to record mutant facts.
+The receipt copies the fact; it never infers a kill. The retired interim
+slug is gone from the closed `limits` vocabulary (which is now empty), and
+the validator keeps the coupling as the guard against **half-recording**: a
+non-null `mutantKilled` alongside a `limits` array that still declares
+`"mutants-unrecorded"` fails at `register.rows[i].mutantKilled` — and
+declaring the retired slug at all is itself a closed-vocabulary failure.
 
 ## Schema
 
@@ -80,13 +81,17 @@ pins it).
     "sha256": "…",
     "reviewedAt": "2026-11-14",
     "rows": [
+      { "id": "V4", "claim": "…", "status": "tested",
+        "evidence": [ { "kind": "test", "pointer": "…" },
+                      { "kind": "mutant", "pointer": "tests/mutants/V4.patch" } ],
+        "mutantKilled": true },
       { "id": "V3", "claim": "…", "status": "argued",
         "evidence": [ { "kind": "proof", "pointer": "…" } ],
         "trigger": "…", "review": "…", "mutantKilled": null }
     ]
   },
   "trusted": [ { "item": "push_containment", "row": "V9" } ],
-  "limits":  [ "mutants-unrecorded" ]
+  "limits":  []
 }
 ```
 
@@ -96,9 +101,9 @@ pins it).
 |---|---|---|
 | `kind` | `verificationReceipt` | `receipt::check` |
 | obligation `status` | `proved` \| `tested` \| `argued` \| `assumed` (`verified` rejected by name) | `receipt::check` |
-| evidence `kind` | `proof` \| `test` \| `mirror` \| `doc` \| `code` | `receipt::check` |
+| evidence `kind` | `proof` \| `test` \| `mirror` \| `doc` \| `code` \| `mutant` | `receipt::check` |
 | artifact `kind` | `irModel` \| `actorModel` \| `dddDesign` \| `eventContract` \| `useCaseModel` \| `deployModel` \| `decisionModel` \| `cmmnModel` \| `ifmlManifest` | `receipt::check` |
-| `limits` | `mutants-unrecorded` | `receipt::check` |
+| `limits` | *(empty)* — the `mutants-unrecorded` slug was retired by #208 | `receipt::check` |
 
 The artifact vocabulary is **receipt-local**, not `pherolang artifact check`'s
 shape-sniffed classification: an empty `IfmlModel` is shape-ambiguous with a
@@ -125,7 +130,9 @@ Beyond the vocabularies:
   digest-only — the hash pins the emitted bytes but there is no sibling file
   to re-hash (domain and actor artifacts ship no example golden).
 - Status↔evidence joins are carried from the register: `proved` needs a
-  `proof` or `mirror` entry, `tested` needs a `test`.
+  `proof` or `mirror` entry, `tested` needs a `test` — and, for the register
+  itself, exactly one `mutant` pointer plus `mutantKilled: true` (the
+  receipt validator keeps the limits↔`mutantKilled` half-recording guard).
 - `argued`/`assumed` rows carry a `trigger` and an ISO `review` ≥
   `reviewedAt`; every `trusted` entry references a row the receipt carries.
 - The document must be in canonical byte form (re-serialization must

@@ -73,15 +73,15 @@ pub const ARTIFACT_KINDS: [&str; 9] = [
 ];
 
 /// The closed `limits` vocabulary: what a receipt explicitly does **not**
-/// record. A limit is a promise about the future, not an excuse — each slug
-/// is documented in `docs/RECEIPTS.md` with the issue that retires it.
+/// record. A limit is a promise documented in `docs/RECEIPTS.md` with the
+/// issue that retires it.
 ///
-/// `mutants-unrecorded` is the interim honesty entry for issue #197's
-/// `mutantKilled` deliverable: the register carries no mutation data until
-/// the anti-vacuity mutant pipeline (#208) lands, so every row's
-/// `mutantKilled` is `null` and the receipt says so out loud instead of
-/// leaving the reader to assume a silent `true`.
-pub const LIMITS: [&str; 1] = ["mutants-unrecorded"];
+/// The vocabulary is **empty**: the interim `mutants-unrecorded` slug is
+/// retired by #208, which delivered the anti-vacuity mutation pipeline — every
+/// `tested` row now records its killed mutant, so the empty array is the
+/// delivered contract, not a gap. A future limit is a new slug here plus its
+/// documented `docs/RECEIPTS.md` row.
+pub const LIMITS: [&str; 0] = [];
 
 /// A verification receipt.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -222,9 +222,10 @@ pub struct RegisterRow {
     /// When the row is re-reviewed (ISO `YYYY-MM-DD`).
     #[serde(default)]
     pub review: Option<String>,
-    /// Whether a recorded mutant was killed against this row's evidence
-    /// (#208). `null` for every row until the mutant pipeline lands — see
-    /// [`LIMITS`].
+    /// Whether a recorded mutant of this row's checking code was killed by
+    /// the row's own pinned tests (#208): `true` on a `tested` row, `null` on
+    /// every other status — a proved row's story is the proof run, and
+    /// argued/assumed rows claim no executable evidence.
     #[serde(default)]
     pub mutant_killed: Option<bool>,
 }
@@ -598,8 +599,8 @@ fn validate_artifacts(
 }
 
 /// `register`: provenance, row completeness, the closed status/evidence
-/// vocabularies, the trigger/review discipline, and the interim
-/// `mutantKilled` rule.
+/// vocabularies, the trigger/review discipline, and the `mutantKilled`
+/// half-recording guard.
 fn validate_register(receipt: &Receipt, out: &mut Vec<Violation>) {
     let register = &receipt.register;
     check_relative("register.source", &register.source, out);
@@ -749,8 +750,9 @@ fn validate_register(receipt: &Receipt, out: &mut Vec<Violation>) {
             out.push(Violation::new(
                 format!("register.rows[{index}].mutantKilled"),
                 format!(
-                    "row {id} records a mutant kill while limits declares \"mutants-unrecorded\" — \
-                     drop the limit (issue #208) before recording mutant facts"
+                    "row {id} records a mutant fact while limits still declares \
+                     \"mutants-unrecorded\" — the fact and the retired limit must change together \
+                     (issue #208), never half-recorded"
                 ),
             ));
         }
@@ -884,6 +886,18 @@ mod tests {
         }
     }
 
+    /// A `tested` row in the delivered #208 shape: a test pointer, its one
+    /// recorded mutation file, and the killed fact.
+    fn tested_row(id: &str) -> RegisterRow {
+        let mut row = row(id, "tested");
+        row.evidence.push(RowEvidence {
+            kind: "mutant".to_string(),
+            pointer: format!("tests/mutants/{id}.patch"),
+        });
+        row.mutant_killed = Some(true);
+        row
+    }
+
     /// A minimal valid receipt, byte-canonical once serialized.
     fn sample() -> Receipt {
         Receipt {
@@ -909,13 +923,15 @@ mod tests {
                 source: "docs/verification/register.json".to_string(),
                 sha256: hex('d'),
                 reviewed_at: "2026-11-14".to_string(),
-                rows: vec![row("V1", "tested"), row("V3", "argued")],
+                rows: vec![tested_row("V1"), row("V3", "argued")],
             },
             trusted: vec![TrustedRef {
                 item: "push_containment".to_string(),
                 row: "V1".to_string(),
             }],
-            limits: vec!["mutants-unrecorded".to_string()],
+            // The delivered vocabulary is empty: #208 landed the mutant
+            // pipeline, so there is nothing left to disclaim.
+            limits: Vec::new(),
         }
     }
 
@@ -1142,19 +1158,48 @@ mod tests {
     }
 
     #[test]
-    fn mutant_facts_require_dropping_the_limit() {
+    fn mutant_facts_require_dropping_the_retired_limit() {
+        // Half-recording: the row carries a mutant fact while `limits` still
+        // claims none exists. Both sides are named, and the slug itself is now
+        // outside the (empty) vocabulary.
         let mut receipt = sample();
-        receipt.register.rows[0].mutant_killed = Some(true);
+        receipt.limits = vec!["mutants-unrecorded".to_string()];
         let text = receipt.to_json_pretty().expect("serialize");
         let violations = validate_text(&text);
         assert!(
             fields(&violations).contains(&"register.rows[0].mutantKilled"),
-            "{violations:?}"
+            "the coupling guard names the mutant fact: {violations:?}"
+        );
+        assert!(
+            violations.iter().any(|violation| {
+                violation.field == "limits[0]"
+                    && violation.message.contains("outside the closed vocabulary")
+            }),
+            "the retired slug is rejected by the empty vocabulary: {violations:?}"
         );
 
-        receipt.limits.clear();
+        // The delivered shape — the mutant fact with no limit at all — is the
+        // legal one.
+        check(&sample().to_json_pretty().expect("serialize"), &mut |_| {
+            None
+        })
+        .expect("a recorded mutant is legal with the empty limits vocabulary");
+    }
+
+    #[test]
+    fn the_retired_mutants_unrecorded_slug_is_rejected_alone() {
+        // A receipt with no mutant fact but the retired slug still fails: the
+        // vocabulary is the contract, not a signal to reinterpret.
+        let mut receipt = sample();
+        receipt.register.rows[0] = row("V1", "tested");
+        receipt.limits = vec!["mutants-unrecorded".to_string()];
         let text = receipt.to_json_pretty().expect("serialize");
-        check(&text, &mut |_| None).expect("a recorded mutant is legal once the limit is dropped");
+        let violations = validate_text(&text);
+        assert_eq!(fields(&violations), vec!["limits[0]"]);
+        assert!(
+            violations[0].message.contains("mutants-unrecorded"),
+            "{violations:?}"
+        );
     }
 
     #[test]

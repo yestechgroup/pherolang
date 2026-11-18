@@ -43,7 +43,11 @@ fn fixture() -> Value {
                 "statement": "edges reference existing nodes",
                 "implementation": "Graph::reference",
                 "status": "tested",
-                "evidence": [{"kind": "test", "pointer": "crates/verify/tests/t.rs:other_test"}]
+                "evidence": [
+                    {"kind": "test", "pointer": "crates/verify/tests/t.rs:other_test"},
+                    {"kind": "mutant", "pointer": "tests/mutants/V3.patch"}
+                ],
+                "mutantKilled": true
             },
             {
                 "id": "V4",
@@ -83,6 +87,19 @@ fn assert_rule(broken: &Value, rule: &str) {
     assert!(
         violations.iter().any(|v| v.rule == rule),
         "expected a {rule} violation, got {violations:?}"
+    );
+}
+
+/// Asserts a mutation broke `rule` with a message naming `row` — the mutant
+/// rules are per-row facts, so a violation that does not name its row is
+/// useless to the person fixing the register.
+fn assert_rule_names_row(broken: &Value, rule: &str, row: &str) {
+    let violations = violations_of(broken);
+    assert!(
+        violations
+            .iter()
+            .any(|v| v.rule == rule && v.message.contains(row)),
+        "expected a {rule} violation naming {row}, got {violations:?}"
     );
 }
 
@@ -232,6 +249,64 @@ fn a_tested_row_without_test_evidence_is_rejected() {
 }
 
 #[test]
+fn a_tested_row_without_mutant_evidence_is_rejected() {
+    // #208: a tested row's falsifiability is recorded, not assumed.
+    let mut broken = fixture();
+    broken["obligations"][2]["evidence"]
+        .as_array_mut()
+        .expect("array")
+        .pop();
+    assert_rule_names_row(&broken, "mutant-required", "V3");
+}
+
+#[test]
+fn a_tested_row_with_two_mutants_is_rejected() {
+    let mut broken = fixture();
+    broken["obligations"][2]["evidence"]
+        .as_array_mut()
+        .expect("array")
+        .push(json!({"kind": "mutant", "pointer": "tests/mutants/V3-extra.patch"}));
+    assert_rule_names_row(&broken, "mutant-count", "V3");
+}
+
+#[test]
+fn a_tested_row_without_the_killed_fact_is_rejected() {
+    let mut broken = fixture();
+    broken["obligations"][2]
+        .as_object_mut()
+        .expect("object")
+        .remove("mutantKilled");
+    assert_rule_names_row(&broken, "mutant-required", "V3");
+}
+
+#[test]
+fn a_tested_row_with_an_unkilled_mutant_is_rejected() {
+    let mut broken = fixture();
+    broken["obligations"][2]["mutantKilled"] = json!(false);
+    assert_rule_names_row(&broken, "mutant-required", "V3");
+}
+
+#[test]
+fn a_mutant_on_a_proved_row_is_rejected() {
+    // The proof run is a proved row's story; a mutant pointer there claims
+    // executable evidence the status does not carry.
+    let mut broken = fixture();
+    broken["obligations"][0]["evidence"]
+        .as_array_mut()
+        .expect("array")
+        .push(json!({"kind": "mutant", "pointer": "tests/mutants/V1.patch"}));
+    assert_rule_names_row(&broken, "mutant-forbidden", "V1");
+}
+
+#[test]
+fn a_mutant_fact_on_an_assumed_row_is_rejected() {
+    let mut broken = fixture();
+    broken["obligations"][1]["status"] = json!("assumed");
+    broken["obligations"][1]["mutantKilled"] = json!(true);
+    assert_rule_names_row(&broken, "mutant-forbidden", "V2");
+}
+
+#[test]
 fn an_incomplete_hold_row_is_rejected() {
     let mut broken = fixture();
     broken["hold"][0]["trigger"] = json!("");
@@ -296,7 +371,7 @@ fn the_rendered_block_is_pinned() {
         "|---|---|---|---|---|\n",
         "| V1 | proved | `proof`:`crates/verify/src/lib.rs:lemma_x` | — | — |\n",
         "| V2 | argued | `test`:`crates/verify/tests/t.rs:the_test`<br>`doc`:`docs/NOTES.md` | next formal attempt | 2026-07-15 |\n",
-        "| V3 | tested | `test`:`crates/verify/tests/t.rs:other_test` | — | — |\n",
+        "| V3 | tested | `test`:`crates/verify/tests/t.rs:other_test`<br>`mutant`:`tests/mutants/V3.patch` | — | — |\n",
         "| V4 | proved | `mirror`:`crates/verify/src/mirror.rs:the_mirror` | toolchain bump | 2026-07-15 |\n",
         "\n",
         "### Deliberate holds\n",

@@ -169,8 +169,8 @@
       "slug": "receipts",
       "title": "Verification receipts",
       "description": "A **receipt** is the proof-obligation register's shipped artifact: one",
-      "bytes": 12679,
-      "lines": 255
+      "bytes": 13599,
+      "lines": 262
     },
     {
       "path": "docs/RELEASE-0.3.0.md",
@@ -223,8 +223,8 @@
       "slug": "verification",
       "title": "Verification (proof-obligation register)",
       "description": "Phero Lang's formal-verification strategy follows",
-      "bytes": 32931,
-      "lines": 232
+      "bytes": 33988,
+      "lines": 241
     },
     {
       "path": "docs/VERSIONING.md",

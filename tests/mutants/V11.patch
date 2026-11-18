@@ -1,0 +1,15 @@
+# V11 — recorded mutant for register row V11.
+# Inverts the resolution-success branch in check_references, so dangling interaction references pass silently and declared ones are flagged.
+diff --git a/crates/phero-ifml/src/check/references.rs b/crates/phero-ifml/src/check/references.rs
+index 084d9d1..7bb3581 100644
+--- a/crates/phero-ifml/src/check/references.rs
++++ b/crates/phero-ifml/src/check/references.rs
+@@ -88,7 +88,7 @@ pub(super) fn check_references(
+             "refresh" => components.contains(site.target.as_str()),
+             _ => actions.contains(site.target.as_str()),
+         };
+-        if known {
++        if !known {
+             continue;
+         }
+         diags.push((
