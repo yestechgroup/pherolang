@@ -56,6 +56,15 @@
       "lines": 721
     },
     {
+      "path": "docs/EDITORS.md",
+      "name": "EDITORS.md",
+      "slug": "editors",
+      "title": "Editors and the language server",
+      "description": "`pherolang lsp` serves a language server over **stdin/stdout** — the standard",
+      "bytes": 4286,
+      "lines": 115
+    },
+    {
       "path": "docs/EVENTS.md",
       "name": "EVENTS.md",
       "slug": "events",
@@ -110,6 +119,15 @@
       "lines": 912
     },
     {
+      "path": "docs/INSTALL.md",
+      "name": "INSTALL.md",
+      "slug": "install",
+      "title": "Installing Phero Lang",
+      "description": "`pherolang` ships as a single native binary and reads nothing from the network",
+      "bytes": 4350,
+      "lines": 118
+    },
+    {
       "path": "docs/LANGUAGE.md",
       "name": "LANGUAGE.md",
       "slug": "language",
@@ -133,8 +151,8 @@
       "slug": "index",
       "title": "Phero Lang documentation",
       "description": "Phero Lang is a multi-surface modeling language: every surface follows the same",
-      "bytes": 5706,
-      "lines": 59
+      "bytes": 6077,
+      "lines": 61
     },
     {
       "path": "docs/REBRAND.md",
