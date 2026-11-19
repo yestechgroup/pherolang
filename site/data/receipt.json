@@ -532,9 +532,31 @@
         "review": null,
         "status": "tested",
         "trigger": null
+      },
+      {
+        "claim": "Intent coverage classification (issue #196): an intent is reported unmapped — warning `X0009`/`X0010` — exactly when it resolves no element, or no check, against the application's compiled artifacts; a link naming nothing of its kind is the spanned error `X0011`/`X0012` with the did-you-mean candidate; an ambiguous bare name is `X0013`; a stable id declared by two intent artifacts of one application is `X0014`",
+        "evidence": [
+          {
+            "kind": "code",
+            "pointer": "crates/phero-driver/src/coverage.rs:check_coverage"
+          },
+          {
+            "kind": "test",
+            "pointer": "crates/phero-driver/tests/intent_coverage.rs"
+          },
+          {
+            "kind": "mutant",
+            "pointer": "tests/mutants/V18.patch"
+          }
+        ],
+        "id": "V18",
+        "mutantKilled": true,
+        "review": null,
+        "status": "tested",
+        "trigger": null
       }
     ],
-    "sha256": "30f6dc10320046f95d0048c1ba10276982e5efa73c7f93fbf3aa9d12d8d58ea0",
+    "sha256": "d5d090717f4ae192ac55e2665cf7a8139f8a7a90c898cda386082a1eec917b0b",
     "source": "docs/verification/register.json"
   },
   "sources": [
