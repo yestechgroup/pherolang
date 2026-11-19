@@ -6,7 +6,7 @@
 diff --git a/crates/phero-driver/src/coverage.rs b/crates/phero-driver/src/coverage.rs
 --- a/crates/phero-driver/src/coverage.rs
 +++ b/crates/phero-driver/src/coverage.rs
-@@ -366,7 +366,7 @@
+@@ -364,7 +364,7 @@
                      ),
                  );
              }
@@ -14,4 +14,4 @@ diff --git a/crates/phero-driver/src/coverage.rs b/crates/phero-driver/src/cover
 +            if resolved_checks > 0 {
                  local.push(
                      Diagnostic::warning(
-                         format!("{X_INTENT_WITHOUT_CHECK} intent '{}' maps to no check", intent.id),
+                         format!(
