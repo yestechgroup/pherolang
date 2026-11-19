@@ -207,7 +207,7 @@ impl PheroBackend {
                     .map(|(_, diagnostic)| to_lsp_diagnostic(diagnostic, &map))
                     .collect()
             }
-            // The four artifact surfaces compile only inside the graph
+            // The artifact surfaces compile only inside the graph
             // snapshot (pherolang#243/#254): publish the diagnostics its
             // memoized compile already produced for this file instead of
             // compiling a second time (pherolang#255). A non-file URI (or one
@@ -217,7 +217,8 @@ impl PheroBackend {
             DocumentSurface::Known(SurfaceKind::Evt)
             | DocumentSurface::Known(SurfaceKind::Deploy)
             | DocumentSurface::Known(SurfaceKind::Uc)
-            | DocumentSurface::Known(SurfaceKind::Cmmn) => self.snapshot_diagnostics(uri),
+            | DocumentSurface::Known(SurfaceKind::Cmmn)
+            | DocumentSurface::Known(SurfaceKind::Intent) => self.snapshot_diagnostics(uri),
             DocumentSurface::Other => Vec::new(),
         };
         self.client

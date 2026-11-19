@@ -1,4 +1,4 @@
-//! Registry drift tests: the nine-surface metadata must match the compiler's
+//! Registry drift tests: the ten-surface metadata must match the compiler's
 //! word tables and the site's surface catalogue.
 
 use std::collections::{BTreeMap, BTreeSet};
@@ -29,8 +29,8 @@ fn site_surfaces() -> BTreeMap<String, String> {
 #[test]
 fn every_surface_matches_the_site_catalogue() {
     let site = site_surfaces();
-    assert_eq!(site.len(), 9, "the site lists nine surfaces");
-    assert_eq!(all_metadata().len(), 9);
+    assert_eq!(site.len(), 10, "the site lists ten surfaces");
+    assert_eq!(all_metadata().len(), 10);
 
     let mut seen = BTreeSet::new();
     for metadata in all_metadata() {
@@ -66,7 +66,9 @@ fn metadata_order_is_the_compiler_order_and_deterministic() {
     }
     assert_eq!(
         Surface::ALL.map(Surface::id),
-        ["mox", "ifml", "ddd", "actor", "evt", "deploy", "uc", "cmmn", "dmn"]
+        [
+            "mox", "ifml", "ddd", "actor", "evt", "deploy", "uc", "cmmn", "dmn", "intent"
+        ]
     );
 }
 

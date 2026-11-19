@@ -17,7 +17,7 @@
       ],
       "artifact": "artifacts/mox.json",
       "counts": {
-        "conformanceFiles": 19
+        "conformanceFiles": 20
       }
     },
     {
@@ -49,7 +49,7 @@
       ],
       "artifact": "artifacts/actor.json",
       "counts": {
-        "conformanceFiles": 19
+        "conformanceFiles": 20
       }
     },
     {
@@ -142,6 +142,21 @@
       "status": "validated",
       "backends": [],
       "artifact": "artifacts/deploy.json",
+      "counts": {
+        "conformanceFiles": 1
+      }
+    },
+    {
+      "id": "intent",
+      "extension": ".intent",
+      "name": "Intent specification",
+      "tagline": "Requirements, traceability and coverage",
+      "summary": "Requirements as model data: stable ids (`LOAN-001`), links to the elements that express them and the checks that verify them, and a coverage pass that warns on every claim nobody can honor.",
+      "docs": "docs/INTENTS.md",
+      "example": "examples/support/support.intent",
+      "status": "validated",
+      "backends": [],
+      "artifact": "artifacts/intent.json",
       "counts": {
         "conformanceFiles": 1
       }

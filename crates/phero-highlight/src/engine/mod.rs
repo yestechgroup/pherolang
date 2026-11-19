@@ -215,6 +215,13 @@ fn semantic_pass(
             }
             parse_degradation(result.ast.is_some(), &result.errors)
         }
+        Surface::Intent => {
+            let result = phero_syntax::parse_intents(source);
+            if let Some(ast) = &result.ast {
+                semantic::intents::walk(ctx, ast);
+            }
+            parse_degradation(result.ast.is_some(), &result.errors)
+        }
         Surface::Cmmn => {
             let result = phero_syntax::parse_cmmn(source);
             if let Some(ast) = &result.ast {

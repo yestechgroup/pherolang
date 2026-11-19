@@ -9,7 +9,8 @@
     "uc": { "surface": "uc", "source": "examples/support/support.uc", "start": 45, "end": 62 },
     "cmmn": { "surface": "cmmn", "source": "examples/support/support.cmmn", "start": 42, "end": 57 },
     "ifml": { "surface": "ifml", "source": "examples/support/support.ifml", "start": 12, "end": 29 },
-    "deploy": { "surface": "deploy", "source": "examples/support/support.deploy", "start": 10, "end": 30 }
+    "deploy": { "surface": "deploy", "source": "examples/support/support.deploy", "start": 10, "end": 30 },
+    "intent": { "surface": "intent", "source": "examples/support/support.intent", "start": 3, "end": 9 }
   },
   "pages": {
     "getting-started.domain": {

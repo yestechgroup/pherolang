@@ -1,0 +1,27 @@
+import "support.mox";
+
+intent REFUND-001 "A refund above the desk's auto-approval limit is decided by a human." {
+    element class:Ticket;
+    element capability:RaiseRefund;
+    element capability:ApproveRefund;
+    element event:RefundRequested;
+    check decision:RefundAuthority;
+}
+
+intent REFUND-002 "A raised refund is always assessed before money moves." {
+    element op:TicketService.raiseRefund;
+    element event:RefundApproved;
+    check decision:RefundAssessment;
+}
+
+intent TICKET-001 "A stored ticket never carries a negative refund amount." {
+    element class:Ticket;
+    element view:Queue;
+    check invariant:Ticket;
+}
+
+intent REFUND-003 "Every refund decision is an immutable record." {
+    element class:RefundDecision;
+    check invariant:RefundDecision;
+    check decision:RefundEligibility;
+}

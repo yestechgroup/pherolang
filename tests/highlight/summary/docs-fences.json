@@ -296,6 +296,21 @@
       }
     },
     {
+      "file": "docs/INTENTS.md",
+      "line": 16,
+      "surface": "intent",
+      "degraded": false,
+      "spans": 22,
+      "classes": {
+        "function": 4,
+        "keyword": 5,
+        "property": 1,
+        "punctuation": 8,
+        "string": 2,
+        "variable": 2
+      }
+    },
+    {
       "file": "docs/LANGUAGE.md",
       "line": 94,
       "surface": "mox",

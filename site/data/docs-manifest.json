@@ -79,6 +79,13 @@
       "url": "/reference/ifml/"
     },
     {
+      "source": "docs/INTENTS.md",
+      "slug": "intents",
+      "collection": "reference",
+      "target": "reference/intents.md",
+      "url": "/reference/intents/"
+    },
+    {
       "source": "docs/GRAPH.md",
       "slug": "graph",
       "collection": "reference",
@@ -224,6 +231,13 @@
       "collection": "adr",
       "target": "adr/0005-shared-surface-kernel-layering.md",
       "url": "/adr/0005-shared-surface-kernel-layering/"
+    },
+    {
+      "source": "docs/adr/0010-intent-specifications-are-a-declaration-surface.md",
+      "slug": "0010-intent-specifications-are-a-declaration-surface",
+      "collection": "adr",
+      "target": "adr/0010-intent-specifications-are-a-declaration-surface.md",
+      "url": "/adr/0010-intent-specifications-are-a-declaration-surface/"
     }
   ]
 }

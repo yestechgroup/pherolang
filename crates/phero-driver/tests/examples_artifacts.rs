@@ -41,6 +41,10 @@ const DDD_EXAMPLES: [(&str, &str); 2] = [("orders", "shop/orders"), ("support", 
 /// The canonical `.uc` use-case examples.
 const UC_EXAMPLES: [(&str, &str); 1] = [("support", "support/support")];
 
+/// The canonical `.intent` intent-specification examples (issue
+/// pherolang#196).
+const INTENT_EXAMPLES: [(&str, &str); 1] = [("support", "support/support")];
+
 /// The canonical `.deploy` deployment examples.
 const DEPLOY_EXAMPLES: [(&str, &str); 1] = [("support", "support/support")];
 
@@ -253,6 +257,129 @@ fn support_ddd_capabilities_validate_against_the_actor_model() {
     assert!(
         compilation.model.is_some(),
         "support.ddd must lower to a design artifact under actor validation"
+    );
+}
+
+/// Compiles the flagship's intent file (issue pherolang#196) against its
+/// imported domain.
+fn compile_intent(
+    stem: &str,
+) -> (
+    phero_ir::intents::IntentModel,
+    Vec<phero_driver::IntentLinkSite>,
+) {
+    let (path, source) = example(stem, "intent");
+    let (domain_path, domain) = domain_of(stem);
+    let compilation = phero_driver::compile_intent_str(
+        path.to_str().expect("utf-8 example path"),
+        &source,
+        &phero_driver::CompileInputs::from_domains(&[(domain_path, domain)]),
+    );
+    assert_clean(&format!("{stem}.intent"), &compilation.diagnostics);
+    (
+        compilation
+            .model
+            .unwrap_or_else(|| panic!("{stem}.intent must lower to an intent artifact")),
+        compilation.spans,
+    )
+}
+
+#[test]
+fn intent_examples_match_golden_artifacts_and_round_trip() {
+    for (name, stem) in INTENT_EXAMPLES {
+        let (model, _) = compile_intent(stem);
+        assert_eq!(
+            model.format_version,
+            phero_ir::intents::INTENT_MODEL_FORMAT_VERSION
+        );
+        let json = model.to_json_pretty().expect("serialize intent artifact");
+        assert_matches_golden(name, "intent", &json);
+        let reloaded = phero_ir::intents::IntentModel::from_json(&json)
+            .unwrap_or_else(|error| panic!("{name}.intent artifact must round-trip: {error}"));
+        assert_eq!(
+            reloaded.to_json_pretty().expect("re-serialize"),
+            json,
+            "{name}.intent artifact round trip must be stable"
+        );
+    }
+}
+
+/// The flagship's intent → element → check coverage is **full**: every
+/// intent resolves at least one element and at least one check against the
+/// compiled support stack, so the coverage pass is clean on it (issue
+/// pherolang#196's exit gate).
+#[test]
+fn the_support_example_has_full_intent_coverage() {
+    let (intents_model, spans) = compile_intent("support/support");
+    let dir = examples_dir().join("support");
+    let intents_path = "examples/support/support.intent".to_string();
+    let intents = vec![(intents_path.clone(), intents_model)];
+    let mut intent_spans = BTreeMap::new();
+    intent_spans.insert(intents_path, spans);
+
+    let (domain_path, domain_source) = domain_of("support/support");
+    let domains = vec![phero_driver::compile_str(
+        &domain_path,
+        &domain_source,
+        &phero_driver::DomainImports::default(),
+    )
+    .model
+    .expect("support.mox must lower")];
+
+    let design_path = dir.join("support.ddd").display().to_string();
+    let designs = vec![(design_path, compile_ddd("support/support"))];
+    let actors = vec![(
+        dir.join("support.actor").display().to_string(),
+        support_actor_model(),
+    )];
+    let events = vec![(
+        dir.join("support.evt").display().to_string(),
+        compile_evt("support/support"),
+    )];
+    let flows = vec![(
+        dir.join("support.ifml").display().to_string(),
+        support_ifml_model(),
+    )];
+
+    // The decision model with its one external markdown table, gathered
+    // exactly the way the CLI's `.dmn` reader gathers it (as-written table
+    // paths resolved against the file's directory).
+    let (dmn_path, dmn_source) = example("support/support", "dmn");
+    let mut tables = Vec::new();
+    for table in phero_driver::project::dmn_table_paths(&dmn_source) {
+        let content = std::fs::read_to_string(dir.join(&table)).expect("read the decision table");
+        tables.push((table, content));
+    }
+    let dmn = phero_driver::compile_dmn_str(
+        dmn_path.to_str().expect("utf-8 dmn path"),
+        &dmn_source,
+        &phero_driver::CompileInputs::from_domains(&[(domain_path, domain_source)])
+            .with_events([(
+                "support.evt".to_string(),
+                compile_evt("support/support"),
+            )])
+            .with_tables(tables),
+    );
+    assert_clean("support.dmn (coverage inputs)", &dmn.diagnostics);
+    let decisions = vec![(
+        dir.join("support.dmn").display().to_string(),
+        dmn.model.expect("support.dmn artifact"),
+    )];
+
+    let diagnostics = phero_driver::coverage::check_coverage(
+        &intents,
+        &intent_spans,
+        &domains,
+        &actors,
+        &events,
+        &flows,
+        &designs,
+        &decisions,
+        "Support",
+    );
+    assert!(
+        diagnostics.is_empty(),
+        "the flagship's intents must be fully covered: {diagnostics:?}"
     );
 }
 
@@ -554,5 +681,6 @@ fn the_example_lists_cover_every_artifact_file_on_disk() {
     assert_sync(&DDD_EXAMPLES, "ddd");
     assert_sync(&UC_EXAMPLES, "uc");
     assert_sync(&DEPLOY_EXAMPLES, "deploy");
+    assert_sync(&INTENT_EXAMPLES, "intent");
     assert_sync(&CMMN_EXAMPLES, "cmmn");
 }

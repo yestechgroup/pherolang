@@ -378,6 +378,51 @@
       }
     },
     {
+      "id": "intent/parse-error",
+      "surface": "intent",
+      "degraded": true,
+      "spans": 9,
+      "classes": {
+        "keyword": 2,
+        "number": 1,
+        "punctuation": 3,
+        "string": 2,
+        "type": 1
+      },
+      "modifiers": {}
+    },
+    {
+      "id": "intent/truncated",
+      "surface": "intent",
+      "degraded": true,
+      "spans": 7,
+      "classes": {
+        "keyword": 2,
+        "number": 1,
+        "punctuation": 1,
+        "string": 2,
+        "type": 1
+      },
+      "modifiers": {}
+    },
+    {
+      "id": "intent/valid",
+      "surface": "intent",
+      "degraded": false,
+      "spans": 27,
+      "classes": {
+        "function": 5,
+        "keyword": 6,
+        "property": 2,
+        "punctuation": 10,
+        "string": 2,
+        "variable": 2
+      },
+      "modifiers": {
+        "declaration": 1
+      }
+    },
+    {
       "id": "mox/comments",
       "surface": "mox",
       "degraded": false,

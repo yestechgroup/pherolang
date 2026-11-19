@@ -43,6 +43,12 @@
       "sha256": "db7d9d51824fcf5d76d73fec7c6b023828c529cfe6f3c45c7fb5d7ef241edc2a"
     },
     {
+      "formatVersion": 1,
+      "kind": "intentModel",
+      "path": "support.intent.json",
+      "sha256": "730b0bb8429075e107a57fbed9748c1369ab7ed4982b8224cd248c05eafc8f76"
+    },
+    {
       "formatVersion": 2,
       "kind": "irModel",
       "path": null,
@@ -68,6 +74,7 @@
     "examples/support/support.dmn",
     "examples/support/support.evt",
     "examples/support/support.ifml",
+    "examples/support/support.intent",
     "examples/support/support.mox",
     "examples/support/support.uc"
   ],
@@ -558,6 +565,10 @@
     {
       "path": "examples/support/support.ifml",
       "sha256": "05b5bb35e5f437408ca4274e1eca80c1d3cb6e0a33cce84060589b38ce1645a3"
+    },
+    {
+      "path": "examples/support/support.intent",
+      "sha256": "f87eeb95c5c63e68ce694611f9f87decb3a245b846965243ff9067254b0a0340"
     },
     {
       "path": "examples/support/support.mox",

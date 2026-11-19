@@ -313,7 +313,7 @@ const entries: LanguageEntry[] = [
       'ddd',
       'One service: injected dependencies, operations that name capabilities and emissions, an operation with a checked statement body, and two delegations — `close` to the repository, `findTickets` to the search projection.',
     ),
-    artifactLines: 47,
+    artifactLines: 54,
     artifactSummary:
       'One `DddModel`: the application, and per module the services, designs, repositories, searches and machines.',
   },
@@ -733,6 +733,49 @@ const entries: LanguageEntry[] = [
     artifactLines: 56,
     artifactSummary:
       'One `DeployModel`: applications with their components and connections, the profiles, and the deployments that project them.',
+  },
+
+  {
+    id: 'intent',
+    problem: [
+      'An `.intent` file states requirements as model data: one `intent` declaration per requirement, with a stable id (`LOAN-001`) that requirements, artifacts and receipts key on, a quoted statement, and links to the model elements that express it and the checks that verify it.',
+      'Requirements never leave the model again: the coverage pass resolves every link against the application\u2019s compiled artifacts and warns on every intent nothing expresses and nothing verifies — honesty over reach. A broken link is a spanned error with the nearest candidate named.',
+    ],
+    concepts: [
+      {
+        term: 'intent',
+        definition: 'A stable id, a statement, and the links that trace it into the model.',
+      },
+      {
+        term: 'element link',
+        definition:
+          '`element class:Ticket;` — a class, capability, event, view, command or operation that expresses the intent.',
+      },
+      {
+        term: 'check link',
+        definition:
+          '`check decision:RefundAuthority;` — a designed class\u2019s invariants or a decision that verifies it.',
+      },
+      {
+        term: 'stable id',
+        definition: 'An uppercase lead segment plus at least one all-digits segment, sliced exactly as written.',
+      },
+      {
+        term: 'coverage pass',
+        definition:
+          'The project-level pass behind `pherolang check`: unmapped intents warn (`X0009`/`X0010`), broken links error (`X0011`\u2013`X0014`).',
+      },
+    ],
+    relations:
+      'Intents link across the whole stack and are resolved per application: `class` against the imported `.mox` domain, `capability` against `.actor`, `event` against `.evt`, `view`/`command` against `.ifml`, `op` and `invariant` against `.ddd` designs, and `decision` against `.dmn` decision models.',
+    related: ['mox', 'actor', 'evt', 'ifml', 'ddd', 'dmn'],
+    excerpt: languageExcerpt(
+      'intent',
+      'The refund-governance requirement: the elements that express it and the decision that verifies it, all resolved against the compiled stack.',
+    ),
+    artifactLines: 24,
+    artifactSummary:
+      'One `IntentModel`: the intents in declaration order, each with its statement, its `element` links and its `check` links — names exactly as authored.',
   },
 ];
 

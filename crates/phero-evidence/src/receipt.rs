@@ -60,7 +60,7 @@ pub const KIND: &str = "verificationReceipt";
 /// receipt knows which surface it compiled — so the kind is recorded at
 /// emission time and `ifmlManifest` names the control/route manifest
 /// (`phero_ir::ifml_manifest`) a flow contributes.
-pub const ARTIFACT_KINDS: [&str; 9] = [
+pub const ARTIFACT_KINDS: [&str; 10] = [
     "irModel",
     "actorModel",
     "dddDesign",
@@ -70,6 +70,7 @@ pub const ARTIFACT_KINDS: [&str; 9] = [
     "decisionModel",
     "cmmnModel",
     "ifmlManifest",
+    "intentModel",
 ];
 
 /// The closed `limits` vocabulary: what a receipt explicitly does **not**

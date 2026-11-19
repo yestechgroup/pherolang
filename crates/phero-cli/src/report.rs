@@ -34,6 +34,15 @@ pub(crate) fn report_actor_diagnostics(pair: &ActorPair, compilation: &ActorComp
     render_grouped(&compilation.diagnostics, |path| pair.source_of(path));
 }
 
+/// The `.intent` diagnostics (issue pherolang#196): the same grouped
+/// rendering as the actor surface (the file plus its imported domains).
+pub(crate) fn report_intent_diagnostics(
+    pair: &crate::inputs::DomainPair,
+    compilation: &phero_driver::IntentCompilation,
+) {
+    render_grouped(&compilation.diagnostics, |path| pair.source_of(path));
+}
+
 /// Renders a `.ddd` compilation's diagnostics grouped per file: each file's
 /// diagnostics are ariadne-rendered against that file's own source, the way
 /// `check` renders single-model diagnostics.

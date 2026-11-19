@@ -197,6 +197,7 @@ surface_predicate! {
     is_cmmn_file => Cmmn,
     is_deploy_file => Deploy,
     is_ifml_file => Ifml,
+    is_intent_file => Intent,
 }
 
 /// An `.ifml` file plus everything it imports, ready for
@@ -605,6 +606,17 @@ fn render_keys(
 /// An `.actor` file plus the domain sources it imports, ready for
 /// [`phero_driver::compile_actors_str`].
 pub(crate) type ActorPair = DomainPair;
+
+/// Reads an `.intent` file plus every domain it imports, ready for
+/// [`phero_driver::compile_intent_str`] (issue pherolang#196). The `.actor`
+/// gatherer discipline: imports are raw domains only — intent links are
+/// not imports, they are resolved by the union pass's coverage pass.
+pub(crate) fn read_intent_pair(
+    file: &Path,
+    project: Option<&mut Project>,
+) -> anyhow::Result<DomainPair> {
+    read_domain_pair(file, surface_imports(SurfaceKind::Intent), project)
+}
 
 /// Reads an `.actor` file plus every domain it imports, without a project
 /// context — gen's cedar/tools flows stay disk-only (gen is not part of the

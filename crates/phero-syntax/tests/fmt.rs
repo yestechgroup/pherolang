@@ -946,6 +946,11 @@ const GOLDENS: &[(&str, &str, Formatter)] = &[
         "tests/conformance/fmt/dmn.fmt.dmn",
         phero_syntax::fmt::format_dmn,
     ),
+    (
+        "tests/conformance/models/intents.intent",
+        "tests/conformance/fmt/intents.fmt.intent",
+        phero_syntax::fmt::format_intents,
+    ),
 ];
 
 /// Workspace root (two levels above the phero-syntax crate).

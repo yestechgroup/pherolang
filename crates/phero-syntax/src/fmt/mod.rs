@@ -182,6 +182,7 @@ mod ddd;
 mod deploy;
 mod dmn;
 mod evt;
+mod intents;
 mod mox;
 mod uc;
 
@@ -282,6 +283,23 @@ pub fn format_usecases(source: &str) -> Result<String, FormatError> {
     let (tokens, comments) = lex_with_comments(source)?;
     let mut fmt = Formatter::new(source, tokens, comments);
     Ok(fmt.run_usecases())
+}
+
+/// Format an `.intent` source text, preserving comments verbatim.
+///
+/// The canonical layout mirrors [`format_usecases`]: `import` declarations
+/// are hoisted into a tight first section (one per line, source order),
+/// followed by the `intent` declarations with exactly one blank line
+/// between them. An intent's header stays one line (the stable id and the
+/// statement string), and each `element`/`check` link is one indented line
+/// with its canonical `;`, the kind word and dotted name re-emitted as
+/// written. Returns the formatted text ending in exactly one `\n` (empty
+/// input formats to empty output), or [`FormatError::Lex`] if the source
+/// cannot be tokenized.
+pub fn format_intents(source: &str) -> Result<String, FormatError> {
+    let (tokens, comments) = lex_with_comments(source)?;
+    let mut fmt = Formatter::new(source, tokens, comments);
+    Ok(fmt.run_intents())
 }
 
 /// Format a `.cmmn` source text, preserving comments verbatim.
@@ -421,6 +439,8 @@ enum BodyKind {
     UcUseCase,
     /// `occurrence`/`perform` members of a `.uc` participant body.
     UcParticipant,
+    /// `element`/`check` link lines of an `.intent` intent body.
+    IntentsBody,
     /// members of a `.dmn` decision model body: metadata lines and the
     /// six blocks.
     DmnModel,
@@ -1224,6 +1244,7 @@ impl<'src> Formatter<'src> {
                 BodyKind::DeployDeployment => self.scan_deploy_deployment_item(),
                 BodyKind::UcUseCase => self.scan_uc_item(),
                 BodyKind::UcParticipant => self.scan_uc_participant_item(),
+                BodyKind::IntentsBody => self.scan_intent_link_item(),
                 BodyKind::DmnModel => self.scan_dmn_model_item(),
                 BodyKind::DmnInputs => self.scan_dmn_typed_entry(),
                 BodyKind::DmnKnowledge => self.scan_dmn_knowledge_item(),

@@ -1,0 +1,16 @@
+// The intent half of the fixture (issue pherolang#196): the refund-governance
+// requirement, fully covered — the coverage pass resolves every link against
+// this directory's compiled artifacts (the class from the domain, the
+// capability from the policy, the event from the contract, the view from the
+// flow, the decision from the decision model) and stays clean. The
+// traceability edges themselves are the coverage pass's, not the graph's —
+// this file contributes no nodes and no edges.
+import "app.mox";
+
+intent GRAPH-001 "A refund over the desk limit needs an approval." {
+    element class:Ticket;
+    element capability:RaiseRefund;
+    element event:RefundRequested;
+    element view:Intake;
+    check decision:RefundAssessment;
+}

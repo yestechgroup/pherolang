@@ -109,7 +109,7 @@ if (!catalogue) {
 }
 
 const surfaces = catalogue.surfaces;
-check(surfaces.length === 9, `site/data/surfaces.json lists ${surfaces.length} surfaces, expected 9`);
+check(surfaces.length === 10, `site/data/surfaces.json lists ${surfaces.length} surfaces, expected 10`);
 
 const loaded = [];
 for (const surface of surfaces) {

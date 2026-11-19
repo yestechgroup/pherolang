@@ -1,4 +1,4 @@
-//! The workspace's one surface identity: the nine source surfaces pherolang
+//! The workspace's one surface identity: the ten source surfaces pherolang
 //! compiles, their extensions, ids, display names, and editor aliases.
 //!
 //! This module owns the **one** surface enum, the **one** `ALL` order, and the
@@ -72,6 +72,9 @@ pub enum Surface {
     Cmmn,
     /// `.dmn` — the decision model.
     Dmn,
+    /// `.intent` — the intent specification (requirement statements with
+    /// stable ids, linked to model elements and checks).
+    Intent,
 }
 
 impl Surface {
@@ -79,7 +82,7 @@ impl Surface {
     /// the highlighter's registry/grammar generator, and the "every kind is
     /// handled" tests iterate this; a new variant joins it in the same edit as
     /// its `of_extension` arm.
-    pub const ALL: [Surface; 9] = [
+    pub const ALL: [Surface; 10] = [
         Surface::Mox,
         Surface::Ifml,
         Surface::Ddd,
@@ -89,6 +92,7 @@ impl Surface {
         Surface::Uc,
         Surface::Cmmn,
         Surface::Dmn,
+        Surface::Intent,
     ];
 
     /// The stable surface id: the file extension without the dot, the
@@ -105,6 +109,7 @@ impl Surface {
             Surface::Uc => "uc",
             Surface::Cmmn => "cmmn",
             Surface::Dmn => "dmn",
+            Surface::Intent => "intent",
         }
     }
 
@@ -133,6 +138,7 @@ impl Surface {
             "uc" => Surface::Uc,
             "cmmn" => Surface::Cmmn,
             "dmn" => Surface::Dmn,
+            "intent" => Surface::Intent,
             _ => return None,
         })
     }
@@ -157,6 +163,7 @@ impl Surface {
             Surface::Uc => "Use case pattern",
             Surface::Cmmn => "Case management",
             Surface::Dmn => "Decision model",
+            Surface::Intent => "Intent specification",
         }
     }
 
@@ -176,6 +183,7 @@ impl Surface {
             Surface::Uc => &["usecase", "use-case", "usecases"],
             Surface::Cmmn => &["case"],
             Surface::Dmn => &["decision", "decisions"],
+            Surface::Intent => &["intents"],
         }
     }
 
@@ -246,7 +254,7 @@ mod tests {
             assert!(!surface.extension().starts_with('.'));
             assert!(!surface.display_name().is_empty());
         }
-        assert_eq!(ids.len(), 9);
+        assert_eq!(ids.len(), 10);
         assert_eq!(ids.len(), Surface::ALL.len());
     }
 

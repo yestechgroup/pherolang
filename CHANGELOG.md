@@ -7,6 +7,30 @@ policy in [docs/VERSIONING.md](docs/VERSIONING.md).
 
 ## [Unreleased]
 
+### Added
+
+- **Intent specifications are a source surface** (issue
+  [#196](https://github.com/yestechgroup/pherolang/issues/196), the
+  Proof-Carrying Models epic's Phase P1): `.intent` files state requirements
+  as model data — `intent LOAN-001 "<statement>"` with stable ids, links to
+  the model elements that express them (`element class:/capability:/event:/
+  view:/command:/op:`), and the model-native checks that verify them
+  (`check invariant:/decision:`). The tenth row of the one surface table
+  compiles to the versioned `phero_ir::intents::IntentModel` artifact
+  (`formatVersion` 1); the project-level **coverage pass** — the union
+  pass's new `X0009`–`X0014` codes, rendered spanned from a compile-time
+  span table that never serializes — warns on every intent nothing
+  expresses and nothing verifies (honesty over reach), errors on broken
+  links with the did-you-mean candidate, and errors on cross-file duplicate
+  ids. The single-surface checks are the new `driver.intent` band
+  (`E0450`–`E0454`). The flagship `support.intent` is fully covered and
+  pinned clean; the orphaned-intent and broken-link fixtures pin the exact
+  texts. Decision record:
+  [ADR 0010](docs/adr/0010-intent-specifications-are-a-declaration-surface.md);
+  contract: [docs/INTENTS.md](docs/INTENTS.md).
+
+## [0.4.0] — Phero Lang (2026-11-17)
+
 Planned as **v0.4.0** — the first release whose binary ships
 `pherolang highlight`. The workspace version is `0.4.0`; the tag and publish
 are the operator step in

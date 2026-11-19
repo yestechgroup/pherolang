@@ -14,18 +14,19 @@ use std::path::{Path, PathBuf};
 
 use phero_driver::{
     compile_actors_str, compile_cmmn_str, compile_ddd_app_str, compile_deploy_str, compile_dmn_str,
-    compile_evt_str, compile_usecase_str, DddFragment, SurfaceKind,
+    compile_evt_str, compile_intent_str, compile_usecase_str, DddFragment, SurfaceKind,
 };
 
 use crate::inputs::{
     compile_sources, read_actor_pair_in, read_cmmn_pair, read_ddd_design, read_deploy_pair,
-    read_dmn_pair, read_evt_pair, read_ifml_inputs, read_sources, read_uc_pair,
+    read_dmn_pair, read_evt_pair, read_ifml_inputs, read_intent_pair, read_sources, read_uc_pair,
 };
 use crate::project::{Artifact, Project};
 use crate::report::{
     report_actor_diagnostics, report_cmmn_diagnostics, report_ddd_diagnostics,
     report_deploy_diagnostics, report_dmn_diagnostics, report_evt_diagnostics,
-    report_ifml_diagnostics, report_multi_diagnostics, report_usecase_diagnostics,
+    report_ifml_diagnostics, report_intent_diagnostics, report_multi_diagnostics,
+    report_usecase_diagnostics,
 };
 
 /// One surface compile: the outcome, or `None` once the diagnostics are
@@ -132,6 +133,10 @@ pub(crate) struct SurfaceOutcome {
     /// (the host normalizes them for the graph). Empty for a domain model,
     /// whose `import schema`/`import sigil` targets are not graph surfaces.
     pub(crate) imports: Vec<String>,
+    /// The `.intent` compile's span table (issue pherolang#196): where each
+    /// intent id and link name sits, for the coverage pass's spanned
+    /// diagnostics. Empty for every other surface.
+    pub(crate) intent_spans: Vec<phero_driver::IntentLinkSite>,
 }
 
 /// The one per-surface dispatch: read `file` within the context's sibling
@@ -154,6 +159,7 @@ pub(crate) fn compile_one(
         SurfaceKind::Uc => compile_usecase(file, ctx),
         SurfaceKind::Cmmn => compile_cmmn(file, ctx),
         SurfaceKind::Dmn => compile_dmn(file, ctx),
+        SurfaceKind::Intent => compile_intent(file, ctx),
     }
 }
 
@@ -207,6 +213,7 @@ fn compile_domains(files: &[PathBuf], ctx: &mut CompileContext<'_>) -> Compiled 
         warnings: 0,
         artifact: Some(artifact),
         imports: Vec::new(),
+        intent_spans: Vec::new(),
     }))
 }
 
@@ -265,6 +272,7 @@ fn compile_ifml(file: &Path, ctx: &mut CompileContext<'_>) -> Compiled {
         warnings,
         artifact: Some(artifact),
         imports,
+        intent_spans: Vec::new(),
     }))
 }
 
@@ -334,6 +342,7 @@ fn outcome_many(
         warnings: 0,
         artifact: Some(artifact),
         imports,
+        intent_spans: Vec::new(),
     }))
 }
 
@@ -447,6 +456,27 @@ fn compile_dmn(file: &Path, ctx: &mut CompileContext<'_>) -> Compiled {
     outcome(ctx, file, Artifact::Decision(model), pair.path, imports)
 }
 
+/// The `.intent` pipeline (issue pherolang#196): the `.actor` gatherer
+/// discipline (domains only — links are not imports), with the compile's
+/// span table carried beside the artifact for the union pass's coverage
+/// findings.
+fn compile_intent(file: &Path, ctx: &mut CompileContext<'_>) -> Compiled {
+    let pair = read_intent_pair(file, ctx.project.as_deref_mut())?;
+    let compilation = compile_intent_str(&pair.path, &pair.source, pair.inputs());
+    if ctx.renders(compilation.model.is_none()) {
+        report_intent_diagnostics(&pair, &compilation);
+    }
+    let Some(model) = compilation.model else {
+        return Ok(None);
+    };
+    let imports = import_paths(pair.inputs().domains());
+    let mut compiled = outcome(ctx, file, Artifact::Intents(model), pair.path, imports)?;
+    if let Some(compiled) = compiled.as_mut() {
+        compiled.intent_spans = compilation.spans;
+    }
+    Ok(compiled)
+}
+
 /// The tail every single-artifact surface shares: cache the typed artifact
 /// lookup-before-compute and wrap the outcome with its `OK` path, resolved
 /// import keys, and — when asked — the artifact JSON.
@@ -469,6 +499,7 @@ fn outcome(
         warnings: 0,
         artifact: Some(artifact),
         imports,
+        intent_spans: Vec::new(),
     }))
 }
 
@@ -530,6 +561,7 @@ mod tests {
             Artifact::Case(_) => SurfaceKind::Cmmn,
             Artifact::Decision(_) => SurfaceKind::Dmn,
             Artifact::Flow(_) => SurfaceKind::Ifml,
+            Artifact::Intents(_) => SurfaceKind::Intent,
         }
     }
 

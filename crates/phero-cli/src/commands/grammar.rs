@@ -1,7 +1,7 @@
 //! `pherolang grammar`: write or check the generated editor grammar package.
 //!
 //! The command is the distribution step for [`phero_highlight::grammar`]: it
-//! generates the nine TextMate grammars and language configurations from the
+//! generates the ten TextMate grammars and language configurations from the
 //! same metadata the highlighter uses, writes them into the canonical
 //! `site/packages/highlighting` location (or any `--out` directory), and
 //! `--check` proves the committed bytes are exactly what the generator

@@ -73,7 +73,7 @@ fn rule_words(grammar: &Value, key: &str) -> BTreeSet<String> {
 #[test]
 fn every_site_surface_has_a_grammar_and_configuration() {
     let site = site_surfaces();
-    assert_eq!(site.len(), 9, "the site lists nine surfaces");
+    assert_eq!(site.len(), 10, "the site lists ten surfaces");
 
     for (id, extension) in site {
         let surface = Surface::from_id(&id).unwrap_or_else(|| panic!("unknown surface `{id}`"));

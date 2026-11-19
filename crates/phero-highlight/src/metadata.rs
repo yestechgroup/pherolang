@@ -332,9 +332,30 @@ pub static DMN: SurfaceMetadata = SurfaceMetadata {
     ],
 };
 
+/// `.intent` metadata (issue pherolang#196).
+pub static INTENTS: SurfaceMetadata = SurfaceMetadata {
+    surface: Surface::Intent,
+    id: "intent",
+    extension: "intent",
+    aliases: &["intents"],
+    display_name: "Intent specification",
+    documentation: "docs/INTENTS.md",
+    lexer: LexerKind::MoxFamily,
+    keywords: phero_syntax::words::INTENTS_KEYWORDS,
+    contextual: phero_syntax::words::INTENTS_CONTEXTUAL,
+    literals: BOOLEAN_LITERALS,
+    builtin_types: BUILTIN_TYPES,
+    declarations: &[
+        ("intent", HighlightClass::Function),
+        ("element", HighlightClass::Variable),
+        ("check", HighlightClass::Property),
+        ("import", HighlightClass::Namespace),
+    ],
+};
+
 /// Every metadata entry, in [`Surface::ALL`] order.
-pub static ALL: [&SurfaceMetadata; 9] =
-    [&MOX, &IFML, &DDD, &ACTOR, &EVT, &DEPLOY, &UC, &CMMN, &DMN];
+pub static ALL: [&SurfaceMetadata; 10] =
+    [&MOX, &IFML, &DDD, &ACTOR, &EVT, &DEPLOY, &UC, &CMMN, &DMN, &INTENTS];
 
 /// The metadata entry for `surface`.
 #[must_use]
@@ -349,6 +370,7 @@ pub fn metadata_for(surface: Surface) -> &'static SurfaceMetadata {
         Surface::Uc => &UC,
         Surface::Cmmn => &CMMN,
         Surface::Dmn => &DMN,
+        Surface::Intent => &INTENTS,
     }
 }
 
@@ -511,7 +533,7 @@ mod tests {
             assert_eq!(entry.display_name, surface.display_name());
             assert_eq!(metadata_for(surface).id, surface.id());
         }
-        assert_eq!(all_metadata().len(), 9);
+        assert_eq!(all_metadata().len(), 10);
     }
 
     #[test]

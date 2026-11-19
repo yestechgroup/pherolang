@@ -25,6 +25,7 @@ pub(crate) mod deploy;
 pub(crate) mod dmn;
 pub(crate) mod evt;
 pub(crate) mod ifml;
+pub(crate) mod intents;
 pub(crate) mod mox;
 pub(crate) mod uc;
 

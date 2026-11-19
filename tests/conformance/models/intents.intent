@@ -1,0 +1,3 @@
+intent SHOP-002 "an orphaned claim" {
+  element class:Widget
+}

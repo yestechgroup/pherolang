@@ -31,6 +31,7 @@ pub mod ddd;
 pub mod deploy;
 pub mod dmn;
 pub mod evt;
+pub mod intent;
 pub mod mox;
 pub mod uc;
 
@@ -40,5 +41,6 @@ pub use ddd::{compile_ddd, compile_ddd_app_str, compile_ddd_str};
 pub use deploy::compile_deploy_str;
 pub use dmn::{compile_dmn, compile_dmn_str};
 pub use evt::{compile_evt, compile_evt_str};
+pub use intent::{compile_intent, compile_intent_str};
 pub use mox::{compile, compile_files, compile_str, compile_with_imports};
 pub use uc::{compile_usecase, compile_usecase_str};

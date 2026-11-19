@@ -1,5 +1,5 @@
 /**
- * The nine model surfaces, in the one place the site reads them.
+ * The ten model surfaces, in the one place the site reads them.
  *
  * Words here are authored; the *evidence* behind them is derived by
  * `scripts/sync-model.mjs` and cross-checked by `scripts/gate.mjs`:
@@ -133,6 +133,19 @@ export const SURFACES = [
     backends: [],
     summary:
       'Deployment projections: application components, target capabilities and engines, profiles, settings, and type-checked placement policies.',
+  },
+  {
+    id: 'intent',
+    extension: '.intent',
+    name: 'Intent specification',
+    tagline: 'Requirements, traceability and coverage',
+    docs: 'docs/INTENTS.md',
+    example: 'examples/support/support.intent',
+    conformance: 'tests/conformance/intents',
+    golden: 'examples/artifacts/support.intent.json',
+    backends: [],
+    summary:
+      'Requirements as model data: stable ids (`LOAN-001`), links to the elements that express them and the checks that verify them, and a coverage pass that warns on every claim nobody can honor.',
   },
 ];
 

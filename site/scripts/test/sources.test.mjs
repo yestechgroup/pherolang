@@ -19,7 +19,7 @@ test('collectSources reports no problems for the committed corpus', () => {
   assert.ok(artifact, error ?? 'the highlight artifact did not load');
 });
 
-test('all nine example surfaces are collected', () => {
+test('all ten example surfaces are collected', () => {
   const examples = collected.sources
     .filter((source) => source.origin.startsWith('examples/support/'))
     .map((source) => source.surface);

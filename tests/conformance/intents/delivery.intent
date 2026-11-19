@@ -1,0 +1,13 @@
+import "../usecases/delivery.mox";
+
+intent DELIVERY-001 "A handover is confirmed by the receiving courier." {
+    element class:DeliveryDrone;
+    element class:nz.example.delivery.Recipient;
+    element op:HandOverService.confirmHandover;
+    check invariant:DeliveryDrone;
+}
+
+intent DELIVERY-002 "A release below the weight ceiling needs no operator review." {
+    element class:ReleaseRequest;
+    check decision:ReleaseAssessment;
+}
