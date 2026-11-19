@@ -486,7 +486,7 @@ use phero_testkit::fixtures;
 ///
 /// `payrun.ddd` and `childops.ddd` are the conformance designs the support
 /// fixture does not exercise — a state machine with transitions, and
-/// module-level `extend` child operations — so the equality covers them too.
+/// module-level `children` child operations — so the equality covers them too.
 /// `models/actors.mox` carries an inline `actors` block (the `.mox`
 /// surface's own actor/capability nodes); `support.ifml` is the interaction
 /// flow, compiled through the support stack like the other artifact

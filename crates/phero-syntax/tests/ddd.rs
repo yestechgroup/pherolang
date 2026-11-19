@@ -2195,12 +2195,12 @@ fn invokes_and_decision_stay_contextual_identifiers() {
     assert!(formatted.contains("boolean ^invokes();"), "{formatted}");
 }
 
-// --- child-scoped extend blocks (issue pherolang#179) ---------------------------
+// --- child-scoped `children` blocks (issue pherolang#179) -------------------
 
-/// A module with two `extend` blocks over one aggregate root: a collection
+/// A module with two `children` blocks over one aggregate root: a collection
 /// child with `add`/`remove`/`save` actions (one `protected`, one guarded),
 /// and a scalar child with `save`.
-const EXTEND: &str = r#"
+const CHILDREN_SOURCE: &str = r#"
 import "payroll.mox";
 
 application Payroll {
@@ -2223,8 +2223,8 @@ application Payroll {
 "#;
 
 #[test]
-fn extend_blocks_parse_with_child_operations() {
-    let result = parse_ddd(EXTEND);
+fn children_blocks_parse_with_child_operations() {
+    let result = parse_ddd(CHILDREN_SOURCE);
     assert!(
         result.errors.is_empty(),
         "unexpected errors: {:?}",
@@ -2252,7 +2252,7 @@ fn extend_blocks_parse_with_child_operations() {
     assert!(remove.is_protected);
     assert_eq!(remove.action.text, "remove");
     assert_eq!(
-        span_text(EXTEND, remove.condition.expect("the guard")),
+        span_text(CHILDREN_SOURCE, remove.condition.expect("the guard")),
         "(lineId != \"\")"
     );
 
@@ -2280,14 +2280,61 @@ fn children_formats_canonically_and_is_idempotent() {
         "    }\n",
         "}\n",
     );
-    let formatted = fmt_ddd(EXTEND);
-    assert_eq!(formatted, canonical, "extend layout drifted");
+    let formatted = fmt_ddd(CHILDREN_SOURCE);
+    assert_eq!(formatted, canonical, "children layout drifted");
     assert_eq!(fmt_ddd(&formatted), formatted, "formatting is a fixpoint");
     assert_eq!(
         parse_ddd(&formatted).errors.len(),
         0,
         "the canonical form parses"
     );
+}
+
+/// The 0.4 `extend` spelling (DF4, issue pherolang#327): removed from the
+/// grammar in 0.5 — a parse error, never a warning.
+const EXTEND_ALIAS_SOURCE: &str = r#"
+import "payroll.mox";
+
+application Payroll {
+
+    base nz.example.payroll
+
+    module payroll {
+        entity PayRun repository PayRunRepository {
+            findById;
+        }
+        extend PayRun {
+            boolean addLine(PayRunLineDraft line) => lines.add;
+        }
+    }
+}
+"#;
+
+#[test]
+fn the_extend_alias_is_a_parse_error() {
+    let result = parse_ddd(EXTEND_ALIAS_SOURCE);
+    assert!(
+        !result.errors.is_empty(),
+        "`extend` must fail to parse in 0.5 (DF4): {:?}",
+        result.errors
+    );
+}
+
+#[test]
+fn fmt_still_migrates_the_extend_alias() {
+    // The token-level rewrite survives the grammar removal: `pherolang fmt`
+    // is the mechanical migration path for 0.4 sources.
+    let formatted = fmt_ddd(EXTEND_ALIAS_SOURCE);
+    assert!(
+        !formatted.contains("extend"),
+        "the alias must be rewritten: {formatted}"
+    );
+    assert_eq!(
+        parse_ddd(&formatted).errors.len(),
+        0,
+        "the migrated source parses"
+    );
+    assert_eq!(fmt_ddd(&formatted), formatted, "formatting is a fixpoint");
 }
 
 #[test]
@@ -2319,8 +2366,9 @@ application Payroll {
 }
 
 #[test]
-fn extend_remains_a_contextual_identifier() {
-    // `extend` is an ordinary name everywhere but module-member position.
+fn extend_is_an_ordinary_identifier() {
+    // Since 0.5 `extend` is special nowhere (the 0.4 alias is gone), so a
+    // design may even be named `extend`.
     let source = r#"
 application Payroll {
     module payroll {
@@ -2342,7 +2390,7 @@ application Payroll {
 }
 
 #[test]
-fn a_junk_child_operation_recovers_within_the_extend_block() {
+fn a_junk_child_operation_recovers_within_the_children_block() {
     let source = r#"
 import "payroll.mox"
 

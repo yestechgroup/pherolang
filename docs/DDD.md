@@ -86,8 +86,7 @@ docs):
   artifact that does not declare them — body-less and machine-less models
   stay byte-identical, `DDD_MODEL_FORMAT_VERSION` stays 2. The pherolang#179
   additions follow the same discipline: a design's `childOperations`
-  (ordinary `ServiceOperation` rows declared by `children` blocks, the
-  deprecated `extend` alias included) and an
+  (ordinary `ServiceOperation` rows declared by `children` blocks) and an
   operation's `childScope` (`ChildRef { feature, class, action }` — the
   root's child feature, the child class's full name, the `Delegation.target`
   convention, and the validated action `"add" | "remove" | "save"`) appear
@@ -218,7 +217,7 @@ keyword authority the parser and the formatter share.
 Lexical and structural rules:
 
 - Every `.ddd` word (`application`, `base`, `module`, `service`, `children`,
-  `extend` (deprecated), `root`, `aggregate`, `invariant`, `inject`,
+  `root`, `aggregate`, `invariant`, `inject`,
   `entity`, `value`, `dto`, `abstract`, the flags, `repository`,
   and the built-in operation names) is a **contextual identifier**, not a
   keyword: it is special only in the grammar position it is parsed in,
@@ -312,8 +311,9 @@ Lexical and structural rules:
   module-level `children <Class> { ... }` block declares operations that act
   on the aggregate root's contained children (the root-side counterpart of
   a child aggregate's own lifecycle). The block was named `extend` before
-  DD4; that spelling is a deprecated alias (warning `E0387`, deprecated in
-  0.4 and removed in 0.5) and the formatter rewrites it to `children`:
+  DD4; that alias was removed from the grammar in 0.5 (DF4, issue
+  [#327](https://github.com/yestechgroup/pherolang/issues/327)) — it is a
+  parse error, and `pherolang fmt` rewrites it to `children`:
 
   ```
   children PayRun {
@@ -962,9 +962,9 @@ classes, nor the DTO member typing, which reads the source class.
     exist on the target class (the `extends` chain included) and be a
     containment or cross reference (`E0355`); the action must be one of
     `add`, `remove`, `save` (`E0357`), with `add`/`remove` requiring a
-    many-valued feature (`E0356`). The deprecated `extend` block spelling
-    parses to the same declaration: it emits warning `E0387` (deprecated in
-    0.4, removed in 0.5) and the formatter rewrites it to `children`. A child
+    many-valued feature (`E0356`). The pre-0.5 `extend` block spelling is
+    gone from the grammar (DF4): it is a parse error in 0.5, and
+    `pherolang fmt` rewrites it to `children`. A child
     operation's `when` guard is
     typed with the operation's declared parameters in scope **and** the
     child feature's target class as `self` — `line.quantity` reads a
@@ -1541,9 +1541,9 @@ decided the boundary or `"derived"` when containment did. A root omits
 `aggregate`, and non-entity designs carry neither key.
 
 **Children.** The root-side child operations are declared with
-`children <Root> { ... }` (rule 23); the pre-DD4 `extend` spelling is a
-deprecated alias (`E0387`, deprecated in 0.4 and removed in 0.5) that the
-formatter rewrites to `children`.
+`children <Root> { ... }` (rule 23); the pre-DD4 `extend` spelling was
+removed from the grammar in 0.5 (DF4) — `pherolang fmt` rewrites it to
+`children`.
 
 ## Domain operations vs service operations
 
@@ -1578,8 +1578,7 @@ contained child through the root — no outside cross reference to a
 non-root member (rule 13) is needed. The child's own behavior stays a
 domain `op` on the child class; the `children` operation is the root-owned
 entry point over it, and the aggregate boundary stays intact. The pre-DD4
-`extend` spelling is a deprecated alias (`E0387`, deprecated in 0.4 and
-removed in 0.5).
+`extend` spelling was removed from the grammar in 0.5 (DF4).
 
 ## The lowering contract (issue #143)
 
@@ -1808,7 +1807,7 @@ pherolang artifact check library.ddd.json \
   <Root>` boundary stays on its header line, and each invariant sits on its
   own line one indent deeper, before the repository/machine block, with its
   expression re-emitted verbatim. A `children <Class>` header
-  expands like a service/design header — the deprecated `extend` spelling is
+  expands like a service/design header — the 0.4 `extend` spelling is
   rewritten to `children` — and each child operation is one
   canonical line — `boolean addLine(PayRunLineDraft line) => lines.add;`,
   with an optional leading `protected` and the trailing `when (...)` in
@@ -1841,7 +1840,7 @@ rationale for each divergence is in [Deliberate divergences](#deliberate-diverge
 | `scaffold` / `auditable` / `optimisticLocking` / `cache` | design flags (entity-only where noted; `auditable`/`optimisticLocking` default on for entities, `!flag` opts out) | `!immutable` is absent (D3) — not an opt-out but a refused spelling; there is no `!aggregateRoot` flag — the boundary is authored with `root`/`aggregate <Root>` or derived (DD4); the artifact stores the effective flag values, never the raw spelling |
 | `belongsTo` / `!aggregateRoot` | authored with `root` / `aggregate <Root>`, or derived from the domain model's containment graph (see [aggregate derivation](#aggregate-derivation)) | both authorable and derived (DD4): an authored clause wins over the derivation; an unknown verdict warns `E0385` and the artifact carries no `isAggregateRoot` |
 | Module | `module` label grouping services and designs; an application may span a root file and its imported fragments (DD8) | a root owns the application name, `base`, and application-scoped errors; fragments contribute modules only (they may reopen a module); the module is a design label, not a deployment boundary, and duplicate members stay application-wide errors |
-| child-scoped aggregate operations | `children <Root> { ... }` block (issue [#179](https://github.com/yestechgroup/pherolang/issues/179)) | not class inheritance; the pre-DD4 `extend` spelling parses as a deprecated alias (`E0387`, deprecated in 0.4, removed in 0.5) and formats to `children` |
+| child-scoped aggregate operations | `children <Root> { ... }` block (issue [#179](https://github.com/yestechgroup/pherolang/issues/179)) | not class inheritance; the pre-DD4 `extend` spelling was removed from the grammar in 0.5 (DF4) and formats to `children` |
 | DTO | `dto` design in three forms: mirror (`dto User`), projection (`dto BookSummary from Book { ... }`), standalone (`dto CreateBookRequest { ... }`) | real parity, shaped differently: a projection selects (`name;`), renames a path (`name = path;`), or derives (`name = expr;`, source class as `self`); no identity, aggregate membership, repository, machine, invariants, or behavior; `input`/`output` is derived from the member set, and an output boundary is not a parameter; a standalone DTO has no domain class |
 | `findByQuery` / `findByCondition` finders | declared repository **query** operations: `where` (typed predicate over the designed class + parameters), `sort` (direct stored scalar features with direction), `page` (`limit`/`max`/`cursor`), optional `capability` (DD9, issue [#306](https://github.com/yestechgroup/pherolang/issues/306)) | declarative and typed, not a string query language: no `ConditionalCriteriaBuilder`, no generated properties class, no dynamic ordering from user input, no joins/aggregations (project into a DTO instead); the consumer lowers the typed predicate to its store and never interpolates parameter values |
 | full-text search | `search` projection (intent only: text fields with boosts, filters, sorts, ranking, pagination, document projections) — the backend chooses the engine (Postgres FTS, Tantivy, OpenSearch, ...) | a search is not a structured query: no query language and no engine-specific ordering; the engine is the consumer's choice |

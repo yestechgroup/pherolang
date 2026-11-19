@@ -329,21 +329,19 @@ pub fn is_prelude_error(name: &str) -> bool {
     PRELUDE_ERRORS.iter().any(|(prelude, _)| *prelude == name)
 }
 
-/// A module-level `extend <Class> { ... }` block (issue pherolang#179):
+/// A module-level `children <Class> { ... }` block (issue pherolang#179):
 /// child-scoped operations over an aggregate root's contained children —
 /// `boolean addLine(PayRunLineDraft line) => lines.add;` means "reach the
 /// `lines` child collection through the root and `add` to it". A class may
 /// carry several blocks; the driver merges them in source order onto the
-/// class's design.
+/// class's design. (The 0.4 `extend` alias is gone from the grammar in 0.5 —
+/// DF4, issue pherolang#327; the formatter rewrites it.)
 #[derive(Debug, Clone, PartialEq)]
 pub struct DddExtend {
     /// The aggregate-root class being extended.
     pub class: Name,
     /// The child operations in source order.
     pub operations: Vec<DddChildOp>,
-    /// `true` when the deprecated `extend` spelling was written; the driver
-    /// warns and the formatter rewrites it to `children` (DD4).
-    pub deprecated: bool,
     /// Span of the whole block, the block keyword included.
     pub span: Span,
 }

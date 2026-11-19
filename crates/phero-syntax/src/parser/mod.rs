@@ -448,10 +448,9 @@
 //!   vocabulary the driver validates against the feature's multiplicity).
 //!   Blocks may repeat for one class and merge in source order; the target
 //!   must be an effective aggregate root designed in the same module (the
-//!   driver's `E0358`). The deprecated `extend` spelling parses as an alias
-//!   of `children` (deprecated in 0.4, removed in 0.5 — DF4); the driver
-//!   warns E0387 and the formatter rewrites it, so `pherolang fmt` is the
-//!   migration path before the alias graduates to an error. A
+//!   driver's `E0358`). The 0.4 `extend` alias was removed from the grammar
+//!   in 0.5 (DF4, issue pherolang#327); `pherolang fmt` still rewrites it,
+//!   which is the mechanical migration path for 0.4 sources. A
 //!   `child_op`'s `when` guard types against the operation's
 //!   parameters and the child feature's target class as `self`.
 //! * Executable operation bodies (issue pherolang#178) are the `statement_body`

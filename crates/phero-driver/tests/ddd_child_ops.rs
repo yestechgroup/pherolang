@@ -1,5 +1,5 @@
 //! Child-scoped aggregate operations (issue pherolang#179): a module-level
-//! `extend <Class> { ... }` block declares root-side operations that act on
+//! `children <Class> { ... }` block declares root-side operations that act on
 //! the aggregate's contained children — `boolean addLine(PayRunLineDraft
 //! line) => lines.add;` meaning "reach the `lines` child collection through
 //! the root and `add` to it".
@@ -9,14 +9,14 @@
 //! `childScope` naming the child feature and its resolved class), and the
 //! driver validates:
 //!
-//! - the extend target resolves to a class with an entity design in the
+//! - the `children` target resolves to a class with an entity design in the
 //!   same module that is an aggregate root (a repository-bearing entity,
 //!   rule 6) — `E0358`;
 //! - the child feature exists on the target class and is a containment or
 //!   cross-reference — `E0355`;
 //! - the action is one of `add`, `remove`, `save` — `E0357`, with
 //!   `add`/`remove` requiring a many-valued feature — `E0356`;
-//! - child-operation names are unique per extend target, across every
+//! - child-operation names are unique per `children` target, across every
 //!   block (blocks merge in source order);
 //! - a `when` guard types against the op's declared parameters **and** the
 //!   child feature's target class as `self`.
@@ -125,7 +125,7 @@ const ROOT: &str = "\
 
 /// A `lines` collection child op block.
 const LINES_BLOCK: &str = "\
-        extend PayRun {\n\
+        children PayRun {\n\
             boolean addLine(PayRunLineDraft line) => lines.add;\n\
             boolean removeLine(String lineId) => lines.remove;\n\
             boolean saveLine(PayRunLineDraft line) => lines.save;\n\
@@ -134,10 +134,10 @@ const LINES_BLOCK: &str = "\
 // --- lowering ---------------------------------------------------------------
 
 #[test]
-fn extend_lowers_child_scope_signatures_and_condition() {
+fn children_lowers_child_scope_signatures_and_condition() {
     let design = payroll(&format!(
         "{ROOT}\
-         \x20       extend PayRun {{\n\
+         \x20       children PayRun {{\n\
          \x20           boolean addLine(PayRunLineDraft line) => lines.add;\n\
          \x20           boolean removeLine(String lineId) => lines.remove;\n\
          \x20           boolean saveLine(PayRunLineDraft line) => lines.save when (line.quantity > 0);\n\
@@ -214,13 +214,13 @@ fn extend_lowers_child_scope_signatures_and_condition() {
 }
 
 #[test]
-fn multiple_extend_blocks_for_one_class_merge_in_source_order() {
+fn multiple_children_blocks_for_one_class_merge_in_source_order() {
     let design = payroll(&format!(
         "{ROOT}\
-         \x20       extend PayRun {{\n\
+         \x20       children PayRun {{\n\
          \x20           boolean addLine(PayRunLineDraft line) => lines.add;\n\
          \x20       }}\n\
-         \x20       extend PayRun {{\n\
+         \x20       children PayRun {{\n\
          \x20           boolean removeLine(String lineId) => lines.remove;\n\
          \x20       }}\n"
     ));
@@ -238,7 +238,7 @@ fn multiple_extend_blocks_for_one_class_merge_in_source_order() {
 fn a_protected_child_operation_lowers_protected() {
     let design = payroll(&format!(
         "{ROOT}\
-         \x20       extend PayRun {{\n\
+         \x20       children PayRun {{\n\
          \x20           protected boolean addLine(PayRunLineDraft line) => lines.add;\n\
          \x20       }}\n"
     ));
@@ -251,7 +251,7 @@ fn a_child_operation_signature_typechecks_against_the_domain() {
     assert_error(
         &payroll(&format!(
             "{ROOT}\
-             \x20       extend PayRun {{\n\
+             \x20       children PayRun {{\n\
              \x20           boolean addLine(Mystery line) => lines.add;\n\
              \x20       }}\n"
         )),
@@ -267,7 +267,7 @@ fn child_when_binds_operation_params_and_the_child_as_self() {
     // resolves on the child class (the op's `self`), not the root.
     assert_clean(&payroll(&format!(
         "{ROOT}\
-         \x20       extend PayRun {{\n\
+         \x20       children PayRun {{\n\
          \x20           boolean saveLine(PayRunLineDraft line) => lines.save when (line.quantity > 0 && unitCost > 0);\n\
          \x20       }}\n"
     )));
@@ -278,7 +278,7 @@ fn child_when_rejects_a_non_boolean_guard() {
     assert_error(
         &payroll(&format!(
             "{ROOT}\
-             \x20       extend PayRun {{\n\
+             \x20       children PayRun {{\n\
              \x20           boolean saveLine(PayRunLineDraft line) => lines.save when (line.quantity);\n\
              \x20       }}\n"
         )),
@@ -293,7 +293,7 @@ fn child_when_scopes_the_root_out_of_self() {
     assert_error(
         &payroll(&format!(
             "{ROOT}\
-             \x20       extend PayRun {{\n\
+             \x20       children PayRun {{\n\
              \x20           boolean addLine(PayRunLineDraft line) => lines.add when (total > 0);\n\
              \x20       }}\n"
         )),
@@ -308,7 +308,7 @@ fn unknown_child_feature_is_e0355() {
     assert_error(
         &payroll(&format!(
             "{ROOT}\
-             \x20       extend PayRun {{\n\
+             \x20       children PayRun {{\n\
              \x20           boolean addWidget(String id) => widgets.add;\n\
              \x20       }}\n"
         )),
@@ -323,7 +323,7 @@ fn a_non_child_feature_is_e0355() {
     assert_error(
         &payroll(&format!(
             "{ROOT}\
-             \x20       extend PayRun {{\n\
+             \x20       children PayRun {{\n\
              \x20           boolean bump(String id) => total.add;\n\
              \x20       }}\n"
         )),
@@ -336,20 +336,20 @@ fn add_and_remove_require_a_collection_e0356() {
     assert_error(
         &payroll(&format!(
             "{ROOT}\
-             \x20       extend PayRun {{\n\
+             \x20       children PayRun {{\n\
              \x20           boolean addNote(String text) => note.add;\n\
              \x20       }}\n"
         )),
-        "E0356 child operation 'addNote' in extend 'PayRun': action 'add' requires a collection",
+        "E0356 child operation 'addNote' in children 'PayRun': action 'add' requires a collection",
     );
     assert_error(
         &payroll(&format!(
             "{ROOT}\
-             \x20       extend PayRun {{\n\
+             \x20       children PayRun {{\n\
              \x20           boolean removeNote(String id) => note.remove;\n\
              \x20       }}\n"
         )),
-        "E0356 child operation 'removeNote' in extend 'PayRun': action 'remove' requires a collection",
+        "E0356 child operation 'removeNote' in children 'PayRun': action 'remove' requires a collection",
     );
 }
 
@@ -357,7 +357,7 @@ fn add_and_remove_require_a_collection_e0356() {
 fn save_is_legal_for_a_scalar_child() {
     assert_clean(&payroll(&format!(
         "{ROOT}\
-         \x20       extend PayRun {{\n\
+         \x20       children PayRun {{\n\
          \x20           boolean updateNote(String text) => note.save;\n\
          \x20       }}\n"
     )));
@@ -368,7 +368,7 @@ fn unknown_child_action_is_e0357() {
     assert_error(
         &payroll(&format!(
             "{ROOT}\
-             \x20       extend PayRun {{\n\
+             \x20       children PayRun {{\n\
              \x20           boolean clearLines() => lines.clear;\n\
              \x20       }}\n"
         )),
@@ -381,74 +381,74 @@ fn duplicate_child_operation_names_are_refused() {
     assert_error(
         &payroll(&format!(
             "{ROOT}\
-             \x20       extend PayRun {{\n\
+             \x20       children PayRun {{\n\
              \x20           boolean addLine(PayRunLineDraft line) => lines.add;\n\
              \x20       }}\n\
-             \x20       extend PayRun {{\n\
+             \x20       children PayRun {{\n\
              \x20           boolean addLine(PayRunLineDraft line) => lines.save;\n\
              \x20       }}\n"
         )),
-        "duplicate child operation 'addLine' in extend 'PayRun'",
+        "duplicate child operation 'addLine' in children 'PayRun'",
     );
 }
 
-// --- extend target validation ----------------------------------------------
+// --- `children` target validation -------------------------------------------
 
 #[test]
-fn unknown_extend_target_is_e0358() {
+fn unknown_children_target_is_e0358() {
     assert_error(
         &payroll(&format!(
             "{ROOT}\
-             \x20       extend Mystery {{\n\
+             \x20       children Mystery {{\n\
              \x20           boolean addLine(PayRunLineDraft line) => lines.add;\n\
              \x20       }}\n"
         )),
-        "E0358 unknown extend target 'Mystery'",
+        "E0358 unknown children target 'Mystery'",
     );
 }
 
 #[test]
-fn extend_target_without_a_design_is_e0358() {
+fn children_target_without_a_design_is_e0358() {
     assert_error(
         &payroll(&format!(
             "{ROOT}\
-             \x20       extend PayRunLine {{\n\
+             \x20       children PayRunLine {{\n\
              \x20           boolean rename(String name) => payRun.save;\n\
              \x20       }}\n"
         )),
-        "E0358 extend target 'PayRunLine' has no design in module 'payroll'",
+        "E0358 children target 'PayRunLine' has no design in module 'payroll'",
     );
 }
 
 #[test]
-fn extend_target_that_is_not_an_aggregate_root_is_e0358() {
+fn children_target_that_is_not_an_aggregate_root_is_e0358() {
     // The child is designed as an entity but carries no repository, so it
     // is not an aggregate root.
     assert_error(
         &payroll(&format!(
             "{ROOT}\
              \x20       entity PayRunLine\n\
-             \x20       extend PayRunLine {{\n\
+             \x20       children PayRunLine {{\n\
              \x20           boolean rename(String name) => payRun.save;\n\
              \x20       }}\n"
         )),
-        "E0358 extend target 'PayRunLine' is not an aggregate root",
+        "E0358 children target 'PayRunLine' is not an aggregate root",
     );
     // A value design is never a root either.
     assert_error(
         &payroll(&format!(
             "{ROOT}\
              \x20       value PayRunNote\n\
-             \x20       extend PayRunNote {{\n\
+             \x20       children PayRunNote {{\n\
              \x20           boolean rewrite(String text) => payRun.save;\n\
              \x20       }}\n"
         )),
-        "E0358 extend target 'PayRunNote' is not an aggregate root",
+        "E0358 children target 'PayRunNote' is not an aggregate root",
     );
 }
 
 #[test]
-fn extend_target_in_another_module_is_e0358() {
+fn children_target_in_another_module_is_e0358() {
     let design = "import \"childops.mox\";\n\n\
          application Payroll {\n\
          \x20   base nz.example.payroll\n\
@@ -458,14 +458,14 @@ fn extend_target_in_another_module_is_e0358() {
          \x20       }\n\
          \x20   }\n\
          \x20   module other {\n\
-         \x20       extend PayRun {\n\
+         \x20       children PayRun {\n\
          \x20           boolean addLine(PayRunLineDraft line) => lines.add;\n\
          \x20       }\n\
          \x20   }\n\
          }\n";
     assert_error(
         design,
-        "E0358 extend target 'PayRun' has no design in module 'other'",
+        "E0358 children target 'PayRun' has no design in module 'other'",
     );
 }
 
@@ -474,7 +474,7 @@ fn extend_target_in_another_module_is_e0358() {
 #[test]
 fn a_standalone_repository_on_a_contained_child_is_still_refused() {
     // Rule 6 is untouched: designing the contained child with its own
-    // repository stays an error even though `extend` is in play.
+    // repository stays an error even though `children` blocks are in play.
     assert_error(
         &payroll(&format!(
             "{ROOT}\

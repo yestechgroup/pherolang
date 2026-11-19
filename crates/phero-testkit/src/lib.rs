@@ -114,7 +114,7 @@ pub mod fixtures {
     pub const PAYRUN_DDD: &str = "tests/conformance/ddd/payrun.ddd";
     /// The `payrun` design's domain.
     pub const PAYRUN_MOX: &str = "tests/conformance/ddd/payrun.mox";
-    /// The design fixture with module-level `extend` child operations.
+    /// The design fixture with module-level `children` child operations.
     pub const CHILDOPS_DDD: &str = "tests/conformance/ddd/childops.ddd";
     /// The `childops` design's domain.
     pub const CHILDOPS_MOX: &str = "tests/conformance/ddd/childops.mox";

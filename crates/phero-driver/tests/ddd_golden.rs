@@ -36,7 +36,7 @@ const TIMESHEET_DESIGN_PATH: &str = "tests/conformance/ddd/timesheet.ddd";
 const TIMESHEET_DOMAIN_PATH: &str = "tests/conformance/ddd/timesheet.mox";
 const TIMESHEET_ARTIFACT_PATH: &str = "tests/conformance/ddd/timesheet.ddd.json";
 
-/// The pherolang#179 fixture: module-level `extend PayRun` child operations
+/// The pherolang#179 fixture: module-level `children PayRun` child operations
 /// over the aggregate's contained collection/scalar children; its golden
 /// carries `childOperations` and each operation's `childScope`.
 const CHILDOPS_DESIGN_PATH: &str = "tests/conformance/ddd/childops.ddd";
@@ -170,7 +170,7 @@ fn conformance_timesheet_matches_golden_artifact() {
     assert_golden_artifact(model, TIMESHEET_ARTIFACT_PATH, TIMESHEET_DESIGN_PATH);
 }
 
-/// The pherolang#179 child-operation fixture: the `extend PayRun` blocks lower
+/// The pherolang#179 child-operation fixture: the `children PayRun` blocks lower
 /// onto the root's design as `childOperations`, each naming the child
 /// feature and its resolved class; ordinary service operations stay
 /// untouched.

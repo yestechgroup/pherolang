@@ -2366,16 +2366,16 @@ pub(crate) fn junk_ddd_child_op<'src>(
 }
 
 /// A module-level `children <Class> { ... }` block of child operations
-/// (issue pherolang#179; renamed by DD4, issue pherolang#301). The block
-/// keyword may also be the deprecated `extend` alias, which the driver warns
-/// about and the formatter rewrites. The body is a run of [`ddd_child_op`]s
-/// (with junk recovery between them); the driver validates the target (an
-/// entity design with a repository in the same module) and each operation.
+/// (issue pherolang#179; renamed by DD4, issue pherolang#301). The body is a
+/// run of [`ddd_child_op`]s (with junk recovery between them); the driver
+/// validates the target (an entity design with a repository in the same
+/// module) and each operation. The 0.4 `extend` alias was removed from the
+/// grammar in 0.5 (DF4, issue pherolang#327): `pherolang fmt` is the
+/// mechanical migration path.
 pub(crate) fn ddd_extend_decl<'src>(
 ) -> impl Parser<'src, Tokens<'src>, DddExtend, MoxExtra<'src>> + Clone {
     select! {
-        Token::Ident(text) = e
-            if text == ddd::CHILDREN || text == ddd::EXTEND => (e.span(), text == ddd::EXTEND)
+        Token::Ident(text) = e if text == ddd::CHILDREN => e.span()
     }
     .then(name())
     .then_ignore(kw(Token::LBrace))
@@ -2387,14 +2387,11 @@ pub(crate) fn ddd_extend_decl<'src>(
             .collect::<Vec<_>>(),
     )
     .then_ignore(kw(Token::RBrace))
-    .map_with(
-        |(((_keyword_span, deprecated), class), operations), e| DddExtend {
-            class,
-            operations: operations.into_iter().flatten().collect(),
-            deprecated,
-            span: e.span(),
-        },
-    )
+    .map_with(|((_, class), operations), e| DddExtend {
+        class,
+        operations: operations.into_iter().flatten().collect(),
+        span: e.span(),
+    })
 }
 
 /// One member of a `module` body.
@@ -2759,7 +2756,7 @@ pub fn parse_ddd(source: &str) -> DddParseResult {
                     message: error.to_string(),
                     span: error.span,
                 }],
-            }
+            };
         }
     };
     let (mut ast, errors) = ddd_file().parse(Tokens::new(&tokens)).into_output_errors();

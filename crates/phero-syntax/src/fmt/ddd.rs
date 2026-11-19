@@ -830,21 +830,23 @@ impl<'src> Formatter<'src> {
         self.scan_body(BodyKind::DddSearch);
     }
 
-    /// Consumes and emits one module-level `extend <Class> { ... }` block
+    /// Consumes and emits one module-level `children <Class> { ... }` block
     /// (issue pherolang#179). The header expands like the `service`/design
     /// headers; each child operation is one canonical line
     /// (`op signature => feature.action when (...) ;`, the service-op
     /// layout).
     pub(crate) fn scan_ddd_extend(&mut self) {
-        // The deprecated `extend` spelling is rewritten to the canonical
-        // `children` (DD4); both consume the same body.
+        // The 0.4 `extend` alias is rewritten to the canonical `children`
+        // (DD4); it was removed from the grammar in 0.5 (DF4), so this
+        // rewrite is the mechanical migration path — a `children` header
+        // re-emits as written. Both consume the same body.
         self.bump_token();
         self.push_text(ddd::CHILDREN, false);
         self.take_name();
         self.scan_body(BodyKind::DddExtend);
     }
 
-    /// One child operation of an `extend` body:
+    /// One child operation of a `children` body:
     /// `protected? type_ref multiplicity? name(params) "=>"
     /// feature.action when? ";"` — the declared-service-operation layout
     /// followed by the dotted child target.

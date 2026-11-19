@@ -118,6 +118,16 @@ fn entries_are_internally_consistent() {
 }
 
 #[test]
+fn retired_codes_are_unknown() {
+    // E0387 was `E_DEPRECATED_EXTEND`, the `extend`-alias deprecation
+    // warning. The alias was removed from the grammar in 0.5 (DF4, issue
+    // pherolang#359, #327), so the code burned with it: lookup reports an
+    // unknown code and the number is reserved against reuse
+    // (`crates/phero-diagnostics/src/ddd.rs`).
+    assert!(lookup("E0387").is_none());
+}
+
+#[test]
 fn docs_file_matches_the_registry() {
     let rendered = render_markdown();
     let path = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../docs/DIAGNOSTICS.md");
