@@ -150,6 +150,7 @@ const EXAMPLES: &[(&str, &str)] = &[
     ("uc", "support.uc"),
     ("cmmn", "support.cmmn"),
     ("dmn", "support.dmn"),
+    ("intent", "support.intent"),
 ];
 
 fn golden_dir() -> PathBuf {
