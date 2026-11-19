@@ -191,12 +191,11 @@ compilation_struct!(
 /// their links **as authored** — link names are resolved by the
 /// project-level coverage pass, never by the compile.
 ///
-/// This compilation is hand-written (not the
-/// [`compilation_struct`](crate::compilation::compilation_struct) shape)
-/// because it carries one extra, deliberately unserialized table: the
-/// span sites the coverage pass renders spanned diagnostics from (the
-/// `.ifml` auth-sites discipline — spans live beside the artifact, never
-/// in the wire).
+/// This compilation is hand-written instead of the
+/// `compilation_struct!` macro shape because it carries one extra,
+/// deliberately unserialized table: the span sites the coverage pass
+/// renders spanned diagnostics from (the `.ifml` auth-sites discipline —
+/// spans live beside the artifact, never in the wire).
 ///
 /// Diagnostics come from every file involved (the `.intent` file, its
 /// imported domains), so each is tagged with its path; group or render

@@ -61,7 +61,10 @@ fn multi_segment_and_multi_digit_ids_survive_lexing_exactly() {
     let source = "import \"a.mox\"\n\nintent REFUND-DESK-007 \"x\" {\n    element class:A;\n}\n";
     let file = parse_ok(source);
     assert_eq!(file.intents[0].id.text, "REFUND-DESK-007");
-    assert_eq!(span_text(source, file.intents[0].id.span), "REFUND-DESK-007");
+    assert_eq!(
+        span_text(source, file.intents[0].id.span),
+        "REFUND-DESK-007"
+    );
 }
 
 #[test]
@@ -97,9 +100,8 @@ fn kind_words_that_are_keywords_parse_as_names() {
 
 #[test]
 fn imports_after_the_first_intent_are_a_syntax_error() {
-    let result = parse_intents(
-        "intent LOAN-001 \"x\" {\n    element class:A;\n}\n\nimport \"a.mox\"\n",
-    );
+    let result =
+        parse_intents("intent LOAN-001 \"x\" {\n    element class:A;\n}\n\nimport \"a.mox\"\n");
     assert!(!result.errors.is_empty(), "an `import` after an intent");
 }
 
@@ -126,6 +128,14 @@ fn intents_format_canonically_and_are_idempotent() {
     );
     let formatted = format_intents(messy).expect("format");
     assert_eq!(formatted, canonical, "canonical layout drifted");
-    assert_eq!(format_intents(&formatted).expect("format"), formatted, "formatting is a fixpoint");
-    assert_eq!(parse_intents(&formatted).errors.len(), 0, "the canonical form parses");
+    assert_eq!(
+        format_intents(&formatted).expect("format"),
+        formatted,
+        "formatting is a fixpoint"
+    );
+    assert_eq!(
+        parse_intents(&formatted).errors.len(),
+        0,
+        "the canonical form parses"
+    );
 }

@@ -65,11 +65,11 @@ pub use project::{
 pub use phero_syntax::Span;
 
 mod compilation;
-mod entry;
 pub mod coverage;
-pub(crate) mod intents;
+mod entry;
 pub(crate) mod imports;
 pub(crate) mod inputs;
+pub(crate) mod intents;
 mod session;
 mod union;
 
@@ -78,7 +78,6 @@ pub use compilation::{
     DmnCompilation, EventCompilation, IntentCompilation, MultiCompilation, UseCaseCompilation,
 };
 pub use ddd::domain_fingerprint;
-pub use intents::IntentLinkSite;
 pub use entry::ddd::DddFragment;
 pub use entry::{
     compile, compile_actors, compile_actors_str, compile_cmmn, compile_cmmn_str, compile_ddd,
@@ -87,6 +86,7 @@ pub use entry::{
     compile_usecase, compile_usecase_str, compile_with_imports,
 };
 pub use imports::{DomainImports, SchemaImports, SigilImports};
+pub use intents::IntentLinkSite;
 pub use session::{
     parse_actors_query, parse_cmmn_query, parse_ddd_query, parse_deploy_query, parse_dmn_query,
     parse_evt_query, parse_intent_query, parse_query, parse_usecase_query, Database,

@@ -39,7 +39,10 @@ fn compile_conformance() -> phero_driver::IntentCompilation {
     let source = std::fs::read_to_string(&absolute).expect("read conformance intent file");
     let domain_source =
         std::fs::read_to_string(fixture_path(DOMAIN_PATH)).expect("read the imported domain");
-    let domain = [(fixture_path(DOMAIN_PATH).display().to_string(), domain_source)];
+    let domain = [(
+        fixture_path(DOMAIN_PATH).display().to_string(),
+        domain_source,
+    )];
     compile_intent_str(
         absolute.to_str().expect("utf-8 path"),
         &source,
@@ -61,7 +64,11 @@ fn conformance_intent_file_matches_golden_artifact() {
         phero_ir::intents::INTENT_MODEL_FORMAT_VERSION
     );
     assert_eq!(
-        model.intents.iter().map(|i| i.id.as_str()).collect::<Vec<_>>(),
+        model
+            .intents
+            .iter()
+            .map(|i| i.id.as_str())
+            .collect::<Vec<_>>(),
         ["DELIVERY-001", "DELIVERY-002"]
     );
     let first = &model.intents[0];
@@ -70,7 +77,10 @@ fn conformance_intent_file_matches_golden_artifact() {
     // The qualified class spelling survives as authored (resolution is the
     // coverage pass's job, never the wire's).
     assert_eq!(first.elements[1].name, "nz.example.delivery.Recipient");
-    assert_eq!(first.elements[2].kind, phero_ir::intents::IntentLinkKind::Op);
+    assert_eq!(
+        first.elements[2].kind,
+        phero_ir::intents::IntentLinkKind::Op
+    );
     assert_eq!(first.checks[0].name, "DeliveryDrone");
     // The compile carries the span table beside the artifact (never
     // serialized): one site per link (4 + 2).
@@ -162,7 +172,8 @@ fn expect_diagnostic(compilation: &phero_driver::IntentCompilation, expected: &s
 
 #[test]
 fn an_unprovided_import_is_an_error() {
-    let source = "import \"nowhere.mox\"\n\nintent LOAN-001 \"x\" {\n    element class:Widget;\n}\n";
+    let source =
+        "import \"nowhere.mox\"\n\nintent LOAN-001 \"x\" {\n    element class:Widget;\n}\n";
     let compilation = compile(source);
     expect_diagnostic(
         &compilation,
@@ -179,7 +190,9 @@ fn a_malformed_id_is_e0450() {
     let matches: Vec<_> = compilation
         .diagnostics
         .iter()
-        .filter(|(path, diagnostic)| path == "bad.intent" && diagnostic.message.starts_with("E0450"))
+        .filter(|(path, diagnostic)| {
+            path == "bad.intent" && diagnostic.message.starts_with("E0450")
+        })
         .collect();
     assert_eq!(matches.len(), 1, "got {:?}", compilation.diagnostics);
 }

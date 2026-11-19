@@ -109,18 +109,20 @@ pub(crate) fn compile_intent_file(
     ast: Option<&dsl::IntentFile>,
     parse_diagnostics: &[Diagnostic],
     domains: &[DomainUnit],
-) -> (Option<IntentModel>, Vec<(String, Diagnostic)>, Vec<IntentLinkSite>) {
-    let imports = ast
-        .map(|file| file.imports.as_slice())
-        .unwrap_or_default();
+) -> (
+    Option<IntentModel>,
+    Vec<(String, Diagnostic)>,
+    Vec<IntentLinkSite>,
+) {
+    let imports = ast.map(|file| file.imports.as_slice()).unwrap_or_default();
 
     // Import hits against the one domains bucket (links are not imports).
     let hits: Vec<[bool; 1]> = imports
         .iter()
         .map(|import| {
-            [domains.iter().any(|unit| {
-                union::import_matches(&import.path, path, &unit.path)
-            })]
+            [domains
+                .iter()
+                .any(|unit| union::import_matches(&import.path, path, &unit.path))]
         })
         .collect();
     let import_diagnostics = engine_common::import_hit_diagnostics(
@@ -156,7 +158,9 @@ pub(crate) fn compile_intent_file(
                     ),
                     Some(decl.id.span),
                 )
-                .with_help("the id is the traceability key (#196): requirements and receipts key on it"),
+                .with_help(
+                    "the id is the traceability key (#196): requirements and receipts key on it",
+                ),
             );
             continue;
         }
@@ -217,13 +221,18 @@ pub(crate) fn compile_intent_file(
                         ),
                         Some(link.kind.span),
                     )
-                    .with_help(format!("the {} kinds are {}", slot_name(link.slot), allowed.join(", "))),
+                    .with_help(format!(
+                        "the {} kinds are {}",
+                        slot_name(link.slot),
+                        allowed.join(", ")
+                    )),
                 );
                 continue;
             };
-            if lowered_links.iter().any(|existing| {
-                existing.kind == kind && existing.name == link.name
-            }) {
+            if lowered_links
+                .iter()
+                .any(|existing| existing.kind == kind && existing.name == link.name)
+            {
                 local.push(
                     Diagnostic::error(
                         format!(
@@ -246,9 +255,8 @@ pub(crate) fn compile_intent_file(
             });
         }
 
-        let (elements, checks): (Vec<IntentLink>, Vec<IntentLink>) = lowered_links
-            .into_iter()
-            .partition(|link| {
+        let (elements, checks): (Vec<IntentLink>, Vec<IntentLink>) =
+            lowered_links.into_iter().partition(|link| {
                 matches!(
                     link.kind,
                     IntentLinkKind::Class
@@ -285,7 +293,11 @@ pub(crate) fn compile_intent_file(
         .chain(diags.iter().map(|(_, diagnostic)| diagnostic))
         .any(|diagnostic| diagnostic.severity == Severity::Error);
     let mut tagged = diags;
-    tagged.extend(local.into_iter().map(|diagnostic| (path.to_string(), diagnostic)));
+    tagged.extend(
+        local
+            .into_iter()
+            .map(|diagnostic| (path.to_string(), diagnostic)),
+    );
     let artifact = clean.then_some(model);
     (artifact, tagged, sites)
 }

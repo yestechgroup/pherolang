@@ -88,7 +88,11 @@ impl IntentModel {
     }
 }
 
-crate::wire::versioned_artifact!(IntentModel, INTENT_MODEL_FORMAT_VERSION, "the intent artifact");
+crate::wire::versioned_artifact!(
+    IntentModel,
+    INTENT_MODEL_FORMAT_VERSION,
+    "the intent artifact"
+);
 
 /// A declared intent (issue pherolang#196): one requirement statement with
 /// a stable id, the model elements that express it, and the checks that
@@ -164,10 +168,8 @@ impl IntentLinkKind {
     ];
 
     /// The check-slot kinds, in diagnostic-listing order.
-    pub const CHECK_KINDS: [IntentLinkKind; 2] = [
-        IntentLinkKind::Invariant,
-        IntentLinkKind::Decision,
-    ];
+    pub const CHECK_KINDS: [IntentLinkKind; 2] =
+        [IntentLinkKind::Invariant, IntentLinkKind::Decision];
 
     /// The tag as written on the authoring surface (`element class:Name`).
     pub const fn as_str(self) -> &'static str {

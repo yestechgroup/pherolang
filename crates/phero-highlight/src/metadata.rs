@@ -354,8 +354,9 @@ pub static INTENTS: SurfaceMetadata = SurfaceMetadata {
 };
 
 /// Every metadata entry, in [`Surface::ALL`] order.
-pub static ALL: [&SurfaceMetadata; 10] =
-    [&MOX, &IFML, &DDD, &ACTOR, &EVT, &DEPLOY, &UC, &CMMN, &DMN, &INTENTS];
+pub static ALL: [&SurfaceMetadata; 10] = [
+    &MOX, &IFML, &DDD, &ACTOR, &EVT, &DEPLOY, &UC, &CMMN, &DMN, &INTENTS,
+];
 
 /// The metadata entry for `surface`.
 #[must_use]

@@ -259,8 +259,7 @@ fn report_union_integrity(
         let mut domains = Vec::new();
         let mut decisions = Vec::new();
         let mut intents = Vec::new();
-        let mut intent_spans: BTreeMap<String, Vec<phero_driver::IntentLinkSite>> =
-            BTreeMap::new();
+        let mut intent_spans: BTreeMap<String, Vec<phero_driver::IntentLinkSite>> = BTreeMap::new();
         for &member in members {
             let contribution = &contributions[owners[member]];
             match &contribution.artifact {
@@ -289,8 +288,7 @@ fn report_union_integrity(
                 None => {}
             }
             if !contribution.intent_spans.is_empty() {
-                intent_spans
-                    .insert(contribution.path.clone(), contribution.intent_spans.clone());
+                intent_spans.insert(contribution.path.clone(), contribution.intent_spans.clone());
             }
         }
         if designs.is_empty()

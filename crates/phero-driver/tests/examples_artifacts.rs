@@ -354,10 +354,7 @@ fn the_support_example_has_full_intent_coverage() {
         dmn_path.to_str().expect("utf-8 dmn path"),
         &dmn_source,
         &phero_driver::CompileInputs::from_domains(&[(domain_path, domain_source)])
-            .with_events([(
-                "support.evt".to_string(),
-                compile_evt("support/support"),
-            )])
+            .with_events([("support.evt".to_string(), compile_evt("support/support"))])
             .with_tables(tables),
     );
     assert_clean("support.dmn (coverage inputs)", &dmn.diagnostics);

@@ -64,8 +64,8 @@ pub(crate) fn intent_link_decl<'src>(
 /// Consumes a run of tokens that cannot start or continue an intent body
 /// link, stopping before the body's closing `}` and before identifiers
 /// (which could begin the next link). Always consumes at least one token.
-pub(crate) fn junk_intent_link<'src>(
-) -> impl Parser<'src, Tokens<'src>, (), MoxExtra<'src>> + Clone {
+pub(crate) fn junk_intent_link<'src>() -> impl Parser<'src, Tokens<'src>, (), MoxExtra<'src>> + Clone
+{
     let first = select! { t if !matches!(t, Token::RBrace) => () };
     let rest = select! {
         t if !matches!(t, Token::RBrace | Token::Ident(_) | Token::IdentEscaped(_)) => ()
@@ -95,15 +95,13 @@ pub(crate) fn intent_decl<'src>(
                 .collect::<Vec<_>>(),
         )
         .then_ignore(kw(Token::RBrace))
-        .map_with(
-            |((id, (statement, statement_span)), links), e| IntentDecl {
-                id,
-                statement,
-                statement_span,
-                links: links.into_iter().flatten().collect(),
-                span: e.span(),
-            },
-        )
+        .map_with(|((id, (statement, statement_span)), links), e| IntentDecl {
+            id,
+            statement,
+            statement_span,
+            links: links.into_iter().flatten().collect(),
+            span: e.span(),
+        })
 }
 
 /// One stable-id spelling: `LOAN-001`. The lexer never sees a hyphen as one
@@ -138,8 +136,8 @@ pub(crate) fn intent_id<'src>() -> impl Parser<'src, Tokens<'src>, Name, MoxExtr
 /// contextual `intent` word (or end of input). File-level recovery for
 /// `.intent` files: always consumes at least one token (guaranteeing
 /// progress) and emits an error for the skipped region.
-pub(crate) fn junk_intent_file<'src>(
-) -> impl Parser<'src, Tokens<'src>, (), MoxExtra<'src>> + Clone {
+pub(crate) fn junk_intent_file<'src>() -> impl Parser<'src, Tokens<'src>, (), MoxExtra<'src>> + Clone
+{
     let rest = select! {
         t if !matches!(t, Token::Import | Token::Ident(intents::INTENT)) => ()
     };
@@ -233,7 +231,9 @@ pub fn parse_intents(source: &str) -> IntentsParseResult {
             }
         }
     };
-    let (mut ast, errors) = intent_file().parse(Tokens::new(&tokens)).into_output_errors();
+    let (mut ast, errors) = intent_file()
+        .parse(Tokens::new(&tokens))
+        .into_output_errors();
     // The intent ids' written text: the grammar parses the hyphen-separated
     // segments token-wise, so the verbatim source slice is the id's text
     // (leading zeros survive exactly).

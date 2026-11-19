@@ -30,17 +30,17 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 
+use phero_diagnostics::did_you_mean_adaptive;
 use phero_diagnostics::integrity::{
     X_AMBIGUOUS_INTENT_LINK, X_DUPLICATE_INTENT_ID, X_INTENT_WITHOUT_CHECK,
     X_INTENT_WITHOUT_ELEMENT, X_UNKNOWN_INTENT_CHECK, X_UNKNOWN_INTENT_ELEMENT,
 };
-use phero_diagnostics::did_you_mean_adaptive;
-use phero_ir::ActorModel;
 use phero_ir::ddd::DddModel;
 use phero_ir::dmn::DmnModel;
 use phero_ir::events::EventModel;
 use phero_ir::ifml::IfmlModel;
 use phero_ir::intents::{IntentLinkKind, IntentModel};
+use phero_ir::ActorModel;
 use phero_ir::{Model, TypeRef};
 
 use crate::diagnostic::Diagnostic;
@@ -136,11 +136,7 @@ impl Vocabulary {
                 for service in &module.services {
                     for operation in &service.operations {
                         let qualified = format!("{}.{}", service.name, operation.name);
-                        vocab.register_bare(
-                            IntentLinkKind::Op,
-                            &operation.name,
-                            qualified.clone(),
-                        );
+                        vocab.register_bare(IntentLinkKind::Op, &operation.name, qualified.clone());
                         vocab
                             .qualified
                             .get_mut(&IntentLinkKind::Op)
@@ -168,7 +164,11 @@ impl Vocabulary {
         }
         for (_, model) in decisions {
             for decision in &model.decisions {
-                vocab.register_bare(IntentLinkKind::Decision, &decision.name, decision.name.clone());
+                vocab.register_bare(
+                    IntentLinkKind::Decision,
+                    &decision.name,
+                    decision.name.clone(),
+                );
                 vocab.bare_names.insert(decision.name.clone());
             }
         }
@@ -241,14 +241,12 @@ pub fn check_coverage(
                         .iter()
                         .find(|(site_path, _)| site_path == path)
                         .and_then(|(site_path, _)| {
-                            spans
-                                .get(site_path)
-                                .and_then(|sites| {
-                                    sites
-                                        .iter()
-                                        .find(|site| site.intent == intent.id)
-                                        .map(|site| site.intent_span)
-                                })
+                            spans.get(site_path).and_then(|sites| {
+                                sites
+                                    .iter()
+                                    .find(|site| site.intent == intent.id)
+                                    .map(|site| site.intent_span)
+                            })
                         });
                     diagnostics.push((
                         path.clone(),
@@ -369,7 +367,10 @@ pub fn check_coverage(
             if resolved_checks == 0 {
                 local.push(
                     Diagnostic::warning(
-                        format!("{X_INTENT_WITHOUT_CHECK} intent '{}' maps to no check", intent.id),
+                        format!(
+                            "{X_INTENT_WITHOUT_CHECK} intent '{}' maps to no check",
+                            intent.id
+                        ),
                         file_sites.and_then(|sites| {
                             sites
                                 .iter()
@@ -384,7 +385,11 @@ pub fn check_coverage(
                 );
             }
         }
-        diagnostics.extend(local.into_iter().map(|diagnostic| (path.clone(), diagnostic)));
+        diagnostics.extend(
+            local
+                .into_iter()
+                .map(|diagnostic| (path.clone(), diagnostic)),
+        );
     }
     diagnostics
 }

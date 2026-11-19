@@ -8,9 +8,9 @@
 
 use std::collections::BTreeMap;
 
-use phero_driver::coverage::check_coverage;
 use phero_driver::compile_intent_str;
-use phero_ir::ddd::{Design, DddModel, Invariant, Module, Service, ServiceOperation, Stereotype};
+use phero_driver::coverage::check_coverage;
+use phero_ir::ddd::{DddModel, Design, Invariant, Module, Service, ServiceOperation, Stereotype};
 use phero_ir::dmn::{Decision, DmnModel};
 use phero_ir::intents::IntentModel;
 use phero_ir::{ClassDef, Model, Package, TypeRef};
@@ -79,11 +79,7 @@ fn decisions() -> Vec<(String, DmnModel)> {
 fn compile_intents(
     path: &str,
     source: &str,
-) -> (
-    String,
-    IntentModel,
-    Vec<phero_driver::IntentLinkSite>,
-) {
+) -> (String, IntentModel, Vec<phero_driver::IntentLinkSite>) {
     let domain = [(
         "domain.mox".to_string(),
         "package nz.example.shop\n\nclass Widget {}\n\nclass Gadget {}".to_string(),

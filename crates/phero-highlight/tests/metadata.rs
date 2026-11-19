@@ -66,9 +66,7 @@ fn metadata_order_is_the_compiler_order_and_deterministic() {
     }
     assert_eq!(
         Surface::ALL.map(Surface::id),
-        [
-            "mox", "ifml", "ddd", "actor", "evt", "deploy", "uc", "cmmn", "dmn", "intent"
-        ]
+        ["mox", "ifml", "ddd", "actor", "evt", "deploy", "uc", "cmmn", "dmn", "intent"]
     );
 }
 

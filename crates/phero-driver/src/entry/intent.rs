@@ -6,9 +6,9 @@ use salsa::Database as Db;
 use crate::compilation::IntentCompilation;
 use crate::entry::finish_surface;
 use crate::inputs::CompileInputs;
+use crate::intents;
 use crate::session::{parse_intent_query, Database, SourceFile};
 use crate::union::{domain_files, lower_domains};
-use crate::intents;
 
 /// Compiles a `.intent` file against its imported domain models to the
 /// standalone [`phero_ir::intents::IntentModel`] (memoized by salsa): parse
@@ -54,9 +54,14 @@ fn compile_intent_with(
         &parsed.diagnostics,
         &domains.domain_units,
     );
-    finish_surface(domains, model, diagnostics, |model, domains_model, diagnostics| {
-        IntentCompilation::assemble(model, domains_model, diagnostics, spans)
-    })
+    finish_surface(
+        domains,
+        model,
+        diagnostics,
+        |model, domains_model, diagnostics| {
+            IntentCompilation::assemble(model, domains_model, diagnostics, spans)
+        },
+    )
 }
 
 /// Compiles a `.intent` file against its imported domain models in one call.
