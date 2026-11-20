@@ -1,12 +1,12 @@
 //! The `driver.ddd` band: `E0350`–`E0449`, the phero-driver `.ddd` lifecycle
 //! and aggregate-operation checks (issues pherolang#176, pherolang#179, and
 //! pherolang#180 — the service-operation transition bindings, the
-//! child-scoped `extend` operations, and the `when`-condition scoping over
+//! child-scoped `children` operations, and the `when`-condition scoping over
 //! `crates/phero-driver/src/ddd/`). Every check prefixes its code onto the
 //! diagnostic message (`E0350 unknown transition trigger …`), the
 //! `dmn.check` band's E0250/E0251 precedent. E0350–E0352 are the
 //! transition-binding checks; E0353–E0354 are the condition-scope checks;
-//! E0355–E0358 are the `extend` child-operation checks; E0359–E0360 are the
+//! E0355–E0358 are the child-operation (`children` block) checks; E0359–E0360 are the
 //! executable operation-body checks (issue pherolang#178); E0361–E0364 are
 //! the strict value-semantics checks (issue pherolang#299: R-V1, R-V2, R-V3,
 //! and the `abstract value` rejection); E0365–E0372 are the DTO-shape checks
@@ -60,13 +60,13 @@ pub const E_UNKNOWN_CONDITION_PATH: &str = "E0353";
 /// spellings (`<EnumType>.<State>`, and lowerCamel(`<EnumType>`) for a
 /// field) resolve it.
 pub const E_AMBIGUOUS_MACHINE_SCOPE: &str = "E0354";
-/// `unknown child feature '<feature>' on '<class>'` — an `extend` block's
+/// `unknown child feature '<feature>' on '<class>'` — a `children` block's
 /// child operation names a feature the extended class does not carry (or
 /// one that is not a containment/reference, so it has no child aggregate
 /// to act on).
 pub const E_UNKNOWN_CHILD_FEATURE: &str = "E0355";
-/// `child operation '<op>' in extend '<class>': action '<action>' requires
-/// a collection` — `add` and `remove` operate on the elements of a
+/// `child operation '<op>' in children '<class>': action '<action>'
+/// requires a collection` — `add` and `remove` operate on the elements of a
 /// many-valued child feature; a single-valued containment takes only
 /// `save`.
 pub const E_CHILD_ACTION_NEEDS_COLLECTION: &str = "E0356";
@@ -74,8 +74,8 @@ pub const E_CHILD_ACTION_NEEDS_COLLECTION: &str = "E0356";
 /// child-operation action is one of the closed set `add`, `remove`,
 /// `save`.
 pub const E_UNKNOWN_CHILD_ACTION: &str = "E0357";
-/// `unknown extend target '<class>'` — the `extend` block's class has no
-/// entity design that is an aggregate root (a class declared in the
+/// `unknown children target '<class>'` — the `children` block's class has
+/// no entity design that is an aggregate root (a class declared in the
 /// imported domains, designed in the same module, with a repository).
 pub const E_UNKNOWN_EXTEND_TARGET: &str = "E0358";
 /// `unknown body receiver '<name>' on operation '<op>' of service
@@ -191,9 +191,10 @@ pub const E_AGGREGATE_BOUNDARY_UNKNOWN: &str = "E0385";
 /// `aggregate root '<root>' is itself a member of '<outer>'; name the
 /// outermost root` (DD4).
 pub const E_AGGREGATE_ROOT_NOT_ROOT: &str = "E0386";
-/// `'extend' is deprecated since 0.4 and removed in 0.5; write 'children
-/// <Class>'` — the old child-operation block keyword (DD4).
-pub const E_DEPRECATED_EXTEND: &str = "E0387";
+// E0387 is retired (issue pherolang#359, DF4 #327): it was
+// `E_DEPRECATED_EXTEND`, the `extend`-alias deprecation warning. The alias
+// was removed from the grammar in 0.5, so the code burned with it —
+// never reuse E0387.
 /// `invalid invariant in design '<design>': <detail>` — the invariant does
 /// not parse, does not type-check, is not boolean, or reads beyond the
 /// designed class's own state (DD5, issue pherolang#302).
@@ -297,7 +298,7 @@ pub(crate) const ENTRIES: &[Entry] = &[
         band: DDD_BAND,
         severity: Severity::Error,
         title: "Unknown child feature",
-        meaning: "`unknown child feature '<feature>' on '<class>'` (or `child feature '<feature>' of '<class>' is an attribute`) — an `extend` block's child operation names a feature the extended class does not carry, or one that is not a containment or cross reference (an attribute has no child aggregate to act on). `extend` operates on the aggregate's contained children, so only `contains` and `refers` features are eligible.",
+        meaning: "`unknown child feature '<feature>' on '<class>'` (or `child feature '<feature>' of '<class>' is an attribute`) — a `children` block's child operation names a feature the extended class does not carry, or one that is not a containment or cross reference (an attribute has no child aggregate to act on). `children` operates on the aggregate's contained children, so only `contains` and `refers` features are eligible.",
         fix: "Name a containment or reference feature of the extended class (the help lists the eligible ones), or extend the class that actually holds the child.",
     },
     Entry {
@@ -305,7 +306,7 @@ pub(crate) const ENTRIES: &[Entry] = &[
         band: DDD_BAND,
         severity: Severity::Error,
         title: "Child action needs a collection",
-        meaning: "`child operation '<op>' in extend '<class>': action '<action>' requires a collection; feature '<feature>' is single-valued` — `add` and `remove` act on the elements of a many-valued child feature, so a single-valued containment (a scalar child object) admits only `save`.",
+        meaning: "`child operation '<op>' in children '<class>': action '<action>' requires a collection; feature '<feature>' is single-valued` — `add` and `remove` act on the elements of a many-valued child feature, so a single-valued containment (a scalar child object) admits only `save`.",
         fix: "Use `save` for a single-valued child, or declare the feature as a many-valued containment (`contains Child[] children`).",
     },
     Entry {
@@ -313,16 +314,16 @@ pub(crate) const ENTRIES: &[Entry] = &[
         band: DDD_BAND,
         severity: Severity::Error,
         title: "Unknown child action",
-        meaning: "`unknown child action '<action>' in child operation '<op>' of extend '<class>'` — the action after the child feature's dot is one of the closed vocabulary `add`, `remove`, `save`: add a new child, remove an existing one, or persist (insert/replace) it. The action selects the aggregate-internal operation the child-scoped operation performs, so an unknown word is refused rather than silently ignored (the lowered artifact carries the operation's signature and its `childScope`).",
+        meaning: "`unknown child action '<action>' in child operation '<op>' of children '<class>'` — the action after the child feature's dot is one of the closed vocabulary `add`, `remove`, `save`: add a new child, remove an existing one, or persist (insert/replace) it. The action selects the aggregate-internal operation the child-scoped operation performs, so an unknown word is refused rather than silently ignored (the lowered artifact carries the operation's signature and its `childScope`).",
         fix: "Write `add`, `remove`, or `save` as the action.",
     },
     Entry {
         code: E_UNKNOWN_EXTEND_TARGET,
         band: DDD_BAND,
         severity: Severity::Error,
-        title: "Unknown extend target",
-        meaning: "`unknown extend target '<class>'` — the `extend` block's class must be a domain class with an entity design in the same module that is an aggregate root (a repository-bearing entity, validation rule 6). The message names which part failed: the class resolves against the imported domains, the design must live in the extending module, and the design must carry a repository (a contained, repository-less child is not a root).",
-        fix: "Extend an aggregate root designed in the same module (add its `repository` block if it is missing), or move the `extend` block next to the root's design.",
+        title: "Unknown children target",
+        meaning: "`unknown children target '<class>'` — the `children` block's class must be a domain class with an entity design in the same module that is an aggregate root (a repository-bearing entity, validation rule 6). The message names which part failed: the class resolves against the imported domains, the design must live in the block's module, and the design must carry a repository (a contained, repository-less child is not a root).",
+        fix: "Extend an aggregate root designed in the same module (add its `repository` block if it is missing), or move the `children` block next to the root's design.",
     },
     Entry {
         code: E_UNKNOWN_BODY_RECEIVER,
@@ -547,14 +548,6 @@ pub(crate) const ENTRIES: &[Entry] = &[
         title: "Aggregate root is itself a member",
         meaning: "`aggregate root '<root>' is itself a member of '<outer>'; name the outermost root` — an aggregate root cannot belong to another aggregate, so `aggregate <Root>` must name the boundary's outermost class.",
         fix: "Name the outermost root, or remove the contradictory membership.",
-    },
-    Entry {
-        code: E_DEPRECATED_EXTEND,
-        band: DDD_BAND,
-        severity: Severity::Warning,
-        title: "Deprecated extend keyword",
-        meaning: "`'extend' is deprecated since 0.4 and removed in 0.5; write 'children <Class>'` — the child-operation block was renamed so it no longer reads like class inheritance; the alias has a recorded removal milestone (DF4, issue pherolang#327).",
-        fix: "Rename the block keyword to `children`; `pherolang fmt` rewrites it automatically before 0.5.",
     },
     Entry {
         code: E_INVALID_INVARIANT,

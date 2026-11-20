@@ -1,8 +1,8 @@
-//! Module-level `extend <Class> { ... }` child operations (issue
+//! Module-level `children <Class> { ... }` child operations (issue
 //! pherolang#179): root-side operations over an aggregate's contained
 //! children.
 //!
-//! An `extend PayRun { ... }` block is validated against the root's design
+//! A `children PayRun { ... }` block is validated against the root's design
 //! in the same module and lowered onto it as `Design::child_operations`;
 //! each operation carries the root's child feature and the child class the
 //! feature resolves to (`ServiceOperation::child_scope`). The action
@@ -19,8 +19,8 @@
 //!   is a containment or cross reference (`E0355`);
 //! - the action is `add`, `remove`, or `save` (`E0357`), with `add` and
 //!   `remove` requiring a many-valued feature (`E0356`);
-//! - child-operation names are unique per extend target across every block
-//!   (blocks merge in source order; the rule-2 duplicate convention);
+//! - child-operation names are unique per `children` target across every
+//!   block (blocks merge in source order; the rule-2 duplicate convention);
 //! - a `when` guard types against the operation's declared parameters and
 //!   the child feature's target class as `self`.
 //!
@@ -29,8 +29,8 @@
 //! the artifact), and no child scope lowers then.
 
 use phero_diagnostics::ddd::{
-    E_CHILD_ACTION_NEEDS_COLLECTION, E_DEPRECATED_EXTEND, E_UNKNOWN_CHILD_ACTION,
-    E_UNKNOWN_CHILD_FEATURE, E_UNKNOWN_EXTEND_TARGET,
+    E_CHILD_ACTION_NEEDS_COLLECTION, E_UNKNOWN_CHILD_ACTION, E_UNKNOWN_CHILD_FEATURE,
+    E_UNKNOWN_EXTEND_TARGET,
 };
 use phero_ir::ddd::{ChildRef, Design, ServiceOperation, Stereotype};
 use phero_syntax::ast as dsl;
@@ -45,7 +45,7 @@ use super::*;
 /// collection, remove one, or persist one (insert/replace).
 pub(crate) const CHILD_ACTIONS: [&str; 3] = ["add", "remove", "save"];
 
-/// Stage 5b — one module's `extend` blocks, merged onto the designs of
+/// Stage 5b — one module's `children` blocks, merged onto the designs of
 /// their target classes. `design_index` maps every resolved design class
 /// (package, class) to its position in `designs`, built by the design stage
 /// in declaration order (the first design of a class wins, the rule-2
@@ -64,27 +64,14 @@ pub(crate) fn lower_module_child_operations(
     registries: &mut Registries<'_>,
 ) -> Vec<Diagnostic> {
     let mut local: Vec<Diagnostic> = Vec::new();
-    // The merged child-operation names per extend target: duplicate
+    // The merged child-operation names per `children` target: duplicate
     // detection spans every block, because blocks merge in source order.
     let mut declared: Vec<((String, String), Vec<String>)> = Vec::new();
 
     for extend in &module.extends {
-        if extend.deprecated {
-            local.push(
-                Diagnostic::warning(
-                    format!(
-                        "{E_DEPRECATED_EXTEND} 'extend' is deprecated since 0.4 and \
-                         removed in 0.5; write 'children {}'",
-                        extend.class.text
-                    ),
-                    Some(extend.span),
-                )
-                .with_help("the block was renamed so it no longer reads like class inheritance"),
-            );
-        }
         // The target must be a domain class (the rule-3 resolution).
         let help = format!(
-            "an `extend` target must be an aggregate root designed in module '{}'",
+            "a `children` target must be an aggregate root designed in module '{}'",
             module.name.text
         );
         // Resolution diagnostics are dropped: the unknown target is this
@@ -101,7 +88,7 @@ pub(crate) fn lower_module_child_operations(
             local.push(
                 Diagnostic::error(
                     format!(
-                        "{E_UNKNOWN_EXTEND_TARGET} unknown extend target '{}': not a class \
+                        "{E_UNKNOWN_EXTEND_TARGET} unknown children target '{}': not a class \
                          declared in the imported domains",
                         extend.class.text
                     ),
@@ -122,7 +109,7 @@ pub(crate) fn lower_module_child_operations(
             local.push(
                 Diagnostic::error(
                     format!(
-                        "{E_UNKNOWN_EXTEND_TARGET} extend target '{}' has no design in \
+                        "{E_UNKNOWN_EXTEND_TARGET} children target '{}' has no design in \
                          module '{}'",
                         extend.class.text, module.name.text
                     ),
@@ -153,15 +140,16 @@ pub(crate) fn lower_module_child_operations(
             local.push(
                 Diagnostic::error(
                     format!(
-                        "{E_UNKNOWN_EXTEND_TARGET} extend target '{}' is not an aggregate \
+                        "{E_UNKNOWN_EXTEND_TARGET} children target '{}' is not an aggregate \
                          root: {reason}",
                         extend.class.text
                     ),
                     Some(extend.class.span),
                 )
                 .with_help(
-                    "child operations belong to the aggregate root; extend the \
-                     repository-bearing entity design of the aggregate",
+                    "child operations belong to the aggregate root; write the \
+                     `children` block next to the repository-bearing entity \
+                     design of the aggregate",
                 ),
             );
             continue;
@@ -177,18 +165,18 @@ pub(crate) fn lower_module_child_operations(
         };
 
         for op in &extend.operations {
-            // Rule 2 — child-operation names are unique per extend target.
+            // Rule 2 — child-operation names are unique per `children` target.
             if declared[merged].1.contains(&op.name.text) {
                 local.push(
                     Diagnostic::error(
                         format!(
-                            "duplicate child operation '{}' in extend '{}'",
+                            "duplicate child operation '{}' in children '{}'",
                             op.name.text, extend.class.text
                         ),
                         Some(op.name.span),
                     )
                     .with_help(format!(
-                        "'{}' is already declared for this extend target",
+                        "'{}' is already declared for this target",
                         op.name.text
                     )),
                 );
@@ -221,7 +209,7 @@ pub(crate) fn lower_module_child_operations(
                     record_dto_param(
                         registries,
                         format!(
-                            "child operation '{}' of extend '{}'",
+                            "child operation '{}' of children '{}'",
                             op.name.text, extend.class.text
                         ),
                         &param.name.text,
@@ -312,7 +300,7 @@ pub(crate) fn lower_module_child_operations(
                         Diagnostic::error(
                             format!(
                                 "{E_CHILD_ACTION_NEEDS_COLLECTION} child operation '{}' in \
-                                 extend '{}': action '{}' requires a collection; feature '{}' \
+                                 children '{}': action '{}' requires a collection; feature '{}' \
                                  is single-valued",
                                 op.name.text, extend.class.text, op.action.text, op.feature.text
                             ),
@@ -331,7 +319,7 @@ pub(crate) fn lower_module_child_operations(
                         Diagnostic::error(
                             format!(
                                 "{E_UNKNOWN_CHILD_ACTION} unknown child action '{other}' in \
-                                 child operation '{}' of extend '{}'",
+                                 child operation '{}' of children '{}'",
                                 op.name.text, extend.class.text
                             ),
                             Some(op.action.span),
@@ -359,7 +347,7 @@ pub(crate) fn lower_module_child_operations(
                     span,
                     ConditionCheck {
                         label: format!(
-                            "child operation '{}' in extend '{}'",
+                            "child operation '{}' in children '{}'",
                             op.name.text, extend.class.text
                         ),
                         module: &module.name.text,
@@ -392,7 +380,7 @@ pub(crate) fn lower_module_child_operations(
     local
 }
 
-/// Whether a feature is an eligible `extend` child: a containment (aggregate
+/// Whether a feature is an eligible `children` child: a containment (aggregate
 /// ownership) or a cross reference (the aggregate's named access to another
 /// root's instance).
 fn is_child_feature(feature: &phero_ir::Feature) -> bool {

@@ -53,12 +53,13 @@ pub(crate) const MODULE: &str = "module";
 pub(crate) const SERVICE: &str = "service";
 /// The `search <name> { ... }` keyword of a module body.
 pub(crate) const SEARCH: &str = "search";
-/// The deprecated `extend <Class> { ... }` alias of [`CHILDREN`]
+/// The retired `extend <Class> { ... }` alias of [`CHILDREN`]
 /// (issue pherolang#179; renamed by DD4, issue pherolang#301). A contextual
-/// word like the rest — special only in module-member position, an ordinary
-/// identifier everywhere else (`^extend` escapes). The parser accepts it,
-/// the driver warns (`E0387`: deprecated in 0.4, removed in 0.5), and the
-/// formatter rewrites it to `children`.
+/// word like the rest — an ordinary identifier everywhere else (`^extend`
+/// escapes). Removed from the grammar in 0.5 (DF4, issue pherolang#327):
+/// the parser refuses it, and `pherolang fmt` rewrites it to `children` as
+/// the mechanical migration path. This constant survives only for the
+/// formatter's dispatch.
 pub(crate) const EXTEND: &str = "extend";
 /// The optional `abstract` modifier of a design declaration.
 pub(crate) const ABSTRACT: &str = "abstract";

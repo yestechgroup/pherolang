@@ -42,7 +42,7 @@ pub(crate) fn lower_module_designs<'a>(
     let mut local: Vec<Diagnostic> = Vec::new();
     let mut designs_out = Vec::new();
     // Every resolved design class paired with its artifact position: the
-    // child-operation stage (5b, issue pherolang#179) attaches `extend`
+    // child-operation stage (5b, issue pherolang#179) attaches `children`
     // blocks to their target design by class. DTO designs are not aggregate
     // roots, so they never enter this index.
     let mut design_index: Vec<((String, String), usize)> = Vec::new();
@@ -332,7 +332,7 @@ pub(crate) fn lower_module_designs<'a>(
         }
         designs_out.push(design_out);
     }
-    // Stage 5b — the module's `extend` blocks (issue pherolang#179), attached
+    // Stage 5b — the module's `children` blocks (issue pherolang#179), attached
     // to their target designs after every design lowered (a block may
     // precede its target in source order). Diagnostics ride the design
     // stage's emission slot.

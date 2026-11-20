@@ -196,7 +196,7 @@ struct DecisionCheck<'a> {
 pub(crate) struct DtoParamCheck {
     /// The signature context the message embeds (`operation 'x' of service
     /// 'Y'`, `operation 'x' of repository 'R'`, `child operation 'x' of
-    /// extend 'C'`).
+    /// children 'C'`).
     pub(crate) context: String,
     /// The parameter name.
     pub(crate) param: String,
@@ -237,7 +237,7 @@ struct Registries<'a> {
 /// [`pipeline::engine_diags`]), rule 1 + the union model
 /// ([`rule_1_base_package`], [`union_model`]), the per-module lowering
 /// stages ([`collect_machine_scopes`], [`lower_module_services`],
-/// [`lower_module_designs`] — including the `extend` child-operation blocks
+/// [`lower_module_designs`] — including the `children` child-operation blocks
 /// (issue pherolang#179) and [`lower_module_bodies`] (issue pherolang#178) —
 /// [`lower_module_searches`]), and the deferred
 /// validations ([`rule_11_bind_searches`], [`rule_6_aggregate_boundary`],

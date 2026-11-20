@@ -1596,7 +1596,7 @@ fn two_unrelated_applications_do_not_merge() {
         kinds::DESIGNS,
         &class("examples/shop/ecommerce.mox", "nz.example.shop.Order"),
     );
-    // `extend Order { OrderLine addLine(OrderLine line) => lines.add; }` — a
+    // `children Order { OrderLine addLine(OrderLine line) => lines.add; }` — a
     // module-level child operation is a serviceOperation node owned by the
     // module, typed by the same `typeOf` rules as any operation.
     let add_line = service_operation("examples/shop/orders.ddd", "Orders.ordering.Order.addLine");

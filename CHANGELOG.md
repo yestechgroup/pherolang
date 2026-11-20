@@ -29,6 +29,20 @@ policy in [docs/VERSIONING.md](docs/VERSIONING.md).
   [ADR 0010](docs/adr/0010-intent-specifications-are-a-declaration-surface.md);
   contract: [docs/INTENTS.md](docs/INTENTS.md).
 
+### Removed
+
+- **The `.ddd` `extend` child-operation alias is gone from the grammar**
+  (DF4, issue [#327](https://github.com/yestechgroup/pherolang/issues/327),
+  tracked by
+  [#359](https://github.com/yestechgroup/pherolang/issues/359)): the 0.4
+  deprecation has aged out on schedule. A source writing
+  `extend <Class> { ... }` now fails to parse — the warning code `E0387` is
+  retired with it and the number is reserved against reuse — while
+  `pherolang fmt` still rewrites the spelling to
+  `children <Class> { ... }`, the mechanical migration path. The
+  child-operation diagnostics (`E0355`–`E0358`) now name the canonical
+  `children` spelling.
+
 ## [0.4.0] — Phero Lang (2026-11-17)
 
 Planned as **v0.4.0** — the first release whose binary ships
