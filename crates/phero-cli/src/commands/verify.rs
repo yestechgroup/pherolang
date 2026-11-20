@@ -45,8 +45,9 @@ use phero_evidence::receipt::{
 
 use crate::inputs::{
     expand_check_inputs, is_actor_file, is_cmmn_file, is_ddd_file, is_deploy_file, is_dmn_file,
-    is_evt_file, is_ifml_file, is_uc_file, read_actor_pair_in, read_cmmn_pair, read_ddd_design,
-    read_deploy_pair, read_dmn_pair, read_evt_pair, read_ifml_inputs, read_uc_pair,
+    is_evt_file, is_ifml_file, is_intent_file, is_uc_file, read_actor_pair_in, read_cmmn_pair,
+    read_ddd_design, read_deploy_pair, read_dmn_pair, read_evt_pair, read_ifml_inputs,
+    read_intent_pair, read_uc_pair,
 };
 use crate::project::Project;
 use crate::report::report_ifml_diagnostics;
@@ -258,6 +259,7 @@ fn artifact_kind(input: &Path) -> anyhow::Result<&'static str> {
         phero_driver::SurfaceKind::Dmn => "decisionModel",
         phero_driver::SurfaceKind::Cmmn => "cmmnModel",
         phero_driver::SurfaceKind::Ifml => "ifmlManifest",
+        phero_driver::SurfaceKind::Intent => "intentModel",
     })
 }
 
@@ -437,6 +439,8 @@ fn record_imports(input: &Path, project: &mut Project) -> anyhow::Result<()> {
         read_deploy_pair(input, Some(project))?;
     } else if is_dmn_file(input) {
         read_dmn_pair(input, Some(project))?;
+    } else if is_intent_file(input) {
+        read_intent_pair(input, Some(project))?;
     }
     Ok(())
 }

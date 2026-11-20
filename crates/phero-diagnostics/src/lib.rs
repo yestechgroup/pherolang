@@ -54,6 +54,7 @@ pub mod ifml_check;
 pub mod ifml_lints;
 pub mod ifml_resolver;
 pub mod integrity;
+pub mod intents;
 pub mod record;
 pub mod suggest;
 
@@ -140,6 +141,7 @@ const BAND_ENTRIES: &[&[Entry]] = &[
     dmn::ENTRIES,
     domain::ENTRIES,
     ddd::ENTRIES,
+    intents::ENTRIES,
 ];
 
 /// All registered entries, flattened once.
@@ -200,7 +202,7 @@ const BANDS: &[Band] = &[
         range: "X0001–X0099",
         owner: "phero-driver integrity pass",
         severity_note: "error",
-        next_free: "X0009",
+        next_free: "X0015",
     },
     Band {
         id: "dmn.check",
@@ -222,6 +224,13 @@ const BANDS: &[Band] = &[
         owner: "phero-driver `.ddd` lifecycle checks",
         severity_note: "error",
         next_free: "E0403",
+    },
+    Band {
+        id: "driver.intent",
+        range: "E0450–E0499",
+        owner: "phero-driver `.intent` surface checks",
+        severity_note: "error",
+        next_free: "E0455",
     },
 ];
 

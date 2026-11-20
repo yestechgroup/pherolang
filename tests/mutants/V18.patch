@@ -1,0 +1,17 @@
+# V18 — recorded mutant for register row V18.
+# Flips the coverage classification: an intent that resolved checks is now
+# the unmapped case and a check-less intent maps — the honesty rule
+# (X0010 fires exactly when no check resolved) inverts, and both directions
+# of the pinned tests turn red.
+diff --git a/crates/phero-driver/src/coverage.rs b/crates/phero-driver/src/coverage.rs
+--- a/crates/phero-driver/src/coverage.rs
++++ b/crates/phero-driver/src/coverage.rs
+@@ -364,7 +364,7 @@
+                     ),
+                 );
+             }
+-            if resolved_checks == 0 {
++            if resolved_checks > 0 {
+                 local.push(
+                     Diagnostic::warning(
+                         format!(

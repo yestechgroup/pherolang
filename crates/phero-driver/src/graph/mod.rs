@@ -9,7 +9,7 @@
 //!
 //! # Shape of the pass
 //!
-//! 1. **Applications.** Every file (all nine buckets) is fed to
+//! 1. **Applications.** Every file (all nine buckets plus the intent pass-through) is fed to
 //!    [`crate::applications::applications`] with its normalized imports; the
 //!    union-find components are the graph's applications. A node belongs to
 //!    its file's application, and nothing resolves across applications.

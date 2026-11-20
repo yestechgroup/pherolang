@@ -5,7 +5,7 @@
     {
       "id": "V1",
       "claim": "Nodes always have unique identities",
-      "statement": "`add_node` `ensures`: fresh id = old count, count + 1, id ∉ old ids",
+      "statement": "`add_node` `ensures`: fresh id = old count, count + 1, id \u2209 old ids",
       "implementation": "`Graph::add_node` (`phero-verify`); ids are arena indices, never reused",
       "status": "proved",
       "evidence": [
@@ -51,7 +51,7 @@
     {
       "id": "V3",
       "claim": "Containment graphs cannot contain cycles",
-      "statement": "reachability machinery defined and partly proved: `anc_k`/`anc_strict_k` (bounded-`k` reflexive/strict closure), `anc`/`anc_strict` (budgeted witness ≤ node count), `acyclic` (no strict cycle within the budget); **`lemma_anc_shift` proved** — bounded reachability (reflexive + strict, both directions) transfers across any mutation keeping old parent lists and appending parentless slots (induction on the bound)",
+      "statement": "reachability machinery defined and partly proved: `anc_k`/`anc_strict_k` (bounded-`k` reflexive/strict closure), `anc`/`anc_strict` (budgeted witness \u2264 node count), `acyclic` (no strict cycle within the budget); **`lemma_anc_shift` proved** \u2014 bounded reachability (reflexive + strict, both directions) transfers across any mutation keeping old parent lists and appending parentless slots (induction on the bound)",
       "implementation": "`link` ancestor guard (`is_ancestor`: proved safe + terminating); `tests/invariants.rs` `p3_*` + proptest `p3_containment_stays_acyclic`; **`phero-driver` inheritance/actor cycle passes now detect cycles via rejected `link` calls** (`detect_inheritance_cycles` / `detect_actor_cycles` on `phero_verify::Graph`); use-case `check_graph` still DFS-based",
       "status": "argued",
       "evidence": [
@@ -80,8 +80,8 @@
           "pointer": "crates/phero-driver/tests/cycle_detection.rs"
         }
       ],
-      "statusNote": "spec machinery proved (shift lemma); `is_ancestor` functional spec and acyclicity preservation under `link` open — they need a path-shortening (loop-cutting) lemma plus a DFS-completeness invariant, deliberately budgeted as #93's hard residue; driver detection kernel-backed",
-      "trigger": "a time-boxed formal attempt under epic #202's T1 — one focused session; if the box is exceeded, downgrade the row with a written rationale, never leave it silently open",
+      "statusNote": "spec machinery proved (shift lemma); `is_ancestor` functional spec and acyclicity preservation under `link` open \u2014 they need a path-shortening (loop-cutting) lemma plus a DFS-completeness invariant, deliberately budgeted as #93's hard residue; driver detection kernel-backed",
+      "trigger": "a time-boxed formal attempt under epic #202's T1 \u2014 one focused session; if the box is exceeded, downgrade the row with a written rationale, never leave it silently open",
       "review": "2027-02-13"
     },
     {
@@ -117,7 +117,7 @@
     {
       "id": "V5",
       "claim": "Mutations preserve all established invariants",
-      "statement": "`well_formed(*self)` → `well_formed(^self)` on every mutator",
+      "statement": "`well_formed(*self)` \u2192 `well_formed(^self)` on every mutator",
       "implementation": "every `phero-verify` mutator; bridged against the trusted mutation primitives; proptest sequences with `check_invariants` oracle",
       "status": "proved",
       "evidence": [
@@ -171,7 +171,7 @@
       "id": "V8",
       "claim": "`check_invariants` (executable oracle) mirrors the invariant",
       "statement": "`contains_edge`: full functional spec (`ensures result == has_contains(parent, child)`); `has_containment_cycle`: safety + termination (bounded mark-on-push walk; `requires` the kernel's `u32` length bound and a valid `start`)",
-      "implementation": "`Graph::check_invariants` (`#[trusted]` — it must inspect *arbitrary*, possibly malformed graphs, states the invariant excludes) + `contains_edge` / `has_containment_cycle` (proved against the logical `has_contains` / `is_ancestor`-shaped loop discipline)",
+      "implementation": "`Graph::check_invariants` (`#[trusted]` \u2014 it must inspect *arbitrary*, possibly malformed graphs, states the invariant excludes) + `contains_edge` / `has_containment_cycle` (proved against the logical `has_contains` / `is_ancestor`-shaped loop discipline)",
       "status": "assumed",
       "evidence": [
         {
@@ -191,7 +191,7 @@
           "pointer": "crates/phero-verify/tests/invariants.rs:p5_invariants_hold_after_random_mutation_sequences"
         }
       ],
-      "statusNote": "deliberate assumption, not an oversight — the dispatcher is test-side (validated by the property suites, never relied on by proofs) and must inspect arbitrary, possibly malformed graphs, the very states the invariant excludes; the prover cannot re-establish the consolidated invariant across that raw `Vec`-borrow boundary (quantifier instantiation across the borrow). Both walk helpers are proved. Shrinking path (#90's spirit): shrinking the trusted set is always a welcome PR",
+      "statusNote": "deliberate assumption, not an oversight \u2014 the dispatcher is test-side (validated by the property suites, never relied on by proofs) and must inspect arbitrary, possibly malformed graphs, the very states the invariant excludes; the prover cannot re-establish the consolidated invariant across that raw `Vec`-borrow boundary (quantifier instantiation across the borrow). Both walk helpers are proved. Shrinking path (#90's spirit): shrinking the trusted set is always a welcome PR",
       "trigger": "shrinking the trusted set is always a welcome PR (#90's spirit): prove the dispatcher's cycle walk against the kernel's loop discipline, or retire it with a creusot-std bump that closes the borrow-boundary gap",
       "review": "2027-05-14"
     },
@@ -219,7 +219,7 @@
           "pointer": "crates/phero-verify/src/lib.rs:push_reference"
         }
       ],
-      "statusNote": "deliberate assumption, not an oversight — the one-statement bodies exist because the prover cannot re-establish the consolidated invariant directly after a raw `Vec`-indexing borrow (quantifier instantiation across the borrow boundary); bodies assumed, full model-effect contracts proved (see the `#[trusted]` policy). Shrinking path (#90's spirit): shrinking the trusted set is always a welcome PR",
+      "statusNote": "deliberate assumption, not an oversight \u2014 the one-statement bodies exist because the prover cannot re-establish the consolidated invariant directly after a raw `Vec`-indexing borrow (quantifier instantiation across the borrow boundary); bodies assumed, full model-effect contracts proved (see the `#[trusted]` policy). Shrinking path (#90's spirit): shrinking the trusted set is always a welcome PR",
       "trigger": "shrinking the trusted set is always a welcome PR (#90's spirit); a creusot-std bump that re-establishes the consolidated invariant across a raw `Vec` borrow (release notes) retires the primitives",
       "review": "2027-05-14"
     },
@@ -248,7 +248,7 @@
         }
       ],
       "statusNote": "in-crate `phero-ir` translation blocked upstream (see avoidances); the identity contract is an intra-publication ordinal, not a cross-publication key (DF2, issue pherolang#325)",
-      "trigger": "the next creusot-std/Creusot toolchain bump — its release notes are the trigger: watch them for the derive-gap family closing, then move the mirror in-crate",
+      "trigger": "the next creusot-std/Creusot toolchain bump \u2014 its release notes are the trigger: watch them for the derive-gap family closing, then move the mirror in-crate",
       "review": "2027-05-14",
       "mirror": {
         "of": "phero-ir `ClassDef::assign_feature_ids`",
@@ -257,9 +257,9 @@
     },
     {
       "id": "V11",
-      "claim": "Interaction references always resolve to declarations ([issue #112](https://github.com/yestechgroup/pherolang/issues/112)): every interaction reference edge — `action(\"X\")`, `navigate(\"X\")`, `refresh(\"X\")` — terminates at a **declaration-backed** node, never a synthesized one",
-      "statement": "every invocation edge's endpoint ∈ the declared set (`InvocationGraph::check_invariants` in `crates/phero-verify/tests/invariants.rs`, `p11_*`)",
-      "implementation": "`phero-ifml`'s `check_references` cross-reference pass (`E0104`–`E0106`, entry file plus **instantiated-module** sites, union-wide declarations; container targets included) flowing into `pherolang check`'s error block and the LSP's published diagnostics — and, as the artifact boundary, `pherolang manifest`: the control/route manifest ([issue #118](https://github.com/yestechgroup/pherolang/issues/118), `phero_ir::ifml_manifest`) is derived post-check, so every manifest edge's target resolved by construction and consumers cannot re-derive resolution or synthesize endpoints; the proptest validates the oracle against an independent recomputation over random histories",
+      "claim": "Interaction references always resolve to declarations ([issue #112](https://github.com/yestechgroup/pherolang/issues/112)): every interaction reference edge \u2014 `action(\"X\")`, `navigate(\"X\")`, `refresh(\"X\")` \u2014 terminates at a **declaration-backed** node, never a synthesized one",
+      "statement": "every invocation edge's endpoint \u2208 the declared set (`InvocationGraph::check_invariants` in `crates/phero-verify/tests/invariants.rs`, `p11_*`)",
+      "implementation": "`phero-ifml`'s `check_references` cross-reference pass (`E0104`\u2013`E0106`, entry file plus **instantiated-module** sites, union-wide declarations; container targets included) flowing into `pherolang check`'s error block and the LSP's published diagnostics \u2014 and, as the artifact boundary, `pherolang manifest`: the control/route manifest ([issue #118](https://github.com/yestechgroup/pherolang/issues/118), `phero_ir::ifml_manifest`) is derived post-check, so every manifest edge's target resolved by construction and consumers cannot re-derive resolution or synthesize endpoints; the proptest validates the oracle against an independent recomputation over random histories",
       "status": "tested",
       "evidence": [
         {
@@ -296,12 +296,12 @@
         }
       ],
       "mutantKilled": true,
-      "statusNote": "honest staging per V4's precedent — the kernel tracks no node metadata yet; the graph-level `proved` form belongs in `phero-verify` once the ingest stops synthesizing endpoints from invocations, the codegraph companion — which the manifest boundary now makes structurally impossible on the artifact path"
+      "statusNote": "honest staging per V4's precedent \u2014 the kernel tracks no node metadata yet; the graph-level `proved` form belongs in `phero-verify` once the ingest stops synthesizing endpoints from invocations, the codegraph companion \u2014 which the manifest boundary now makes structurally impossible on the artifact path"
     },
     {
       "id": "V12",
-      "claim": "Lifecycle wiring always resolves across the artifact union ([issue #114](https://github.com/yestechgroup/pherolang/issues/114)): a capability clause names a declared capability; a granted or delegated capability is carried by an operation or search; an `.ifml` action declaration binds to a service operation (case-insensitive verb equality); a subscription consumer names a declared deploy component; flow `requires:`/`roles:` resolve into the actor layer; an operation's `emits` event name is declared in some `.evt` contract; a declared event is emitted by at least one service operation (channel `publishes`/subscription lists are consumption-side and never satisfy production). Since pherolang#128 the two capability joins resolve at **compile time** (rule 10 pooling every provided actor model, with the `unknownCapability` did-you-mean code; grant coverage in the actor engine, code `grantedCapabilityUncarried`) — the union pass keeps them as its lint channel (warning severity). Every union-pass diagnostic carries its stable registry code prefixed on the message (`X0001`–`X0008`, the `driver.integrity` band of [the diagnostic-code registry](DIAGNOSTICS.md)), and an action whose case-insensitive mirror matches **several** service operations binds to no unique backend — an error (`X0006`), the mirror naming exactly one `(service, operation)` carrier",
-      "statement": "`phero_driver::check_integrity` over the gathered artifact buckets — a pure function, pinned at the artifact level with exact diagnostic text plus its silent gates in `crates/phero-driver/tests/integrity.rs`; the promoted capability joins are pinned in `crates/phero-driver/tests/ddd.rs` (rule 10, did-you-mean), `crates/phero-driver/tests/actors_file.rs` (coverage), `crates/phero-cli/tests/cli.rs` (directory mode, phase 1 owns the errors), and `crates/phero-lsp/src/server/tests.rs` (diagnostics + the rename quick-fix)",
+      "claim": "Lifecycle wiring always resolves across the artifact union ([issue #114](https://github.com/yestechgroup/pherolang/issues/114)): a capability clause names a declared capability; a granted or delegated capability is carried by an operation or search; an `.ifml` action declaration binds to a service operation (case-insensitive verb equality); a subscription consumer names a declared deploy component; flow `requires:`/`roles:` resolve into the actor layer; an operation's `emits` event name is declared in some `.evt` contract; a declared event is emitted by at least one service operation (channel `publishes`/subscription lists are consumption-side and never satisfy production). Since pherolang#128 the two capability joins resolve at **compile time** (rule 10 pooling every provided actor model, with the `unknownCapability` did-you-mean code; grant coverage in the actor engine, code `grantedCapabilityUncarried`) \u2014 the union pass keeps them as its lint channel (warning severity). Every union-pass diagnostic carries its stable registry code prefixed on the message (`X0001`\u2013`X0008`, the `driver.integrity` band of [the diagnostic-code registry](DIAGNOSTICS.md)), and an action whose case-insensitive mirror matches **several** service operations binds to no unique backend \u2014 an error (`X0006`), the mirror naming exactly one `(service, operation)` carrier",
+      "statement": "`phero_driver::check_integrity` over the gathered artifact buckets \u2014 a pure function, pinned at the artifact level with exact diagnostic text plus its silent gates in `crates/phero-driver/tests/integrity.rs`; the promoted capability joins are pinned in `crates/phero-driver/tests/ddd.rs` (rule 10, did-you-mean), `crates/phero-driver/tests/actors_file.rs` (coverage), `crates/phero-cli/tests/cli.rs` (directory mode, phase 1 owns the errors), and `crates/phero-lsp/src/server/tests.rs` (diagnostics + the rename quick-fix)",
       "implementation": "the CLI's directory batch mode: per-file artifacts cluster into import-connected applications (the house import graph) and the pass runs per application, error diagnostics failing the batch; the compile-time capability joins run in the CLI project pipeline and the LSP per document against the sibling artifacts, with the union-pass lint suppressed for files phase 1 already failed; per-surface single-file compiles are unchanged",
       "status": "tested",
       "evidence": [
@@ -335,12 +335,12 @@
         }
       ],
       "mutantKilled": true,
-      "statusNote": "enforcement landed; the kernel/proptest staging follows V11's precedent once the graph ingest stops synthesizing endpoints — the same codegraph companion"
+      "statusNote": "enforcement landed; the kernel/proptest staging follows V11's precedent once the graph ingest stops synthesizing endpoints \u2014 the same codegraph companion"
     },
     {
       "id": "V13",
-      "claim": "State machines are closed over their enum, and lifecycle guards are predicates: every machine state (initial, terminal, transition endpoint) is a literal of the machine's enum type, and every `when` condition — transition guard, service operation, repository operation — types as `boolean`",
-      "statement": "state-set membership ⊆ the enum's literal list; `check_condition`'s result type = `boolean`",
+      "claim": "State machines are closed over their enum, and lifecycle guards are predicates: every machine state (initial, terminal, transition endpoint) is a literal of the machine's enum type, and every `when` condition \u2014 transition guard, service operation, repository operation \u2014 types as `boolean`",
+      "statement": "state-set membership \u2286 the enum's literal list; `check_condition`'s result type = `boolean`",
       "implementation": "`lower_design_machine` + `check_condition` in `crates/phero-driver/src/ddd.rs`, pinned by `crates/phero-driver/tests/ddd_machines.rs` (six tests: three boolean sites, typo'd endpoint, non-literal initial/terminal, all-literals clean)",
       "status": "tested",
       "evidence": [
@@ -366,7 +366,7 @@
     {
       "id": "V14",
       "claim": "Obligations are a declared vocabulary: every grant or delegation entry's obligation names resolve against the union of the actors blocks' `obligation` declarations",
-      "statement": "references ⊆ the union declared set",
+      "statement": "references \u2286 the union declared set",
       "implementation": "`validate_actor_obligations` in `crates/phero-driver/src/lower/actors.rs` over the `ActorsRecord` obligation refs, pinned by `crates/phero-driver/tests/actors.rs` (IR shape, grant/delegation errors with spans, duplicates, union pooling)",
       "status": "tested",
       "evidence": [
@@ -387,9 +387,9 @@
     },
     {
       "id": "V15",
-      "claim": "Domain-type lookup agreement (issue #94, the first verified statement for expression typing): a domain-type index is **total** over what was registered — every key resolves to its registration, last registration winning — and **merge preserves per-source lookups** (the merged-in index wins on collision, the surviving index resolves everywhere else)",
+      "claim": "Domain-type lookup agreement (issue #94, the first verified statement for expression typing): a domain-type index is **total** over what was registered \u2014 every key resolves to its registration, last registration winning \u2014 and **merge preserves per-source lookups** (the merged-in index wins on collision, the surviving index resolves everywhere else)",
       "statement": "`TypeIndex::lookup` full functional spec (`result == lookup_spec(entries, key)`), `insert` replace semantics, `merge` right-wins concat semantics (all proved; helper `lemma_bound_at_prefix`, induction on the prefix length)",
-      "implementation": "spec mirror `phero_verify::domain_types` — insert-replaces + linear-scan lookup standing in for `phero_expr::DomainTypes`' `BTreeMap` (whose std specs creusot-std 0.14.0 cannot translate — the V10 upstream-gap family), executably pinned by `crates/phero-verify/tests/domain_types.rs` and shape-pinned on the real API by `crates/phero-expr/tests/typecheck.rs` (`domain_types_is_assembled_incrementally_and_merges`); moves in-crate on a toolchain bump",
+      "implementation": "spec mirror `phero_verify::domain_types` \u2014 insert-replaces + linear-scan lookup standing in for `phero_expr::DomainTypes`' `BTreeMap` (whose std specs creusot-std 0.14.0 cannot translate \u2014 the V10 upstream-gap family), executably pinned by `crates/phero-verify/tests/domain_types.rs` and shape-pinned on the real API by `crates/phero-expr/tests/typecheck.rs` (`domain_types_is_assembled_incrementally_and_merges`); moves in-crate on a toolchain bump",
       "status": "proved",
       "evidence": [
         {
@@ -405,7 +405,7 @@
           "pointer": "crates/phero-expr/tests/typecheck.rs:domain_types_is_assembled_incrementally_and_merges"
         }
       ],
-      "trigger": "the next creusot-std/Creusot toolchain bump — its release notes are the trigger: watch them for the std-spec translation gap closing, then move the mirror in-crate",
+      "trigger": "the next creusot-std/Creusot toolchain bump \u2014 its release notes are the trigger: watch them for the std-spec translation gap closing, then move the mirror in-crate",
       "review": "2027-05-14",
       "mirror": {
         "of": "phero-expr `DomainTypes` (`BTreeMap`-backed)",
@@ -414,9 +414,9 @@
     },
     {
       "id": "V16",
-      "claim": "Class→artifact correspondence at the IR → JSON Schema boundary (issue #95, the first proved transformation statement): the collector admits exactly the declarations with distinct class names (duplicates rejected — `Context::collect`'s `bail!`), and the emitted `$defs` are in correspondence with the declared classes — **one def per class, in declaration order, none dropped, none synthesized**",
-      "statement": "`correspondence::collect` two-directional contract (`Some` ⇒ keys unchanged + `distinct`; `None` ⇒ a witnessed `has_duplicate`), `def_keys` identity emit (`result@ == classes@`)",
-      "implementation": "spec mirror `phero_verify::correspondence` — interned keys standing in for class names, identity emit standing in for `wire_defs`' per-class loop (the `phero-ir` wire types cannot translate under creusot-std 0.14.0 — the V10 upstream-gap family); executably pinned by `crates/phero-verify/tests/correspondence.rs` and on the real emitter by `crates/phero-backend-jsonschema`'s `wire_defs_map_every_declared_class` / `collect_rejects_duplicate_class_names`; moves in-crate on a toolchain bump",
+      "claim": "Class\u2192artifact correspondence at the IR \u2192 JSON Schema boundary (issue #95, the first proved transformation statement): the collector admits exactly the declarations with distinct class names (duplicates rejected \u2014 `Context::collect`'s `bail!`), and the emitted `$defs` are in correspondence with the declared classes \u2014 **one def per class, in declaration order, none dropped, none synthesized**",
+      "statement": "`correspondence::collect` two-directional contract (`Some` \u21d2 keys unchanged + `distinct`; `None` \u21d2 a witnessed `has_duplicate`), `def_keys` identity emit (`result@ == classes@`)",
+      "implementation": "spec mirror `phero_verify::correspondence` \u2014 interned keys standing in for class names, identity emit standing in for `wire_defs`' per-class loop (the `phero-ir` wire types cannot translate under creusot-std 0.14.0 \u2014 the V10 upstream-gap family); executably pinned by `crates/phero-verify/tests/correspondence.rs` and on the real emitter by `crates/phero-backend-jsonschema`'s `wire_defs_map_every_declared_class` / `collect_rejects_duplicate_class_names`; moves in-crate on a toolchain bump",
       "status": "proved",
       "evidence": [
         {
@@ -436,7 +436,7 @@
           "pointer": "crates/phero-backend-jsonschema/src/lib.rs:collect_rejects_duplicate_class_names"
         }
       ],
-      "trigger": "the next creusot-std/Creusot toolchain bump — its release notes are the trigger: watch them for the `phero-ir` wire types translating, then move the mirror in-crate",
+      "trigger": "the next creusot-std/Creusot toolchain bump \u2014 its release notes are the trigger: watch them for the `phero-ir` wire types translating, then move the mirror in-crate",
       "review": "2027-05-14",
       "mirror": {
         "of": "phero-backend-jsonschema `wire_defs`",
@@ -445,7 +445,7 @@
     },
     {
       "id": "V17",
-      "claim": "Stripped-name uniqueness within a package (issue #177): two declarations — classes or enums, in any combination — whose names strip to the same module identifier (one trailing `Type` suffix, then snake_case; `PayRun` and `PayRunType` both strip to `pay_run`), or two classes mapping to the same effective table name (declared `table \"…\"` override, else the derived default), are rejected; a pair where either class is a containment target is exempt (a contained value object shares its owner's module downstream by design), and a pair already diagnosed as E0300 is not re-diagnosed as E0301 (one rename resolves both)",
+      "claim": "Stripped-name uniqueness within a package (issue #177): two declarations \u2014 classes or enums, in any combination \u2014 whose names strip to the same module identifier (one trailing `Type` suffix, then snake_case; `PayRun` and `PayRunType` both strip to `pay_run`), or two classes mapping to the same effective table name (declared `table \"\u2026\"` override, else the derived default), are rejected; a pair where either class is a containment target is exempt (a contained value object shares its owner's module downstream by design), and a pair already diagnosed as E0300 is not re-diagnosed as E0301 (one rename resolves both)",
       "statement": "both keys are pure functions of the declarations (`stripped_module_name`, the effective table) plus the containment set; the table key's derivation matches `phero_backend_common::snake_case` exactly, so the check's keys equal what consumers derive",
       "implementation": "`check_name_uniqueness` in `crates/phero-driver/src/lower/names.rs` over per-package records, wired into all three lowering pipelines and skipped when the model already failed to lower (no cascade); the diagnostics carry the `driver.domain` codes (E0300/E0301) prefixed on the message and span the later declaration; the derivation vectors, both codes, the exemption, the override's IR flow, and the no-cascade discipline are pinned by `crates/phero-driver/tests/domain_names.rs`, the `lower::names` unit tests, `crates/phero-ir/tests/class_table_name.rs` (wire byte-identity), and the `name_uniqueness` conformance fixture's IR golden",
       "status": "tested",
@@ -472,6 +472,28 @@
         }
       ],
       "mutantKilled": true
+    },
+    {
+      "id": "V18",
+      "claim": "Intent coverage classification (issue #196): an intent is reported unmapped \u2014 warning `X0009`/`X0010` \u2014 exactly when it resolves no element, or no check, against the application's compiled artifacts; a link naming nothing of its kind is the spanned error `X0011`/`X0012` with the did-you-mean candidate; an ambiguous bare name is `X0013`; a stable id declared by two intent artifacts of one application is `X0014`",
+      "statement": "the per-slot resolved counts drive the warnings (`resolved_elements == 0` \u21d2 X0009, `resolved_checks == 0` \u21d2 X0010, warning severity, never error), the per-link resolution drives the errors, and the id-collision pass is order-independent over the application's intent files",
+      "implementation": "`check_coverage` in `crates/phero-driver/src/coverage.rs` over the per-application buckets, hosted by the CLI union pass's phase 2 (`crates/phero-cli/src/commands/integrity.rs`, the `check_integrity` channel), with the compile-time span table (`IntentLinkSite`) rendered spanned and a host without the table getting the same findings span-free",
+      "status": "tested",
+      "evidence": [
+        {
+          "kind": "code",
+          "pointer": "crates/phero-driver/src/coverage.rs:check_coverage"
+        },
+        {
+          "kind": "test",
+          "pointer": "crates/phero-driver/tests/intent_coverage.rs"
+        },
+        {
+          "kind": "mutant",
+          "pointer": "tests/mutants/V18.patch"
+        }
+      ],
+      "mutantKilled": true
     }
   ],
   "pipeline": [
@@ -484,7 +506,7 @@
     {
       "name": "Semantic analysis",
       "want": "invalid models cannot pass validation",
-      "enforcement": "driver validators: duplicate names, reference resolution, opposite pairing, inheritance/actor cycles, `never_both`; error ⇒ no model",
+      "enforcement": "driver validators: duplicate names, reference resolution, opposite pairing, inheritance/actor cycles, `never_both`; error \u21d2 no model",
       "status": "tested"
     },
     {
@@ -496,7 +518,7 @@
     {
       "name": "Transformations",
       "want": "transformations preserve meaning",
-      "enforcement": "golden artifacts per surface + examples harness; **V16: the IR → JSON Schema class correspondence is proved over its spec mirror** (`phero_verify::correspondence`)",
+      "enforcement": "golden artifacts per surface + examples harness; **V16: the IR \u2192 JSON Schema class correspondence is proved over its spec mirror** (`phero_verify::correspondence`)",
       "status": "tested (mirror proved; full preservation = issue phase 8, open)"
     },
     {
@@ -509,12 +531,12 @@
   "hold": [
     {
       "item": "nightly-CI proof job (#88)",
-      "reason": "closed as a **documented non-goal**, not delivered: no proof workflow exists in `.github/workflows/` (only `ci.yml`), and prover availability and cost keep proofs local and per-release. The sanctioned form of proof automation is epic P6/T3's per-release proof-log artifact (`verif/` manifest + why3find summary) referenced by the release receipt — a nightly prover job would need its own go/no-go",
-      "trigger": "the next release tag — where the P6/T3 per-release proof-log artifact would be produced",
+      "reason": "closed as a **documented non-goal**, not delivered: no proof workflow exists in `.github/workflows/` (only `ci.yml`), and prover availability and cost keep proofs local and per-release. The sanctioned form of proof automation is epic P6/T3's per-release proof-log artifact (`verif/` manifest + why3find summary) referenced by the release receipt \u2014 a nightly prover job would need its own go/no-go",
+      "trigger": "the next release tag \u2014 where the P6/T3 per-release proof-log artifact would be produced",
       "review": "2027-02-13"
     },
     {
-      "item": "`creusot-std` 0.14.0 → 0.15.0",
+      "item": "`creusot-std` 0.14.0 \u2192 0.15.0",
       "reason": "proofs are toolchain-coupled: a stdlib bump needs the matching Creusot upgrade, a full `cargo creusot -p phero-verify` re-run, and a register review; held through v0.2 per the #173 plan",
       "trigger": "the Creusot toolchain upgrade lands (#220)",
       "review": "2027-02-13"
@@ -542,7 +564,7 @@
     {
       "item": "check_invariants",
       "row": "V8",
-      "reason": "test-side oracle dispatcher: it must inspect arbitrary, possibly malformed graphs — the very states the invariant excludes"
+      "reason": "test-side oracle dispatcher: it must inspect arbitrary, possibly malformed graphs \u2014 the very states the invariant excludes"
     },
     {
       "item": "push_default_node",

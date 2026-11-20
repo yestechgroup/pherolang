@@ -44,6 +44,7 @@ const SURFACE_EXTENSIONS = new Set([
   '.uc',
   '.cmmn',
   '.ifml',
+  '.intent',
 ]);
 
 /** The named skip's exact shape — the issue's wording, tag + failing file. */
@@ -77,7 +78,10 @@ function runCheck(binary, target) {
 /**
  * The verdict. Returns `{ compatible: true }` when the release compiles the
  * directory, or `{ compatible: false, failingFile }` naming the first file
- * the release cannot parse. Throws (infrastructure failure) when the binary
+ * the release cannot parse **or silently skips** (a release predating a
+ * surface compiles nothing for it in directory mode — no `OK <path>` line —
+ * so coverage of the check's own receipts is part of the verdict). Throws
+ * (infrastructure failure) when the binary
  * cannot run at all or the examples directory is missing — those are never
  * the named skip, because "no binary" is a broken job, not an old release.
  */
@@ -88,7 +92,30 @@ export function probeRelease({ binary, examplesDir }) {
 
   const whole = runCheck(binary, examplesDir);
   if (whole.error) throw new Error(`cannot execute ${binary}: ${whole.error.message}`);
-  if (whole.status === 0) return { compatible: true };
+  if (whole.status === 0) {
+    // A release that predates a surface **silently skips** its files in
+    // directory mode (the unknown-extension default compiles nothing and
+    // prints nothing) — the `OK <path>` line is the only receipt that the
+    // release compiled a file. Every model file must be claimed by one;
+    // an unclaimed file is exactly the named skip: the release predates
+    // that surface.
+    const files = listModelFiles(examplesDir);
+    const okPaths = new Set(
+      (whole.stdout ?? '')
+        .split('\n')
+        .filter((line) => line.startsWith('OK '))
+        .map((line) => line.slice(3).trim()),
+    );
+    const unclaimed = files.find((file) => {
+      const suffix = file.slice(examplesDir.length + 1);
+      for (const ok of okPaths) {
+        if (ok === suffix || ok.endsWith(`/${suffix}`)) return false;
+      }
+      return true;
+    });
+    if (unclaimed) return { compatible: false, failingFile: unclaimed };
+    return { compatible: true };
+  }
 
   // The directory failed. Pin the first file the release cannot parse by
   // checking each model file on its own — deterministic (sorted walk), and

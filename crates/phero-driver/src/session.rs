@@ -89,6 +89,15 @@ parse_output!(
 );
 
 parse_output!(
+    /// The outcome of parsing a [`SourceFile`] as an `.intent` file.
+    IntentParseOutput {
+        /// The recovered intent file, or `None` when nothing could be
+        /// produced.
+        phero_syntax::IntentFile
+    }
+);
+
+parse_output!(
     /// The outcome of parsing a [`SourceFile`] as a `.cmmn` file.
     CmmnParseOutput {
         /// The recovered case file, or `None` when nothing could be produced.
@@ -174,6 +183,18 @@ pub fn parse_usecase_query(db: &dyn Db, file: SourceFile) -> UcParseOutput {
     let source = file.text(db);
     let parsed = phero_syntax::parse_usecases(&source);
     UcParseOutput {
+        ast: parsed.ast,
+        diagnostics: parse_error_diagnostics(parsed.errors),
+    }
+}
+
+/// Lexes and parses a [`SourceFile`] as an `.intent` file (memoized by
+/// salsa).
+#[salsa::tracked(returns(clone))]
+pub fn parse_intent_query(db: &dyn Db, file: SourceFile) -> IntentParseOutput {
+    let source = file.text(db);
+    let parsed = phero_syntax::parse_intents(&source);
+    IntentParseOutput {
         ast: parsed.ast,
         diagnostics: parse_error_diagnostics(parsed.errors),
     }

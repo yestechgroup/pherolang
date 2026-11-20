@@ -1,0 +1,93 @@
+{
+  "formatVersion": 1,
+  "intents": [
+    {
+      "id": "REFUND-001",
+      "statement": "A refund above the desk's auto-approval limit is decided by a human.",
+      "elements": [
+        {
+          "kind": "class",
+          "name": "Ticket"
+        },
+        {
+          "kind": "capability",
+          "name": "RaiseRefund"
+        },
+        {
+          "kind": "capability",
+          "name": "ApproveRefund"
+        },
+        {
+          "kind": "event",
+          "name": "RefundRequested"
+        }
+      ],
+      "checks": [
+        {
+          "kind": "decision",
+          "name": "RefundAuthority"
+        }
+      ]
+    },
+    {
+      "id": "REFUND-002",
+      "statement": "A raised refund is always assessed before money moves.",
+      "elements": [
+        {
+          "kind": "op",
+          "name": "TicketService.raiseRefund"
+        },
+        {
+          "kind": "event",
+          "name": "RefundApproved"
+        }
+      ],
+      "checks": [
+        {
+          "kind": "decision",
+          "name": "RefundAssessment"
+        }
+      ]
+    },
+    {
+      "id": "TICKET-001",
+      "statement": "A stored ticket never carries a negative refund amount.",
+      "elements": [
+        {
+          "kind": "class",
+          "name": "Ticket"
+        },
+        {
+          "kind": "view",
+          "name": "Queue"
+        }
+      ],
+      "checks": [
+        {
+          "kind": "invariant",
+          "name": "Ticket"
+        }
+      ]
+    },
+    {
+      "id": "REFUND-003",
+      "statement": "Every refund decision is an immutable record.",
+      "elements": [
+        {
+          "kind": "class",
+          "name": "RefundDecision"
+        }
+      ],
+      "checks": [
+        {
+          "kind": "invariant",
+          "name": "RefundDecision"
+        },
+        {
+          "kind": "decision",
+          "name": "RefundEligibility"
+        }
+      ]
+    }
+  ]
+}

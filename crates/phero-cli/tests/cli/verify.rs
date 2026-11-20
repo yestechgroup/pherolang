@@ -14,9 +14,9 @@ use crate::support::*;
 /// `examples/artifacts/`.
 const FLAGSHIP: &str = "examples/artifacts/support.receipt.json";
 
-/// The nine `support` surfaces the flagship receipt covers, in the sorted
+/// The ten `support` surfaces the flagship receipt covers, in the sorted
 /// order the receipt records them (the canonical document sorts `inputs`).
-const SUPPORT_INPUTS: [&str; 9] = [
+const SUPPORT_INPUTS: [&str; 10] = [
     "examples/support/support.actor",
     "examples/support/support.cmmn",
     "examples/support/support.ddd",
@@ -24,6 +24,7 @@ const SUPPORT_INPUTS: [&str; 9] = [
     "examples/support/support.dmn",
     "examples/support/support.evt",
     "examples/support/support.ifml",
+    "examples/support/support.intent",
     "examples/support/support.mox",
     "examples/support/support.uc",
 ];
@@ -66,7 +67,7 @@ fn the_flagship_receipt_reports_the_register_and_its_closure() {
         "the receipt records the pheroVersion provenance of its generator"
     );
 
-    // The inputs are exactly the nine support surfaces, sorted.
+    // The inputs are exactly the ten support surfaces, sorted.
     let inputs: Vec<&str> = receipt["inputs"]
         .as_array()
         .expect("inputs")
@@ -125,7 +126,7 @@ fn the_flagship_receipt_reports_the_register_and_its_closure() {
     );
     assert_eq!(receipt["register"]["reviewedAt"], "2026-11-14");
     let rows = receipt["register"]["rows"].as_array().expect("rows");
-    assert_eq!(rows.len(), 17, "V1..V17 are all reported");
+    assert_eq!(rows.len(), 18, "V1..V18 are all reported");
     assert_eq!(rows[0]["id"], "V1");
     for row in rows {
         let status = row["status"].as_str().expect("status");
@@ -214,8 +215,8 @@ fn the_flagship_artifact_hashes_equal_the_committed_goldens() {
         );
     }
     assert_eq!(
-        path_bearing, 7,
-        "the seven golden-bearing surfaces name their files"
+        path_bearing, 8,
+        "the eight golden-bearing surfaces name their files"
     );
 }
 

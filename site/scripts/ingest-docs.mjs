@@ -98,6 +98,7 @@ const PLACEMENT = {
   cmmn: ['reference', 70],
   dmn: ['reference', 80],
   ifml: ['reference', 90],
+  intents: ['reference', 95],
   graph: ['reference', 100],
   diagnostics: ['reference', 110],
   backends: ['reference', 120],

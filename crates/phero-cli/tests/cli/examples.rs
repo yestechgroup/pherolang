@@ -30,7 +30,7 @@ const ACTOR_EXAMPLES: [(&str, &str); 1] = [("support", "support/support")];
 /// like a `pherolang check` of those surfaces). Their artifact bytes are
 /// pinned by `crates/phero-driver/tests/examples_artifacts.rs` and the cmmn
 /// backend's examples test.
-const ARTIFACT_EXAMPLES: [(&str, &str, &str); 9] = [
+const ARTIFACT_EXAMPLES: [(&str, &str, &str); 10] = [
     ("ecommerce", "shop/ecommerce", "evt"),
     ("support", "support/support", "evt"),
     ("lending", "lending/lending", "dmn"),
@@ -40,6 +40,7 @@ const ARTIFACT_EXAMPLES: [(&str, &str, &str); 9] = [
     ("support", "support/support", "uc"),
     ("support", "support/support", "deploy"),
     ("support", "support/support", "cmmn"),
+    ("support", "support/support", "intent"),
 ];
 
 fn workspace_root() -> PathBuf {

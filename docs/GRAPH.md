@@ -608,7 +608,7 @@ feature). Unreachable is the finding.
 
 The analytics' byte goldens (`tests/conformance/graph/queries/app.*`) come
 from the self-contained fixture `tests/conformance/graph/` — `app.*` across
-all nine surfaces plus the unrelated `other.*` application (an opaque
+all ten surfaces plus the unrelated `other.*` application (an opaque
 `cedar` policy). The fixture exercises every outcome: a declared pair with no
 violation, an undeclared pair with one (inheritance), a monotonicity gap,
 `alive`/`dead`/`latent`/`unknown` capabilities, and a reachable and an
@@ -668,7 +668,11 @@ so a host compiling one surface never sees these diagnostics.
 import-connected application at a time (the same union-find relation as the
 [graph's applications](#applications)): a `.mox` file is a bridge node,
 `.deploy`/`.uc`/`.cmmn` contribute no bucket, and unrelated applications in
-one checked tree never cross-check. In the CLI's directory batch mode the
+one checked tree never cross-check. The intent **coverage pass**
+(`X0009`–`X0014`, issue #196) rides the same phase: the `.mox` domains,
+`.dmn` decisions, and `.intent` artifacts feed it per application (see
+[docs/INTENTS.md](INTENTS.md)); `.intent` files themselves carry no graph
+bucket. In the CLI's directory batch mode the
 pass is phase 2 only — each successful file's artifact is retained, the
 contributions cluster by import, and the capability lint stays unprinted for
 files phase 1 already failed. The compile-time joins pool the same relation

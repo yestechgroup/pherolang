@@ -65,29 +65,32 @@ pub use project::{
 pub use phero_syntax::Span;
 
 mod compilation;
+pub mod coverage;
 mod entry;
-mod imports;
-mod inputs;
+pub(crate) mod imports;
+pub(crate) mod inputs;
+pub(crate) mod intents;
 mod session;
 mod union;
 
 pub use compilation::{
     ActorCompilation, CmmnCompilation, Compilation, Compiled, DddCompilation, DeployCompilation,
-    DmnCompilation, EventCompilation, MultiCompilation, UseCaseCompilation,
+    DmnCompilation, EventCompilation, IntentCompilation, MultiCompilation, UseCaseCompilation,
 };
 pub use ddd::domain_fingerprint;
 pub use entry::ddd::DddFragment;
 pub use entry::{
     compile, compile_actors, compile_actors_str, compile_cmmn, compile_cmmn_str, compile_ddd,
     compile_ddd_app_str, compile_ddd_str, compile_deploy_str, compile_dmn, compile_dmn_str,
-    compile_evt, compile_evt_str, compile_files, compile_str, compile_usecase, compile_usecase_str,
-    compile_with_imports,
+    compile_evt, compile_evt_str, compile_files, compile_intent, compile_intent_str, compile_str,
+    compile_usecase, compile_usecase_str, compile_with_imports,
 };
 pub use imports::{DomainImports, SchemaImports, SigilImports};
+pub use intents::IntentLinkSite;
 pub use session::{
     parse_actors_query, parse_cmmn_query, parse_ddd_query, parse_deploy_query, parse_dmn_query,
-    parse_evt_query, parse_query, parse_usecase_query, Database, DeployParseOutput, DmnParseOutput,
-    ParseOutput, SourceFile,
+    parse_evt_query, parse_intent_query, parse_query, parse_usecase_query, Database,
+    DeployParseOutput, DmnParseOutput, IntentParseOutput, ParseOutput, SourceFile,
 };
 pub use surface::SurfaceKind;
 pub(crate) use union::import_matches;

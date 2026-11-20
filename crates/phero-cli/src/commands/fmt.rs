@@ -7,7 +7,7 @@ use std::process::ExitCode;
 
 use crate::inputs::{
     expand_check_inputs, is_actor_file, is_cmmn_file, is_ddd_file, is_deploy_file, is_dmn_file,
-    is_evt_file, is_ifml_file, is_uc_file,
+    is_evt_file, is_ifml_file, is_intent_file, is_uc_file,
 };
 
 pub(crate) fn run(check: bool, files: Vec<PathBuf>) -> anyhow::Result<ExitCode> {
@@ -48,6 +48,8 @@ pub(crate) fn run(check: bool, files: Vec<PathBuf>) -> anyhow::Result<ExitCode> 
             phero_syntax::fmt::format_deploy(&source)?
         } else if is_ifml_file(file) {
             phero_ifml::format_ifml(&source)
+        } else if is_intent_file(file) {
+            phero_syntax::fmt::format_intents(&source)?
         } else {
             phero_syntax::fmt::format(&source)?
         };

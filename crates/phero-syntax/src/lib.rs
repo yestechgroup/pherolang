@@ -36,6 +36,7 @@ pub(crate) mod ddd;
 pub(crate) mod deploy;
 pub(crate) mod dmn;
 pub mod fmt;
+pub(crate) mod intents;
 pub mod lexer;
 pub mod parser;
 pub(crate) mod usecases;
@@ -53,18 +54,19 @@ pub use ast::{
     DeployProfileDecl, DeploySettingDecl, DeploySettingValue, DmnBinding, DmnBkm, DmnDecision,
     DmnDecisionModel, DmnFile, DmnInput, DmnKnowledgeSource, DmnLogic, DmnMetadata,
     DmnMetadataKind, DmnOutput, DmnRequirement, DmnService, DmnView, EnumDecl, EnumLiteral,
-    EventDecl, EventFieldDecl, EvtFile, FeatureDecl, Import, ImportKind, InterfaceDecl, Model,
-    MultBound, Multiplicity, MultiplicityKind, Name, Param, PublishesDecl, QualifiedName, Span,
-    SubscriptionDecl, TypeRef, UcDecl, UcEndpoint, UcFile, UcMessage, UcNodeRef, UcOccurrence,
-    UcParticipant, UcRealizes, UcStep, UcSuccession, VocabularyDecl, VocabularyFacetDecl, Wraps,
+    EventDecl, EventFieldDecl, EvtFile, FeatureDecl, Import, ImportKind, IntentDecl, IntentFile,
+    IntentLink, IntentLinkSlot, InterfaceDecl, Model, MultBound, Multiplicity, MultiplicityKind,
+    Name, Param, PublishesDecl, QualifiedName, Span, SubscriptionDecl, TypeRef, UcDecl, UcEndpoint,
+    UcFile, UcMessage, UcNodeRef, UcOccurrence, UcParticipant, UcRealizes, UcStep, UcSuccession,
+    VocabularyDecl, VocabularyFacetDecl, Wraps,
 };
 pub use fmt::{
     format, format_actors, format_cmmn, format_ddd, format_deploy, format_dmn, format_evt,
-    format_usecases, FormatError,
+    format_intents, format_usecases, FormatError,
 };
 pub use lexer::{lex, lex_with_comments, Comment, CommentKind, LexError, Token};
 pub use parser::{
-    parse, parse_actors, parse_cmmn, parse_ddd, parse_deploy, parse_dmn, parse_evt, parse_usecases,
-    ActorsParseResult, CmmnParseResult, DddParseResult, DeployParseResult, DmnParseResult,
-    EvtParseResult, ParseError, ParseResult, UcParseResult,
+    parse, parse_actors, parse_cmmn, parse_ddd, parse_deploy, parse_dmn, parse_evt, parse_intents,
+    parse_usecases, ActorsParseResult, CmmnParseResult, DddParseResult, DeployParseResult,
+    DmnParseResult, EvtParseResult, IntentsParseResult, ParseError, ParseResult, UcParseResult,
 };

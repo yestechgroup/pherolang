@@ -47,10 +47,11 @@ deliberately has no write path.
 | `phero-driver` `evt_golden` | `tests/conformance/events/orders.evt.json` |
 | `phero-driver` `deploy_golden` | `tests/conformance/deploy/svc.deploy.json` |
 | `phero-driver` `usecase_golden` | `tests/conformance/usecases/delivery.uc.json` |
+| `phero-driver` `intent_golden` | `tests/conformance/intents/delivery.intent.json` |
 | `phero-driver` `cmmn_golden` | `tests/conformance/cmmn/{lending,decision}.cmmn.json` |
 | `phero-driver` `dmn_golden` | `tests/conformance/dmn/*.dmn.json` |
 | `phero-driver` `sigil_golden` | `tests/conformance/sigil/{basic,funcs}.mox.json` |
-| `phero-driver` `examples_artifacts` | `examples/artifacts/*.{evt,ddd,uc,deploy,cmmn,dmn}.json` |
+| `phero-driver` `examples_artifacts` | `examples/artifacts/*.{evt,ddd,uc,deploy,cmmn,dmn,intent}.json` |
 | `phero-driver` `graph_analytics` | `tests/conformance/graph/app.graph.json`, `tests/conformance/graph/queries/*.json` |
 | `phero-backend-cedar` `golden` | `tests/conformance/cedar/Support.cedar`, `Support.cedarschema.json` |
 | `phero-backend-jsonschema` `golden_api` / `golden_wire` | `tests/conformance/schemas/*.api.schema.json` / `*.wire.schema.json` |

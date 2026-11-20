@@ -4,7 +4,7 @@
 //! The navigation tests read the same fixture applications in three places —
 //! this crate's own unit tests, the `phero-driver` integration tests
 //! (`tests/navigation.rs`), and the LSP server tests. Before this crate each
-//! site carried its own copy of the fixture paths and the nine-surface
+//! site carried its own copy of the fixture paths and the ten-surface
 //! compile order, so a fixture rename or a new surface meant three edits.
 //! Here they live exactly once:
 //!
@@ -71,12 +71,15 @@ pub mod fixtures {
     pub const APP_DEPLOY: &str = "tests/conformance/graph/app.deploy";
     /// The conformance interaction flow.
     pub const APP_IFML: &str = "tests/conformance/graph/app.ifml";
-    /// The conformance application's nine surface files, in compile order.
+    /// The conformance intent specifications (issue pherolang#196).
+    pub const APP_INTENT: &str = "tests/conformance/graph/app.intent";
+    /// The conformance application's ten surface files, in compile order.
     ///
     /// This is what [`crate::copy_fixture_tree`] copies into the LSP's temp
     /// directory.
-    pub const APP_STACK: [&str; 9] = [
+    pub const APP_STACK: [&str; 10] = [
         APP_MOX, APP_ACTOR, APP_DDD, APP_EVT, APP_DMN, APP_UC, APP_CMMN, APP_DEPLOY, APP_IFML,
+        APP_INTENT,
     ];
 
     /// The fixture's unrelated second application (an opaque `cedar`
@@ -155,7 +158,7 @@ pub fn fixture(display: &str) -> String {
 ///
 /// The LSP tests compile a *writable* directory snapshot: the committed
 /// fixture stays untouched while each test adds its own files on top. The
-/// nine canonical files come from here; LSP-only extras (the payrun pair,
+/// ten canonical files come from here; LSP-only extras (the payrun pair,
 /// an inline-actors model, a patched `.evt`/`.uc`) are added by the caller.
 pub fn copy_fixture_tree(dst: &Path) {
     copy_fixture_files(dst, &fixtures::APP_STACK);

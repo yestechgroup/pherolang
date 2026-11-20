@@ -830,6 +830,25 @@ impl PheroBackend {
                     keyed_diagnostics(&compilation.diagnostics, &key, &map),
                 )
             }
+            DocumentSurface::Known(SurfaceKind::Intent) => {
+                let domains = phero_driver::project::gather_domain_sources(
+                    &key,
+                    text,
+                    |source| {
+                        phero_syntax::parse_intents(source)
+                            .ast
+                            .map(|ast| ast.imports.into_iter().map(|import| import.path).collect())
+                            .unwrap_or_default()
+                    },
+                    &mut fetch,
+                );
+                let compilation =
+                    phero_driver::compile_intent_str(&key, text, &domain_inputs(&domains));
+                (
+                    compilation.model.map(SnapshotArtifact::Intent),
+                    keyed_diagnostics(&compilation.diagnostics, &key, &map),
+                )
+            }
             DocumentSurface::Other => (None, Vec::new()),
         }
     }
@@ -938,6 +957,11 @@ enum SnapshotArtifact {
     Case(phero_ir::cmmn::CmmnModel),
     /// A `.dmn` decision-model artifact.
     Decision(phero_ir::dmn::DmnModel),
+    /// An `.intent` intent-specification artifact (issue pherolang#196). It
+    /// marks the file compiled for the snapshot memo and the coverage
+    /// pass's benefit; it contributes no graph bucket (v0.5), so the model
+    /// itself is carried only to keep the compile's output honest.
+    Intent(#[allow(dead_code)] phero_ir::intents::IntentModel),
 }
 
 /// Files one artifact into its graph input bucket.
@@ -977,6 +1001,10 @@ fn push_artifact(
         SnapshotArtifact::Decision(model) => inputs
             .decisions
             .push(GraphFile::new(display, key, imports, model)),
+        // Intents carry no graph bucket (v0.5): the file compiles (its
+        // diagnostics publish), but it contributes no nodes and no edges —
+        // the traceability edges are the coverage pass's (#196).
+        SnapshotArtifact::Intent(_) => {}
     }
 }
 
@@ -1036,6 +1064,9 @@ fn surface_index(
         DocumentSurface::Known(SurfaceKind::Dmn) => {
             phero_driver::navigation::dmn_index(text, display)
         }
+        // Intents carry no span table (v0.5): the file compiles in the
+        // snapshot, but it owns no definitions, so it contributes no index.
+        DocumentSurface::Known(SurfaceKind::Intent) => return None,
         DocumentSurface::Other => return None,
     })
 }
@@ -1087,6 +1118,10 @@ fn written_imports(surface: DocumentSurface, text: &str) -> Vec<String> {
             .map(|ast| ast.imports.into_iter().map(|import| import.path).collect())
             .unwrap_or_default(),
         DocumentSurface::Known(SurfaceKind::Cmmn) => phero_syntax::parse_cmmn(text)
+            .ast
+            .map(|ast| ast.imports.into_iter().map(|import| import.path).collect())
+            .unwrap_or_default(),
+        DocumentSurface::Known(SurfaceKind::Intent) => phero_syntax::parse_intents(text)
             .ast
             .map(|ast| ast.imports.into_iter().map(|import| import.path).collect())
             .unwrap_or_default(),

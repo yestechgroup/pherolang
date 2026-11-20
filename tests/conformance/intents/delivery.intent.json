@@ -1,0 +1,45 @@
+{
+  "formatVersion": 1,
+  "intents": [
+    {
+      "id": "DELIVERY-001",
+      "statement": "A handover is confirmed by the receiving courier.",
+      "elements": [
+        {
+          "kind": "class",
+          "name": "DeliveryDrone"
+        },
+        {
+          "kind": "class",
+          "name": "nz.example.delivery.Recipient"
+        },
+        {
+          "kind": "op",
+          "name": "HandOverService.confirmHandover"
+        }
+      ],
+      "checks": [
+        {
+          "kind": "invariant",
+          "name": "DeliveryDrone"
+        }
+      ]
+    },
+    {
+      "id": "DELIVERY-002",
+      "statement": "A release below the weight ceiling needs no operator review.",
+      "elements": [
+        {
+          "kind": "class",
+          "name": "ReleaseRequest"
+        }
+      ],
+      "checks": [
+        {
+          "kind": "decision",
+          "name": "ReleaseAssessment"
+        }
+      ]
+    }
+  ]
+}

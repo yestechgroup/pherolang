@@ -203,6 +203,7 @@
 //! | [`events::EVENT_MODEL_FORMAT_VERSION`] | [`events::EventModel`] | `.evt` event contract |
 //! | [`deploy::DEPLOY_MODEL_FORMAT_VERSION`] | [`deploy::DeployModel`] | `.deploy` deployment model |
 //! | [`usecases::USE_CASE_MODEL_FORMAT_VERSION`] | [`usecases::UseCaseModel`] | `.uc` use case pattern |
+//! | [`intents::INTENT_MODEL_FORMAT_VERSION`] | [`intents::IntentModel`] | `.intent` intent specification |
 //! | [`ifml::IFML_MODEL_FORMAT_VERSION`] | [`ifml::IfmlModel`] | `.ifml` interaction flow |
 //! | [`ifml_manifest::IFML_MANIFEST_FORMAT_VERSION`] | [`ifml_manifest::IfmlManifest`] | `.ifml` control/route manifest |
 //! | [`cmmn::CMMN_MODEL_FORMAT_VERSION`] | [`cmmn::CmmnModel`] | `.cmmn` case management |
@@ -226,6 +227,7 @@ pub mod events;
 pub mod graph;
 pub mod ifml;
 pub mod ifml_manifest;
+pub mod intents;
 pub mod usecases;
 mod wire;
 

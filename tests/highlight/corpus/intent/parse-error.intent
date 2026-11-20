@@ -1,0 +1,4 @@
+import "support.mox"
+
+intent LOAN-001 "no body"
+) } $$

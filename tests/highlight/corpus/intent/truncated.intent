@@ -1,0 +1,3 @@
+import "support.mox"
+
+intent LOAN-001 "A loan above the desk limit is decided by a human." {

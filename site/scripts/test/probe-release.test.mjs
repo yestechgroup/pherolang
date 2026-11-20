@@ -13,9 +13,12 @@ const SCRIPT = new URL('../probe-release.mjs', import.meta.url).pathname;
 /**
  * A stub `pherolang`: `check` exits 0 unless the target contains `fails` in
  * its path or is a directory holding such a file — mirroring real `check`,
- * where a directory fails when any contained model fails.
+ * where a directory fails when any contained model fails. It prints the
+ * real check's receipt (`OK <path>`, one per compiled model file) — except
+ * for `skipGlob` matches, which exit 0 silently: a release predating a
+ * surface compiles nothing for it and prints nothing.
  */
-function writeStub(dir, { failGlob = 'fails' } = {}) {
+function writeStub(dir, { failGlob = 'fails', skipGlob = null } = {}) {
   const stub = join(dir, 'pherolang-stub');
   writeFileSync(
     stub,
@@ -28,6 +31,14 @@ function writeStub(dir, { failGlob = 'fails' } = {}) {
       `if find "$target" -name '*${failGlob}*' -print -quit 2>/dev/null | grep -q .; then`,
       '  echo "Error: missing `package` declaration" >&2; echo "1 of 1 files failed" >&2',
       '  exit 1',
+      'fi',
+      `if [ -n "${skipGlob}" ] && find "$target" -name '*${skipGlob}*' -print -quit 2>/dev/null | grep -q .; then`,
+      '  exit 0',
+      'fi',
+      'if [ -d "$target" ]; then',
+      '  find "$target" -type f | LC_ALL=C sort | while IFS= read -r f; do echo "OK $f"; done',
+      'else',
+      '  echo "OK $target"',
       'fi',
       'exit 0',
     ].join('\n'),
@@ -172,6 +183,40 @@ test('listModelFiles walks recursively, sorts, and only takes model surfaces', (
     writeFileSync(join(dir, 'a', 'b.ddd'), '');
     const files = listModelFiles(dir).map((path) => path.slice(dir.length + 1));
     assert.deepEqual(files, ['a/b.ddd', 'a/nested/a.mox', 'a/z.actor']);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('a release that silently skips an extension gets the named skip', () => {
+  // The v0.4.0 binary facing `.intent`: directory mode exits 0 and prints
+  // nothing for the file it does not know — no `OK <path>` receipt, so the
+  // release has not compiled it. The probe must not call that compatible.
+  const dir = scratch();
+  try {
+    const binary = writeStub(dir, { skipGlob: 'intent' });
+    const examples = join(dir, 'examples');
+    mkdirSync(join(examples, 'support'), { recursive: true });
+    writeFileSync(join(examples, 'support', 'support.mox'), 'model');
+    writeFileSync(join(examples, 'support', 'support.intent'), 'model');
+    const verdict = probeRelease({ binary, examplesDir: examples });
+    assert.equal(verdict.compatible, false);
+    assert.match(verdict.failingFile, /support\.intent$/);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('a release that compiles every file is compatible (coverage receipts count)', () => {
+  const dir = scratch();
+  try {
+    const binary = writeStub(dir);
+    const examples = join(dir, 'examples');
+    mkdirSync(join(examples, 'support'), { recursive: true });
+    writeFileSync(join(examples, 'support', 'support.mox'), 'model');
+    writeFileSync(join(examples, 'support', 'support.intent'), 'model');
+    const verdict = probeRelease({ binary, examplesDir: examples });
+    assert.deepEqual(verdict, { compatible: true });
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }

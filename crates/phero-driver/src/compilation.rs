@@ -186,6 +186,58 @@ compilation_struct!(
     }
 );
 
+/// The result of compiling an `.intent` file against its imported domain
+/// models (issue pherolang#196). The artifact carries the intents with
+/// their links **as authored** — link names are resolved by the
+/// project-level coverage pass, never by the compile.
+///
+/// This compilation is hand-written instead of the
+/// `compilation_struct!` macro shape because it carries one extra,
+/// deliberately unserialized table: the span sites the coverage pass
+/// renders spanned diagnostics from (the `.ifml` auth-sites discipline —
+/// spans live beside the artifact, never in the wire).
+///
+/// Diagnostics come from every file involved (the `.intent` file, its
+/// imported domains), so each is tagged with its path; group or render
+/// them per file (see [`render`](crate::render)).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct IntentCompilation {
+    /// The intent artifact, or `None` when any error-severity diagnostic
+    /// was produced in any file. Warnings do not block lowering.
+    pub model: Option<phero_ir::intents::IntentModel>,
+    /// The imported domains lowered against their shared union namespace as
+    /// one multi-package model, or `None` when any domain failed to lower.
+    /// The union is carried for host symmetry with the other standalone
+    /// surfaces; the intent engine itself consumes no types from it.
+    pub domains_model: Option<phero_ir::Model>,
+    /// Diagnostics from the `.intent` file and each imported domain, each
+    /// tagged with its file's path, in compilation order.
+    pub diagnostics: Vec<(String, Diagnostic)>,
+    /// The span table of the file's intent ids and links (byte offsets,
+    /// never serialized). Empty when the file did not produce an AST.
+    pub spans: Vec<crate::intents::IntentLinkSite>,
+}
+
+impl IntentCompilation {
+    /// Assembles the compilation from the surface engine's artifact,
+    /// diagnostics, and span table, and the lowered domains (the shared
+    /// `entry::finish_surface` tail appends the domains' sigil diagnostics
+    /// before calling this).
+    pub(crate) fn assemble(
+        model: Option<phero_ir::intents::IntentModel>,
+        domains_model: Option<phero_ir::Model>,
+        diagnostics: Vec<(String, Diagnostic)>,
+        spans: Vec<crate::intents::IntentLinkSite>,
+    ) -> Self {
+        Self {
+            model,
+            domains_model,
+            diagnostics,
+            spans,
+        }
+    }
+}
+
 /// The result of compiling several `.mox` files (one package per file) into
 /// one multi-package model.
 #[derive(Debug, Clone, PartialEq, Eq, Default)]

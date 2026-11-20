@@ -43,8 +43,8 @@
       "slug": "diagnostics",
       "title": "Diagnostic codes",
       "description": "Every diagnostic a pherolang surface emits carries a stable string code. The codes live in one place — the `phero-diagnostics` crate — and this page is generated from that registry: a new code is a table row in `phero-diagnostics`, never a local constant. Two schemes are registered side by side: the numeric bands (`E####` errors, `W####` warnings, `X####` cross-surface integrity) are surface-local, human-facing codes the CLI prints, while the driver's camelCase names are payload-carrying LSP diagnostic codes (`phero_driver::DiagnosticCode`); both are first-class registry entries, cross-referenced by band. To allocate a code, claim (or find) your band in the ledger and add the constant plus its entry to the band module. Run `pherolang explain <code>` for one entry, or `pherolang explain --list` for everything.",
-      "bytes": 50166,
-      "lines": 170
+      "bytes": 55313,
+      "lines": 187
     },
     {
       "path": "docs/DMN.md",
@@ -88,8 +88,8 @@
       "slug": "goldens",
       "title": "Golden fixtures",
       "description": "A **golden** is a committed file that a test compares byte-for-byte against",
-      "bytes": 8035,
-      "lines": 132
+      "bytes": 8128,
+      "lines": 133
     },
     {
       "path": "docs/GRAPH.md",
@@ -97,8 +97,8 @@
       "slug": "graph",
       "title": "The unified semantic graph",
       "description": "`pherolang graph build` compiles a tree of model files into **one queryable,",
-      "bytes": 62372,
-      "lines": 995
+      "bytes": 62627,
+      "lines": 999
     },
     {
       "path": "docs/HIGHLIGHTING.md",
@@ -126,6 +126,15 @@
       "description": "`pherolang` ships as a single native binary and reads nothing from the network",
       "bytes": 4475,
       "lines": 120
+    },
+    {
+      "path": "docs/INTENTS.md",
+      "name": "INTENTS.md",
+      "slug": "intents",
+      "title": "Intent specifications (`.intent`)",
+      "description": "An `.intent` file states **requirements as model data**: one requirement per",
+      "bytes": 4168,
+      "lines": 88
     },
     {
       "path": "docs/LANGUAGE.md",
@@ -223,8 +232,8 @@
       "slug": "verification",
       "title": "Verification (proof-obligation register)",
       "description": "Phero Lang's formal-verification strategy follows",
-      "bytes": 33988,
-      "lines": 241
+      "bytes": 35236,
+      "lines": 243
     },
     {
       "path": "docs/VERSIONING.md",

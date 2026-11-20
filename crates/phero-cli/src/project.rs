@@ -68,6 +68,9 @@ pub(crate) enum Artifact {
     Deploy(phero_ir::deploy::DeployModel),
     /// An `.ifml` flow (the standalone `IfmlModel`).
     Flow(phero_ir::ifml::IfmlModel),
+    /// An `.intent` intent specification (the standalone `IntentModel`,
+    /// issue pherolang#196).
+    Intents(phero_ir::intents::IntentModel),
 }
 
 impl Artifact {
@@ -83,6 +86,7 @@ impl Artifact {
             Artifact::Case(model) => Ok(model.to_json_pretty()?),
             Artifact::Deploy(model) => Ok(model.to_json_pretty()?),
             Artifact::Flow(model) => Ok(model.to_json_pretty()?),
+            Artifact::Intents(model) => Ok(model.to_json_pretty()?),
         }
     }
 }
@@ -617,6 +621,10 @@ fn written_imports(path: &Path, text: &str) -> Vec<String> {
         Some(SurfaceKind::Dmn) => phero_driver::project::dmn_import_paths(text),
         Some(SurfaceKind::Ifml) => phero_ifml::parse_ifml(text)
             .map(|model| model.imports)
+            .unwrap_or_default(),
+        Some(SurfaceKind::Intent) => phero_syntax::parse_intents(text)
+            .ast
+            .map(|ast| ast.imports.into_iter().map(|import| import.path).collect())
             .unwrap_or_default(),
         // A `.mox` member declares no surface imports; an unknown extension
         // is no application file at all.

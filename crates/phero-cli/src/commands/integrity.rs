@@ -28,6 +28,7 @@ use phero_driver::applications::{applications, ApplicationFile};
 use phero_driver::{check_integrity, Diagnostic, SurfaceKind};
 use phero_ir::ddd::DddModel;
 use phero_ir::deploy::DeployModel;
+use phero_ir::dmn::DmnModel;
 use phero_ir::events::EventModel;
 use phero_ir::ifml::IfmlModel;
 use phero_ir::ActorModel;
@@ -81,6 +82,10 @@ struct Contribution {
     source: String,
     imports: Vec<ImportPath>,
     artifact: Option<Bucket>,
+    /// The `.intent` compile's span table (empty for every other surface):
+    /// where each intent id and link name sits, for the coverage pass's
+    /// spanned diagnostics.
+    intent_spans: Vec<phero_driver::IntentLinkSite>,
 }
 
 /// One import of a contribution, in the form its reader produced: the
@@ -103,17 +108,22 @@ impl ImportPath {
     }
 }
 
-/// One artifact bucket of the union pass. `.mox` domains and `.uc`/`.cmmn`
-/// files contribute no artifact — domains are not a check input, and the
-/// use case surfaces are consumers of the other buckets — but `.mox` files
-/// still join the clustering as bridges between the surfaces importing
-/// them.
+/// One artifact bucket of the union pass. `.uc`/`.cmmn` files contribute no
+/// artifact — the use case surfaces are consumers of the other buckets.
+/// The `.mox` domains, `.dmn` decisions, and `.intent` files feed the
+/// **coverage** pass (issue pherolang#196), not the integrity checks
+/// (`check_integrity`'s own inputs stay the design/actor/event/deploy/flow
+/// buckets); `.mox` files also join the clustering as bridges between the
+/// surfaces importing them.
 enum Bucket {
     Design(DddModel),
     Actors(ActorModel),
     Events(EventModel),
     Deploys(DeployModel),
     Flows(IfmlModel),
+    Domain(phero_ir::Model),
+    Decision(DmnModel),
+    Intents(phero_ir::intents::IntentModel),
 }
 
 /// Standalone check of one input through the shared pipeline: no project
@@ -152,13 +162,17 @@ fn check_contribution(file: &Path) -> anyhow::Result<Option<Contribution>> {
                 .collect();
             (Some(Bucket::Flows(model)), imports)
         }
-        // A `.mox` domain joins the clustering as a bridge node (no bucket):
-        // the surfaces importing it share one application through it.
-        Artifact::Domain(_) => (None, Vec::new()),
+        // A `.mox` domain joins the clustering as a bridge node and feeds
+        // the coverage pass's class vocabulary (no integrity bucket).
+        Artifact::Domain(model) => (Some(Bucket::Domain(model)), Vec::new()),
+        // The `.dmn` decisions and `.intent` files feed the coverage pass
+        // (issue pherolang#196), not the integrity checks.
+        Artifact::Decision(model) => (Some(Bucket::Decision(model)), resolved(outcome.imports)),
+        Artifact::Intents(model) => (Some(Bucket::Intents(model)), resolved(outcome.imports)),
         // The use case surfaces are consumers of the other buckets, not
         // check inputs (the `.uc`/`.cmmn` precedent): they compile — so a
         // failure still re-reports — and contribute nothing.
-        Artifact::UseCase(_) | Artifact::Case(_) | Artifact::Decision(_) => return Ok(None),
+        Artifact::UseCase(_) | Artifact::Case(_) => return Ok(None),
     };
     let source = std::fs::read_to_string(file)
         .map_err(|error| anyhow::anyhow!("cannot read {}: {error}", file.display()))?;
@@ -167,6 +181,7 @@ fn check_contribution(file: &Path) -> anyhow::Result<Option<Contribution>> {
         source,
         imports,
         artifact,
+        intent_spans: outcome.intent_spans,
     }))
 }
 
@@ -238,6 +253,13 @@ fn report_union_integrity(
         let mut events = Vec::new();
         let mut deploys = Vec::new();
         let mut flows = Vec::new();
+        // The coverage pass's buckets (issue pherolang#196): the domains
+        // the classes resolve against, the decisions the `decision` checks
+        // resolve against, and the intent artifacts themselves.
+        let mut domains = Vec::new();
+        let mut decisions = Vec::new();
+        let mut intents = Vec::new();
+        let mut intent_spans: BTreeMap<String, Vec<phero_driver::IntentLinkSite>> = BTreeMap::new();
         for &member in members {
             let contribution = &contributions[owners[member]];
             match &contribution.artifact {
@@ -256,7 +278,17 @@ fn report_union_integrity(
                 Some(Bucket::Flows(model)) => {
                     flows.push((contribution.path.clone(), model.clone()))
                 }
+                Some(Bucket::Domain(model)) => domains.push(model.clone()),
+                Some(Bucket::Decision(model)) => {
+                    decisions.push((contribution.path.clone(), model.clone()))
+                }
+                Some(Bucket::Intents(model)) => {
+                    intents.push((contribution.path.clone(), model.clone()))
+                }
                 None => {}
+            }
+            if !contribution.intent_spans.is_empty() {
+                intent_spans.insert(contribution.path.clone(), contribution.intent_spans.clone());
             }
         }
         if designs.is_empty()
@@ -264,10 +296,26 @@ fn report_union_integrity(
             && events.is_empty()
             && deploys.is_empty()
             && flows.is_empty()
+            && intents.is_empty()
         {
             continue;
         }
-        let diagnostics = check_integrity(&designs, &actors, &events, &deploys, &flows);
+        let application = designs
+            .iter()
+            .find_map(|(_, model)| model.application.as_ref().map(|app| app.name.clone()))
+            .unwrap_or_else(|| "the application".to_string());
+        let mut diagnostics = check_integrity(&designs, &actors, &events, &deploys, &flows);
+        diagnostics.extend(phero_driver::coverage::check_coverage(
+            &intents,
+            &intent_spans,
+            &domains,
+            &actors,
+            &events,
+            &flows,
+            &designs,
+            &decisions,
+            &application,
+        ));
         for (path, group) in group_by_path(&diagnostics) {
             let Some(source) = sources.get(path.as_str()) else {
                 continue;

@@ -343,6 +343,18 @@ pub const DMN_CONTEXTUAL: &[&str] = &[
     "name",
 ];
 
+/// The real lexer keywords the `.intent` grammar recognizes (issue
+/// pherolang#196): the shared `import` is the only real keyword — the
+/// declaration and link words are contextual.
+pub const INTENTS_KEYWORDS: &[&str] = &["import"];
+
+/// The contextual words of `.intent`. The link kind words (`class`,
+/// `capability`, `event`, `view`, `command`, `op`, `invariant`,
+/// `decision`) are deliberately **not** listed: they are an open,
+/// driver-validated vocabulary in plain name position, never
+/// grammar-special.
+pub const INTENTS_CONTEXTUAL: &[&str] = &["intent", "element", "check"];
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -378,6 +390,8 @@ mod tests {
             ("CMMN_CONTEXTUAL", CMMN_CONTEXTUAL),
             ("DMN_KEYWORDS", DMN_KEYWORDS),
             ("DMN_CONTEXTUAL", DMN_CONTEXTUAL),
+            ("INTENTS_KEYWORDS", INTENTS_KEYWORDS),
+            ("INTENTS_CONTEXTUAL", INTENTS_CONTEXTUAL),
         ] {
             unique(words, name);
         }
@@ -394,6 +408,7 @@ mod tests {
             ("UC_KEYWORDS", UC_KEYWORDS),
             ("CMMN_KEYWORDS", CMMN_KEYWORDS),
             ("DMN_KEYWORDS", DMN_KEYWORDS),
+            ("INTENTS_KEYWORDS", INTENTS_KEYWORDS),
         ] {
             for word in words {
                 assert!(
@@ -438,6 +453,7 @@ mod tests {
             ("UC_CONTEXTUAL", UC_CONTEXTUAL),
             ("CMMN_CONTEXTUAL", CMMN_CONTEXTUAL),
             ("DMN_CONTEXTUAL", DMN_CONTEXTUAL),
+            ("INTENTS_CONTEXTUAL", INTENTS_CONTEXTUAL),
         ] {
             for word in words {
                 // `if` is a `.mox` keyword token and a `.ddd` statement word;

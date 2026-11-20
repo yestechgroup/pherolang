@@ -6,7 +6,7 @@
     "reported": "pherolang 0.4.0 (x86_64-unknown-linux-gnu)"
   },
   "counts": {
-    "surfaces": 9,
+    "surfaces": 10,
     "nodes": 312,
     "edges": 476,
     "applications": 8,
@@ -201,7 +201,7 @@
       "conformance": {
         "path": "tests/conformance/models",
         "exists": true,
-        "files": 19
+        "files": 20
       },
       "golden": null,
       "backends": [
@@ -264,7 +264,7 @@
       "conformance": {
         "path": "tests/conformance/models",
         "exists": true,
-        "files": 19
+        "files": 20
       },
       "golden": {
         "path": "examples/artifacts/support.actor.json",
@@ -446,6 +446,33 @@
         "path": "examples/artifacts/support.deploy.json",
         "exists": true,
         "bytes": 4133
+      },
+      "backends": [],
+      "status": "validated"
+    },
+    {
+      "id": "intent",
+      "extension": ".intent",
+      "name": "Intent specification",
+      "docs": {
+        "path": "docs/INTENTS.md",
+        "exists": true,
+        "bytes": 4168
+      },
+      "example": {
+        "path": "examples/support/support.intent",
+        "exists": true,
+        "bytes": 818
+      },
+      "conformance": {
+        "path": "tests/conformance/intents",
+        "exists": true,
+        "files": 1
+      },
+      "golden": {
+        "path": "examples/artifacts/support.intent.json",
+        "exists": true,
+        "bytes": 1891
       },
       "backends": [],
       "status": "validated"

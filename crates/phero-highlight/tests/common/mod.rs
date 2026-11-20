@@ -37,7 +37,7 @@ pub fn assert_invariants(source: &str, spans: &[HighlightSpan]) {
     }
 }
 
-/// The nine `examples/support/support.*` files, in path order.
+/// The ten `examples/support/support.*` files, in path order.
 pub fn example_files() -> Vec<(Surface, PathBuf)> {
     let directory = repository_root().join("examples/support");
     let mut files = Vec::new();

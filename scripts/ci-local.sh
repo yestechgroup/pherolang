@@ -88,6 +88,7 @@ FIXTURE_FORMAT_GLOBS=(
   tests/conformance/usecases
   tests/conformance/cmmn
   tests/conformance/dmn
+  tests/conformance/intents
   tests/conformance/ifml
 )
 
