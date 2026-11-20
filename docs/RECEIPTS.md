@@ -223,7 +223,7 @@ stripping the canonical working directory.
 
 `examples/artifacts/support.receipt.json`, next to the artifacts it names —
 so `--check` re-hashes its siblings and the whole bundle is copy-able. The
-`support` example is the flagship: nine surfaces, the cross-surface
+`support` example is the flagship: ten surfaces, the cross-surface
 capability joins, the pattern library, and an external decision table, which
 is what makes it worth a receipt.
 

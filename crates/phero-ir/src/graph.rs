@@ -288,6 +288,9 @@ pub mod kinds {
     pub const ACTOR: &str = "actor";
     /// Node: a policy capability.
     pub const CAPABILITY: &str = "capability";
+    /// Node: a declared `.intent` requirement — the stable id is the name
+    /// (`REFUND-001`), application-unique across the intent artifacts.
+    pub const INTENT: &str = "intent";
     /// Node: a `.ddd` application design.
     pub const DESIGN_APPLICATION: &str = "designApplication";
     /// Node: a `.ddd` module.
@@ -453,6 +456,12 @@ pub mod kinds {
     pub const USES_PROFILE: &str = "usesProfile";
     /// Edge: deployment → deployed application.
     pub const DEPLOYS: &str = "deploys";
+    /// Edge: intent → the model element that expresses it (an `element` link:
+    /// class, capability, event, view, command, or service operation).
+    pub const EXPRESSES: &str = "expresses";
+    /// Edge: intent → the model-native check that verifies it (a `check`
+    /// link: the invariant-bearing class, or a decision).
+    pub const VERIFIED_BY: &str = "verifiedBy";
 }
 
 #[cfg(test)]

@@ -182,6 +182,23 @@ fn dmn_model() -> phero_ir::dmn::DmnModel {
     compilation.model.expect("decision model must lower")
 }
 
+/// The flagship `.intent` artifact, compiled against the support domain
+/// (`.intent` imports are raw `.mox` domains).
+fn intent_model() -> phero_ir::intents::IntentModel {
+    let display = "examples/support/support.intent";
+    let domains = [(
+        disk("examples/support/support.mox").display().to_string(),
+        read("examples/support/support.mox"),
+    )];
+    let compilation = phero_driver::compile_intent_str(
+        &disk(display).display().to_string(),
+        &read(display),
+        &phero_driver::CompileInputs::from_domains(&domains),
+    );
+    assert_clean(display, &compilation.diagnostics);
+    compilation.model.expect("intent artifact must lower")
+}
+
 /// The pattern files `support.ifml` instantiates (its `walk_ifml_imports`
 /// closure), hardcoded per the house convention: a missing file fails loudly.
 const PATTERN_FLOWS: [&str; 6] = [
@@ -367,6 +384,10 @@ fn support_inputs() -> GraphInputs {
     inputs
         .decisions
         .push(graph_file("examples/support/support.dmn", dmn_model()));
+    inputs.intents.push(graph_file(
+        "examples/support/support.intent",
+        intent_model(),
+    ));
     inputs
 }
 
@@ -1741,7 +1762,7 @@ fn artifact_contains_no_absolute_paths() {
 /// `phero_ir::graph::kinds`.
 #[test]
 fn emitted_kinds_are_the_published_vocabulary() {
-    const NODE_KINDS: [&str; 44] = [
+    const NODE_KINDS: [&str; 45] = [
         kinds::FILE,
         kinds::CLASS,
         kinds::ENUM,
@@ -1750,6 +1771,7 @@ fn emitted_kinds_are_the_published_vocabulary() {
         kinds::OPERATION,
         kinds::ACTOR,
         kinds::CAPABILITY,
+        kinds::INTENT,
         kinds::DESIGN_APPLICATION,
         kinds::MODULE,
         kinds::SERVICE,
@@ -1787,7 +1809,7 @@ fn emitted_kinds_are_the_published_vocabulary() {
         kinds::DEPLOYMENT,
         kinds::PLATFORM_CAPABILITY,
     ];
-    const EDGE_KINDS: [&str; 41] = [
+    const EDGE_KINDS: [&str; 43] = [
         kinds::IMPORTS,
         kinds::MEMBER_OF,
         kinds::EXTENDS,
@@ -1829,6 +1851,8 @@ fn emitted_kinds_are_the_published_vocabulary() {
         kinds::PROVIDES,
         kinds::USES_PROFILE,
         kinds::DEPLOYS,
+        kinds::EXPRESSES,
+        kinds::VERIFIED_BY,
     ];
     // A merged tree: both example applications plus the CLI flow (commands)
     // and the conformance interaction model (containers, refreshes), so every
@@ -1871,6 +1895,7 @@ fn emitted_kinds_are_the_published_vocabulary() {
         kinds::OPERATION,
         kinds::ACTOR,
         kinds::CAPABILITY,
+        kinds::INTENT,
         kinds::DESIGN_APPLICATION,
         kinds::MODULE,
         kinds::SERVICE,
@@ -1949,6 +1974,8 @@ fn emitted_kinds_are_the_published_vocabulary() {
         kinds::PROVIDES,
         kinds::USES_PROFILE,
         kinds::DEPLOYS,
+        kinds::EXPRESSES,
+        kinds::VERIFIED_BY,
     ] {
         assert!(seen_edges.contains(kind), "no {kind} edge emitted");
         seen_edges.remove(kind);
@@ -2181,18 +2208,28 @@ fn affected_by_raise_refund_returns_the_support_desk_wiring() {
         // Depth 0 — the reference itself.
         capability(ACTOR, "Support.RaiseRefund"),
         // Depth 1 — the permitting actor, the excluded capability, the
-        // operation carrying the capability, and the use case requiring it.
+        // requirement that states the capability (#363), the operation
+        // carrying the capability, and the use case requiring it.
         actor(ACTOR, "Support.Agent"),
         capability(ACTOR, "Support.ApproveRefund"),
+        format!(
+            "{}:examples/support/support.intent#REFUND-001",
+            kinds::INTENT
+        ),
         service_operation(DDD, "SupportDesk.desk.TicketService.raiseRefund"),
         use_case(UC, "RaiseRefund"),
         // Depth 2 — the `.ifml` action bound to the operation, the actors
-        // reached through `permits`/`extends`, the case wiring, and the
-        // service owning the operation (`memberOf` walks forward).
+        // reached through `permits`/`extends`, the case wiring, the
+        // requirement expressing the operation, and the service owning the
+        // operation (`memberOf` walks forward).
         action(IFML, "RaiseRefund"),
         actor(ACTOR, "Support.Finance"),
         actor(ACTOR, "Support.Manager"),
         case_role(CMMN, "RefundDesk.triage"),
+        format!(
+            "{}:examples/support/support.intent#REFUND-002",
+            kinds::INTENT
+        ),
         plan_item(CMMN, "RefundDesk.AssessRefund"),
         format!("{}:{DDD}#SupportDesk.desk.TicketService", kinds::SERVICE),
         service_operation(DDD, "SupportDesk.desk.TicketService.approveRefund"),
@@ -2356,5 +2393,98 @@ fn a_mirror_dto_emits_no_second_type_node() {
             .all(|node| node.file != display
                 || (node.kind != kinds::CLASS && node.kind != kinds::DTO)),
         "a mirror DTO's boundary name is the source class's node"
+    );
+}
+
+/// #363's exit gate, plus the graph-versus-coverage guard: every link of the
+/// flagship's **fully covered** intents becomes exactly one traceability
+/// edge, the two slots stay distinct families, `affected-by` reverse-walks a
+/// capability into the requirement that states it, and `dependencies` of a
+/// requirement names what expresses and verifies it.
+///
+/// The guard's other half is
+/// `examples_artifacts::the_support_example_has_full_intent_coverage`: the
+/// coverage pass is clean on this fixture, so "every authored link" and
+/// "every resolved link" are the same set here. If the graph's `Symbols`
+/// resolution and `coverage::Vocabulary` ever part ways, one of the two
+/// assertions moves.
+#[test]
+fn intent_traceability_edges_are_walkable() {
+    let graph = build(&support_inputs());
+    let index = GraphIndex::new(&graph);
+
+    let authored: usize = intent_model()
+        .intents
+        .iter()
+        .map(|intent| intent.elements.len() + intent.checks.len())
+        .sum();
+    let traceability: Vec<&GraphEdge> = graph
+        .edges
+        .iter()
+        .filter(|edge| edge.kind == kinds::EXPRESSES || edge.kind == kinds::VERIFIED_BY)
+        .collect();
+    assert_eq!(
+        traceability.len(),
+        authored,
+        "one edge per authored link (the fixture is fully covered)"
+    );
+    assert!(
+        traceability
+            .iter()
+            .any(|edge| edge.kind == kinds::EXPRESSES),
+        "the element links emit expresses edges"
+    );
+    assert!(
+        traceability
+            .iter()
+            .any(|edge| edge.kind == kinds::VERIFIED_BY),
+        "the check links emit verifiedBy edges"
+    );
+
+    // Every edge starts at an intent node: the traceability family is
+    // intent-owned, never element-owned.
+    for edge in &traceability {
+        assert!(
+            graph
+                .nodes
+                .iter()
+                .any(|node| node.id == edge.from && node.kind == kinds::INTENT),
+            "{} must start at an intent node",
+            edge.from
+        );
+    }
+
+    // `affected-by` an expressing capability reaches the requirement.
+    let envelope = affected_by(
+        &index,
+        &capability(ACTOR, "Support.RaiseRefund"),
+        &[],
+        ClosureDirection::Dependents,
+    )
+    .expect("the capability resolves");
+    assert!(
+        envelope
+            .results
+            .iter()
+            .any(|result| result.id == "intent:examples/support/support.intent#REFUND-001"),
+        "the requirement stating the capability must be affected by it: {:#?}",
+        envelope.results
+    );
+
+    // `dependencies` of a requirement names its element and its check.
+    let envelope = dependencies(&index, "intent:examples/support/support.intent#TICKET-001")
+        .expect("the requirement resolves");
+    let dependency_ids: BTreeSet<&str> = envelope
+        .results
+        .iter()
+        .map(|result| result.id.as_str())
+        .collect();
+    assert!(
+        dependency_ids.contains("class:examples/support/support.mox#nz.example.support.Ticket"),
+        "the expressed class is a dependency: {dependency_ids:#?}"
+    );
+    assert!(
+        dependency_ids.contains("view:examples/support/support.ifml#Queue"),
+        "the expressing view is a dependency: {dependency_ids:#?}"
     );
 }

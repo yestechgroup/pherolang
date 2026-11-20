@@ -375,6 +375,25 @@ fn cmmn_model() -> phero_ir::cmmn::CmmnModel {
     compilation.model.expect("case must lower")
 }
 
+/// The fixture's `.intent` artifact, compiled against `app.mox`.
+fn intent_model() -> phero_ir::intents::IntentModel {
+    let domains = [(
+        disk("tests/conformance/graph/app.mox")
+            .display()
+            .to_string(),
+        read("tests/conformance/graph/app.mox"),
+    )];
+    let compilation = phero_driver::compile_intent_str(
+        &disk("tests/conformance/graph/app.intent")
+            .display()
+            .to_string(),
+        &read("tests/conformance/graph/app.intent"),
+        &phero_driver::CompileInputs::from_domains(&domains),
+    );
+    assert_no_file_errors("app.intent", &compilation.diagnostics);
+    compilation.model.expect("intent artifact must lower")
+}
+
 /// The full fixture: every surface of `app.*` plus the unrelated `other.*`
 /// application (no import path between them).
 fn fixture_inputs() -> GraphInputs {
@@ -404,6 +423,9 @@ fn fixture_inputs() -> GraphInputs {
     inputs.use_cases.push(graph_file("app.uc", uc_model()));
     inputs.cases.push(graph_file("app.cmmn", cmmn_model()));
     inputs.decisions.push(graph_file("app.dmn", dmn_model()));
+    inputs
+        .intents
+        .push(graph_file("app.intent", intent_model()));
     inputs
 }
 
@@ -934,6 +956,8 @@ fn exit_gate_support_example_answers_what_is_affected_by_changing_a_capability()
             capability,
             "actor:support/support.actor#Support.Agent",
             "capability:support/support.actor#Support.ApproveRefund",
+            // The requirement stating the capability (#363).
+            "intent:support/support.intent#REFUND-001",
             "serviceOperation:support/support.ddd#SupportDesk.desk.TicketService.raiseRefund",
             "useCase:support/support.uc#RaiseRefund",
             "action:support/support.ifml#RaiseRefund",
@@ -941,6 +965,8 @@ fn exit_gate_support_example_answers_what_is_affected_by_changing_a_capability()
             "actor:support/support.actor#Support.Manager",
             "caseRole:support/support.cmmn#RefundDesk.triage",
             "command:support/cli.ifml#tickets",
+            // The requirement expressing the raised operation (#363).
+            "intent:support/support.intent#REFUND-002",
             "planItem:support/support.cmmn#RefundDesk.AssessRefund",
             "service:support/support.ddd#SupportDesk.desk.TicketService",
             "serviceOperation:support/support.ddd#SupportDesk.desk.TicketService.approveRefund",

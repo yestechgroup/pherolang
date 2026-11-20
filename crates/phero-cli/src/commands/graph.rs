@@ -524,10 +524,9 @@ fn push(
         Artifact::Decision(model) => inputs
             .decisions
             .push(GraphFile::new(display, path, imports, model)),
-        // Intents carry no graph bucket (v0.5): the file compiles and its
-        // diagnostics publish, but it contributes no nodes and no edges —
-        // the traceability edges are the coverage pass's (#196).
-        Artifact::Intents(_) => {}
+        Artifact::Intents(model) => inputs
+            .intents
+            .push(GraphFile::new(display, path, imports, model)),
     }
 }
 

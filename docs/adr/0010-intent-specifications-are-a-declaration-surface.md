@@ -54,6 +54,10 @@ Consequences, deliberately:
   #137's intent → element → verification receipt table is the follow-up.
   The pipeline still compiles every `.intent` file (one compile per
   surface), and the editor publishes its per-file diagnostics.
+  *Amended by [#363](https://github.com/yestechgroup/pherolang/issues/363):
+  the graph now emits `intent` nodes with `expresses`/`verifiedBy` edges and
+  `.intent` has a span table. This bullet records the Phase-1 scoping, which
+  the follow-through deliberately widened.*
 - **Link names are carried as authored.** The artifact never resolves a
   link; resolution is the coverage pass's, over the application's compiled
   artifacts.

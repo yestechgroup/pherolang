@@ -12,20 +12,21 @@
       "support/support.dmn",
       "support/support.evt",
       "support/support.ifml",
+      "support/support.intent",
       "support/support.mox",
       "support/support.uc"
     ],
     "source": "site/data/graph.json",
     "generator": "site/scripts/render-graph.mjs",
     "graph": {
-      "nodes": 312,
-      "edges": 476,
+      "nodes": 317,
+      "edges": 491,
       "applications": 8
     },
     "excludedKinds": [
       "file"
     ],
-    "excludedNodes": 10,
+    "excludedNodes": 11,
     "layout": {
       "margin": 20,
       "columnGap": 40,
@@ -76,6 +77,11 @@
         "nodes": 20,
         "edges": 17,
         "groups": 2
+      },
+      "intent": {
+        "nodes": 4,
+        "edges": 0,
+        "groups": 1
       }
     }
   },
@@ -2688,6 +2694,77 @@
           "kind": "assignedTo"
         }
       ]
+    },
+    {
+      "id": "intent",
+      "label": "Requirements",
+      "surface": "intent",
+      "viewport": {
+        "width": 404,
+        "height": 178
+      },
+      "groups": [
+        {
+          "key": "support",
+          "label": "support",
+          "x": 20,
+          "y": 20,
+          "w": 364,
+          "h": 138,
+          "count": 4
+        }
+      ],
+      "nodes": [
+        {
+          "id": "intent:support/support.intent#REFUND-001",
+          "kind": "intent",
+          "label": "REFUND-001",
+          "group": "support",
+          "x": 20,
+          "y": 54,
+          "w": 176,
+          "h": 46,
+          "detail": "REFUND-001 is a requirement declared in support/support.intent, with 0 connections shown in this view.",
+          "provenance": "support/support.intent"
+        },
+        {
+          "id": "intent:support/support.intent#REFUND-002",
+          "kind": "intent",
+          "label": "REFUND-002",
+          "group": "support",
+          "x": 208,
+          "y": 54,
+          "w": 176,
+          "h": 46,
+          "detail": "REFUND-002 is a requirement declared in support/support.intent, with 0 connections shown in this view.",
+          "provenance": "support/support.intent"
+        },
+        {
+          "id": "intent:support/support.intent#REFUND-003",
+          "kind": "intent",
+          "label": "REFUND-003",
+          "group": "support",
+          "x": 20,
+          "y": 112,
+          "w": 176,
+          "h": 46,
+          "detail": "REFUND-003 is a requirement declared in support/support.intent, with 0 connections shown in this view.",
+          "provenance": "support/support.intent"
+        },
+        {
+          "id": "intent:support/support.intent#TICKET-001",
+          "kind": "intent",
+          "label": "TICKET-001",
+          "group": "support",
+          "x": 208,
+          "y": 112,
+          "w": 176,
+          "h": 46,
+          "detail": "TICKET-001 is a requirement declared in support/support.intent, with 0 connections shown in this view.",
+          "provenance": "support/support.intent"
+        }
+      ],
+      "edges": []
     }
   ]
 }

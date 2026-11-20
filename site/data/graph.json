@@ -24,6 +24,7 @@
         "support/support.dmn",
         "support/support.evt",
         "support/support.ifml",
+        "support/support.intent",
         "support/support.mox",
         "support/support.uc"
       ],
@@ -1463,6 +1464,41 @@
       "kind": "view",
       "name": "WorkItem",
       "file": "support/support.ifml",
+      "application": "SupportDesk"
+    },
+    {
+      "id": "file:support/support.intent#support/support.intent",
+      "kind": "file",
+      "name": "support/support.intent",
+      "file": "support/support.intent",
+      "application": "SupportDesk"
+    },
+    {
+      "id": "intent:support/support.intent#REFUND-001",
+      "kind": "intent",
+      "name": "REFUND-001",
+      "file": "support/support.intent",
+      "application": "SupportDesk"
+    },
+    {
+      "id": "intent:support/support.intent#REFUND-002",
+      "kind": "intent",
+      "name": "REFUND-002",
+      "file": "support/support.intent",
+      "application": "SupportDesk"
+    },
+    {
+      "id": "intent:support/support.intent#REFUND-003",
+      "kind": "intent",
+      "name": "REFUND-003",
+      "file": "support/support.intent",
+      "application": "SupportDesk"
+    },
+    {
+      "id": "intent:support/support.intent#TICKET-001",
+      "kind": "intent",
+      "name": "TICKET-001",
+      "file": "support/support.intent",
       "application": "SupportDesk"
     },
     {
@@ -4016,6 +4052,11 @@
       "kind": "imports"
     },
     {
+      "from": "file:support/support.intent#support/support.intent",
+      "to": "file:support/support.mox#support/support.mox",
+      "kind": "imports"
+    },
+    {
       "from": "file:support/support.uc#support/support.uc",
       "to": "file:support/support.actor#support/support.actor",
       "kind": "imports"
@@ -4105,6 +4146,76 @@
       "attributes": {
         "field": "ticket"
       }
+    },
+    {
+      "from": "intent:support/support.intent#REFUND-001",
+      "to": "capability:support/support.actor#Support.ApproveRefund",
+      "kind": "expresses"
+    },
+    {
+      "from": "intent:support/support.intent#REFUND-001",
+      "to": "capability:support/support.actor#Support.RaiseRefund",
+      "kind": "expresses"
+    },
+    {
+      "from": "intent:support/support.intent#REFUND-001",
+      "to": "class:support/support.mox#nz.example.support.Ticket",
+      "kind": "expresses"
+    },
+    {
+      "from": "intent:support/support.intent#REFUND-001",
+      "to": "event:support/support.evt#support.RefundRequested",
+      "kind": "expresses"
+    },
+    {
+      "from": "intent:support/support.intent#REFUND-001",
+      "to": "decision:support/support.dmn#RefundDecisions.RefundAuthority",
+      "kind": "verifiedBy"
+    },
+    {
+      "from": "intent:support/support.intent#REFUND-002",
+      "to": "event:support/support.evt#support.RefundApproved",
+      "kind": "expresses"
+    },
+    {
+      "from": "intent:support/support.intent#REFUND-002",
+      "to": "serviceOperation:support/support.ddd#SupportDesk.desk.TicketService.raiseRefund",
+      "kind": "expresses"
+    },
+    {
+      "from": "intent:support/support.intent#REFUND-002",
+      "to": "decision:support/support.dmn#RefundDecisions.RefundAssessment",
+      "kind": "verifiedBy"
+    },
+    {
+      "from": "intent:support/support.intent#REFUND-003",
+      "to": "class:support/support.mox#nz.example.support.RefundDecision",
+      "kind": "expresses"
+    },
+    {
+      "from": "intent:support/support.intent#REFUND-003",
+      "to": "class:support/support.mox#nz.example.support.RefundDecision",
+      "kind": "verifiedBy"
+    },
+    {
+      "from": "intent:support/support.intent#REFUND-003",
+      "to": "decision:support/support.dmn#RefundDecisions.RefundEligibility",
+      "kind": "verifiedBy"
+    },
+    {
+      "from": "intent:support/support.intent#TICKET-001",
+      "to": "class:support/support.mox#nz.example.support.Ticket",
+      "kind": "expresses"
+    },
+    {
+      "from": "intent:support/support.intent#TICKET-001",
+      "to": "view:support/support.ifml#Queue",
+      "kind": "expresses"
+    },
+    {
+      "from": "intent:support/support.intent#TICKET-001",
+      "to": "class:support/support.mox#nz.example.support.Ticket",
+      "kind": "verifiedBy"
     },
     {
       "from": "knowledgeSource:lending/lending.dmn#Lending.CreditPolicy",

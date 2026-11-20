@@ -199,6 +199,7 @@ design-bearing components take their authored names — `Orders` and
 | `operation` | `.mox` operation | `<package>.<Class>.<op>` |
 | `actor` | `.actor` actor (inline `.mox` actors blocks too) | `<Block>.<Actor>` |
 | `capability` | `.actor` capability | `<Block>.<Capability>` |
+| `intent` | `.intent` requirement | the stable id as written (`REFUND-001`) |
 | `designApplication` | `.ddd` application root (one per application; its imported fragments merge into it) | `<App>` |
 | `module` | `.ddd` module, and an `.ifml` module declaration (one declaration per pattern) | `<App>.<module>` (`.ddd`), `<Module>` (`.ifml`) |
 | `service` | `.ddd` service | `<App>.<module>.<Service>` |
@@ -316,6 +317,17 @@ actor.
 | `provides` | decisionService → decision | — |
 | `usesProfile` | deployment → profile | — |
 | `deploys` | deployment → deployApplication | — |
+| `expresses` | intent → class / capability / event / view / command / serviceOperation (an `element` link) | — |
+| `verifiedBy` | intent → class (an `invariant` check's class) / decision (a `check` link) | — |
+
+The two traceability kinds both point **from** the intent (issue
+pherolang#363), so `affected-by` on an expressing element reaches the
+requirements that state it and `dependencies` of a requirement names what
+expresses and verifies it. An `op` link names a **service** operation (the
+coverage pass's vocabulary); an `invariant` check names the class carrying
+the invariants, which is the class's own node — `intent` is the only new
+node kind. A link that does not resolve to exactly one node emits no edge
+(the same unresolved-reference rule as every other reference).
 
 ## Node attributes
 
@@ -671,8 +683,8 @@ import-connected application at a time (the same union-find relation as the
 one checked tree never cross-check. The intent **coverage pass**
 (`X0009`–`X0014`, issue #196) rides the same phase: the `.mox` domains,
 `.dmn` decisions, and `.intent` artifacts feed it per application (see
-[docs/INTENTS.md](INTENTS.md)); `.intent` files themselves carry no graph
-bucket. In the CLI's directory batch mode the
+[docs/INTENTS.md](INTENTS.md)); `.intent` files also contribute the graph's
+`intent` nodes and traceability edges (#363). In the CLI's directory batch mode the
 pass is phase 2 only — each successful file's artifact is retained, the
 contributions cluster by import, and the capability lint stays unprinted for
 files phase 1 already failed. The compile-time joins pool the same relation
@@ -700,8 +712,9 @@ parse.
   is **frozen** — the existing suites are the oracle.
 - The seven artifact surfaces implement `SurfaceIndex` with
   `actors_index`/`ddd_index`/`evt_index`/`deploy_index`/`uc_index`/
-  `cmmn_index`/`dmn_index`; `.mox` and `.ifml` project through
-  `mox_index`/`ifml_surface` (below), completing the nine.
+  `cmmn_index`/`dmn_index`, `.intent` adds `intents_index`, and `.mox` and
+  `.ifml` project through `mox_index`/`ifml_surface` (below), completing the
+  ten.
 - Definitions are the graph's `(kind, name)` node keys, derived through
   `graph::ids` — the one naming source (`ids.rs` is `pub(crate)` for exactly
   this, and the emitters share `deploy_component_name`, `deployment_name`,
@@ -740,7 +753,7 @@ parse.
 **The anti-drift gate** is
 `every_indexed_definition_maps_to_exactly_one_graph_node` plus
 `span_slices_equal_the_written_name` in
-`crates/phero-driver/tests/navigation.rs`, over **all nine** surfaces of the
+`crates/phero-driver/tests/navigation.rs`, over **all ten** surfaces of the
 `examples/support/support.*` stack (plus
 `tests/conformance/models/actors.mox` for inline actors and the two
 conformance designs). Exactly three node kinds are excluded, each naming a

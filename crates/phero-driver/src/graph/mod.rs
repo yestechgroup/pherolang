@@ -9,7 +9,7 @@
 //!
 //! # Shape of the pass
 //!
-//! 1. **Applications.** Every file (all nine buckets plus the intent pass-through) is fed to
+//! 1. **Applications.** Every file (all ten buckets) is fed to
 //!    [`crate::applications::applications`] with its normalized imports; the
 //!    union-find components are the graph's applications. A node belongs to
 //!    its file's application, and nothing resolves across applications.
@@ -64,6 +64,7 @@ mod events;
 pub(crate) mod ids;
 mod ifml;
 pub mod index;
+mod intents;
 pub mod query;
 mod resolve;
 mod usecases;
@@ -83,6 +84,7 @@ use phero_ir::dmn::DmnModel;
 use phero_ir::events::EventModel;
 use phero_ir::graph::{GraphApplication, GraphEdge, GraphModel, GraphNode};
 use phero_ir::ifml::IfmlModel;
+use phero_ir::intents::IntentModel;
 use phero_ir::usecases::UseCaseModel;
 use phero_ir::{ActorModel, Model};
 
@@ -152,6 +154,10 @@ pub struct GraphInputs {
     pub cases: Vec<GraphFile<CmmnModel>>,
     /// `.dmn` decision-model artifacts.
     pub decisions: Vec<GraphFile<DmnModel>>,
+    /// `.intent` intent-specification artifacts (#196): the requirement nodes
+    /// and their traceability edges. A file joins the application its
+    /// `import`s name, exactly like every other surface.
+    pub intents: Vec<GraphFile<IntentModel>>,
     /// `.ddd` fragments (DD8): host facts only — a fragment has no artifact
     /// of its own, but it is a file in the application, so its file node,
     /// import edges, and `applications[].files` membership are emitted.
@@ -267,7 +273,7 @@ pub fn build(inputs: &GraphInputs) -> GraphModel {
     let (files, offsets, applications) = cluster(inputs);
     builder.files = files;
     let at = |offset: usize, index: usize| offset + index;
-    let [domain_base, actors_base, design_base, events_base, deploy_base, flow_base, use_case_base, case_base, decision_base] =
+    let [domain_base, actors_base, design_base, events_base, deploy_base, flow_base, use_case_base, case_base, decision_base, intent_base] =
         offsets;
 
     // Pass A0 — the deployment platform-capability vocabulary's nodes, one
@@ -325,6 +331,14 @@ pub fn build(inputs: &GraphInputs) -> GraphModel {
         let reference = builder.files[at(decision_base, index)].clone();
         dmn::nodes(&mut builder, &reference, &file.model);
     }
+    // The intent nodes come last: an intent names elements of every other
+    // surface, so its own nodes never have to be visible to pass A's edges —
+    // but emitting them here keeps the per-surface order the one the offsets
+    // describe.
+    for (index, file) in inputs.intents.iter().enumerate() {
+        let reference = builder.files[at(intent_base, index)].clone();
+        intents::nodes(&mut builder, &reference, &file.model);
+    }
 
     // Pass B — edges, resolving only through the completed node table.
     for (index, file) in inputs.domains.iter().enumerate() {
@@ -363,6 +377,10 @@ pub fn build(inputs: &GraphInputs) -> GraphModel {
         let reference = builder.files[at(decision_base, index)].clone();
         dmn::edges(&mut builder, &reference, &file.model);
     }
+    for (index, file) in inputs.intents.iter().enumerate() {
+        let reference = builder.files[at(intent_base, index)].clone();
+        intents::edges(&mut builder, &reference, &file.model);
+    }
     let import_edges = import_edges(&builder);
     for edge in import_edges {
         builder.add_edge(edge);
@@ -375,11 +393,11 @@ pub fn build(inputs: &GraphInputs) -> GraphModel {
 /// Clusters every input file into import-connected applications and returns
 /// the indexed files with their application ids, the per-bucket offsets into
 /// that flat list, and the wire applications.
-fn cluster(inputs: &GraphInputs) -> (Vec<FileRef>, [usize; 9], Vec<GraphApplication>) {
+fn cluster(inputs: &GraphInputs) -> (Vec<FileRef>, [usize; 10], Vec<GraphApplication>) {
     let mut files: Vec<FileRef> = Vec::new();
     // The buckets are appended in this order; each offset is its first file's
     // index in the flat list.
-    let mut offsets = [0usize; 9];
+    let mut offsets = [0usize; 10];
     let mut next = 0usize;
     for (slot, length) in offsets.iter_mut().zip([
         inputs.domains.len(),
@@ -391,6 +409,7 @@ fn cluster(inputs: &GraphInputs) -> (Vec<FileRef>, [usize; 9], Vec<GraphApplicat
         inputs.use_cases.len(),
         inputs.cases.len(),
         inputs.decisions.len(),
+        inputs.intents.len(),
     ]) {
         *slot = next;
         next += length;
@@ -429,6 +448,9 @@ fn cluster(inputs: &GraphInputs) -> (Vec<FileRef>, [usize; 9], Vec<GraphApplicat
         push(&file.display, &file.path, &file.imports);
     }
     for file in &inputs.decisions {
+        push(&file.display, &file.path, &file.imports);
+    }
+    for file in &inputs.intents {
         push(&file.display, &file.path, &file.imports);
     }
     for fragment in &inputs.design_fragments {

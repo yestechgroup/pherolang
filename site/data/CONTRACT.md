@@ -89,7 +89,8 @@ of cluster header boxes. Lane 6 needs only `nodes`/`edges`.
   "perspectives": [
     {
       "id": "domain",                  // domain | decisions | events | workflows |
-                                       // authorisation | experience | deployment | cases
+                                       // authorisation | experience | deployment |
+                                       // cases | intent
       "label": "Domain",
       "surface": "mox",                // the surface whose nodes dominate this view
       "nodes": [

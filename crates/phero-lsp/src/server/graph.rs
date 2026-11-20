@@ -957,11 +957,10 @@ enum SnapshotArtifact {
     Case(phero_ir::cmmn::CmmnModel),
     /// A `.dmn` decision-model artifact.
     Decision(phero_ir::dmn::DmnModel),
-    /// An `.intent` intent-specification artifact (issue pherolang#196). It
-    /// marks the file compiled for the snapshot memo and the coverage
-    /// pass's benefit; it contributes no graph bucket (v0.5), so the model
-    /// itself is carried only to keep the compile's output honest.
-    Intent(#[allow(dead_code)] phero_ir::intents::IntentModel),
+    /// An `.intent` intent-specification artifact (issue pherolang#196): the
+    /// requirement nodes and their traceability edges, fed to the graph's
+    /// intent bucket (issue pherolang#363).
+    Intent(phero_ir::intents::IntentModel),
 }
 
 /// Files one artifact into its graph input bucket.
@@ -1001,10 +1000,9 @@ fn push_artifact(
         SnapshotArtifact::Decision(model) => inputs
             .decisions
             .push(GraphFile::new(display, key, imports, model)),
-        // Intents carry no graph bucket (v0.5): the file compiles (its
-        // diagnostics publish), but it contributes no nodes and no edges —
-        // the traceability edges are the coverage pass's (#196).
-        SnapshotArtifact::Intent(_) => {}
+        SnapshotArtifact::Intent(model) => inputs
+            .intents
+            .push(GraphFile::new(display, key, imports, model)),
     }
 }
 
