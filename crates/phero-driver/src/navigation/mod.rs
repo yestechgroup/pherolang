@@ -20,6 +20,7 @@
 //! | `.uc` | [`SurfaceIndex`] | [`uc_index`] |
 //! | `.cmmn` | [`SurfaceIndex`] | [`cmmn_index`] |
 //! | `.dmn` | [`SurfaceIndex`] | [`dmn_index`] (takes the document path) |
+//! | `.intent` | [`SurfaceIndex`] | [`intents_index`] |
 //! | `.mox` | [`SurfaceIndex`] (graph-node projection) | [`mox_index`] |
 //! | `.ifml` | [`SurfaceIndex`] (graph-node projection) | [`ifml_surface`] |
 //!
@@ -56,6 +57,7 @@ mod deploy;
 mod dmn;
 mod evt;
 mod ifml;
+mod intents;
 mod mox;
 pub mod surface;
 #[cfg(test)]
@@ -69,6 +71,7 @@ pub use deploy::deploy_index;
 pub use dmn::dmn_index;
 pub use evt::evt_index;
 pub use ifml::ifml_surface;
+pub use intents::intents_index;
 pub use mox::{
     mox_index, DefId, Definition, FeatureSymbolKind, Lookup, NavigationIndex, Reference, SymbolKind,
 };

@@ -9,7 +9,7 @@
  * the same files with the same released asset and fails on a diff.
  *
  * Inputs : examples/**, docs/**, crates/, tests/conformance/
- * Outputs: site/data/graph.json          the unified semantic graph (305 nodes)
+ * Outputs: site/data/graph.json          the unified semantic graph
  *          site/data/support-model.json  the demo projection (scripts/render-graph.mjs)
  *          site/data/artifacts/*.json    one compiled artifact per surface
  *          site/data/receipt.json        the committed verification receipt

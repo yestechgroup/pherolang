@@ -7,8 +7,8 @@
   },
   "counts": {
     "surfaces": 10,
-    "nodes": 312,
-    "edges": 476,
+    "nodes": 317,
+    "edges": 491,
     "applications": 8,
     "crates": 24
   },
@@ -33,6 +33,7 @@
         "support/support.dmn",
         "support/support.evt",
         "support/support.ifml",
+        "support/support.intent",
         "support/support.mox",
         "support/support.uc"
       ]
@@ -101,9 +102,10 @@
       "error": 1,
       "event": 7,
       "feature": 66,
-      "file": 20,
+      "file": 21,
       "flow": 3,
       "inputData": 11,
+      "intent": 4,
       "knowledgeSource": 4,
       "module": 4,
       "operation": 6,
@@ -132,10 +134,11 @@
       "emits": 8,
       "excludes": 2,
       "executes": 1,
+      "expresses": 9,
       "extends": 4,
       "forbids": 1,
       "forwardsTo": 4,
-      "imports": 22,
+      "imports": 23,
       "injects": 3,
       "invokesAction": 6,
       "invokesDecision": 1,
@@ -154,7 +157,8 @@
       "subscribes": 8,
       "throws": 1,
       "typeOf": 59,
-      "usesProfile": 2
+      "usesProfile": 2,
+      "verifiedBy": 5
     }
   },
   "crates": [
@@ -227,7 +231,7 @@
       "docs": {
         "path": "docs/DDD.md",
         "exists": true,
-        "bytes": 130573
+        "bytes": 130441
       },
       "example": {
         "path": "examples/support/support.ddd",
@@ -457,7 +461,7 @@
       "docs": {
         "path": "docs/INTENTS.md",
         "exists": true,
-        "bytes": 4168
+        "bytes": 4427
       },
       "example": {
         "path": "examples/support/support.intent",

@@ -233,6 +233,14 @@ pub enum ReferenceContext {
     IfmlRoles,
     /// A component's `data: <Class>` binding.
     IfmlData,
+
+    // --- `.intent` --------------------------------------------------------
+    /// An `element <kind>:<name>;` link — the model element the requirement
+    /// claims to be expressed by.
+    IntentElement,
+    /// A `check <kind>:<name>;` link — the model-native check that verifies
+    /// the requirement.
+    IntentCheck,
 }
 
 impl ReferenceContext {
@@ -300,6 +308,8 @@ impl ReferenceContext {
             Self::IfmlRequires => "ifml-requires",
             Self::IfmlRoles => "ifml-roles",
             Self::IfmlData => "ifml-data",
+            Self::IntentElement => "intent-element",
+            Self::IntentCheck => "intent-check",
         }
     }
 }

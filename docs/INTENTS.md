@@ -82,6 +82,10 @@ spanned diagnostics, the `.ifml` auth-sites discipline.
 - The editor publishes per-file compile diagnostics for open `.intent`
   documents. The coverage pass is a project-level phase-2 pass, like the
   integrity checks; it is not editor-hosted in v0.5.
-- Intent files contribute **no semantic-graph nodes or edges** in v0.5 —
-  the traceability edges are the coverage pass's, and #137's
-  intent → element → verification receipt table is the follow-up.
+- Intent files contribute `intent` nodes plus one `expresses`/`verifiedBy`
+  edge per resolved link (issue #363) — `affected-by` on an expressing
+  capability, class, event, view, command, operation, or decision reaches
+  the requirement that states it. The coverage pass stays the authoring
+  authority; a link the graph cannot bind uniquely emits **no edge**, never
+  a guess. #137's intent → element → verification receipt table is the
+  follow-up (#364).

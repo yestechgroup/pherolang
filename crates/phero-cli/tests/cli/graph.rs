@@ -504,6 +504,8 @@ fn query_affected_by_prints_the_golden() {
         CAPABILITY,
         "actor:support/support.actor#Support.Agent",
         "capability:support/support.actor#Support.ApproveRefund",
+        // The requirement stating the capability (#363).
+        "intent:support/support.intent#REFUND-001",
         "serviceOperation:support/support.ddd#SupportDesk.desk.TicketService.raiseRefund",
         "useCase:support/support.uc#RaiseRefund",
         "action:support/support.ifml#RaiseRefund",
@@ -511,6 +513,8 @@ fn query_affected_by_prints_the_golden() {
         "actor:support/support.actor#Support.Manager",
         "caseRole:support/support.cmmn#RefundDesk.triage",
         "command:support/cli.ifml#tickets",
+        // The requirement expressing the raised operation (#363).
+        "intent:support/support.intent#REFUND-002",
         "planItem:support/support.cmmn#RefundDesk.AssessRefund",
         "service:support/support.ddd#SupportDesk.desk.TicketService",
         "serviceOperation:support/support.ddd#SupportDesk.desk.TicketService.approveRefund",

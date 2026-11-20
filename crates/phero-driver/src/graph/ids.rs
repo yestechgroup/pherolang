@@ -9,6 +9,7 @@ use std::collections::BTreeMap;
 
 use phero_ir::ddd::{DddModel, StateMachine, Transition};
 use phero_ir::graph::{kinds, GraphNode};
+use phero_ir::intents::IntentLinkKind;
 
 /// Builds the canonical v1 node id `<kind>:<file>#<name>`.
 ///
@@ -84,6 +85,27 @@ pub(crate) fn actor_name(block: &str, actor: &str) -> String {
 /// The node name of a policy capability: `<Block>.<Capability>`.
 pub(crate) fn capability_name(block: &str, capability: &str) -> String {
     qualify(&[block, capability])
+}
+
+/// The graph node kinds an intent link of `kind` may target — a one-element
+/// slice in the shape [`IndexedReference::target_kinds`](crate::navigation::IndexedReference)
+/// wants, so the edge emitter (`graph::intents`) and the span index
+/// (`navigation::intents`) read one table and cannot drift.
+///
+/// An `invariant` check names the **class** that carries the invariants
+/// (there is no separate invariant node), and an `op` name is a **service**
+/// operation — the coverage pass's vocabulary; a declared repository
+/// operation is not an intent-link target.
+pub(crate) fn intent_link_targets(kind: IntentLinkKind) -> &'static [&'static str] {
+    match kind {
+        IntentLinkKind::Class | IntentLinkKind::Invariant => &[kinds::CLASS],
+        IntentLinkKind::Capability => &[kinds::CAPABILITY],
+        IntentLinkKind::Event => &[kinds::EVENT],
+        IntentLinkKind::View => &[kinds::VIEW],
+        IntentLinkKind::Command => &[kinds::COMMAND],
+        IntentLinkKind::Op => &[kinds::SERVICE_OPERATION],
+        IntentLinkKind::Decision => &[kinds::DECISION],
+    }
 }
 
 /// The node name of a `.ddd` design application: the declared `application

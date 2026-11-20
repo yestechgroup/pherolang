@@ -184,4 +184,23 @@ impl IntentLinkKind {
             IntentLinkKind::Decision => "decision",
         }
     }
+
+    /// The inverse of [`IntentLinkKind::as_str`]: the kind a written tag
+    /// denotes, or `None` for a word outside the closed vocabulary (the
+    /// driver reports that as E0453 at compile time, so a consumer of a
+    /// compiled artifact never sees one).
+    pub fn from_word(word: &str) -> Option<Self> {
+        [
+            IntentLinkKind::Class,
+            IntentLinkKind::Capability,
+            IntentLinkKind::Event,
+            IntentLinkKind::View,
+            IntentLinkKind::Command,
+            IntentLinkKind::Op,
+            IntentLinkKind::Invariant,
+            IntentLinkKind::Decision,
+        ]
+        .into_iter()
+        .find(|kind| kind.as_str() == word)
+    }
 }

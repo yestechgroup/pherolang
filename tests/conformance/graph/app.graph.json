@@ -11,6 +11,7 @@
         "app.dmn",
         "app.evt",
         "app.ifml",
+        "app.intent",
         "app.mox",
         "app.uc"
       ],
@@ -539,6 +540,20 @@
       "kind": "view",
       "name": "Intake",
       "file": "app.ifml",
+      "application": "GraphDesk"
+    },
+    {
+      "id": "file:app.intent#app.intent",
+      "kind": "file",
+      "name": "app.intent",
+      "file": "app.intent",
+      "application": "GraphDesk"
+    },
+    {
+      "id": "intent:app.intent#GRAPH-001",
+      "kind": "intent",
+      "name": "GRAPH-001",
+      "file": "app.intent",
       "application": "GraphDesk"
     },
     {
@@ -1478,6 +1493,11 @@
       "kind": "imports"
     },
     {
+      "from": "file:app.intent#app.intent",
+      "to": "file:app.mox#app.mox",
+      "kind": "imports"
+    },
+    {
       "from": "file:app.uc#app.uc",
       "to": "file:app.actor#app.actor",
       "kind": "imports"
@@ -1519,6 +1539,31 @@
       "attributes": {
         "field": "ticket"
       }
+    },
+    {
+      "from": "intent:app.intent#GRAPH-001",
+      "to": "capability:app.actor#App.RaiseRefund",
+      "kind": "expresses"
+    },
+    {
+      "from": "intent:app.intent#GRAPH-001",
+      "to": "class:app.mox#nz.example.graph.Ticket",
+      "kind": "expresses"
+    },
+    {
+      "from": "intent:app.intent#GRAPH-001",
+      "to": "event:app.evt#app.RefundRequested",
+      "kind": "expresses"
+    },
+    {
+      "from": "intent:app.intent#GRAPH-001",
+      "to": "view:app.ifml#Intake",
+      "kind": "expresses"
+    },
+    {
+      "from": "intent:app.intent#GRAPH-001",
+      "to": "decision:app.dmn#GraphDecisions.RefundAssessment",
+      "kind": "verifiedBy"
     },
     {
       "from": "knowledgeSource:app.dmn#GraphDecisions.RefundPolicy",

@@ -9,6 +9,17 @@ policy in [docs/VERSIONING.md](docs/VERSIONING.md).
 
 ### Added
 
+- **Intent traceability is walkable in the semantic graph** (issue
+  [#363](https://github.com/yestechgroup/pherolang/issues/363)): `.intent`
+  files contribute `intent` nodes (name = the stable id) and two edge
+  families — `expresses` for each resolved `element` link and `verifiedBy`
+  for each resolved `check` link — resolved through the graph's own node
+  table (`Symbols::by_suffix`, unique match only, so an ambiguous name emits
+  no edge). `affected-by` on an expressing class, capability, event, view,
+  command, operation, or decision now reaches the requirements that state
+  it, and `.intent` gained a span table (`intents_index`) that joins the
+  nine existing surfaces in the anti-drift gate.
+
 - **Intent specifications are a source surface** (issue
   [#196](https://github.com/yestechgroup/pherolang/issues/196), the
   Proof-Carrying Models epic's Phase P1): `.intent` files state requirements

@@ -43,6 +43,11 @@
         "kind": "excludes"
       },
       {
+        "from": "intent:support/support.intent#REFUND-001",
+        "to": "capability:support/support.actor#Support.RaiseRefund",
+        "kind": "expresses"
+      },
+      {
         "from": "serviceOperation:support/support.ddd#SupportDesk.desk.TicketService.raiseRefund",
         "to": "capability:support/support.actor#Support.RaiseRefund",
         "kind": "carries"

@@ -109,6 +109,8 @@ pub mod fixtures {
     pub const SUPPORT_DEPLOY: &str = "examples/support/support.deploy";
     /// The support interaction flow.
     pub const SUPPORT_IFML: &str = "examples/support/support.ifml";
+    /// The flagship intent specifications (#196/#363).
+    pub const SUPPORT_INTENT: &str = "examples/support/support.intent";
 
     /// The design fixture with a state machine (its transitions).
     pub const PAYRUN_DDD: &str = "tests/conformance/ddd/payrun.ddd";
@@ -373,6 +375,14 @@ fn fixture_inputs() -> GraphInputs {
     );
     let deployment = lowered(deploy_display, compilation.model, &compilation.diagnostics);
 
+    let intent_display = fixtures::APP_INTENT;
+    let compilation = phero_driver::compile_intent_str(
+        &disk(intent_display).display().to_string(),
+        &fixture(intent_display),
+        &phero_driver::CompileInputs::from_domains(&domains),
+    );
+    let intents = lowered(intent_display, compilation.model, &compilation.diagnostics);
+
     let mut inputs = GraphInputs::default();
     inputs.domains.push(graph_file(domain_display, domain));
     inputs.actors.push(graph_file(actor_display, actor));
@@ -383,6 +393,7 @@ fn fixture_inputs() -> GraphInputs {
     inputs.use_cases.push(graph_file(uc_display, use_cases));
     inputs.cases.push(graph_file(cmmn_display, case));
     inputs.deploys.push(graph_file(deploy_display, deployment));
+    inputs.intents.push(graph_file(intent_display, intents));
     inputs
 }
 
@@ -533,6 +544,14 @@ pub fn support_graph() -> &'static GraphModel {
         );
         let deployment = lowered(deploy_display, compilation.model, &compilation.diagnostics);
 
+        let intent_display = fixtures::SUPPORT_INTENT;
+        let compilation = phero_driver::compile_intent_str(
+            &disk(intent_display).display().to_string(),
+            &fixture(intent_display),
+            &phero_driver::CompileInputs::from_domains(&domains),
+        );
+        let intents = lowered(intent_display, compilation.model, &compilation.diagnostics);
+
         let mut inputs = GraphInputs::default();
         inputs.domains.push(graph_file(domain_display, domain));
         inputs.actors.push(graph_file(actor_display, actor));
@@ -543,6 +562,7 @@ pub fn support_graph() -> &'static GraphModel {
         inputs.use_cases.push(graph_file(uc_display, use_cases));
         inputs.cases.push(graph_file(cmmn_display, case));
         inputs.deploys.push(graph_file(deploy_display, deployment));
+        inputs.intents.push(graph_file(intent_display, intents));
         for display in PATTERN_FLOWS {
             inputs.flows.push(graph_file(display, flow_model(display)));
         }
@@ -561,6 +581,11 @@ pub fn single_file_graph(display: &str, domain: &str) -> GraphModel {
     let extension = display.rsplit_once('.').map(|(_, extension)| extension);
     if matches!(extension, Some("deploy" | "uc" | "cmmn" | "dmn" | "ifml")) {
         return support_graph().clone();
+    }
+    // An `.intent` file belongs to the `app.*` fixture application, whose
+    // fully wired stack (intent bucket included) is `fixture_graph`.
+    if extension == Some("intent") {
+        return fixture_graph().clone();
     }
     let source = fixture(display);
     if display.ends_with(".mox") {
@@ -633,6 +658,7 @@ pub fn surface_index(display: &str) -> (String, SurfaceIndex) {
         Some("uc") => phero_driver::navigation::uc_index(&source),
         Some("cmmn") => phero_driver::navigation::cmmn_index(&source),
         Some("dmn") => phero_driver::navigation::dmn_index(&source, display),
+        Some("intent") => phero_driver::navigation::intents_index(&source),
         Some("mox") => phero_driver::navigation::mox_index(&source),
         Some("ifml") => {
             let (model, index) = phero_ifml::parse_ifml_indexed(&source)

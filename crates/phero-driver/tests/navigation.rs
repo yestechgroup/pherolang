@@ -491,7 +491,7 @@ use phero_testkit::fixtures;
 /// surface's own actor/capability nodes); `support.ifml` is the interaction
 /// flow, compiled through the support stack like the other artifact
 /// surfaces.
-const SURFACES: [(&str, &str); 12] = [
+const SURFACES: [(&str, &str); 13] = [
     (fixtures::SUPPORT_ACTOR, fixtures::SUPPORT_MOX),
     (fixtures::SUPPORT_DDD, fixtures::SUPPORT_MOX),
     (fixtures::SUPPORT_EVT, fixtures::SUPPORT_MOX),
@@ -500,6 +500,7 @@ const SURFACES: [(&str, &str); 12] = [
     (fixtures::SUPPORT_CMMN, ""),
     (fixtures::SUPPORT_DMN, ""),
     (fixtures::SUPPORT_IFML, ""),
+    (fixtures::APP_INTENT, ""),
     (fixtures::SUPPORT_MOX, ""),
     (fixtures::ACTORS_MOX, ""),
     (fixtures::PAYRUN_DDD, fixtures::PAYRUN_MOX),

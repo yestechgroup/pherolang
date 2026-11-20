@@ -5,10 +5,10 @@
  *
  * WHY THIS FILE EXISTS
  * --------------------
- * The graph artifact is one flat node/edge table (305 nodes, 463 edges across
- * eight applications). A visitor needs *perspectives*: the domain model, the
- * decisions, the events, the workflows, the policy, the interaction flow, the
- * deployment, the case — the same application seen through each surface. And
+ * The graph artifact is one flat node/edge table. A visitor needs
+ * *perspectives*: the domain model, the decisions, the events, the workflows,
+ * the policy, the interaction flow, the deployment, the case, the
+ * requirements — the same application seen through each surface. And
  * the page must paint before JavaScript runs, so the layout is **baked here**,
  * not computed in the browser. GraphFigure.astro renders these numbers
  * directly into SVG; the interactive island (lane 6) reuses the same nodes and
@@ -126,6 +126,11 @@ const PERSPECTIVES = [
     label: 'Cases',
     kinds: ['case', 'planItem', 'caseFileItem', 'caseRole', 'useCase'],
   },
+  {
+    id: 'intent',
+    label: 'Requirements',
+    kinds: ['intent'],
+  },
 ];
 
 /**
@@ -164,6 +169,7 @@ const KIND_NOUN = {
   error: 'a declared error',
   actor: 'an actor',
   capability: 'a capability',
+  intent: 'a requirement',
   flow: 'an interaction flow',
   view: 'a view',
   component: 'a component',

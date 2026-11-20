@@ -34,6 +34,16 @@
       "via": "excludes"
     },
     {
+      "id": "intent:support/support.intent#REFUND-001",
+      "kind": "intent",
+      "name": "REFUND-001",
+      "file": "support/support.intent",
+      "application": "SupportDesk",
+      "depth": 1,
+      "parent": "capability:support/support.actor#Support.RaiseRefund",
+      "via": "expresses"
+    },
+    {
       "id": "serviceOperation:support/support.ddd#SupportDesk.desk.TicketService.raiseRefund",
       "kind": "serviceOperation",
       "name": "SupportDesk.desk.TicketService.raiseRefund",
@@ -102,6 +112,16 @@
       "depth": 2,
       "parent": "actor:support/support.actor#Support.Agent",
       "via": "requires"
+    },
+    {
+      "id": "intent:support/support.intent#REFUND-002",
+      "kind": "intent",
+      "name": "REFUND-002",
+      "file": "support/support.intent",
+      "application": "SupportDesk",
+      "depth": 2,
+      "parent": "serviceOperation:support/support.ddd#SupportDesk.desk.TicketService.raiseRefund",
+      "via": "expresses"
     },
     {
       "id": "planItem:support/support.cmmn#RefundDesk.AssessRefund",

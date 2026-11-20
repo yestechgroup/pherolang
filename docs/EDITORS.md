@@ -27,8 +27,8 @@ hand — the server advertises:
 The scoping contract — one graph snapshot per directory, how surfaces
 resolve, and what the editor shares with `pherolang graph build` — is owned
 by [GRAPH.md](GRAPH.md#the-lsp-contract); this page deliberately does not
-restate it. All nine surfaces (`.mox`, `.actor`, `.ddd`, `.evt`, `.dmn`,
-`.deploy`, `.uc`, `.cmmn`, `.ifml`) are served by the one process.
+restate it. All ten surfaces (`.mox`, `.actor`, `.ddd`, `.evt`, `.dmn`,
+`.deploy`, `.uc`, `.cmmn`, `.ifml`, `.intent`) are served by the one process.
 
 A ten-second smoke test without an editor: start `pherolang lsp` in a
 terminal, paste a framed `initialize` request, and read the capabilities
