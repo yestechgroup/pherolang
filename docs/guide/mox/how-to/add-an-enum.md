@@ -45,8 +45,9 @@ enum InvoiceState {
 }
 ```
 
-The integer is the stored value. The label is what appears in canonical JSON, so
-it is the part other systems will read; choose it as carefully as a feature name.
+The integer is the stored value. The literal name is the wire spelling:
+canonical JSON and the generated schema use `Draft`, not the label. The optional
+`as "…"` label is a human-readable string carried into generated code.
 
 **2. Use the enum name as a feature type.** An enum is a type, exactly like a
 class or an attribute's primitive type:
@@ -94,13 +95,16 @@ class Invoice {
 }
 ```
 
-`Invoice.state` now accepts only the three declared literals. A value is never
-spelled `"draft"` in a `.mox` file: the literal name `Draft` is the spelling in
-models, and `"draft"` is how it appears in JSON.
+`Invoice.state` now accepts only the three declared literals. The literal is
+written `Draft` in the model and serialized as `"Draft"`; the label `"draft"` is
+display metadata, never the wire value.
 
 ## Related reference
 
-- [Classes and features](../reference/classes.md) — the full feature and type
-  reference, including constraints on enum-typed attributes.
+- [Classes and features](../reference/classes.md) — the full feature reference,
+  including constraints on enum-typed attributes.
+- [Enums, datatypes, and vocabularies](../reference/enums-datatypes-and-vocabularies.md)
+  — the authoritative page for enum values, labels, and the rest of the type
+  universe.
 - [The .mox language reference](../../../LANGUAGE.md#enums-datatypes-interfaces-vocabularies)
   — the authoritative enum rules.

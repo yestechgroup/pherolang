@@ -114,6 +114,10 @@ A lending application, for example, might use `.mox` for customers and loans,
   builds a small refund desk from an empty directory.
 - [Add an enum to a domain model](../how-to/add-an-enum.md) is the one-task
   version of the enum you saw above.
+- [Model a relationship](../how-to/model-a-relationship.md) covers ownership,
+  links, and opposites.
+- [Choose a collection](../how-to/choose-a-collection.md) covers lists, unique
+  lists, and sets.
 
 ## Further reading
 
@@ -121,6 +125,10 @@ A lending application, for example, might use `.mox` for customers and loans,
   model comes first.
 - [Classes and features](../reference/classes.md) is the reference for
   everything a class can declare.
+- [Enums, datatypes, and vocabularies](../reference/enums-datatypes-and-vocabularies.md)
+  covers the rest of the type universe.
+- [Packages and imports](../reference/packages-and-imports.md) covers
+  multi-file models and imported types.
 - [The .mox language reference](../../LANGUAGE.md) is the complete
   engineering reference, including grammar and tooling.
 - The [support-desk example](../../../examples/support/support.mox) is a
