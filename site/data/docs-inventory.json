@@ -52,8 +52,8 @@
       "slug": "dmn",
       "title": "DMN decision model DSL (.dmn)",
       "description": "A standalone decision-modeling surface implementing the DMN decision",
-      "bytes": 33001,
-      "lines": 721
+      "bytes": 33222,
+      "lines": 726
     },
     {
       "path": "docs/EDITORS.md",
@@ -160,8 +160,8 @@
       "slug": "index",
       "title": "Phero Lang documentation",
       "description": "Phero Lang is a multi-surface modeling language: every surface follows the same",
-      "bytes": 6595,
-      "lines": 71
+      "bytes": 6752,
+      "lines": 74
     },
     {
       "path": "docs/REBRAND.md",

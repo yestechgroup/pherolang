@@ -56,6 +56,9 @@ artifact. This index routes to the right document.
 - **"I want to design the interaction"** → the [interaction flows
   guide](guide/ifml/overview.md): views, navigation, data bindings, and
   authorization.
+- **"I want to model the business rules"** → the [decision models
+  guide](guide/dmn/overview.md): typed inputs, decision tables, and decision
+  services.
 - **"I want to generate a system"** → the support-desk stack in
   [../examples/](../examples/) walks domain → policy → design → events →
   use cases → flows → deployment → case; the README's walkthrough compiles

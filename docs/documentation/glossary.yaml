@@ -100,6 +100,15 @@ terms:
   - term: actor
     definition: A party in an actor policy that may hold capabilities.
     aliases: []
+  - term: decision model
+    definition: A .dmn file: the decision-requirements graph of inputs, knowledge, decisions, and services.
+    aliases: [DMN model]
+  - term: decision table
+    definition: An external markdown file holding the rules of one table-logic decision, in the dsntk shape.
+    aliases: [rule table]
+  - term: decision service
+    definition: The invocation boundary of a decision model: the inputs a caller supplies and the decisions it receives.
+    aliases: []
   - term: decision
     definition: A named rule or set of rules in a .dmn decision model that maps inputs to an outcome.
     aliases: [business rule]
@@ -146,6 +155,21 @@ acronyms:
     scope: all
   - acronym: XML
     expansion: Extensible Markup Language
+    scope: all
+  - acronym: DRD
+    expansion: decision requirements diagram
+    scope: all
+  - acronym: DI
+    expansion: diagram interchange
+    scope: all
+  - acronym: FEEL
+    expansion: Friendly Enough Expression Language
+    scope: all
+  - acronym: DRG
+    expansion: decision requirements graph
+    scope: all
+  - acronym: BKM
+    expansion: business knowledge model
     scope: all
   - acronym: API
     expansion: application programming interface

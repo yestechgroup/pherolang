@@ -148,3 +148,6 @@ delegation and the lifecycle cannot drift apart.
 - Capabilities are validated against actor policies when the host provides
   them; a design compiled without policies is not silently treated as
   authorized.
+- A decision service named by `invokes` or injected with `inject decision` is
+  declared in a `.dmn` model; see [Connect decisions to the
+  application](../../dmn/how-to/connect-decisions-to-the-application.md).
