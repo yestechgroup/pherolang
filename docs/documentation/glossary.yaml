@@ -1,0 +1,234 @@
+# Phero Lang terminology registry — the single source of canonical wording.
+#
+# Consumed by the documentation gate (EDITORIAL_POLICY.md E5/E6, CONTENT_MODEL.md
+# CM12/CM14). Rules:
+#
+#   * `term`      the only accepted spelling of the concept.
+#   * `aliases`   spellings that MUST NOT appear (matched as whole words,
+#                 case-insensitive; an alias never matches inside its canonical
+#                 term — "Phero" does not match inside "Phero Lang").
+#   * `acronyms`  every abbreviation allowed in a page, with its expansion and
+#                 the page types allowed to use it.
+#
+# Adding a term or an alias is a documentation change like any other: it lands
+# with the page that needs it.
+
+formatVersion: 1
+
+terms:
+  - term: Phero Lang
+    definition: The modelling ecosystem: the languages, the artifacts they compile to, and the toolchain.
+    aliases: [Phero]
+  - term: modelling ecosystem
+    definition: The set of Phero Lang languages and the way they compose around one domain model.
+    aliases: [DSL suite, language family]
+  - term: domain model
+    definition: A structural description of a problem domain written in .mox: its classes, features, and constraints.
+    aliases: [mox model, domain DSL, domain design]
+  - term: package
+    definition: The namespace a domain model declares. One package per .mox file.
+    aliases: []
+  - term: class
+    definition: A declared type in a domain model. A class has features; whether it is an entity or a value object follows from its design.
+    aliases: []
+  - term: feature
+    definition: A named part of a class: an attribute, a contains or refers relationship, a container back-pointer, a derived value, or an operation.
+    aliases: [field, property]
+  - term: attribute
+    definition: A feature holding a value of a primitive, enum, datatype, or vocabulary type.
+    aliases: []
+  - term: containment
+    definition: The contains/container relationship: the owning side stores its children by value and serializes them inline.
+    aliases: []
+  - term: cross-reference
+    definition: The refers relationship: a link from one class to another, serialized as an identity reference.
+    aliases: [ref]
+  - term: identity
+    definition: The feature marked id that distinguishes one instance of a class from another.
+    aliases: [primary key]
+  - term: enum
+    definition: A closed set of named literals, each carrying an integer value.
+    aliases: [enumeration]
+  - term: datatype
+    definition: A declared type that wraps a platform type opaquely.
+    aliases: [value type]
+  - term: vocabulary
+    definition: A reference to a well-known external code set, vendored and pinned at build time.
+    aliases: [code list, code set]
+  - term: derived feature
+    definition: A feature computed from other features rather than stored.
+    aliases: [computed feature]
+  - term: domain operation
+    definition: An operation declared on a class in the domain model, with an expression body or an abstract signature.
+    aliases: [method, function]
+  - term: entity
+    definition: A class with identity whose instances are distinguished by identity rather than structure.
+    aliases: []
+  - term: value object
+    definition: A class with no identity, defined entirely by its stored features and compared structurally.
+    aliases: [value type object]
+  - term: aggregate
+    definition: A cluster of classes with one root entity that outside objects reference.
+    aliases: []
+  - term: aggregate root
+    definition: The entity that outside objects reference to reach an aggregate.
+    aliases: [root entity]
+  - term: repository
+    definition: A designed persistence boundary on an entity, carrying the built-in operations and any declared signatures.
+    aliases: [data access object, DAO]
+  - term: state machine
+    definition: A declared lifecycle over an enum-typed feature, with states, triggers, guards, and terminals.
+    aliases: [workflow]
+  - term: Phero implementation
+    definition: A concept from an external or earlier design that Phero Lang carries with the same intent.
+    aliases: []
+  - term: Phero extension
+    definition: Functionality Phero Lang adds beyond an external or earlier design's shape.
+    aliases: []
+  - term: Phero divergence
+    definition: A deliberate difference from an external or earlier design; its spelling is not accepted.
+    aliases: []
+  - term: application design
+    definition: A .ddd design: the application architecture built on a domain model.
+    aliases: [DDD design DSL, DDD design language, design DSL]
+  - term: application service
+    definition: A .ddd service whose operations implement use cases and orchestrate domain operations.
+    aliases: []
+  - term: capability
+    definition: A named permission on a class, granted to actors in an actor policy.
+    aliases: [permission]
+  - term: actor
+    definition: A party in an actor policy that may hold capabilities.
+    aliases: []
+  - term: decision
+    definition: A named rule or set of rules in a .dmn decision model that maps inputs to an outcome.
+    aliases: [business rule]
+  - term: case
+    definition: A .cmmn unit of adaptive work: a case file, plan items, and sentry criteria.
+    aliases: []
+  - term: interaction flow
+    definition: A .ifml description of the screens, actions, and navigation of an application.
+    aliases: [user flow, screen flow]
+  - term: view
+    definition: A .ifml element describing one screen or section of an application.
+    aliases: []
+  - term: deployment target
+    definition: A described runtime environment in a .deploy model.
+    aliases: [target environment]
+  - term: guide
+    definition: A page under docs/guide/: user-facing documentation organized by Diátaxis type.
+    aliases: [user manual, handbook]
+  - term: engineering reference
+    definition: A page under docs/ that documents the compiler, its artifacts, and its development process.
+    aliases: [internal docs]
+  - term: integration reference
+    definition: A page documenting an artifact or wire contract that external tools consume.
+    aliases: [consumer docs]
+
+acronyms:
+  - acronym: DDD
+    expansion: domain-driven design
+    scope: all
+  - acronym: DTO
+    expansion: data transfer object
+    scope: all
+  - acronym: XMI
+    expansion: XML Metadata Interchange
+    scope: all
+  - acronym: CRUD
+    expansion: create, read, update, delete
+    scope: all
+  - acronym: TUI
+    expansion: terminal user interface
+    scope: all
+  - acronym: UI
+    expansion: user interface
+    scope: all
+  - acronym: XML
+    expansion: Extensible Markup Language
+    scope: all
+  - acronym: API
+    expansion: application programming interface
+    scope: all
+  - acronym: CLI
+    expansion: command-line interface
+    scope: all
+  - acronym: JSON
+    expansion: JavaScript Object Notation
+    scope: all
+  - acronym: ISO
+    expansion: International Organization for Standardization
+    scope: all
+  - acronym: ADR
+    expansion: architecture decision record
+    scope: all
+  - acronym: RFC
+    expansion: request for comments
+    scope: all
+  - acronym: DSL
+    expansion: domain-specific language
+    scope: engineering
+  - acronym: IR
+    expansion: intermediate representation
+    scope: engineering
+  - acronym: LSP
+    expansion: Language Server Protocol
+    scope: engineering
+  - acronym: CI
+    expansion: continuous integration
+    scope: engineering
+  - acronym: AST
+    expansion: abstract syntax tree
+    scope: engineering
+  - acronym: OMG
+    expansion: Object Management Group
+    scope: all
+  - acronym: IFML
+    expansion: Interaction Flow Modeling Language
+    scope: all
+  - acronym: DMN
+    expansion: Decision Model and Notation
+    scope: all
+  - acronym: CMMN
+    expansion: Case Management Model and Notation
+    scope: all
+  - acronym: UML
+    expansion: Unified Modeling Language
+    scope: all
+
+# Vocabulary a Guide page (type overview/tutorial/how-to/concept) MUST NOT use.
+# Reference pages may use artifact facts in `## Compatibility`; integration
+# pages may document wire contracts in full. Matched as whole words,
+# case-sensitive for identifiers.
+implementation_vocabulary:
+  words:
+    - salsa
+    - chumsky
+    - logos
+    - serde
+    - ariadne
+    - lowering
+    - lowered
+    - emitter
+    - AST
+    - IR
+    - wire format
+    - span table
+    - artifact
+    - backend
+    - crate
+    - parser
+  identifiers:
+    - Core IR
+    - DddModel
+    - IfmlModel
+    - ActorModel
+    - DeployModel
+    - CmmnModel
+    - DmnModel
+    - UseCaseModel
+    - EventModel
+    - IntentModel
+    - GraphIndex
+  patterns:
+    - phero-

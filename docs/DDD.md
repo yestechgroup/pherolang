@@ -1,5 +1,10 @@
 # DDD design DSL (.ddd)
 
+> **Learning the language?** Start with the [application design
+> guide](guide/ddd/overview.md): overview, tutorial, how-tos, and reference,
+> written for people using the language. This page is the engineering
+> contract.
+
 ## Overview
 
 A Sculptor-style domain-driven-design layer over `.mox` domain models. The

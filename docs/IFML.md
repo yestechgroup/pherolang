@@ -1,5 +1,10 @@
 # IFML DSL
 
+> **Learning the language?** Start with the [interaction flows
+> guide](guide/ifml/overview.md): overview, tutorial, how-tos, and reference,
+> written for people using the language. This page is the engineering
+> contract.
+
 ## Overview
 
 A Domain-Specific Language that is semantically aligned with [OMG IFML 1.0](https://www.omg.org/spec/IFML/) but uses a modern, C-like expression-heavy syntax instead of XML/XMI. Lexed by a **logos** lexer and parsed by **chumsky** into a spanned syntax tree, then lowered into a versioned `IfmlModel` artifact; the same parser and byte-offset spans back the language server.

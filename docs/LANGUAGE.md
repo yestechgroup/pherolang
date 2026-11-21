@@ -1,5 +1,10 @@
 # The .mox language reference
 
+> **Learning the language?** Start with the [domain models
+> guide](guide/mox/overview.md): overview, tutorial, how-tos, and reference,
+> written for people using the language. This page is the engineering
+> contract.
+
 Phero Lang compiles `.mox` modeling sources (inspired by [Eclipse Xcore]) into
 a resolved **Core IR** artifact, from which backends generate Rust models, JSON
 Schemas, and canonical instance JSON. This document is the normative language
