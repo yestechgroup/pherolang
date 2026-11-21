@@ -58,6 +58,33 @@ PHERO_UPDATE_FIXTURES=1 cargo test -p phero-verify  # regenerate the register ta
 
 CI (`.github/workflows/ci.yml`) **invokes `scripts/ci-local.sh` for every gate** (build, rebrand, tests, clippy, fmt, receipt, docs) — the script is the single source of truth for the gate sequence and the `pherolang fmt --check` fixture-glob list (`FIXTURE_FORMAT_GLOBS`), so a new fixture directory is a one-file edit and local/remote can never drift (issue #121). CI also runs two fast supply-chain jobs: `cargo audit` (advisories — must stay at zero) and `cargo deny check` (advisories/licenses/bans/sources per `deny.toml`); the script's `audit` subcommand replicates both locally. A warning anywhere is a failure.
 
+## Build cache (mbx)
+
+`mbx` (mr boxington) is the machine-wide compilation cache. It matters most
+here: a clean `cargo test --no-run` costs ~70–80 minutes and writes ~250 GB of
+test artifacts (the issue #261 disk budget); through mbx the same build
+restores from the local store in seconds, including after `target/` is wiped
+or in a fresh worktree.
+
+- **Run cargo through mbx.** `mbx setup` installs the cargo shim, so plain
+  `cargo`, `scripts/ci-local.sh`, and `scripts/dev-test.sh` route through it
+  automatically; or invoke `mbx build` / `mbx test` directly. Use one mode per
+  checkout — alternating mbx and plain cargo recompiles build-script units.
+- **The toolchain pin is a cache key.** `rust-toolchain.toml` pins 1.100.0;
+  bump it in one deliberate commit. CI's `dtolnay/rust-toolchain@stable`
+  runner resolves the pin through rustup. Never bump with a silent
+  `rustup update`.
+- **Keep `RUSTFLAGS` consistent per flavour.** `scripts/dev-test.sh` and
+  `scripts/ci-local.sh` use `-C debuginfo=0` + `CARGO_INCREMENTAL=0`; a bare
+  `cargo test` is a different key set. Mixing the two halves the hit rate.
+- The scratch-crate e2e tests generate their own cargo projects under
+  `target/scratch/` — they are separate builds and are not cached as units.
+- **Store.** `~/.cache/mbx`, 90 GiB default budget with automatic GC. Test
+  artifacts are the big consumer; `mbx cache stats` / `mbx gc --dry-run`
+  inspect it. `.mbx.toml` opts test binaries into the machine-wide scheduler.
+- Escape hatch: plain `cargo` keeps working; `MBX_*` variables disable
+  individual features (https://mr-boxington.jdx.dev/configuration).
+
 ## Testing quirks
 
 - **Golden fixtures** under `tests/conformance/` (IR artifacts, wire/api schemas, instances, fmt output) are byte-compared. Regenerate with `PHERO_UPDATE_FIXTURES=1`, then read the diff — goldens are the spec. Changing any emitter usually invalidates several goldens; body-less/vocabulary-less models must stay byte-identical.
