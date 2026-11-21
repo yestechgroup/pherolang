@@ -62,6 +62,12 @@
 //!   highlighter metadata (canonical location
 //!   `site/packages/highlighting`), or byte-check a committed package; a
 //!   hand edit fails `--check`. See docs/HIGHLIGHTING.md.
+//! * `pherolang docs lint [paths...]` — the documentation quality gate:
+//!   the content model (frontmatter, heading sets, page placement), the
+//!   editorial policy (implementation vocabulary, issue references,
+//!   canonical terminology), and every compilable `mox` fence in the Guide
+//!   tree, plus template drift. Exits `1` on any finding. The contract is
+//!   docs/documentation/CONTENT_MODEL.md and EDITORIAL_POLICY.md.
 //! * `pherolang verify <files>... -o <receipt.json>` — compile the surfaces
 //!   and emit a **verification receipt**: one canonical, versioned JSON
 //!   document recording the hash of every source file the compile read
@@ -230,6 +236,15 @@ enum Command {
         /// Write to this file (one input) or directory (several inputs).
         #[arg(short, long, value_name = "PATH")]
         output: Option<PathBuf>,
+    },
+    /// Lint the documentation against the content model and editorial
+    /// policy (`docs/documentation/`): frontmatter, heading sets, page
+    /// placement, implementation vocabulary, issue references, canonical
+    /// terminology, and every compilable example fence. Exits `1` on any
+    /// finding. Run from the repository root.
+    Docs {
+        #[command(subcommand)]
+        action: commands::docs::DocsCommand,
     },
     /// Generate the editor-facing TextMate grammars and language
     /// configurations from the highlighter metadata, or check a committed
@@ -446,6 +461,7 @@ fn run(cli: Cli) -> anyhow::Result<ExitCode> {
             surface,
             output,
         } => commands::highlight::run(files, format, mode, surface, output),
+        Command::Docs { action } => commands::docs::run(action),
         Command::Grammar { out, check } => commands::grammar::run(out, check),
         Command::Verify {
             files,

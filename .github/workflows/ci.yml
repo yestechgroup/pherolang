@@ -108,6 +108,12 @@ jobs:
       # live in scripts/check-platforms.sh and scripts/check-rebrand.sh.
       - name: Platform and rebrand guards
         run: scripts/ci-local.sh rebrand
+      # The documentation quality gate (docs/documentation/EDITORIAL_POLICY.md):
+      # the content model, heading sets, terminology, and every compilable
+      # Guide example. Runs before the expensive test step so a documentation
+      # regression fails fast; it only needs the binary from the build step.
+      - name: Documentation quality
+        run: scripts/ci-local.sh docs-lint
       # Every gate below invokes scripts/ci-local.sh — the single source
       # of truth for the gate sequence and the fixture-glob list (issue
       # #121): local and remote can never drift. Step boundaries match the
