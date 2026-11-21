@@ -1113,6 +1113,19 @@ fn check_fences(root: &Path, path: &Path, structure: &Structure, findings: &mut 
                     continue;
                 }
             }
+        } else if surface == "dmn" {
+            match compile_dmn_example(root, &fence.body, options.fixture.as_deref()) {
+                Ok(outcome) => outcome,
+                Err(message) => {
+                    findings.push(Finding {
+                        path: path.to_path_buf(),
+                        line: fence.line,
+                        rule: "CM10",
+                        message,
+                    });
+                    continue;
+                }
+            }
         } else if surface == "ifml" {
             match compile_ifml_example(root, &fence.body, options.fixture.as_deref()) {
                 Ok(outcome) => outcome,
@@ -1417,6 +1430,140 @@ fn format_ifml_diagnostic(
         Some(code) => format!("{path}: {code} {}", diagnostic.message),
         None => format!("{path}: {}", diagnostic.message),
     }
+}
+
+/// Compiles one `.dmn` fence. The fixture names a directory; imports (`.mox`,
+/// `.evt`) resolve against it, and every `logic table "<path>"` markdown file is
+/// read from the same directory and supplied keyed by the path as written.
+fn compile_dmn_example(
+    root: &Path,
+    body: &str,
+    fixture: Option<&str>,
+) -> Result<FenceOutcome, String> {
+    let Some(fixture) = fixture else {
+        return Err(
+            "a `.dmn` example must name its fixture directory: `dmn,fixture=<dir>`".to_string(),
+        );
+    };
+    let fixture_dir = fixture.trim_end_matches('/');
+    let design_path = join_posix(fixture_dir, "fence.dmn");
+
+    let mut imports = Vec::new();
+    for line in body.lines() {
+        let trimmed = line.trim();
+        if let Some(rest) = trimmed.strip_prefix("import ") {
+            match parse_quoted_path(rest) {
+                Some(path) => imports.push(path),
+                None => {
+                    return Err(format!(
+                        "unsupported `.dmn` import `{trimmed}` — expected `import \"<file>\";`"
+                    ))
+                }
+            }
+        }
+    }
+
+    let mut domains: Vec<(String, String)> = Vec::new();
+    let mut events: Vec<(String, phero_ir::events::EventModel)> = Vec::new();
+    for import in &imports {
+        let resolved = join_posix(fixture_dir, import);
+        let text = fs::read_to_string(root.join(&resolved))
+            .map_err(|error| format!("cannot read the imported file `{resolved}`: {error}"))?;
+        match Path::new(&resolved)
+            .extension()
+            .and_then(|extension| extension.to_str())
+        {
+            Some("mox") => {
+                let compilation = phero_driver::compile_str(
+                    &resolved,
+                    &text,
+                    &phero_driver::DomainImports::default(),
+                );
+                if let Some(error) = compilation
+                    .diagnostics
+                    .iter()
+                    .find(|diagnostic| diagnostic.is_error())
+                {
+                    return Err(format!(
+                        "the fixture domain `{resolved}` does not compile: {}",
+                        error.message
+                    ));
+                }
+                domains.push((resolved, text));
+            }
+            Some("evt") => {
+                let inputs = phero_driver::CompileInputs::from_domains(&domains);
+                let compilation = phero_driver::compile_evt_str(&resolved, &text, &inputs);
+                if let Some((_, error)) = compilation
+                    .diagnostics
+                    .iter()
+                    .find(|(_, diagnostic)| diagnostic.is_error())
+                {
+                    return Err(format!(
+                        "the fixture event contract `{resolved}` does not compile: {}",
+                        error.message
+                    ));
+                }
+                let Some(model) = compilation.model else {
+                    return Err(format!(
+                        "the fixture event contract `{resolved}` did not produce a model"
+                    ));
+                };
+                // `.dmn` matches `.evt` imports by the path as written; the
+                // contract itself was compiled with its resolved path so its
+                // own domain import resolves.
+                events.push((import.clone(), model));
+            }
+            _ => {
+                return Err(format!(
+                    "the documentation gate compiles `.dmn` examples with a `.mox` domain and `.evt` contracts; `{import}` is not supported yet"
+                ))
+            }
+        }
+    }
+
+    let mut tables = Vec::new();
+    for line in body.lines() {
+        let trimmed = line.trim();
+        if let Some(rest) = trimmed.strip_prefix("logic table ") {
+            let Some(path) = parse_quoted_path(rest) else {
+                return Err(format!(
+                    "a `logic table` needs a quoted path, found `{trimmed}`"
+                ));
+            };
+            let resolved = join_posix(fixture_dir, &path);
+            let text = fs::read_to_string(root.join(&resolved)).map_err(|error| {
+                format!("cannot read the decision table `{path}` under `{fixture}`: {error}")
+            })?;
+            tables.push((path, text));
+        }
+    }
+
+    let inputs = phero_driver::CompileInputs::from_domains(&domains)
+        .with_events(events)
+        .with_tables(tables);
+    let compilation = phero_driver::compile_dmn_str(&design_path, body, &inputs);
+    // Driver diagnostics already carry their registry code inside the message
+    // text (the `E02xx` prefix), so rendering the message is sufficient.
+    let rendered = compilation
+        .diagnostics
+        .iter()
+        .map(|(path, diagnostic)| format!("{path}: {}", diagnostic.message))
+        .collect::<Vec<_>>()
+        .join("\n");
+    let errors = compilation
+        .diagnostics
+        .iter()
+        .filter(|(_, diagnostic)| diagnostic.is_error())
+        .map(|(path, diagnostic)| format!("{path}: {}", diagnostic.message))
+        .collect();
+    Ok(FenceOutcome { errors, rendered })
+}
+
+fn parse_quoted_path(rest: &str) -> Option<String> {
+    let rest = rest.trim().trim_end_matches(';').trim();
+    let inner = rest.strip_prefix('"')?.strip_suffix('"')?;
+    Some(inner.to_string())
 }
 
 fn parse_ddd_import(line: &str) -> Option<String> {
@@ -2380,6 +2527,63 @@ lastReviewed: 2026-11-21\n\
         check_fences(
             &repo_root(),
             Path::new("docs/guide/ifml/how-to/page.md"),
+            &scan_structure(body, 1),
+            &mut findings,
+        );
+        assert!(findings.is_empty(), "{findings:?}");
+    }
+
+    #[test]
+    fn a_dmn_example_compiles_with_its_external_table() {
+        let body = "# T\n\n```dmn,fixture=examples/support\nimport \"support.mox\";\n\ndecision_model RefundDecisions {\n    namespace nz.example.support.decisions;\n    inputs {\n        requested_cents: int;\n    }\n    decisions {\n        decision RefundAuthority {\n            outputs {\n                requires_approval: boolean;\n                approver_role: string;\n                maximum_amount: int;\n            }\n            logic table \"./tables/refund-authority.md\"\n        }\n    }\n    requirements {\n        information {\n            RefundAuthority requires requested_cents;\n        }\n    }\n}\n```\n";
+        let mut findings = Vec::new();
+        check_fences(
+            &repo_root(),
+            Path::new("docs/guide/dmn/tutorials/page.md"),
+            &scan_structure(body, 1),
+            &mut findings,
+        );
+        assert!(findings.is_empty(), "{findings:?}");
+    }
+
+    #[test]
+    fn a_dmn_missing_decision_table_is_a_finding() {
+        let body = "# T\n\n```dmn,fixture=examples/support\nimport \"support.mox\";\n\ndecision_model M {\n    namespace nz.example.m;\n    inputs {\n        requested_cents: int;\n    }\n    decisions {\n        decision D {\n            output boolean;\n            logic table \"./tables/nope.md\"\n        }\n    }\n}\n```\n";
+        let mut findings = Vec::new();
+        check_fences(
+            &repo_root(),
+            Path::new("docs/guide/dmn/how-to/page.md"),
+            &scan_structure(body, 1),
+            &mut findings,
+        );
+        assert!(
+            findings
+                .iter()
+                .any(|finding| finding.message.contains("cannot read the decision table")),
+            "{findings:?}"
+        );
+    }
+
+    #[test]
+    fn a_dmn_invalid_example_must_fail_with_the_named_code() {
+        let body = "# T\n\n```dmn,invalid=E0204,fixture=examples/support\nimport \"support.mox\";\n\ndecision_model Bad {\n    namespace nz.example.bad;\n    inputs {\n        ticket: Ticket;\n        ticket: Ticket;\n    }\n}\n```\n";
+        let mut findings = Vec::new();
+        check_fences(
+            &repo_root(),
+            Path::new("docs/guide/dmn/how-to/page.md"),
+            &scan_structure(body, 1),
+            &mut findings,
+        );
+        assert!(findings.is_empty(), "{findings:?}");
+    }
+
+    #[test]
+    fn a_dmn_example_loads_its_event_contract_for_the_emits_rule() {
+        let body = "# T\n\n```dmn,fixture=examples/support\nimport \"support.mox\";\nimport \"support.evt\";\n\ndecision_model RefundEvents {\n    namespace nz.example.support.decisions;\n    inputs {\n        requested_cents: int;\n    }\n    decisions {\n        decision Raise {\n            output boolean;\n            logic expression \"requested_cents > 0\"\n            emits {\n                TicketRaised;\n            }\n        }\n    }\n}\n```\n";
+        let mut findings = Vec::new();
+        check_fences(
+            &repo_root(),
+            Path::new("docs/guide/dmn/concepts/page.md"),
             &scan_structure(body, 1),
             &mut findings,
         );

@@ -160,7 +160,7 @@ changing this document in the same pull request.
   | `<surface>` | A complete example. It compiles as a standalone unit. |
   | `<surface>,fragment` | A syntax illustration, not an example. |
   | `<surface>,invalid=<CODE>` | A deliberately invalid example; it must fail with exactly `<CODE>`. |
-  | `<surface>,fixture=<PATH>` | The repository-root-relative source the example is compiled against: a `.mox` file for `.ddd`, a directory for `.ifml`. |
+  | `<surface>,fixture=<PATH>` | The repository-root-relative source the example is compiled against: a `.mox` file for `.ddd`, a directory for `.ifml` and `.dmn`. |
 
   Attributes combine (`mox,invalid=E0300`; `ddd,fixture=examples/support/support.mox`).
   `fragment` cannot combine with `invalid` or `fixture`. An unknown attribute is
@@ -179,6 +179,11 @@ changing this document in the same pull request.
   `examples/support`); its imports resolve against that directory, and the gate
   compiles the imported `.mox` domain and any `.actor` policies before running
   the interaction, authorization, and binding passes.
+
+  A `.dmn` example names the same kind of directory. Its `.mox` and `.evt`
+  imports resolve there, and every `logic table "<path>"` markdown file is read
+  from that directory and supplied to the compiler keyed by the path as written
+  — the same contract a host implements.
 
   A `.mox` example never carries `fixture` — it is self-contained.
 - **CM11 — Examples are complete and self-contained.** `[CI]` A `mox` fence

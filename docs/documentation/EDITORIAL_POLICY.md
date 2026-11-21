@@ -90,7 +90,7 @@ before the rule is relied upon.
   Guide page is classified with attributes: a complete example that compiles,
   `fragment` (a syntax illustration, only in a reference Syntax section or a
   how-to Solution step), or `invalid=<CODE>` (fails with exactly that code);
-  `.ddd` examples name their domain and `.ifml` examples their fixture directory with `fixture=<PATH>`. An
+  `.ddd` examples name their domain and `.ifml`/`.dmn` examples their fixture directory with `fixture=<PATH>`. An
   unclassified fence is a defect.
 - **E12 — Examples are self-contained.** `[CI]` A Guide example teaches one
   thing. It carries no imports and no unrelated declarations; complete
