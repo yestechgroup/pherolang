@@ -1,0 +1,8 @@
+# Single toolchain authority for local rustup and CI. Cache keys (mbx) and
+# compiler behaviour include the compiler identity, so local and CI must
+# resolve the same release. Bump deliberately, in one commit — never with a
+# silent `rustup update`. CI's dtolnay/rust-toolchain@stable runner resolves
+# this pin through rustup.
+[toolchain]
+channel = "1.100.0"
+components = ["rustfmt", "clippy"]
