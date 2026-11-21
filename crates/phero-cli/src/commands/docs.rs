@@ -1113,6 +1113,22 @@ fn check_fences(root: &Path, path: &Path, structure: &Structure, findings: &mut 
                     continue;
                 }
             }
+        } else if matches!(
+            surface.as_str(),
+            "evt" | "intent" | "uc" | "cmmn" | "deploy"
+        ) {
+            match compile_engine_example(root, &surface, &fence.body, options.fixture.as_deref()) {
+                Ok(outcome) => outcome,
+                Err(message) => {
+                    findings.push(Finding {
+                        path: path.to_path_buf(),
+                        line: fence.line,
+                        rule: "CM10",
+                        message,
+                    });
+                    continue;
+                }
+            }
         } else if surface == "dmn" {
             match compile_dmn_example(root, &fence.body, options.fixture.as_deref()) {
                 Ok(outcome) => outcome,
@@ -1430,6 +1446,123 @@ fn format_ifml_diagnostic(
         Some(code) => format!("{path}: {code} {}", diagnostic.message),
         None => format!("{path}: {}", diagnostic.message),
     }
+}
+
+/// Compiles one fence for a driver surface with no dedicated adapter: `.evt`,
+/// `.intent`, `.uc`, `.cmmn`, and `.deploy`. A `.mox` fixture directory is
+/// optional for contracts/intents and required when the example imports a
+/// domain; imports of any other surface fail closed.
+fn compile_engine_example(
+    root: &Path,
+    surface: &str,
+    body: &str,
+    fixture: Option<&str>,
+) -> Result<FenceOutcome, String> {
+    let fixture_dir = fixture.map(|fixture| fixture.trim_end_matches('/'));
+    let extension = match surface {
+        "evt" => "evt",
+        "intent" => "intent",
+        "uc" => "uc",
+        "cmmn" => "cmmn",
+        "deploy" => "deploy",
+        other => return Err(format!("unsupported engine surface `{other}`")),
+    };
+
+    let mut imports = Vec::new();
+    for line in body.lines() {
+        let trimmed = line.trim();
+        if let Some(rest) = trimmed.strip_prefix("import ") {
+            match parse_quoted_path(rest) {
+                Some(path) => imports.push(path),
+                None => {
+                    return Err(format!(
+                        "unsupported import line `{trimmed}` — expected `import \"<file>\"`"
+                    ))
+                }
+            }
+        }
+    }
+
+    if surface == "deploy" && !imports.is_empty() {
+        return Err(
+            "the documentation gate compiles self-contained `.deploy` examples; design/flow bindings are not compiled yet"
+                .to_string(),
+        );
+    }
+    if !imports.is_empty() && fixture_dir.is_none() {
+        return Err(format!(
+            "a `.mox`-importing `{surface}` example must name its fixture directory: `{surface},fixture=<dir>`"
+        ));
+    }
+    if imports.is_empty() && fixture_dir.is_some() {
+        return Err(format!(
+            "a `fixture` on a `{surface}` example needs an `import` line naming the domain"
+        ));
+    }
+
+    let mut domains = Vec::new();
+    for import in &imports {
+        let dir = fixture_dir.unwrap_or("");
+        let resolved = join_posix(dir, import);
+        let text = fs::read_to_string(root.join(&resolved))
+            .map_err(|error| format!("cannot read the imported file `{resolved}`: {error}"))?;
+        match Path::new(&resolved)
+            .extension()
+            .and_then(|extension| extension.to_str())
+        {
+            Some("mox") => {
+                let compilation = phero_driver::compile_str(
+                    &resolved,
+                    &text,
+                    &phero_driver::DomainImports::default(),
+                );
+                if let Some(error) = compilation
+                    .diagnostics
+                    .iter()
+                    .find(|diagnostic| diagnostic.is_error())
+                {
+                    return Err(format!(
+                        "the fixture domain `{resolved}` does not compile: {}",
+                        error.message
+                    ));
+                }
+                domains.push((resolved, text));
+            }
+            _ => {
+                return Err(format!(
+                    "the documentation gate compiles `{surface}` examples with a `.mox` domain; `{import}` is not supported yet"
+                ))
+            }
+        }
+    }
+
+    let design_path = match fixture_dir {
+        Some(dir) => join_posix(dir, &format!("fence.{extension}")),
+        None => format!("fence.{extension}"),
+    };
+    let inputs = phero_driver::CompileInputs::from_domains(&domains);
+    let diagnostics = match surface {
+        "evt" => phero_driver::compile_evt_str(&design_path, body, &inputs).diagnostics,
+        "intent" => phero_driver::compile_intent_str(&design_path, body, &inputs).diagnostics,
+        "uc" => phero_driver::compile_usecase_str(&design_path, body, &inputs).diagnostics,
+        "cmmn" => phero_driver::compile_cmmn_str(&design_path, body, &inputs).diagnostics,
+        "deploy" => phero_driver::compile_deploy_str(&design_path, body, &inputs).diagnostics,
+        other => return Err(format!("unsupported engine surface `{other}`")),
+    };
+
+    // These engines report by message (their codes, where allocated, are not
+    // carried in the record), so rendering the message is the honest report.
+    let rendered = diagnostics
+        .iter()
+        .map(|(path, diagnostic)| format!("{path}: {}", diagnostic.message))
+        .collect::<Vec<_>>()
+        .join("\n");
+    let errors = diagnostics
+        .iter()
+        .filter(|(_, diagnostic)| diagnostic.is_error())
+        .map(|(path, diagnostic)| format!("{path}: {}", diagnostic.message))
+        .collect();
+    Ok(FenceOutcome { errors, rendered })
 }
 
 /// Compiles one `.dmn` fence. The fixture names a directory; imports (`.mox`,
@@ -2588,6 +2721,47 @@ lastReviewed: 2026-11-21\n\
             &mut findings,
         );
         assert!(findings.is_empty(), "{findings:?}");
+    }
+
+    fn check_fence_body(path: &str, body: &str) -> Vec<Finding> {
+        let mut findings = Vec::new();
+        check_fences(
+            &repo_root(),
+            Path::new(path),
+            &scan_structure(body, 1),
+            &mut findings,
+        );
+        findings
+    }
+
+    #[test]
+    fn an_evt_example_compiles_without_a_fixture() {
+        let body = "# T\n\n```evt\nevent Ping version \"1.0.0\" {\n    name: String;\n}\n```\n";
+        assert!(check_fence_body("docs/guide/evt/overview.md", body).is_empty());
+    }
+
+    #[test]
+    fn an_intent_example_compiles_without_a_fixture() {
+        let body = "# T\n\n```intent\nintent SUPPORT-001 \"A refund needs a human.\" {\n}\n```\n";
+        assert!(check_fence_body("docs/guide/intent/overview.md", body).is_empty());
+    }
+
+    #[test]
+    fn a_uc_example_compiles_against_its_domain_fixture() {
+        let body = "# T\n\n```uc,fixture=examples/support\nimport \"support.mox\"\n\nusecase ResolveTicket {\n    subject Ticket: Ticket\n    actor Agent: User\n}\n```\n";
+        assert!(check_fence_body("docs/guide/uc/overview.md", body).is_empty());
+    }
+
+    #[test]
+    fn a_cmmn_example_compiles_against_its_domain_fixture() {
+        let body = "# T\n\n```cmmn,fixture=examples/support\nimport \"support.mox\"\n\ncase SupportCase {\n    case_file {\n        Ticket[0..1] ticket;\n    }\n    stage Intake {\n        milestone Ready {\n            entry on ticket.create;\n        }\n    }\n}\n```\n";
+        assert!(check_fence_body("docs/guide/cmmn/overview.md", body).is_empty());
+    }
+
+    #[test]
+    fn a_deploy_example_compiles_without_its_companion_surfaces() {
+        let body = "# T\n\n```deploy\napplication Svc {\n    component api: api {\n        port: 8080\n    }\n    component db: database {\n        engine: postgres\n    }\n    connects api -> db\n}\n```\n";
+        assert!(check_fence_body("docs/guide/deploy/overview.md", body).is_empty());
     }
 
     #[test]
