@@ -1,5 +1,10 @@
 # DMN decision model DSL (.dmn)
 
+> **Learning the language?** Start with the [decision models
+> guide](guide/dmn/overview.md): overview, tutorial, how-tos, and reference,
+> written for people using the language. This page is the engineering
+> contract.
+
 ## Overview
 
 A standalone decision-modeling surface implementing the DMN decision

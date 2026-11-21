@@ -141,7 +141,8 @@ container with a details panel and an editing form.
 - The interaction model is a versioned artifact: views, containers, components,
   properties, and events are part of its wire contract.
 - `data:` resolution is domain-only in the model; a decision-service binding is
-  a check-only fact and keeps the bare spelling.
+  a check-only fact and keeps the bare spelling. See [Connect decisions to the
+  application](../../dmn/how-to/connect-decisions-to-the-application.md).
 - Unknown top-level properties are carried by the model; the checker consumes
   the ones it documents (`type`, `data`, `fields`, `column`, `filter`, `if`,
   `mode`, authorization lists).

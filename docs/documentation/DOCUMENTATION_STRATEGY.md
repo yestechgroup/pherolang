@@ -80,7 +80,9 @@ This is the bar the five `.mox` exemplar pages are held to.
 4. `.ifml` pilot plus its conformance page, to prove the architecture fits a
    standards-derived language — landed (ten pages, including the OMG
    conformance page).
-5. Remaining languages, one at a time, against the same checklist.
+5. `.dmn` pilot plus its conformance page, with the `.mox` reference depth that
+   gives both a type authority — landed (twelve pages across the two trees).
+6. Remaining languages, one at a time, against the same checklist.
 
 The pilot order is deliberate. `.mox` comes first because it is the entry
 language; `.ddd` is the first *rewrite* because it contains the broadest

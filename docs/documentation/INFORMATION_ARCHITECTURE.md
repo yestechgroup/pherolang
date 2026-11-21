@@ -92,7 +92,8 @@ replacement exists.
 | `docs/DIAGNOSTICS.md` | `guide/platform/reference/diagnostics.md` (every code explained) |
 | `docs/DDD.md` | `guide/ddd/**` (landed: overview, tutorial, three how-tos, two concepts, four reference pages) + Engineering contract |
 | `docs/IFML.md` | `guide/ifml/**` (landed: overview, tutorial, three how-tos, two concepts — one is the OMG conformance page — three reference pages) + Engineering contract |
-| `docs/DMN.md`, `docs/CMMN.md`, `docs/EVENTS.md`, `docs/DEPLOY.md`, `docs/USECASES.md`, `docs/INTENTS.md` | `guide/<language>/**` in rollout + Engineering contract |
+| `docs/DMN.md` | `guide/dmn/**` (landed: overview, tutorial, two how-tos, two concepts — one is the OMG conformance page — two reference pages) + Engineering contract |
+| `docs/CMMN.md`, `docs/EVENTS.md`, `docs/DEPLOY.md`, `docs/USECASES.md`, `docs/INTENTS.md` | `guide/<language>/**` in rollout + Engineering contract |
 | `docs/VERSIONING.md` | `guide/platform/reference/compatibility.md` + Engineering policy |
 
 ### Engineering reference (compiler, artifacts, development)
