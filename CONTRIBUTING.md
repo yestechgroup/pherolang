@@ -36,8 +36,9 @@ Before you open a pull request, run:
 scripts/ci-local.sh
 ```
 
-It runs seven steps — build, rebrand, test, clippy, fmt, receipt, docs — and
-every step must report `*-OK`. One `*-FAIL` is a real failure. CI invokes
+It runs eight steps — build, rebrand, docs-lint, test, clippy, fmt, receipt,
+docs — and every step must report `*-OK`. One `*-FAIL` is a real failure. CI
+invokes
 this same script, so a green local run and a green CI run are the same gate.
 The step sequence and the list of files the format gate covers live only in
 `scripts/ci-local.sh`: do not copy them into a workflow or a document.
@@ -82,6 +83,13 @@ hand-edited golden is a review reject.
   commands, and the traps that cost people a day.
 - [docs/README.md](docs/README.md) — the index; every document is one hop
   from here.
+- [docs/guide/](docs/guide/mox/overview.md) — the user-facing Guide: language
+  overviews, tutorials, how-tos, concepts, and reference, organized by
+  Diátaxis type.
+- [docs/documentation/](docs/documentation/README.md) — the documentation
+  standard itself: content model, editorial policy, style guide, glossary,
+  and templates. A documentation change follows it, and the pull-request
+  template carries the blocking review rows.
 - [docs/LANGUAGE.md](docs/LANGUAGE.md) — the language reference. The
   grammar is stated once, in the parser module docs, and the reference
   links to it rather than restating it.

@@ -43,9 +43,19 @@ artifact. This index routes to the right document.
 
 ## Reading paths
 
-- **"I want to model a domain"** → [LANGUAGE.md](LANGUAGE.md), then the
-  `.mox` examples in [../examples/](../examples/). Add behavior with
-  [DDD.md](DDD.md), contracts with [EVENTS.md](EVENTS.md).
+- **"I am new to Phero Lang"** → the [Guide](guide/mox/overview.md): language
+  overviews, tutorials, how-tos, and reference written for people using the
+  languages rather than changing them.
+- **"I want to model a domain"** → the [domain models
+  guide](guide/mox/overview.md), then the `.mox` examples in
+  [../examples/](../examples/).
+- **"I want to design the application"** → the [application design
+  guide](guide/ddd/overview.md): services, entities and repositories,
+  lifecycles, values, and DTOs. Contracts follow with
+  [EVENTS.md](EVENTS.md).
+- **"I want to design the interaction"** → the [interaction flows
+  guide](guide/ifml/overview.md): views, navigation, data bindings, and
+  authorization.
 - **"I want to generate a system"** → the support-desk stack in
   [../examples/](../examples/) walks domain → policy → design → events →
   use cases → flows → deployment → case; the README's walkthrough compiles

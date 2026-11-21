@@ -53,6 +53,17 @@ export function isPheroSurface(language) {
 }
 
 /**
+ * The Phero surface a fence language names, ignoring a content-model suffix.
+ * `mox,invalid=E0300` and `mox,fragment` are still `mox` fences for
+ * highlighting; the suffix classifies the block for the documentation gate.
+ */
+export function surfaceOfFenceLanguage(language) {
+  if (typeof language !== 'string') return null;
+  const base = language.split(',')[0].trim().toLowerCase();
+  return isPheroSurface(base) ? base : null;
+}
+
+/**
  * Fence languages that are deliberately left to Expressive Code/Shiki or to
  * plaintext. A docs fence outside the Phero surfaces and this list fails the
  * site gate, so adding a language is an explicit decision.

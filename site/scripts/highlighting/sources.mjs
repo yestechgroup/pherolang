@@ -48,7 +48,15 @@ export function normalizeEcCode(code) {
 
 function fenceLanguage(info) {
   const first = info.trim().split(/\s+/)[0] ?? '';
-  return first.replace(/^\{\.?/, '').replace(/\}$/, '').replace(/^\./, '').toLowerCase();
+  // A Phero fence may carry a content-model suffix after the surface
+  // (`mox,fragment`, `mox,invalid=E0300`). The suffix classifies the block for
+  // the documentation gate; the highlighting pipeline keys on the surface.
+  return first
+    .replace(/^\{\.?/, '')
+    .replace(/\}$/, '')
+    .replace(/^\./, '')
+    .split(',')[0]
+    .toLowerCase();
 }
 
 /**

@@ -67,7 +67,7 @@ zero-JS.
 | `receipt.json` | `support.receipt.json`, copied | copy | lane 2/5 (verification story) |
 | `register.json` | `docs/verification/register.json`, copied | copy | lane 2/5 (proof-obligation ladder) |
 | `docs-inventory.json` | `{ formatVersion, docs[] }` — title, slug, size, lines | sync-model | `ingest-docs.mjs` |
-| `docs-manifest.json` | `{ formatVersion, generated[] }` — `{ source, slug, collection, target, url }` per page, ADRs included | `ingest-docs.mjs` | gate (docs coverage), lane 3 (doc URLs) |
+| `docs-manifest.json` | `{ formatVersion, generated[] }` — `{ source, slug, collection, target, url, title, type, language, section, order }` per page; ADRs, `docs/guide/**`, and `docs/documentation/*.md` included (the content-model fields are `null` for pages that predate the model) | `ingest-docs.mjs` | gate (docs coverage), the Guide sidebar, lane 3 (doc URLs) |
 | `highlighting/spans.json` | `{ formatVersion, generator, entries }` — one `{ surface, sourceHash, degraded, spans[] }` per `sha256(surface + "\0" + exact source bytes)` key | `scripts/sync-highlight.mjs` | both apps' renderer, `gate/highlighting.mjs` |
 | `support-model.json` | **lane 5's contract**, below | `scripts/render-graph.mjs` | lane 6 (island) |
 

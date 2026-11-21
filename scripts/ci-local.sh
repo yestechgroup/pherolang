@@ -18,7 +18,7 @@
 # plus the informational disk-budget print/warning before the build (issue
 # #261). On a beefier machine you can drop the nice and the job cap.
 #
-# Usage: scripts/ci-local.sh [all|build|rebrand|test|clippy|fmt|receipt|docs|audit|mutants]
+# Usage: scripts/ci-local.sh [all|build|rebrand|docs-lint|test|clippy|fmt|receipt|docs|audit|mutants]
 #        (default: all — the full sequence; ~30-60 min cold)
 set -u
 . "$(dirname "$0")/ci-env.sh" || exit 1
@@ -93,7 +93,7 @@ FIXTURE_FORMAT_GLOBS=(
 )
 
 step_build() {
-  step "CI 1/7: cargo build --workspace --all-targets"
+  step "CI 1/8: cargo build --workspace --all-targets"
   disk_budget
   nice -n 19 cargo build --workspace --all-targets && echo "BUILD-OK" || echo "BUILD-FAIL"
   kill_orphans
@@ -106,13 +106,23 @@ step_build() {
 # regression no other gate can see. The contracts they enforce are
 # docs/adr/0004 and docs/NAMING.md.
 step_rebrand() {
-  step "CI 2/7: platform + rebrand guards (scripts/check-platforms.sh, scripts/check-rebrand.sh)"
+  step "CI 2/8: platform + rebrand guards (scripts/check-platforms.sh, scripts/check-rebrand.sh)"
   ./scripts/check-platforms.sh && echo "PLATFORMS-STEP-OK" || echo "PLATFORMS-STEP-FAIL"
   ./scripts/check-rebrand.sh && echo "REBRAND-STEP-OK" || echo "REBRAND-STEP-FAIL"
 }
 
+# The documentation quality gate (docs/documentation/EDITORIAL_POLICY.md and
+# CONTENT_MODEL.md): frontmatter, heading sets, page placement, terminology,
+# implementation vocabulary, issue references, template drift, and every
+# compilable Guide example. It needs only the binary step 1 built, and a
+# documentation regression should fail fast — before the test step.
+step_docs_lint() {
+  step "CI 3/8: documentation quality (pherolang docs lint)"
+  nice -n 19 cargo run -q -p phero-cli -- docs lint && echo "DOCS-LINT-OK" || echo "DOCS-LINT-FAIL"
+}
+
 step_test() {
-  step "CI 3/7: TMPDIR=\$PWD/target/tmp cargo test --workspace --jobs 2"
+  step "CI 4/8: TMPDIR=\$PWD/target/tmp cargo test --workspace --jobs 2"
   # Issue #261: the test step recreates target/tmp, so clear the previous
   # run's leftovers first (doctest linking writes there; a stale pile of
   # scratch artifacts is exactly the disk pressure this budgets).
@@ -130,13 +140,13 @@ step_test() {
 }
 
 step_clippy() {
-  step "CI 4/7: clippy -D warnings"
+  step "CI 5/8: clippy -D warnings"
   nice -n 19 cargo clippy --workspace --all-targets -- -D warnings && echo "CLIPPY-OK" || echo "CLIPPY-FAIL"
   kill_orphans
 }
 
 step_fmt() {
-  step "CI 5/7: format check"
+  step "CI 6/8: format check"
   nice -n 19 cargo fmt --all -- --check && echo "RUSTFMT-OK" || echo "RUSTFMT-FAIL"
   nice -n 19 cargo run -q -p phero-cli -- fmt --check "${FIXTURE_FORMAT_GLOBS[@]}" \
     && echo "PHEROFMT-OK" || echo "PHEROFMT-FAIL"
@@ -154,7 +164,7 @@ step_fmt() {
 # regeneration is red here, with the exact command to run (the same
 # regenerate-and-compare discipline as the fmt fixture gate).
 step_receipt() {
-  step "CI 6/7: receipt freshness (pherolang verify --check-fresh)"
+  step "CI 7/8: receipt freshness (pherolang verify --check-fresh)"
   if nice -n 19 cargo run -q -p phero-cli -- verify --check-fresh \
       examples/artifacts/support.receipt.json; then
     echo "RECEIPT-OK"
@@ -176,7 +186,7 @@ step_docs() {
   # The strict rustdoc gate: broken intra-doc links are warnings by
   # default; -D warnings makes them errors (issue #175). cargo doc runs no
   # doctests, but it inherits the script's TMPDIR export like every step.
-  step "CI 7/7: RUSTDOCFLAGS=-D warnings cargo doc --workspace --no-deps"
+  step "CI 8/8: RUSTDOCFLAGS=-D warnings cargo doc --workspace --no-deps"
   nice -n 19 env RUSTDOCFLAGS="-D warnings" cargo doc --workspace --no-deps \
     && echo "DOC-OK" || echo "DOC-FAIL"
   kill_orphans
@@ -210,6 +220,7 @@ step_mutants() {
 case "${1:-all}" in
   build)  step_build ;;
   rebrand) step_rebrand ;;
+  docs-lint) step_docs_lint ;;
   test)   step_test ;;
   clippy) step_clippy ;;
   fmt)    step_fmt ;;
@@ -219,16 +230,17 @@ case "${1:-all}" in
   all)
     step_build
     step_rebrand
+    step_docs_lint
     step_test
     step_clippy
     step_fmt
     step_receipt
     step_docs
     echo
-    echo "ALL SEVEN STEPS MUST END IN *-OK BEFORE PUSHING."
+    echo "ALL EIGHT STEPS MUST END IN *-OK BEFORE PUSHING."
     ;;
   *)
-    echo "usage: scripts/ci-local.sh [all|build|rebrand|test|clippy|fmt|receipt|docs|audit|mutants]" >&2
+    echo "usage: scripts/ci-local.sh [all|build|rebrand|docs-lint|test|clippy|fmt|receipt|docs|audit|mutants]" >&2
     exit 2
     ;;
 esac

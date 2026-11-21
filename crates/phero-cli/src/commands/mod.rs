@@ -4,6 +4,7 @@ pub(crate) mod artifact;
 pub(crate) mod build;
 pub(crate) mod check;
 pub(crate) mod completions;
+pub(crate) mod docs;
 pub(crate) mod explain;
 pub(crate) mod fmt;
 pub(crate) mod gen;

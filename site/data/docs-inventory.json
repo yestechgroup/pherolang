@@ -25,8 +25,8 @@
       "slug": "ddd",
       "title": "DDD design DSL (.ddd)",
       "description": "A Sculptor-style domain-driven-design layer over `.mox` domain models. The",
-      "bytes": 130441,
-      "lines": 2198
+      "bytes": 130665,
+      "lines": 2203
     },
     {
       "path": "docs/DEPLOY.md",
@@ -115,8 +115,8 @@
       "slug": "ifml",
       "title": "IFML DSL",
       "description": "A Domain-Specific Language that is semantically aligned with OMG IFML 1.0(https://www.omg.org/spec/IFML/) but uses a modern, C-like expression-heavy syntax instead of XML/XMI. Lexed by a **logos** lexer and parsed by **chumsky** into a spanned syntax tree, then lowered into a versioned `IfmlModel` artifact; the same parser and byte-offset spans back the language server.",
-      "bytes": 43753,
-      "lines": 912
+      "bytes": 43977,
+      "lines": 917
     },
     {
       "path": "docs/INSTALL.md",
@@ -142,8 +142,8 @@
       "slug": "language",
       "title": "The .mox language reference",
       "description": "Phero Lang compiles `.mox` modeling sources (inspired by Eclipse Xcore) into",
-      "bytes": 44889,
-      "lines": 806
+      "bytes": 45108,
+      "lines": 811
     },
     {
       "path": "docs/NAMING.md",
@@ -160,8 +160,8 @@
       "slug": "index",
       "title": "Phero Lang documentation",
       "description": "Phero Lang is a multi-surface modeling language: every surface follows the same",
-      "bytes": 6077,
-      "lines": 61
+      "bytes": 6595,
+      "lines": 71
     },
     {
       "path": "docs/REBRAND.md",
