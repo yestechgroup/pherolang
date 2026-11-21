@@ -134,9 +134,10 @@ class RefundRequest {
 }
 ```
 
-Each enum literal has a stable integer value. The label (`as "requested"`) is
-what appears in canonical JSON; the integer is what the model stores. The
-`= Requested` default means a new request starts in the requested state.
+Each enum literal has a stable integer value and a name. The name (`Requested`)
+is what canonical JSON and the generated schema carry; the optional
+`as "requested"` label is display metadata. The `= Requested` default means a
+new request starts in the requested state.
 
 Run the check once more:
 

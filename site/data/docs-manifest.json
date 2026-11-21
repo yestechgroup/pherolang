@@ -254,6 +254,30 @@
       "order": 20
     },
     {
+      "source": "docs/guide/mox/how-to/model-a-relationship.md",
+      "slug": "mox/how-to/model-a-relationship",
+      "collection": "guide",
+      "target": "guide/mox/how-to/model-a-relationship.md",
+      "url": "/guide/mox/how-to/model-a-relationship/",
+      "title": "Model a relationship",
+      "type": "how-to",
+      "language": "mox",
+      "section": "how-to",
+      "order": 20
+    },
+    {
+      "source": "docs/guide/mox/reference/enums-datatypes-and-vocabularies.md",
+      "slug": "mox/reference/enums-datatypes-and-vocabularies",
+      "collection": "guide",
+      "target": "guide/mox/reference/enums-datatypes-and-vocabularies.md",
+      "url": "/guide/mox/reference/enums-datatypes-and-vocabularies/",
+      "title": "Enums, datatypes, and vocabularies",
+      "type": "reference",
+      "language": "mox",
+      "section": "reference",
+      "order": 20
+    },
+    {
       "source": "docs/guide/ddd/how-to/write-an-operation-body.md",
       "slug": "ddd/how-to/write-an-operation-body",
       "collection": "guide",
@@ -298,6 +322,30 @@
       "title": "Events and navigation",
       "type": "reference",
       "language": "ifml",
+      "section": "reference",
+      "order": 30
+    },
+    {
+      "source": "docs/guide/mox/how-to/choose-a-collection.md",
+      "slug": "mox/how-to/choose-a-collection",
+      "collection": "guide",
+      "target": "guide/mox/how-to/choose-a-collection.md",
+      "url": "/guide/mox/how-to/choose-a-collection/",
+      "title": "Choose a collection",
+      "type": "how-to",
+      "language": "mox",
+      "section": "how-to",
+      "order": 30
+    },
+    {
+      "source": "docs/guide/mox/reference/packages-and-imports.md",
+      "slug": "mox/reference/packages-and-imports",
+      "collection": "guide",
+      "target": "guide/mox/reference/packages-and-imports.md",
+      "url": "/guide/mox/reference/packages-and-imports/",
+      "title": "Packages and imports",
+      "type": "reference",
+      "language": "mox",
       "section": "reference",
       "order": 30
     },
