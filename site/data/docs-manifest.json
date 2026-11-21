@@ -2,242 +2,808 @@
   "formatVersion": 1,
   "generated": [
     {
+      "source": "docs/guide/ddd/concepts/entities-values-and-dtos.md",
+      "slug": "ddd/concepts/entities-values-and-dtos",
+      "collection": "guide",
+      "target": "guide/ddd/concepts/entities-values-and-dtos.md",
+      "url": "/guide/ddd/concepts/entities-values-and-dtos/",
+      "title": "Entities, values, and DTOs",
+      "type": "concept",
+      "language": "ddd",
+      "section": "concepts",
+      "order": 10
+    },
+    {
+      "source": "docs/guide/ddd/how-to/define-a-state-machine.md",
+      "slug": "ddd/how-to/define-a-state-machine",
+      "collection": "guide",
+      "target": "guide/ddd/how-to/define-a-state-machine.md",
+      "url": "/guide/ddd/how-to/define-a-state-machine/",
+      "title": "Define a state machine",
+      "type": "how-to",
+      "language": "ddd",
+      "section": "how-to",
+      "order": 10
+    },
+    {
+      "source": "docs/guide/ddd/overview.md",
+      "slug": "ddd/overview",
+      "collection": "guide",
+      "target": "guide/ddd/overview.md",
+      "url": "/guide/ddd/overview/",
+      "title": "Application design (.ddd)",
+      "type": "overview",
+      "language": "ddd",
+      "section": "start",
+      "order": 10
+    },
+    {
+      "source": "docs/guide/ddd/reference/applications-and-modules.md",
+      "slug": "ddd/reference/applications-and-modules",
+      "collection": "guide",
+      "target": "guide/ddd/reference/applications-and-modules.md",
+      "url": "/guide/ddd/reference/applications-and-modules/",
+      "title": "Applications and modules",
+      "type": "reference",
+      "language": "ddd",
+      "section": "reference",
+      "order": 10
+    },
+    {
+      "source": "docs/guide/ddd/tutorials/your-first-application-design.md",
+      "slug": "ddd/tutorials/your-first-application-design",
+      "collection": "guide",
+      "target": "guide/ddd/tutorials/your-first-application-design.md",
+      "url": "/guide/ddd/tutorials/your-first-application-design/",
+      "title": "Tutorial — your first application design",
+      "type": "tutorial",
+      "language": "ddd",
+      "section": "tutorials",
+      "order": 10
+    },
+    {
+      "source": "docs/guide/ifml/concepts/views-and-navigation.md",
+      "slug": "ifml/concepts/views-and-navigation",
+      "collection": "guide",
+      "target": "guide/ifml/concepts/views-and-navigation.md",
+      "url": "/guide/ifml/concepts/views-and-navigation/",
+      "title": "Views and navigation",
+      "type": "concept",
+      "language": "ifml",
+      "section": "concepts",
+      "order": 10
+    },
+    {
+      "source": "docs/guide/ifml/how-to/define-navigation.md",
+      "slug": "ifml/how-to/define-navigation",
+      "collection": "guide",
+      "target": "guide/ifml/how-to/define-navigation.md",
+      "url": "/guide/ifml/how-to/define-navigation/",
+      "title": "Define navigation",
+      "type": "how-to",
+      "language": "ifml",
+      "section": "how-to",
+      "order": 10
+    },
+    {
+      "source": "docs/guide/ifml/overview.md",
+      "slug": "ifml/overview",
+      "collection": "guide",
+      "target": "guide/ifml/overview.md",
+      "url": "/guide/ifml/overview/",
+      "title": "Interaction flows (.ifml)",
+      "type": "overview",
+      "language": "ifml",
+      "section": "start",
+      "order": 10
+    },
+    {
+      "source": "docs/guide/ifml/reference/modules-and-imports.md",
+      "slug": "ifml/reference/modules-and-imports",
+      "collection": "guide",
+      "target": "guide/ifml/reference/modules-and-imports.md",
+      "url": "/guide/ifml/reference/modules-and-imports/",
+      "title": "Modules and imports",
+      "type": "reference",
+      "language": "ifml",
+      "section": "reference",
+      "order": 10
+    },
+    {
+      "source": "docs/guide/ifml/tutorials/your-first-interaction-flow.md",
+      "slug": "ifml/tutorials/your-first-interaction-flow",
+      "collection": "guide",
+      "target": "guide/ifml/tutorials/your-first-interaction-flow.md",
+      "url": "/guide/ifml/tutorials/your-first-interaction-flow/",
+      "title": "Tutorial — your first interaction flow",
+      "type": "tutorial",
+      "language": "ifml",
+      "section": "tutorials",
+      "order": 10
+    },
+    {
+      "source": "docs/guide/mox/concepts/modelling-not-coding.md",
+      "slug": "mox/concepts/modelling-not-coding",
+      "collection": "guide",
+      "target": "guide/mox/concepts/modelling-not-coding.md",
+      "url": "/guide/mox/concepts/modelling-not-coding/",
+      "title": "Modelling, not coding",
+      "type": "concept",
+      "language": "mox",
+      "section": "concepts",
+      "order": 10
+    },
+    {
+      "source": "docs/guide/mox/how-to/add-an-enum.md",
+      "slug": "mox/how-to/add-an-enum",
+      "collection": "guide",
+      "target": "guide/mox/how-to/add-an-enum.md",
+      "url": "/guide/mox/how-to/add-an-enum/",
+      "title": "Add an enum to a domain model",
+      "type": "how-to",
+      "language": "mox",
+      "section": "how-to",
+      "order": 10
+    },
+    {
+      "source": "docs/guide/mox/overview.md",
+      "slug": "mox/overview",
+      "collection": "guide",
+      "target": "guide/mox/overview.md",
+      "url": "/guide/mox/overview/",
+      "title": "Domain models (.mox)",
+      "type": "overview",
+      "language": "mox",
+      "section": "start",
+      "order": 10
+    },
+    {
+      "source": "docs/guide/mox/reference/classes.md",
+      "slug": "mox/reference/classes",
+      "collection": "guide",
+      "target": "guide/mox/reference/classes.md",
+      "url": "/guide/mox/reference/classes/",
+      "title": "Classes and features",
+      "type": "reference",
+      "language": "mox",
+      "section": "reference",
+      "order": 10
+    },
+    {
+      "source": "docs/guide/mox/tutorials/your-first-domain-model.md",
+      "slug": "mox/tutorials/your-first-domain-model",
+      "collection": "guide",
+      "target": "guide/mox/tutorials/your-first-domain-model.md",
+      "url": "/guide/mox/tutorials/your-first-domain-model/",
+      "title": "Tutorial — your first domain model",
+      "type": "tutorial",
+      "language": "mox",
+      "section": "tutorials",
+      "order": 10
+    },
+    {
+      "source": "docs/guide/ddd/concepts/relationship-with-sculptor.md",
+      "slug": "ddd/concepts/relationship-with-sculptor",
+      "collection": "guide",
+      "target": "guide/ddd/concepts/relationship-with-sculptor.md",
+      "url": "/guide/ddd/concepts/relationship-with-sculptor/",
+      "title": "Relationship with Sculptor",
+      "type": "concept",
+      "language": "ddd",
+      "section": "concepts",
+      "order": 20
+    },
+    {
+      "source": "docs/guide/ddd/how-to/define-a-value-object.md",
+      "slug": "ddd/how-to/define-a-value-object",
+      "collection": "guide",
+      "target": "guide/ddd/how-to/define-a-value-object.md",
+      "url": "/guide/ddd/how-to/define-a-value-object/",
+      "title": "Define a value object",
+      "type": "how-to",
+      "language": "ddd",
+      "section": "how-to",
+      "order": 20
+    },
+    {
+      "source": "docs/guide/ddd/reference/designs.md",
+      "slug": "ddd/reference/designs",
+      "collection": "guide",
+      "target": "guide/ddd/reference/designs.md",
+      "url": "/guide/ddd/reference/designs/",
+      "title": "Designs",
+      "type": "reference",
+      "language": "ddd",
+      "section": "reference",
+      "order": 20
+    },
+    {
+      "source": "docs/guide/ifml/concepts/omg-ifml-conformance.md",
+      "slug": "ifml/concepts/omg-ifml-conformance",
+      "collection": "guide",
+      "target": "guide/ifml/concepts/omg-ifml-conformance.md",
+      "url": "/guide/ifml/concepts/omg-ifml-conformance/",
+      "title": "OMG IFML conformance",
+      "type": "concept",
+      "language": "ifml",
+      "section": "concepts",
+      "order": 20
+    },
+    {
+      "source": "docs/guide/ifml/how-to/bind-domain-data.md",
+      "slug": "ifml/how-to/bind-domain-data",
+      "collection": "guide",
+      "target": "guide/ifml/how-to/bind-domain-data.md",
+      "url": "/guide/ifml/how-to/bind-domain-data/",
+      "title": "Bind domain data",
+      "type": "how-to",
+      "language": "ifml",
+      "section": "how-to",
+      "order": 20
+    },
+    {
+      "source": "docs/guide/ifml/reference/views-and-components.md",
+      "slug": "ifml/reference/views-and-components",
+      "collection": "guide",
+      "target": "guide/ifml/reference/views-and-components.md",
+      "url": "/guide/ifml/reference/views-and-components/",
+      "title": "Views and components",
+      "type": "reference",
+      "language": "ifml",
+      "section": "reference",
+      "order": 20
+    },
+    {
+      "source": "docs/guide/ddd/how-to/write-an-operation-body.md",
+      "slug": "ddd/how-to/write-an-operation-body",
+      "collection": "guide",
+      "target": "guide/ddd/how-to/write-an-operation-body.md",
+      "url": "/guide/ddd/how-to/write-an-operation-body/",
+      "title": "Write an operation body",
+      "type": "how-to",
+      "language": "ddd",
+      "section": "how-to",
+      "order": 30
+    },
+    {
+      "source": "docs/guide/ddd/reference/services-and-operations.md",
+      "slug": "ddd/reference/services-and-operations",
+      "collection": "guide",
+      "target": "guide/ddd/reference/services-and-operations.md",
+      "url": "/guide/ddd/reference/services-and-operations/",
+      "title": "Services and operations",
+      "type": "reference",
+      "language": "ddd",
+      "section": "reference",
+      "order": 30
+    },
+    {
+      "source": "docs/guide/ifml/how-to/require-authorization.md",
+      "slug": "ifml/how-to/require-authorization",
+      "collection": "guide",
+      "target": "guide/ifml/how-to/require-authorization.md",
+      "url": "/guide/ifml/how-to/require-authorization/",
+      "title": "Require authorization",
+      "type": "how-to",
+      "language": "ifml",
+      "section": "how-to",
+      "order": 30
+    },
+    {
+      "source": "docs/guide/ifml/reference/events-and-navigation.md",
+      "slug": "ifml/reference/events-and-navigation",
+      "collection": "guide",
+      "target": "guide/ifml/reference/events-and-navigation.md",
+      "url": "/guide/ifml/reference/events-and-navigation/",
+      "title": "Events and navigation",
+      "type": "reference",
+      "language": "ifml",
+      "section": "reference",
+      "order": 30
+    },
+    {
+      "source": "docs/guide/ddd/reference/state-machines.md",
+      "slug": "ddd/reference/state-machines",
+      "collection": "guide",
+      "target": "guide/ddd/reference/state-machines.md",
+      "url": "/guide/ddd/reference/state-machines/",
+      "title": "State machines",
+      "type": "reference",
+      "language": "ddd",
+      "section": "reference",
+      "order": 40
+    },
+    {
       "source": "docs/INSTALL.md",
       "slug": "install",
       "collection": "reference",
       "target": "reference/install.md",
-      "url": "/reference/install/"
+      "url": "/reference/install/",
+      "title": "Installing Phero Lang",
+      "type": null,
+      "language": null,
+      "section": null,
+      "order": 1
     },
     {
       "source": "docs/EDITORS.md",
       "slug": "editors",
       "collection": "reference",
       "target": "reference/editors.md",
-      "url": "/reference/editors/"
+      "url": "/reference/editors/",
+      "title": "Editors and the language server",
+      "type": null,
+      "language": null,
+      "section": null,
+      "order": 2
     },
     {
       "source": "docs/LANGUAGE.md",
       "slug": "language",
       "collection": "reference",
       "target": "reference/language.md",
-      "url": "/reference/language/"
+      "url": "/reference/language/",
+      "title": "The .mox language reference",
+      "type": null,
+      "language": null,
+      "section": null,
+      "order": 10
     },
     {
       "source": "docs/EXPRESSIONS.md",
       "slug": "expressions",
       "collection": "reference",
       "target": "reference/expressions.md",
-      "url": "/reference/expressions/"
+      "url": "/reference/expressions/",
+      "title": "The Phero Lang expression language (Tier 2)",
+      "type": null,
+      "language": null,
+      "section": null,
+      "order": 20
     },
     {
       "source": "docs/DDD.md",
       "slug": "ddd",
       "collection": "reference",
       "target": "reference/ddd.md",
-      "url": "/reference/ddd/"
+      "url": "/reference/ddd/",
+      "title": "DDD design DSL (.ddd)",
+      "type": null,
+      "language": null,
+      "section": null,
+      "order": 30
     },
     {
       "source": "docs/EVENTS.md",
       "slug": "events",
       "collection": "reference",
       "target": "reference/events.md",
-      "url": "/reference/events/"
+      "url": "/reference/events/",
+      "title": "Event contracts (.evt)",
+      "type": null,
+      "language": null,
+      "section": null,
+      "order": 40
     },
     {
       "source": "docs/DEPLOY.md",
       "slug": "deploy",
       "collection": "reference",
       "target": "reference/deploy.md",
-      "url": "/reference/deploy/"
+      "url": "/reference/deploy/",
+      "title": "Deployment models (.deploy)",
+      "type": null,
+      "language": null,
+      "section": null,
+      "order": 50
     },
     {
       "source": "docs/USECASES.md",
       "slug": "usecases",
       "collection": "reference",
       "target": "reference/usecases.md",
-      "url": "/reference/usecases/"
+      "url": "/reference/usecases/",
+      "title": "Use case patterns (.uc)",
+      "type": null,
+      "language": null,
+      "section": null,
+      "order": 60
     },
     {
       "source": "docs/CMMN.md",
       "slug": "cmmn",
       "collection": "reference",
       "target": "reference/cmmn.md",
-      "url": "/reference/cmmn/"
+      "url": "/reference/cmmn/",
+      "title": "Case management (.cmmn)",
+      "type": null,
+      "language": null,
+      "section": null,
+      "order": 70
     },
     {
       "source": "docs/DMN.md",
       "slug": "dmn",
       "collection": "reference",
       "target": "reference/dmn.md",
-      "url": "/reference/dmn/"
+      "url": "/reference/dmn/",
+      "title": "DMN decision model DSL (.dmn)",
+      "type": null,
+      "language": null,
+      "section": null,
+      "order": 80
     },
     {
       "source": "docs/IFML.md",
       "slug": "ifml",
       "collection": "reference",
       "target": "reference/ifml.md",
-      "url": "/reference/ifml/"
+      "url": "/reference/ifml/",
+      "title": "IFML DSL",
+      "type": null,
+      "language": null,
+      "section": null,
+      "order": 90
     },
     {
       "source": "docs/INTENTS.md",
       "slug": "intents",
       "collection": "reference",
       "target": "reference/intents.md",
-      "url": "/reference/intents/"
+      "url": "/reference/intents/",
+      "title": "Intent specifications (`.intent`)",
+      "type": null,
+      "language": null,
+      "section": null,
+      "order": 95
     },
     {
       "source": "docs/GRAPH.md",
       "slug": "graph",
       "collection": "reference",
       "target": "reference/graph.md",
-      "url": "/reference/graph/"
+      "url": "/reference/graph/",
+      "title": "The unified semantic graph",
+      "type": null,
+      "language": null,
+      "section": null,
+      "order": 100
     },
     {
       "source": "docs/DIAGNOSTICS.md",
       "slug": "diagnostics",
       "collection": "reference",
       "target": "reference/diagnostics.md",
-      "url": "/reference/diagnostics/"
+      "url": "/reference/diagnostics/",
+      "title": "Diagnostic codes",
+      "type": null,
+      "language": null,
+      "section": null,
+      "order": 110
     },
     {
       "source": "docs/BACKENDS.md",
       "slug": "backends",
       "collection": "reference",
       "target": "reference/backends.md",
-      "url": "/reference/backends/"
+      "url": "/reference/backends/",
+      "title": "Writing a backend for Phero Lang",
+      "type": null,
+      "language": null,
+      "section": null,
+      "order": 120
     },
     {
       "source": "docs/VERSIONING.md",
       "slug": "versioning",
       "collection": "reference",
       "target": "reference/versioning.md",
-      "url": "/reference/versioning/"
+      "url": "/reference/versioning/",
+      "title": "Versioning and release policy",
+      "type": null,
+      "language": null,
+      "section": null,
+      "order": 130
     },
     {
       "source": "docs/NAMING.md",
       "slug": "naming",
       "collection": "reference",
       "target": "reference/naming.md",
-      "url": "/reference/naming/"
+      "url": "/reference/naming/",
+      "title": "Naming",
+      "type": null,
+      "language": null,
+      "section": null,
+      "order": 140
     },
     {
       "source": "docs/HIGHLIGHTING.md",
       "slug": "highlighting",
       "collection": "reference",
       "target": "reference/highlighting.md",
-      "url": "/reference/highlighting/"
+      "url": "/reference/highlighting/",
+      "title": "Compiler-backed syntax highlighting",
+      "type": null,
+      "language": null,
+      "section": null,
+      "order": 150
     },
     {
       "source": "docs/README.md",
       "slug": "index",
       "collection": "reference",
       "target": "index.md",
-      "url": "/"
+      "url": "/",
+      "title": "Phero Lang documentation",
+      "type": null,
+      "language": null,
+      "section": null,
+      "order": 900
     },
     {
       "source": "docs/SEMANTICS.md",
       "slug": "semantics",
       "collection": "engineering",
       "target": "engineering/semantics.md",
-      "url": "/engineering/semantics/"
+      "url": "/engineering/semantics/",
+      "title": "Semantics: the claim ladder",
+      "type": null,
+      "language": null,
+      "section": null,
+      "order": 10
     },
     {
       "source": "docs/VERIFICATION.md",
       "slug": "verification",
       "collection": "engineering",
       "target": "engineering/verification.md",
-      "url": "/engineering/verification/"
+      "url": "/engineering/verification/",
+      "title": "Verification (proof-obligation register)",
+      "type": null,
+      "language": null,
+      "section": null,
+      "order": 20
     },
     {
       "source": "docs/RECEIPTS.md",
       "slug": "receipts",
       "collection": "engineering",
       "target": "engineering/receipts.md",
-      "url": "/engineering/receipts/"
+      "url": "/engineering/receipts/",
+      "title": "Verification receipts",
+      "type": null,
+      "language": null,
+      "section": null,
+      "order": 30
     },
     {
       "source": "docs/GOLDENS.md",
       "slug": "goldens",
       "collection": "engineering",
       "target": "engineering/goldens.md",
-      "url": "/engineering/goldens/"
+      "url": "/engineering/goldens/",
+      "title": "Golden fixtures",
+      "type": null,
+      "language": null,
+      "section": null,
+      "order": 35
     },
     {
       "source": "docs/RUNE-BODIES.md",
       "slug": "rune-bodies",
       "collection": "engineering",
       "target": "engineering/rune-bodies.md",
-      "url": "/engineering/rune-bodies/"
+      "url": "/engineering/rune-bodies/",
+      "title": "Rune body translation — design (RFC)",
+      "type": null,
+      "language": null,
+      "section": null,
+      "order": 40
+    },
+    {
+      "source": "docs/documentation/README.md",
+      "slug": "index",
+      "collection": "contributing",
+      "target": "contributing/index.md",
+      "url": "/contributing/",
+      "title": "Documentation standard",
+      "type": null,
+      "language": null,
+      "section": null,
+      "order": 0
+    },
+    {
+      "source": "docs/documentation/CONTENT_MODEL.md",
+      "slug": "content_model",
+      "collection": "contributing",
+      "target": "contributing/content_model.md",
+      "url": "/contributing/content_model/",
+      "title": "Content model",
+      "type": null,
+      "language": null,
+      "section": null,
+      "order": 900
+    },
+    {
+      "source": "docs/documentation/DOCUMENTATION_STRATEGY.md",
+      "slug": "documentation_strategy",
+      "collection": "contributing",
+      "target": "contributing/documentation_strategy.md",
+      "url": "/contributing/documentation_strategy/",
+      "title": "Documentation strategy",
+      "type": null,
+      "language": null,
+      "section": null,
+      "order": 900
+    },
+    {
+      "source": "docs/documentation/EDITORIAL_POLICY.md",
+      "slug": "editorial_policy",
+      "collection": "contributing",
+      "target": "contributing/editorial_policy.md",
+      "url": "/contributing/editorial_policy/",
+      "title": "Editorial policy",
+      "type": null,
+      "language": null,
+      "section": null,
+      "order": 900
+    },
+    {
+      "source": "docs/documentation/INFORMATION_ARCHITECTURE.md",
+      "slug": "information_architecture",
+      "collection": "contributing",
+      "target": "contributing/information_architecture.md",
+      "url": "/contributing/information_architecture/",
+      "title": "Information architecture",
+      "type": null,
+      "language": null,
+      "section": null,
+      "order": 900
+    },
+    {
+      "source": "docs/documentation/WRITING_STYLE_GUIDE.md",
+      "slug": "writing_style_guide",
+      "collection": "contributing",
+      "target": "contributing/writing_style_guide.md",
+      "url": "/contributing/writing_style_guide/",
+      "title": "Writing style guide",
+      "type": null,
+      "language": null,
+      "section": null,
+      "order": 900
     },
     {
       "source": "docs/REBRAND.md",
       "slug": "rebrand",
       "collection": "migration",
       "target": "migration/rebrand.md",
-      "url": "/migration/rebrand/"
+      "url": "/migration/rebrand/",
+      "title": "Rebranding: rexlang → Phero Lang",
+      "type": null,
+      "language": null,
+      "section": null,
+      "order": 10
     },
     {
       "source": "docs/RELEASE-0.3.0.md",
       "slug": "release-0.3.0",
       "collection": "migration",
       "target": "migration/release-030.md",
-      "url": "/migration/release-030/"
+      "url": "/migration/release-030/",
+      "title": "Release runbook: v0.3.0 (Phero Lang)",
+      "type": null,
+      "language": null,
+      "section": null,
+      "order": 20
     },
     {
       "source": "docs/RELEASE-0.4.0.md",
       "slug": "release-0.4.0",
       "collection": "migration",
       "target": "migration/release-040.md",
-      "url": "/migration/release-040/"
+      "url": "/migration/release-040/",
+      "title": "Release runbook: v0.4.0 (Phero Lang)",
+      "type": null,
+      "language": null,
+      "section": null,
+      "order": 30
     },
     {
       "source": "docs/adr/README.md",
       "slug": "adr",
       "collection": "adr",
       "target": "adr/index.md",
-      "url": "/adr/"
+      "url": "/adr/",
+      "title": "Architecture decision records",
+      "type": null,
+      "language": null,
+      "section": null,
+      "order": 0
     },
     {
       "source": "docs/adr/0001-rebrand-to-phero-lang.md",
       "slug": "0001-rebrand-to-phero-lang",
       "collection": "adr",
       "target": "adr/0001-rebrand-to-phero-lang.md",
-      "url": "/adr/0001-rebrand-to-phero-lang/"
+      "url": "/adr/0001-rebrand-to-phero-lang/",
+      "title": "0001 — Rebrand rexlang to Phero Lang",
+      "type": null,
+      "language": null,
+      "section": null,
+      "order": 11
     },
     {
       "source": "docs/adr/0002-static-hover-reference-panels.md",
       "slug": "0002-static-hover-reference-panels",
       "collection": "adr",
       "target": "adr/0002-static-hover-reference-panels.md",
-      "url": "/adr/0002-static-hover-reference-panels/"
+      "url": "/adr/0002-static-hover-reference-panels/",
+      "title": "0002 — Static hover reference panels, not a browser IDE",
+      "type": null,
+      "language": null,
+      "section": null,
+      "order": 12
     },
     {
       "source": "docs/adr/0003-compiler-backed-highlighting-is-the-source-of-truth.md",
       "slug": "0003-compiler-backed-highlighting-is-the-source-of-truth",
       "collection": "adr",
       "target": "adr/0003-compiler-backed-highlighting-is-the-source-of-truth.md",
-      "url": "/adr/0003-compiler-backed-highlighting-is-the-source-of-truth/"
+      "url": "/adr/0003-compiler-backed-highlighting-is-the-source-of-truth/",
+      "title": "0003 — Compiler-backed highlighting is the source of truth",
+      "type": null,
+      "language": null,
+      "section": null,
+      "order": 13
     },
     {
       "source": "docs/adr/0004-supported-platforms-linux-only.md",
       "slug": "0004-supported-platforms-linux-only",
       "collection": "adr",
       "target": "adr/0004-supported-platforms-linux-only.md",
-      "url": "/adr/0004-supported-platforms-linux-only/"
+      "url": "/adr/0004-supported-platforms-linux-only/",
+      "title": "0004 — Supported platform is Linux x86_64 only",
+      "type": null,
+      "language": null,
+      "section": null,
+      "order": 14
     },
     {
       "source": "docs/adr/0005-shared-surface-kernel-layering.md",
       "slug": "0005-shared-surface-kernel-layering",
       "collection": "adr",
       "target": "adr/0005-shared-surface-kernel-layering.md",
-      "url": "/adr/0005-shared-surface-kernel-layering/"
+      "url": "/adr/0005-shared-surface-kernel-layering/",
+      "title": "0005 — The surface kernel is already shared; the model stays typed per surface",
+      "type": null,
+      "language": null,
+      "section": null,
+      "order": 15
     },
     {
       "source": "docs/adr/0010-intent-specifications-are-a-declaration-surface.md",
       "slug": "0010-intent-specifications-are-a-declaration-surface",
       "collection": "adr",
       "target": "adr/0010-intent-specifications-are-a-declaration-surface.md",
-      "url": "/adr/0010-intent-specifications-are-a-declaration-surface/"
+      "url": "/adr/0010-intent-specifications-are-a-declaration-surface/",
+      "title": "ADR 0010: Intent specifications are a declaration surface",
+      "type": null,
+      "language": null,
+      "section": null,
+      "order": 20
+    },
+    {
+      "source": "docs/adr/0011-documentation-quality-standard.md",
+      "slug": "0011-documentation-quality-standard",
+      "collection": "adr",
+      "target": "adr/0011-documentation-quality-standard.md",
+      "url": "/adr/0011-documentation-quality-standard/",
+      "title": "0011 — Documentation quality is a normative, hard-enforced standard",
+      "type": null,
+      "language": null,
+      "section": null,
+      "order": 21
     }
   ]
 }

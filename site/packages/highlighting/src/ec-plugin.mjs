@@ -12,7 +12,7 @@
 
 import { loadArtifact, lookupEntry } from './artifact.mjs';
 import { buildByteMap, piecesForRange, utf8Length } from './render.mjs';
-import { classNamesFor, isPheroSurface } from './taxonomy.mjs';
+import { classNamesFor, surfaceOfFenceLanguage } from './taxonomy.mjs';
 
 function classList(value) {
   if (Array.isArray(value)) return value;
@@ -127,7 +127,8 @@ export function pheroHighlightPlugin() {
     name: 'pherolang-highlight',
     hooks: {
       postprocessAnalyzedCode({ codeBlock }) {
-        if (!isPheroSurface(codeBlock.language)) return;
+        const surface = surfaceOfFenceLanguage(codeBlock.language);
+        if (!surface) return;
         const source = codeBlock.code;
         const { artifact: data, error } = artifact();
         if (!data) {
@@ -135,7 +136,7 @@ export function pheroHighlightPlugin() {
           analysis.set(codeBlock, { status: 'missing' });
           return;
         }
-        const { entry, error: lookupError } = lookupEntry(data, codeBlock.language, source);
+        const { entry, error: lookupError } = lookupEntry(data, surface, source);
         if (lookupError) {
           report(lookupError);
           analysis.set(codeBlock, { status: 'missing' });
@@ -143,7 +144,7 @@ export function pheroHighlightPlugin() {
         }
         if (!entry) {
           report(
-            `no ${codeBlock.language} span entry for a ${source.length}-character block — ` +
+            `no ${surface} span entry for a ${source.length}-character block — ` +
               'run node scripts/sync-highlight.mjs',
           );
           analysis.set(codeBlock, { status: 'missing' });

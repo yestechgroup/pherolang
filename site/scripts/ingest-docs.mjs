@@ -11,13 +11,22 @@
  * What it does, in order:
  *
  *   1. **Places** every document. `docs/README.md` becomes the landing page
- *      (`index.md`, URL `/`); everything else lands in one of four
+ *      (`index.md`, URL `/`); everything else lands in one of six
  *      collections, which is what the sidebar groups are built from:
  *
+ *          guide/        user-facing Diátaxis pages  → /guide/<language>/<slug>/
  *          reference/    the language manual          → /reference/<slug>/
  *          engineering/  claims, proofs, receipts     → /engineering/<slug>/
+ *          contributing/ the documentation standard   → /contributing/<slug>/
  *          migration/    rebrand + release runbook    → /migration/<slug>/
  *          adr/          decision records             → /adr/<slug>/
+ *
+ *      `guide/` and `contributing/` are scanned from disk and keep their
+ *      authored frontmatter (the content model): `docs/guide/**` carries title,
+ *      type, language, section, order, status, and the rest; the ingest step
+ *      adds only the fields Starlight needs at build time (`editUrl`,
+ *      `sidebar.order`, table-of-contents depth). The other collections are
+ *      synthesized from the document's own `# h1` as before.
  *
  *      The collection table is curated (`PLACEMENT`); a document that is not
  *      in it still ships — it falls back to `reference/`, ordered last — so a
@@ -50,7 +59,7 @@
 
 import { existsSync, statSync } from 'node:fs';
 import { mkdir, readdir, readFile, rm, writeFile } from 'node:fs/promises';
-import { dirname, join, posix } from 'node:path';
+import { dirname, join, posix, relative, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const SITE = dirname(dirname(fileURLToPath(import.meta.url)));
@@ -77,7 +86,7 @@ const warn = (message) => console.warn(`ingest-docs: ${message}`);
  * are placements. The sidebar in `phero-docs/astro.config.mjs` autogenerates
  * each directory and labels the group with these strings.
  */
-const GROUPS = ['reference', 'engineering', 'migration', 'adr'];
+const GROUPS = ['guide', 'reference', 'engineering', 'contributing', 'migration', 'adr'];
 
 /**
  * `slug → [collection, reading order]`. The order is written into the page
@@ -131,8 +140,10 @@ const ADR_GROUP = 'adr';
 const ADR_ORDER = 10;
 
 const GROUP_LABEL = {
+  guide: 'Guide',
   reference: 'Reference',
   engineering: 'Engineering',
+  contributing: 'Contributing',
   migration: 'Migration',
   adr: 'Decisions',
 };
@@ -353,6 +364,90 @@ async function planPage({ source, slug, title, order, collection: placed, index 
   };
 }
 
+// ---------------------------------------------------------------------------
+// 4b. Authored trees — `docs/guide/**` and `docs/documentation/**`.
+// ---------------------------------------------------------------------------
+
+/** Repository-relative, POSIX-separated path for a scanned file. */
+const repoPath = (absolute) => relative(ROOT, absolute).split(sep).join('/');
+
+/**
+ * Split authored frontmatter from a page body. The docs in the authored trees
+ * carry the content model (`docs/documentation/CONTENT_MODEL.md`), so the
+ * ingest step must preserve it rather than synthesize one. Parsing is the
+ * strict subset the model allows: `key: value` lines at the top level. Values
+ * are returned unquoted for the manifest; the raw lines are kept for output.
+ */
+function parseFrontmatter(text) {
+  const match = /^---\r?\n([\s\S]*?)\r?\n---\r?\n?/.exec(text);
+  if (!match) return { fields: {}, lines: null, body: text };
+  const lines = match[1].split(/\r?\n/);
+  const fields = {};
+  for (const line of lines) {
+    const kv = /^([A-Za-z][A-Za-z0-9_-]*):\s*(.*)$/.exec(line);
+    if (!kv) continue;
+    let value = kv[2].trim();
+    if (
+      (value.startsWith('"') && value.endsWith('"')) ||
+      (value.startsWith("'") && value.endsWith("'"))
+    ) {
+      value = value.slice(1, -1);
+    }
+    fields[kv[1]] = value;
+  }
+  return { fields, lines, body: text.slice(match[0].length) };
+}
+
+/**
+ * One page from an authored tree. The page keeps its frontmatter fields (the
+ * site schema strips what it does not use; the documentation gate validates
+ * them), and only the Starlight build-time fields are added at write time.
+ */
+async function planAuthoredPage({ source, collection, slug, index = false }) {
+  const text = await readFile(join(ROOT, source), 'utf8');
+  const { fields, lines, body } = parseFrontmatter(text);
+  const split = splitTitle(body);
+  const title = fields.title ?? split.title ?? slug;
+
+  if (fields.title && split.title && fields.title !== split.title) {
+    warn(`${source}: frontmatter title "${fields.title}" does not match its # heading "${split.title}"`);
+  }
+
+  const order = Number.parseInt(fields.order ?? '', 10);
+  return {
+    source,
+    slug,
+    collection,
+    index,
+    // A collection's own index page always leads its group.
+    order: index ? 0 : Number.isNaN(order) ? FALLBACK_ORDER : order,
+    title,
+    description: fields.description ?? metaDescription(firstParagraph(split.body)),
+    body: split.body.join('\n'),
+    authored: true,
+    frontmatterLines: lines,
+    type: fields.type ?? null,
+    language: fields.language ?? null,
+    section: fields.section ?? null,
+    target: index ? `${collection}/index.md` : `${collection}/${slug}.md`,
+    url: index ? `/${collection}/` : `/${collection}/${slug}/`,
+  };
+}
+
+/** Every `.md` file under `dir`, sorted by repository path. */
+async function walkMarkdown(dir) {
+  if (!existsSync(dir)) return [];
+  const found = [];
+  for (const entry of await readdir(dir, { withFileTypes: true })) {
+    if (entry.isDirectory()) {
+      found.push(...(await walkMarkdown(join(dir, entry.name))));
+    } else if (entry.name.endsWith('.md')) {
+      found.push(join(dir, entry.name));
+    }
+  }
+  return found.sort();
+}
+
 const pages = {
   all: [],
   bySource: new Map(),
@@ -395,6 +490,34 @@ for (const name of adrFiles) {
       collection: ADR_GROUP,
       index: isIndex,
       order: isIndex ? 0 : ADR_ORDER + (Number.isNaN(number) ? adrFiles.length : number),
+    }),
+  );
+}
+
+// The authored trees are not in `docs-inventory.json` either. `docs/guide/**`
+// carries the content model (frontmatter preserved verbatim); the governance
+// set in `docs/documentation/*.md` is published under Contributing. The
+// templates under `docs/documentation/templates/` are skeletons and are
+// deliberately not published.
+const GUIDE_DIR = join(DOCS, 'guide');
+for (const file of await walkMarkdown(GUIDE_DIR)) {
+  const source = repoPath(file);
+  const slug = relative(GUIDE_DIR, file).split(sep).join('/').replace(/\.md$/, '');
+  pages.all.push(await planAuthoredPage({ source, collection: 'guide', slug }));
+}
+
+const DOCUMENTATION_DIR = join(DOCS, 'documentation');
+const documentationFiles = existsSync(DOCUMENTATION_DIR)
+  ? (await readdir(DOCUMENTATION_DIR)).filter((name) => name.endsWith('.md')).sort()
+  : [];
+for (const name of documentationFiles) {
+  const isIndex = name === 'README.md';
+  pages.all.push(
+    await planAuthoredPage({
+      source: `docs/documentation/${name}`,
+      collection: 'contributing',
+      slug: isIndex ? 'index' : name.replace(/\.md$/, '').toLowerCase(),
+      index: isIndex,
     }),
   );
 }
@@ -518,6 +641,31 @@ const readme = existsSync(join(DOCS, 'README.md'))
   ? await readFile(join(DOCS, 'README.md'), 'utf8')
   : null;
 
+/**
+ * An authored page keeps its content-model frontmatter; the ingest step adds
+ * only what Starlight needs at build time. The content model itself is not
+ * validated here — the documentation gate owns that — so a missing required
+ * field renders rather than failing the site build.
+ */
+function authoredFrontmatter(page, landing) {
+  // A page in the authored trees may still have no frontmatter (the
+  // governance set carries none): synthesize the two fields Starlight
+  // requires, exactly like a flat document.
+  const lines = page.frontmatterLines
+    ? [...page.frontmatterLines]
+    : [
+        `title: ${yaml(page.title)}`,
+        ...(page.description ? [`description: ${yaml(page.description)}`] : []),
+      ];
+  const has = (key) => lines.some((line) => new RegExp(`^${key}:`).test(line));
+  if (!has('editUrl')) lines.push(`editUrl: ${yaml(`${EDIT}/${page.source}`)}`);
+  if (!has('sidebar')) lines.push(`sidebar: { order: ${landing ? 0 : page.order} }`);
+  if (!has('tableOfContents')) {
+    lines.push('tableOfContents: { minHeadingLevel: 2, maxHeadingLevel: 3 }');
+  }
+  return ['---', ...lines, '---'].join('\n');
+}
+
 let written = 0;
 
 for (const page of pages.all) {
@@ -526,21 +674,27 @@ for (const page of pages.all) {
     ? buildLandingPage(readme ?? '', pages.all)
     : rewriteLinks(page.body, page, pages).replace(/^\s+/, '');
 
-  const frontmatter = [
-    '---',
-    `title: ${yaml(page.title)}`,
-    page.description ? `description: ${yaml(page.description)}` : null,
-    `editUrl: ${yaml(`${EDIT}/${page.source}`)}`,
-    `sidebar: { order: ${landing ? 0 : page.order} }`,
-    landing
-      ? 'tableOfContents: { minHeadingLevel: 2, maxHeadingLevel: 2 }'
-      : 'tableOfContents: { minHeadingLevel: 2, maxHeadingLevel: 3 }',
-    '---',
-  ]
-    .filter((line) => line !== null)
-    .join('\n');
+  const frontmatter = page.authored
+    ? authoredFrontmatter(page, landing)
+    : [
+        '---',
+        `title: ${yaml(page.title)}`,
+        page.description ? `description: ${yaml(page.description)}` : null,
+        `editUrl: ${yaml(`${EDIT}/${page.source}`)}`,
+        `sidebar: { order: ${landing ? 0 : page.order} }`,
+        landing
+          ? 'tableOfContents: { minHeadingLevel: 2, maxHeadingLevel: 2 }'
+          : 'tableOfContents: { minHeadingLevel: 2, maxHeadingLevel: 3 }',
+        '---',
+      ]
+        .filter((line) => line !== null)
+        .join('\n');
 
-  await writeFile(join(OUT, page.target), `${frontmatter}\n\n${body}\n`);
+  const target = join(OUT, page.target);
+  // Authored pages nest (`guide/<language>/...`); a group directory is created
+  // once above, deeper ones per page.
+  await mkdir(dirname(target), { recursive: true });
+  await writeFile(target, `${frontmatter}\n\n${body}\n`);
   written += 1;
 }
 
@@ -572,6 +726,14 @@ const manifest = pages.all
     collection: page.collection,
     target: page.target,
     url: page.url,
+    title: page.title,
+    // Content-model fields, present for authored pages and null elsewhere.
+    // The site sidebar is built from these; the documentation gate validates
+    // them against docs/documentation/CONTENT_MODEL.md.
+    type: page.type ?? null,
+    language: page.language ?? null,
+    section: page.section ?? null,
+    order: page.order,
   }));
 
 await writeFile(

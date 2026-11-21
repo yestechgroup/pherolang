@@ -268,10 +268,18 @@ for (const name of docsFiles) {
   const lines = text.split('\n');
   const headingIndex = lines.findIndex((line) => line.startsWith('# '));
   const title = headingIndex >= 0 ? lines[headingIndex].slice(2).trim() : name.replace(/\.md$/, '');
+  // A blockquote is a note about the page (the Guide pointer at the top of a
+  // reference), never the page's description.
   const firstParagraph =
     lines
       .slice(headingIndex + 1)
-      .find((line) => line.trim().length > 0 && !line.startsWith('#') && !line.startsWith('|')) ?? '';
+      .find(
+        (line) =>
+          line.trim().length > 0 &&
+          !line.startsWith('#') &&
+          !line.startsWith('|') &&
+          !line.startsWith('>'),
+      ) ?? '';
 
   docs.push({
     path: rel(path),
