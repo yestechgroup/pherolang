@@ -51,10 +51,10 @@ use crate::project::{CmmnBuckets, DeployPairs, UcBuckets};
 ///
 /// Fields are private and read through accessors so a surface takes only
 /// the buckets it consumes: `.evt` reads `domains` + `imports`, `.ddd` adds
-/// `actors` + `decisions`, `.deploy` reads `designs` + `flows`, `.dmn`
-/// reads `domains` + `imports` + `tables` + `events`, `.uc`/`.cmmn` read
-/// the four/five artifact buckets, and `.actor` adds `designs`. A wrong
-/// bucket is a compile error, not a runtime mismatch.
+/// `actors` + `decisions` + `events`, `.deploy` reads `designs` + `flows`,
+/// `.dmn` reads `domains` + `imports` + `tables` + `events`, `.uc`/`.cmmn`
+/// read the four/five artifact buckets, and `.actor` adds `designs`. A
+/// wrong bucket is a compile error, not a runtime mismatch.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct CompileInputs {
     /// Raw `.mox` domain texts, keyed by the host-resolved path the surface

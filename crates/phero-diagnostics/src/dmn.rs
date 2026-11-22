@@ -9,9 +9,12 @@
 //! with logic in FEEL expressions and external markdown decision tables
 //! the host provides. `E0200`–`E0215` are the `.dmn` surface's codes;
 //! `E0250`–`E0251` are the `.ddd` decision-link codes, joined against
-//! the decision surface at compile time, and `E0252`–`E0254` are the
+//! the decision surface at compile time, `E0252`–`E0254` are the
 //! decision-link **version pin** codes (pherolang#154 — the same join,
-//! resolved through a reference's `version compatible` / exact pin).
+//! resolved through a reference's `version compatible` / exact pin), and
+//! `E0255` is the `.ddd` **emission-link** code, joined against the event
+//! surface at compile time (pherolang#382 — an operation's `emits`
+//! clause resolved against the provided `.evt` contracts).
 //! Claim a new code by adding a documented constant plus an `Entry` to
 //! `ENTRIES`.
 
@@ -81,6 +84,9 @@ pub const E_AMBIGUOUS_SERVICE_VERSION: &str = "E0253";
 /// <context>` — the `compatible` pin has no candidate whose `version`
 /// metadata is strict `X.Y.Z` (pherolang#154).
 pub const E_NO_USABLE_SERVICE_VERSION: &str = "E0254";
+/// `unknown event '<name>' emitted by operation '<op>' of service
+/// '<service>'` — the `.ddd` emission link (pherolang#382).
+pub const E_UNKNOWN_OPERATION_EMITTED_EVENT: &str = "E0255";
 
 pub(crate) const ENTRIES: &[Entry] = &[
     Entry {
@@ -250,5 +256,13 @@ pub(crate) const ENTRIES: &[Entry] = &[
         title: "No usable service version",
         meaning: "`decision service '<name>' declares no usable version invoked by <context>` — the reference carries a `version compatible` pin (pherolang#154) but none of the models providing the service declares a parseable `version` metadata (strict `X.Y.Z`, three numeric dot-separated parts); the models compile alone but cannot satisfy a compatibility selection.",
         fix: "Give a providing model a strict \"X.Y.Z\" `version` metadata line, or pin an exact version.",
+    },
+    Entry {
+        code: E_UNKNOWN_OPERATION_EMITTED_EVENT,
+        band: DMN_BAND,
+        severity: Severity::Error,
+        title: "Unknown operation-emitted event",
+        meaning: "`unknown event '<name>' emitted by operation '<op>' of service '<service>'` — the `.ddd` service operation's `emits` clause names an event no provided `.evt` contract declares; the emitted names resolve union-wide against every provided event contract (pherolang#382, the rule-10 pooling shape), and an operation that emits nothing provided is the loosely-coupled record (an empty events bucket lowers the entries as authored, unchecked — the X0003 lint channel still reports the union).",
+        fix: "Declare the event in an `.evt` contract beside the design, import the contract that declares it, or fix the spelling.",
     },
 ];

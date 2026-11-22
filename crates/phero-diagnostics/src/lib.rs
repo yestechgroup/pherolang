@@ -207,9 +207,9 @@ const BANDS: &[Band] = &[
     Band {
         id: "dmn.check",
         range: "E0200–E0299",
-        owner: "phero-driver .dmn surface and .ddd decision links",
+        owner: "phero-driver .dmn surface and .ddd decision/event links",
         severity_note: "error",
-        next_free: "E0255",
+        next_free: "E0256",
     },
     Band {
         id: "driver.domain",

@@ -63,8 +63,8 @@ use links::fill_resolved_links;
 use machines::{collect_machine_scopes, lower_design_machine, MachineScopes};
 use searches::{lower_module_searches, rule_11_bind_searches};
 use services::{
-    lower_module_services, rule_17_validate_decision_links, rule_8_resolve_delegations,
-    rule_9_resolve_injects,
+    lower_module_services, rule_17_validate_decision_links, rule_23_validate_emission_links,
+    rule_8_resolve_delegations, rule_9_resolve_injects,
 };
 use values::{check_value_semantics, value_semantics};
 
@@ -188,6 +188,13 @@ struct DecisionCheck<'a> {
     name: &'a dsl::QualifiedName,
     pin: Option<&'a dsl::DddVersionPin>,
 }
+/// One emitted-event reference awaiting the provided `.evt` contracts
+/// (pherolang#382). `context` names where the clause was declared
+/// ("operation 'x' of service 'Y'") — the phrase the E0255 message embeds.
+struct EmissionCheck<'a> {
+    context: String,
+    name: &'a dsl::Name,
+}
 /// One DTO-typed parameter awaiting the completed DTO shapes (DD3,
 /// pherolang#300): a boundary with derived members is output-only, so it
 /// cannot fill a parameter slot. The check is deferred because services
@@ -208,8 +215,8 @@ pub(crate) struct DtoParamCheck {
 /// The application-wide registries, accumulated in declaration order while
 /// the modules lower. First declaration wins: a duplicate errors, and the
 /// original keeps resolving. The deferred check queues fill alongside;
-/// their validations (rules 11-binding, 6, 13, 9, 8, 10, 17) run once the
-/// registries are complete.
+/// their validations (rules 11-binding, 6, 13, 9, 8, 10, 17, 23) run once
+/// the registries are complete.
 struct Registries<'a> {
     module_names: Vec<(String, Span)>,
     services: Vec<(String, ServiceEntry)>,
@@ -224,6 +231,7 @@ struct Registries<'a> {
     inject_checks: Vec<InjectCheck<'a>>,
     capability_checks: Vec<CapabilityCheck<'a>>,
     decision_checks: Vec<DecisionCheck<'a>>,
+    emission_checks: Vec<EmissionCheck<'a>>,
     dto_param_checks: Vec<DtoParamCheck>,
 }
 /// Lowers and validates one parsed `.ddd` file against its imported domain
@@ -243,7 +251,8 @@ struct Registries<'a> {
 /// validations ([`rule_11_bind_searches`], [`rule_6_aggregate_boundary`],
 /// [`rule_13_aggregate_references`], [`rule_9_resolve_injects`],
 /// [`rule_8_resolve_delegations`], [`rule_10_validate_capabilities`],
-/// [`rule_17_validate_decision_links`], and the strict value-semantics pass
+/// [`rule_17_validate_decision_links`], [`rule_23_validate_emission_links`],
+/// and the strict value-semantics pass
 /// (R-V1/R-V2/R-V3 and the `abstract value` rejection, issue
 /// pherolang#299)) — the emission order of those stages is the diagnostics
 /// contract, pinned by the `ddd_diagnostic_order` characterization suite.
@@ -260,11 +269,12 @@ pub(crate) fn compile_ddd_file(
     provided_imports: &[String],
     actors: Option<&[phero_ir::ActorModel]>,
     decisions: &[(String, phero_ir::dmn::DmnModel)],
+    events: &[(String, phero_ir::events::EventModel)],
 ) -> (Option<DddModel>, Vec<(String, Diagnostic)>) {
     // Stage 1 — the prologue: import-bucket checks feed the shared engine
     // diagnostic block (parse diagnostics, then import diagnostics, then
     // domain diagnostics, each under its own file path).
-    let import_diagnostics = check_design_imports(ast, path, provided_imports, decisions);
+    let import_diagnostics = check_design_imports(ast, path, provided_imports, decisions, events);
     let diags = pipeline::engine_diags(path, parse_diagnostics, import_diagnostics, domains);
 
     let Some(ast) = ast else {
@@ -306,6 +316,7 @@ pub(crate) fn compile_ddd_file(
         inject_checks: Vec::new(),
         capability_checks: Vec::new(),
         decision_checks: Vec::new(),
+        emission_checks: Vec::new(),
         dto_param_checks: Vec::new(),
     };
 
@@ -490,6 +501,13 @@ pub(crate) fn compile_ddd_file(
         &registries.decision_checks,
         decisions,
     ));
+    // Rule 23 — the emitted-event links (pherolang#382), validated after
+    // the decision links: the same loosely-coupled shape, joined against
+    // the provided `.evt` contracts.
+    local.extend(rule_23_validate_emission_links(
+        &registries.emission_checks,
+        events,
+    ));
     // The strict value-semantics pass (DD2, pherolang#299) reads the
     // completed registries — a value design may precede the entity design it
     // is judged against — and emits after every other deferred rule.
@@ -508,7 +526,7 @@ pub(crate) fn compile_ddd_file(
     // Stage 8 — the resolved-identity companions (DD1, pherolang#298): every
     // application-wide reference gains its resolved companion now that the
     // registries are complete and the deferred rules have validated them.
-    fill_resolved_links(&mut model, &registries, actors, decisions);
+    fill_resolved_links(&mut model, &registries, actors, decisions, events);
 
     // Stage 8.5 — the domain pairing fingerprint (DF1, pherolang#324): every
     // compiler-written design names the domain shape it resolved against.
@@ -577,7 +595,9 @@ fn rule_10_validate_capabilities(
 /// once). Imports ending in `.dmn` are not domains — they are the design's
 /// decision-model imports, ignored by a plain compile (the decisions
 /// bucket, when provided, is checked instead: every `.dmn` import must
-/// name one of the provided decision models). Matching follows
+/// name one of the provided decision models). Imports ending in `.evt`
+/// are the design's event-contract imports, treated the same way against
+/// the events bucket (pherolang#382). Matching follows
 /// [`crate::import_matches`] — the exact import string wins, with the
 /// lexical resolution relative to the design file's directory as the
 /// fallback. Emitted before the domain diagnostics, each under the design
@@ -587,6 +607,7 @@ fn check_design_imports(
     origin_path: &str,
     provided_imports: &[String],
     decisions: &[(String, phero_ir::dmn::DmnModel)],
+    events: &[(String, phero_ir::events::EventModel)],
 ) -> Vec<Diagnostic> {
     let imports = ast.map(|file| file.imports.as_slice()).unwrap_or_default();
     let mut import_diagnostics = Vec::new();
@@ -607,6 +628,22 @@ fn check_design_imports(
                 import_diagnostics.push(Diagnostic::error(
                     format!(
                         "imported decision model \"{}\" was not provided",
+                        import.path
+                    ),
+                    Some(import.span),
+                ));
+            }
+        } else if import.path.ends_with(".evt") {
+            // The event-contract twin of the `.dmn` branch (pherolang#382):
+            // an authored `import "x.evt"` must be satisfied by the events
+            // bucket when the host provided one.
+            let provided = events
+                .iter()
+                .any(|(path, _)| crate::import_matches(&import.path, origin_path, path));
+            if !events.is_empty() && !provided {
+                import_diagnostics.push(Diagnostic::error(
+                    format!(
+                        "imported event contract \"{}\" was not provided",
                         import.path
                     ),
                     Some(import.span),

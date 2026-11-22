@@ -277,7 +277,8 @@ fn compile_ifml(file: &Path, ctx: &mut CompileContext<'_>) -> Compiled {
 }
 
 /// The `.ddd` pipeline: the application-scoped `.actor` joins (pherolang#128
-/// J3) and `.dmn` decision links (pherolang#78 rule 17) feed the compile. An
+/// J3), `.dmn` decision links (pherolang#78 rule 17), and `.evt` emission
+/// links (pherolang#382 rule 23) feed the compile. An
 /// empty pool is exactly the plain `compile_ddd_str` behavior.
 fn compile_ddd(file: &Path, ctx: &mut CompileContext<'_>) -> Compiled {
     let mut design = read_ddd_design(file, ctx.project.as_deref_mut())?;
@@ -289,9 +290,16 @@ fn compile_ddd(file: &Path, ctx: &mut CompileContext<'_>) -> Compiled {
         .project
         .as_deref_mut()
         .map_or_else(Vec::new, |project| project.sibling_decisions(file));
-    design
-        .pair
-        .extend_inputs(|inputs| inputs.with_actors(actors).with_decisions(decisions));
+    let events = ctx
+        .project
+        .as_deref_mut()
+        .map_or_else(Vec::new, |project| project.sibling_events(file));
+    design.pair.extend_inputs(|inputs| {
+        inputs
+            .with_actors(actors)
+            .with_decisions(decisions)
+            .with_events(events)
+    });
     let fragments: Vec<DddFragment> = design
         .fragments
         .iter()

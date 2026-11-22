@@ -60,9 +60,12 @@ docs):
   `events` lists reference events *by name*; resolving them is a
   driver/consumer concern, never a wire concern. The production side is
   the `.ddd` service operation's `emits` clause (`docs/DDD.md`) and the
-  `.dmn` decision's `emits` block (`docs/DMN.md`): the union integrity
-  pass checks that emitted events are declared here and that declared
-  events are emitted somewhere.
+  `.dmn` decision's `emits` block (`docs/DMN.md`): a compile with the
+  contracts provided validates existence (the design's rule 23, `E0255`;
+  the decision surface's rule 14, `E0215`) and stamps the resolved
+  contract identity on the reference; the union integrity pass keeps the
+  union-wide checks — existence for artifact pools assembled without a
+  compile-time bucket (X0003), and coverage (X0004).
 - The slice-2 delivery model rides under the same discipline: an event's
   `owner`/`classification`/`retention` strings, `pii` array, and
   `cloudEvents` object (`{"type": ..., "source": ..., "subject": ...}` —

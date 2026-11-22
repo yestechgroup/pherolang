@@ -56,7 +56,7 @@
       },
       "degraded": false,
       "file": "docs/DDD.md",
-      "line": 1019,
+      "line": 1022,
       "spans": 118,
       "surface": "ddd"
     },
@@ -79,7 +79,7 @@
       },
       "degraded": false,
       "file": "docs/DDD.md",
-      "line": 1949,
+      "line": 1968,
       "spans": 270,
       "surface": "ddd"
     },
@@ -135,7 +135,7 @@
       },
       "degraded": false,
       "file": "docs/EVENTS.md",
-      "line": 397,
+      "line": 400,
       "spans": 121,
       "surface": "evt"
     },

@@ -11,7 +11,8 @@
 //! searches); the ones below need the **completed** registries (a service
 //! may inject a repository declared later in the file) or one of the
 //! entry point's artifact buckets (`.actor` capabilities, `.dmn` decision
-//! services), so they fill here — after rule 17, before `engine_finish`.
+//! services, `.evt` event contracts), so they fill here — after rules 17
+//! and 23, before `engine_finish`.
 //!
 //! The wire contract is `docs/DDD.md` (resolved companions): every authored
 //! reference a consumer acts on carries its companion, the parallel lists
@@ -27,7 +28,9 @@ use phero_ir::ddd::{CapabilityRef, DecisionRef, EventRef, TargetKind, TargetRef}
 use phero_ir::dmn::VersionPin;
 use phero_syntax::ast as dsl;
 
-use super::services::{declared_version, resolve_decision_service, DecisionResolution};
+use super::services::{
+    declared_version, resolve_decision_service, resolve_emitted_event, DecisionResolution,
+};
 use super::Registries;
 
 /// Fills every resolved companion of `model` from the completed
@@ -37,6 +40,7 @@ pub(crate) fn fill_resolved_links(
     registries: &Registries<'_>,
     actors: Option<&[phero_ir::ActorModel]>,
     decisions: &[(String, phero_ir::dmn::DmnModel)],
+    events: &[(String, phero_ir::events::EventModel)],
 ) {
     let application = model
         .application
@@ -58,14 +62,14 @@ pub(crate) fn fill_resolved_links(
                 decisions,
             );
             for operation in &mut service.operations {
-                fill_operation(operation, &targets, &declared, decisions);
+                fill_operation(operation, &targets, &declared, decisions, events);
             }
         }
         for design in &mut module.designs {
             // Child-scoped operations carry no capability/event/decision
             // clauses and no delegation, so this only fills what exists.
             for operation in &mut design.child_operations {
-                fill_operation(operation, &targets, &declared, decisions);
+                fill_operation(operation, &targets, &declared, decisions, events);
             }
             // DD9: a repository query's `capability` clause is the read
             // authorization; its companion resolves like a service op's.
@@ -97,18 +101,16 @@ fn fill_operation(
     targets: &TargetTable<'_>,
     declared: &BTreeMap<String, String>,
     decisions: &[(String, phero_ir::dmn::DmnModel)],
+    events: &[(String, phero_ir::events::EventModel)],
 ) {
     if let Some(delegation) = &mut operation.delegation {
         delegation.target_ref = targets.lookup(&delegation.target);
     }
     operation.capability_refs = capability_refs(&operation.capabilities, declared);
-    // The `.ddd` compile has no `.evt` bucket, so event references are
-    // unresolved by design: the name rides along, `contract` stays absent.
-    operation.emitted_refs = operation
-        .emits
-        .iter()
-        .map(|name| EventRef::new(name.as_str()))
-        .collect();
+    // The emitted-event companions (pherolang#382): the name rides along,
+    // and the provided `.evt` contract declaring it — when one was
+    // supplied at compile time — lands as `contract`.
+    operation.emitted_refs = event_refs(&operation.emits, events);
     operation.decision_refs =
         decision_refs(&operation.invokes, &operation.decision_pins, decisions);
 }
@@ -238,6 +240,31 @@ fn decision_ref(
         reference.version = declared_version(model).map(str::to_string);
     }
     reference
+}
+
+/// One emitted-event companion: name-only without an events bucket, else
+/// the identity of the first provided `.evt` contract (in bucket order —
+/// the decision-link no-pin precedence) whose events declare the name.
+fn event_ref(name: &str, events: &[(String, phero_ir::events::EventModel)]) -> EventRef {
+    let mut reference = EventRef::new(name);
+    if events.is_empty() {
+        return reference;
+    }
+    if let Some(path) = resolve_emitted_event(name, events) {
+        reference.contract = Some(path.to_string());
+    }
+    reference
+}
+
+/// The emitted-event companions of `names`, index-aligned: `contract`
+/// names the provided `.evt` artifact declaring the event, absent when no
+/// event model was supplied (or the reference did not resolve, which only
+/// happens on an error compile — rule 23 has already flagged the name).
+fn event_refs(
+    names: &[String],
+    events: &[(String, phero_ir::events::EventModel)],
+) -> Vec<EventRef> {
+    names.iter().map(|name| event_ref(name, events)).collect()
 }
 
 /// The wire version pin back as the surface spelling the shared resolver

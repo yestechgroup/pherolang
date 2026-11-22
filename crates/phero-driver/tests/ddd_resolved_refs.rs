@@ -519,8 +519,9 @@ application Library {
 
 // -- Events -----------------------------------------------------------------
 
-/// `emits` mirrors into `emittedRefs` with no contract: the `.ddd` compile
-/// has no `.evt` bucket, so event references are unresolved by design.
+/// `emits` mirrors into `emittedRefs` name-only without an events bucket:
+/// the plain compile has no `.evt` bucket, so the event references ride
+/// unvalidated (rule 23 fires only when the host provides contracts).
 #[test]
 fn emitted_refs_mirror_emits_without_a_contract() {
     let design = r#"
@@ -552,6 +553,52 @@ application Library {
     assert_eq!(
         operation(lending, "renew").emitted_refs,
         [EventRef::new("BookLent")]
+    );
+}
+
+/// With a provided `.evt` bucket the companions align index-for-index with
+/// `emits` and stamp the providing contract's path as `contract`
+/// (pherolang#382, rule 23).
+#[test]
+fn emitted_refs_resolve_through_the_events_bucket() {
+    use phero_ir::events::{EventDef, EventModel};
+    let design = r#"
+import "library.mox";
+
+application Library {
+    base nz.example.library
+
+    module media {
+        service LendingService {
+            boolean approve() emits BookLent, BookReturned;
+            boolean renew() emits BookLent;
+        }
+    }
+}
+"#;
+    let events = EventModel::new()
+        .event(EventDef::new("BookReturned"))
+        .event(EventDef::new("BookLent"));
+    let compilation = compile_ddd_str(
+        &inline_design_path(),
+        design,
+        &phero_driver::CompileInputs::from_domains(&[domain()])
+            .with_actors([])
+            .with_events(vec![("events.evt".to_string(), events)]),
+    );
+    let model = artifact(compilation);
+    let lending = service(&model, "LendingService");
+    let approve = operation(lending, "approve");
+    assert_eq!(
+        approve.emitted_refs,
+        [
+            EventRef::new("BookLent").with_contract(Some("events.evt".to_string())),
+            EventRef::new("BookReturned").with_contract(Some("events.evt".to_string())),
+        ]
+    );
+    assert_eq!(
+        operation(lending, "renew").emitted_refs,
+        [EventRef::new("BookLent").with_contract(Some("events.evt".to_string()))]
     );
 }
 

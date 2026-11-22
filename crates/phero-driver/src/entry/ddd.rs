@@ -39,11 +39,12 @@ pub fn compile_ddd(db: &dyn Db, design: SourceFile, domains: Vec<SourceFile>) ->
 /// its `imports` bucket provides the domain files' `import schema`/`import
 /// sigil` content (see [`compile_file`] for the import shape), its `actors`
 /// bucket is the capability table to validate against (absent or empty =
-/// record the names unvalidated), and its `decisions` bucket is the
+/// record the names unvalidated), its `decisions` bucket is the
 /// decision-service
-/// universe the design's `invokes`/`inject decision` links resolve against.
-/// The tracked query passes the empty bundle: tracked surfaces carry no
-/// cross-surface artifacts.
+/// universe the design's `invokes`/`inject decision` links resolve against,
+/// and its `events` bucket is the event-contract universe the design's
+/// `emits` links resolve against (rule 23). The tracked query passes the
+/// empty bundle: tracked surfaces carry no cross-surface artifacts.
 fn compile_ddd_with(
     db: &dyn Db,
     design: SourceFile,
@@ -74,6 +75,7 @@ fn compile_ddd_with(
         &domains.provided_imports,
         actors.as_deref(),
         inputs.decisions(),
+        inputs.events(),
     );
     finish_surface(domains, model, diagnostics, DddCompilation::assemble)
 }
@@ -81,12 +83,14 @@ fn compile_ddd_with(
 /// call.
 ///
 /// `inputs` is the one [`CompileInputs`] bundle the host builds once from
-/// the gathered import closure. This surface consumes three buckets:
+/// the gathered import closure. This surface consumes four buckets:
 /// `domains` and `imports` for the domain union, `actors` for capability
-/// validation (rule 10), and `decisions` for decision-link validation
-/// (rule 17) — see [`CompileInputs::actors`] for the policy-set provenance
-/// the bundle records, and [`CompileInputs::decisions`] for why an empty
-/// decision bucket is the plain compile's behavior.
+/// validation (rule 10), `decisions` for decision-link validation
+/// (rule 17), and `events` for emission-link validation (rule 23) — see
+/// [`CompileInputs::actors`] for the policy-set provenance
+/// the bundle records, [`CompileInputs::decisions`] for why an empty
+/// decision bucket is the plain compile's behavior, and
+/// [`CompileInputs::events`] for the event bucket's identical shape.
 ///
 /// Each domain is a `(path, source)` pair; a design import resolves by
 /// exact path match with a lexical resolution relative to the design file's
@@ -405,6 +409,27 @@ fn compile_ddd_with(
 ///     receives the module's visible raise signatures and the operation's
 ///     declared set; the statement subset stays orchestration-only (see
 ///     `docs/DDD.md`).
+/// 23. **Emission links** (pherolang#382; `E0255`, the
+///     `phero_diagnostics::dmn` band) — validated only when the bundle
+///     provides event models ([`CompileInputs::with_events`]): every
+///     emitted-event name on every service operation must be declared by
+///     the union of the provided `.evt` contracts' events (exact match —
+///     event names are flat, no package dimension), else the operation's
+///     error names the operation, its service, and the unknown event, with
+///     the [`did_you_mean_adaptive`](phero_diagnostics::did_you_mean_adaptive)
+///     closest declared name when one is a plausible typo. Events pool
+///     across every provided model, so a host passes all of the
+///     application's `.evt` artifacts (the rule-10 shape). Plain compiles
+///     record the names unvalidated — the design dimension is loosely
+///     coupled to the event dimension by design. Every `.evt` import the
+///     design declares must be provided under its path (exact match, or
+///     the lexical resolution relative to the design file's directory)
+///     when a non-empty events bucket is supplied, else
+///     `imported event contract "<path>" was not provided`. The resolved
+///     contract identity lands on `emittedRefs[].contract` (the DD1
+///     post-pass) — absent when no bucket was supplied; a declared event
+///     no operation emits stays the union integrity pass's coverage check
+///     (X0004, register row V12), never a compile error.
 /// ## Aggregate derivation
 ///
 /// The aggregate boundary derives from the domain model's containment
@@ -542,6 +567,7 @@ pub fn compile_ddd_app_str(
         &lowered.provided_imports,
         actors.as_deref(),
         inputs.decisions(),
+        inputs.events(),
     );
     diagnostics.extend(local_diagnostics);
     let diagnostics = remap_diagnostics(diagnostics, path, &ranges);
