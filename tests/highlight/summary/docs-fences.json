@@ -1,12 +1,6 @@
 {
-  "formatVersion": 1,
   "fences": [
     {
-      "file": "docs/CMMN.md",
-      "line": 34,
-      "surface": "cmmn",
-      "degraded": false,
-      "spans": 141,
       "classes": {
         "comment": 2,
         "function": 8,
@@ -19,14 +13,14 @@
         "string": 4,
         "type": 16,
         "variable": 11
-      }
+      },
+      "degraded": false,
+      "file": "docs/CMMN.md",
+      "line": 39,
+      "spans": 141,
+      "surface": "cmmn"
     },
     {
-      "file": "docs/CMMN.md",
-      "line": 177,
-      "surface": "cmmn",
-      "degraded": false,
-      "spans": 77,
       "classes": {
         "comment": 2,
         "function": 4,
@@ -38,14 +32,14 @@
         "string": 2,
         "type": 6,
         "variable": 3
-      }
+      },
+      "degraded": false,
+      "file": "docs/CMMN.md",
+      "line": 182,
+      "spans": 77,
+      "surface": "cmmn"
     },
     {
-      "file": "docs/DDD.md",
-      "line": 1014,
-      "surface": "ddd",
-      "degraded": false,
-      "spans": 118,
       "classes": {
         "comment": 3,
         "function": 5,
@@ -59,14 +53,14 @@
         "string": 1,
         "type": 12,
         "variable": 22
-      }
+      },
+      "degraded": false,
+      "file": "docs/DDD.md",
+      "line": 1019,
+      "spans": 118,
+      "surface": "ddd"
     },
     {
-      "file": "docs/DDD.md",
-      "line": 1944,
-      "surface": "ddd",
-      "degraded": false,
-      "spans": 270,
       "classes": {
         "annotation": 4,
         "comment": 3,
@@ -82,14 +76,14 @@
         "string": 4,
         "type": 40,
         "variable": 11
-      }
+      },
+      "degraded": false,
+      "file": "docs/DDD.md",
+      "line": 1949,
+      "spans": 270,
+      "surface": "ddd"
     },
     {
-      "file": "docs/DEPLOY.md",
-      "line": 56,
-      "surface": "deploy",
-      "degraded": false,
-      "spans": 146,
       "classes": {
         "constant": 13,
         "function": 2,
@@ -102,14 +96,14 @@
         "string": 7,
         "type": 10,
         "variable": 9
-      }
+      },
+      "degraded": false,
+      "file": "docs/DEPLOY.md",
+      "line": 61,
+      "spans": 146,
+      "surface": "deploy"
     },
     {
-      "file": "docs/DMN.md",
-      "line": 45,
-      "surface": "dmn",
-      "degraded": false,
-      "spans": 36,
       "classes": {
         "comment": 1,
         "function": 1,
@@ -119,14 +113,14 @@
         "punctuation": 16,
         "string": 1,
         "type": 4
-      }
+      },
+      "degraded": false,
+      "file": "docs/DMN.md",
+      "line": 50,
+      "spans": 36,
+      "surface": "dmn"
     },
     {
-      "file": "docs/EVENTS.md",
-      "line": 392,
-      "surface": "evt",
-      "degraded": false,
-      "spans": 121,
       "classes": {
         "constant": 2,
         "function": 2,
@@ -138,14 +132,14 @@
         "string": 8,
         "type": 14,
         "variable": 8
-      }
+      },
+      "degraded": false,
+      "file": "docs/EVENTS.md",
+      "line": 397,
+      "spans": 121,
+      "surface": "evt"
     },
     {
-      "file": "docs/HIGHLIGHTING.md",
-      "line": 170,
-      "surface": "actor",
-      "degraded": false,
-      "spans": 18,
       "classes": {
         "function": 2,
         "keyword": 7,
@@ -153,28 +147,28 @@
         "punctuation": 4,
         "string": 1,
         "type": 3
-      }
+      },
+      "degraded": false,
+      "file": "docs/HIGHLIGHTING.md",
+      "line": 170,
+      "spans": 18,
+      "surface": "actor"
     },
     {
-      "file": "docs/HIGHLIGHTING.md",
-      "line": 448,
-      "surface": "mox",
-      "degraded": false,
-      "spans": 8,
       "classes": {
         "keyword": 2,
         "namespace": 1,
         "property": 1,
         "punctuation": 2,
         "type": 2
-      }
+      },
+      "degraded": false,
+      "file": "docs/HIGHLIGHTING.md",
+      "line": 448,
+      "spans": 8,
+      "surface": "mox"
     },
     {
-      "file": "docs/IFML.md",
-      "line": 54,
-      "surface": "ifml",
-      "degraded": false,
-      "spans": 155,
       "classes": {
         "function": 1,
         "keyword": 22,
@@ -185,14 +179,14 @@
         "string": 2,
         "type": 18,
         "variable": 15
-      }
+      },
+      "degraded": false,
+      "file": "docs/IFML.md",
+      "line": 59,
+      "spans": 155,
+      "surface": "ifml"
     },
     {
-      "file": "docs/IFML.md",
-      "line": 107,
-      "surface": "ifml",
-      "degraded": false,
-      "spans": 129,
       "classes": {
         "constant": 2,
         "function": 1,
@@ -203,14 +197,14 @@
         "punctuation": 61,
         "type": 14,
         "variable": 13
-      }
+      },
+      "degraded": false,
+      "file": "docs/IFML.md",
+      "line": 112,
+      "spans": 129,
+      "surface": "ifml"
     },
     {
-      "file": "docs/IFML.md",
-      "line": 153,
-      "surface": "ifml",
-      "degraded": false,
-      "spans": 69,
       "classes": {
         "function": 1,
         "keyword": 5,
@@ -221,14 +215,14 @@
         "string": 1,
         "type": 5,
         "variable": 12
-      }
+      },
+      "degraded": false,
+      "file": "docs/IFML.md",
+      "line": 158,
+      "spans": 69,
+      "surface": "ifml"
     },
     {
-      "file": "docs/IFML.md",
-      "line": 176,
-      "surface": "ifml",
-      "degraded": false,
-      "spans": 79,
       "classes": {
         "keyword": 7,
         "operator": 3,
@@ -237,14 +231,14 @@
         "punctuation": 38,
         "type": 7,
         "variable": 11
-      }
+      },
+      "degraded": false,
+      "file": "docs/IFML.md",
+      "line": 181,
+      "spans": 79,
+      "surface": "ifml"
     },
     {
-      "file": "docs/IFML.md",
-      "line": 202,
-      "surface": "ifml",
-      "degraded": false,
-      "spans": 51,
       "classes": {
         "constant": 1,
         "function": 1,
@@ -255,14 +249,14 @@
         "punctuation": 21,
         "type": 8,
         "variable": 2
-      }
+      },
+      "degraded": false,
+      "file": "docs/IFML.md",
+      "line": 207,
+      "spans": 51,
+      "surface": "ifml"
     },
     {
-      "file": "docs/IFML.md",
-      "line": 226,
-      "surface": "ifml",
-      "degraded": false,
-      "spans": 74,
       "classes": {
         "comment": 9,
         "constant": 2,
@@ -273,14 +267,14 @@
         "string": 1,
         "type": 4,
         "variable": 8
-      }
+      },
+      "degraded": false,
+      "file": "docs/IFML.md",
+      "line": 231,
+      "spans": 74,
+      "surface": "ifml"
     },
     {
-      "file": "docs/IFML.md",
-      "line": 271,
-      "surface": "ifml",
-      "degraded": false,
-      "spans": 96,
       "classes": {
         "constant": 3,
         "function": 6,
@@ -293,14 +287,14 @@
         "string": 2,
         "type": 7,
         "variable": 6
-      }
+      },
+      "degraded": false,
+      "file": "docs/IFML.md",
+      "line": 276,
+      "spans": 96,
+      "surface": "ifml"
     },
     {
-      "file": "docs/INTENTS.md",
-      "line": 16,
-      "surface": "intent",
-      "degraded": false,
-      "spans": 22,
       "classes": {
         "function": 4,
         "keyword": 5,
@@ -308,14 +302,14 @@
         "punctuation": 8,
         "string": 2,
         "variable": 2
-      }
+      },
+      "degraded": false,
+      "file": "docs/INTENTS.md",
+      "line": 21,
+      "spans": 22,
+      "surface": "intent"
     },
     {
-      "file": "docs/LANGUAGE.md",
-      "line": 94,
-      "surface": "mox",
-      "degraded": false,
-      "spans": 62,
       "classes": {
         "function": 6,
         "keyword": 17,
@@ -326,14 +320,14 @@
         "punctuation": 15,
         "type": 10,
         "variable": 2
-      }
+      },
+      "degraded": false,
+      "file": "docs/LANGUAGE.md",
+      "line": 99,
+      "spans": 62,
+      "surface": "mox"
     },
     {
-      "file": "docs/LANGUAGE.md",
-      "line": 150,
-      "surface": "mox",
-      "degraded": false,
-      "spans": 26,
       "classes": {
         "comment": 1,
         "keyword": 9,
@@ -342,14 +336,14 @@
         "punctuation": 5,
         "string": 2,
         "type": 3
-      }
+      },
+      "degraded": false,
+      "file": "docs/LANGUAGE.md",
+      "line": 155,
+      "spans": 26,
+      "surface": "mox"
     },
     {
-      "file": "docs/LANGUAGE.md",
-      "line": 213,
-      "surface": "mox",
-      "degraded": false,
-      "spans": 22,
       "classes": {
         "comment": 5,
         "keyword": 4,
@@ -358,14 +352,14 @@
         "punctuation": 4,
         "string": 1,
         "type": 3
-      }
+      },
+      "degraded": false,
+      "file": "docs/LANGUAGE.md",
+      "line": 218,
+      "spans": 22,
+      "surface": "mox"
     },
     {
-      "file": "docs/LANGUAGE.md",
-      "line": 498,
-      "surface": "mox",
-      "degraded": false,
-      "spans": 43,
       "classes": {
         "annotation": 2,
         "comment": 3,
@@ -377,14 +371,14 @@
         "punctuation": 12,
         "string": 2,
         "type": 7
-      }
+      },
+      "degraded": false,
+      "file": "docs/LANGUAGE.md",
+      "line": 503,
+      "spans": 43,
+      "surface": "mox"
     },
     {
-      "file": "docs/LANGUAGE.md",
-      "line": 643,
-      "surface": "mox",
-      "degraded": false,
-      "spans": 57,
       "classes": {
         "constant": 2,
         "function": 4,
@@ -396,14 +390,14 @@
         "punctuation": 11,
         "type": 12,
         "variable": 2
-      }
+      },
+      "degraded": false,
+      "file": "docs/LANGUAGE.md",
+      "line": 648,
+      "spans": 57,
+      "surface": "mox"
     },
     {
-      "file": "docs/USECASES.md",
-      "line": 41,
-      "surface": "uc",
-      "degraded": false,
-      "spans": 20,
       "classes": {
         "function": 1,
         "keyword": 8,
@@ -412,7 +406,376 @@
         "string": 4,
         "type": 1,
         "variable": 2
-      }
+      },
+      "degraded": false,
+      "file": "docs/USECASES.md",
+      "line": 46,
+      "spans": 20,
+      "surface": "uc"
+    },
+    {
+      "classes": {
+        "constant": 7,
+        "function": 1,
+        "keyword": 11,
+        "namespace": 3,
+        "number": 3,
+        "operator": 1,
+        "property": 7,
+        "punctuation": 29,
+        "type": 5,
+        "variable": 5
+      },
+      "degraded": false,
+      "file": "docs/guide/deploy/concepts/architecture-profiles-and-deployments.md",
+      "line": 126,
+      "spans": 72,
+      "surface": "deploy"
+    },
+    {
+      "classes": {
+        "constant": 8,
+        "function": 1,
+        "keyword": 14,
+        "namespace": 7,
+        "number": 4,
+        "operator": 5,
+        "property": 7,
+        "punctuation": 38,
+        "string": 2,
+        "type": 5,
+        "variable": 8
+      },
+      "degraded": false,
+      "file": "docs/guide/deploy/how-to/project-an-application.md",
+      "line": 135,
+      "spans": 99,
+      "surface": "deploy"
+    },
+    {
+      "classes": {
+        "constant": 12,
+        "function": 1,
+        "keyword": 17,
+        "namespace": 7,
+        "number": 4,
+        "operator": 7,
+        "property": 10,
+        "punctuation": 47,
+        "string": 4,
+        "type": 8,
+        "variable": 9
+      },
+      "degraded": false,
+      "file": "docs/guide/deploy/overview.md",
+      "line": 88,
+      "spans": 126,
+      "surface": "deploy"
+    },
+    {
+      "classes": {
+        "constant": 19,
+        "function": 2,
+        "keyword": 24,
+        "namespace": 13,
+        "number": 5,
+        "operator": 13,
+        "property": 13,
+        "punctuation": 61,
+        "string": 5,
+        "type": 17,
+        "variable": 8
+      },
+      "degraded": false,
+      "file": "docs/guide/deploy/reference/applications-and-profiles.md",
+      "line": 207,
+      "spans": 180,
+      "surface": "deploy"
+    },
+    {
+      "classes": {
+        "constant": 15,
+        "function": 3,
+        "keyword": 24,
+        "namespace": 7,
+        "number": 1,
+        "operator": 2,
+        "property": 11,
+        "punctuation": 49,
+        "string": 1,
+        "type": 10,
+        "variable": 6
+      },
+      "degraded": false,
+      "file": "docs/guide/deploy/reference/applications-and-profiles.md",
+      "line": 276,
+      "spans": 129,
+      "surface": "deploy"
+    },
+    {
+      "classes": {
+        "function": 3,
+        "keyword": 3,
+        "property": 1,
+        "punctuation": 6,
+        "string": 1,
+        "variable": 1
+      },
+      "degraded": false,
+      "file": "docs/guide/intent/concepts/requirements-as-data.md",
+      "line": 90,
+      "spans": 15,
+      "surface": "intent"
+    },
+    {
+      "classes": {
+        "function": 1,
+        "keyword": 1,
+        "punctuation": 2,
+        "string": 1
+      },
+      "degraded": false,
+      "file": "docs/guide/intent/reference/intent-specifications.md",
+      "line": 163,
+      "spans": 5,
+      "surface": "intent"
+    },
+    {
+      "classes": {
+        "annotation": 1,
+        "keyword": 9,
+        "namespace": 3,
+        "number": 1,
+        "property": 7,
+        "punctuation": 9,
+        "type": 7
+      },
+      "degraded": false,
+      "file": "docs/guide/mox/concepts/modelling-not-coding.md",
+      "line": 74,
+      "spans": 37,
+      "surface": "mox"
+    },
+    {
+      "classes": {
+        "annotation": 1,
+        "constant": 3,
+        "keyword": 8,
+        "namespace": 3,
+        "number": 4,
+        "operator": 4,
+        "property": 3,
+        "punctuation": 8,
+        "string": 3,
+        "type": 6
+      },
+      "degraded": false,
+      "file": "docs/guide/mox/how-to/add-an-enum.md",
+      "line": 82,
+      "spans": 43,
+      "surface": "mox"
+    },
+    {
+      "classes": {
+        "annotation": 2,
+        "keyword": 9,
+        "namespace": 3,
+        "property": 9,
+        "punctuation": 13,
+        "type": 9
+      },
+      "degraded": false,
+      "file": "docs/guide/mox/how-to/choose-a-collection.md",
+      "line": 81,
+      "spans": 45,
+      "surface": "mox"
+    },
+    {
+      "classes": {
+        "keyword": 14,
+        "namespace": 3,
+        "property": 12,
+        "punctuation": 11,
+        "type": 11
+      },
+      "degraded": false,
+      "file": "docs/guide/mox/how-to/model-a-relationship.md",
+      "line": 85,
+      "spans": 51,
+      "surface": "mox"
+    },
+    {
+      "classes": {
+        "annotation": 2,
+        "constant": 3,
+        "function": 1,
+        "keyword": 10,
+        "namespace": 3,
+        "number": 6,
+        "operator": 8,
+        "parameter": 1,
+        "property": 5,
+        "punctuation": 16,
+        "string": 3,
+        "type": 10,
+        "variable": 3
+      },
+      "degraded": false,
+      "file": "docs/guide/mox/overview.md",
+      "line": 68,
+      "spans": 71,
+      "surface": "mox"
+    },
+    {
+      "classes": {
+        "annotation": 5,
+        "constant": 2,
+        "function": 1,
+        "keyword": 20,
+        "namespace": 3,
+        "number": 5,
+        "operator": 5,
+        "parameter": 1,
+        "property": 16,
+        "punctuation": 27,
+        "string": 3,
+        "type": 21,
+        "variable": 2
+      },
+      "degraded": false,
+      "file": "docs/guide/mox/reference/classes.md",
+      "line": 123,
+      "spans": 111,
+      "surface": "mox"
+    },
+    {
+      "classes": {
+        "annotation": 1,
+        "constant": 3,
+        "keyword": 11,
+        "namespace": 3,
+        "number": 4,
+        "operator": 4,
+        "property": 4,
+        "punctuation": 10,
+        "string": 4,
+        "type": 9
+      },
+      "degraded": false,
+      "file": "docs/guide/mox/reference/enums-datatypes-and-vocabularies.md",
+      "line": 95,
+      "spans": 53,
+      "surface": "mox"
+    },
+    {
+      "classes": {
+        "constant": 2,
+        "keyword": 17,
+        "namespace": 3,
+        "number": 2,
+        "operator": 2,
+        "property": 12,
+        "punctuation": 13,
+        "string": 2,
+        "type": 12
+      },
+      "degraded": false,
+      "file": "docs/guide/mox/reference/packages-and-imports.md",
+      "line": 71,
+      "spans": 65,
+      "surface": "mox"
+    },
+    {
+      "classes": {
+        "keyword": 4,
+        "namespace": 3,
+        "property": 2,
+        "punctuation": 4,
+        "type": 3
+      },
+      "degraded": false,
+      "file": "docs/guide/mox/tutorials/your-first-domain-model.md",
+      "line": 55,
+      "spans": 16,
+      "surface": "mox"
+    },
+    {
+      "classes": {
+        "keyword": 8,
+        "namespace": 3,
+        "number": 2,
+        "property": 6,
+        "punctuation": 9,
+        "type": 8
+      },
+      "degraded": false,
+      "file": "docs/guide/mox/tutorials/your-first-domain-model.md",
+      "line": 81,
+      "spans": 36,
+      "surface": "mox"
+    },
+    {
+      "classes": {
+        "constant": 3,
+        "keyword": 12,
+        "namespace": 3,
+        "number": 5,
+        "operator": 4,
+        "property": 7,
+        "punctuation": 11,
+        "string": 3,
+        "type": 11
+      },
+      "degraded": false,
+      "file": "docs/guide/mox/tutorials/your-first-domain-model.md",
+      "line": 114,
+      "spans": 59,
+      "surface": "mox"
+    },
+    {
+      "classes": {
+        "annotation": 2,
+        "constant": 3,
+        "function": 1,
+        "keyword": 14,
+        "namespace": 3,
+        "number": 6,
+        "operator": 6,
+        "parameter": 1,
+        "property": 8,
+        "punctuation": 21,
+        "string": 3,
+        "type": 14,
+        "variable": 3
+      },
+      "degraded": false,
+      "file": "docs/guide/mox/tutorials/your-first-domain-model.md",
+      "line": 154,
+      "spans": 85,
+      "surface": "mox"
+    },
+    {
+      "classes": {
+        "annotation": 2,
+        "constant": 3,
+        "function": 1,
+        "keyword": 14,
+        "namespace": 3,
+        "number": 6,
+        "operator": 6,
+        "parameter": 1,
+        "property": 8,
+        "punctuation": 21,
+        "string": 3,
+        "type": 14,
+        "variable": 3
+      },
+      "degraded": false,
+      "file": "docs/guide/mox/tutorials/your-first-domain-model.md",
+      "line": 204,
+      "spans": 85,
+      "surface": "mox"
     }
-  ]
+  ],
+  "formatVersion": 1
 }

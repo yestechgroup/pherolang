@@ -1,5 +1,10 @@
 # Event contracts (.evt)
 
+> **Learning the language?** Start with the [event contracts
+> guide](guide/evt/overview.md): overview, concept, reference, and a how-to,
+> written for people using the language. This page is the engineering
+> contract.
+
 ## Overview
 
 A transport-independent event-contract layer over `.mox` domain models. The

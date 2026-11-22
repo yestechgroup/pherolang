@@ -1,5 +1,10 @@
 # Intent specifications (`.intent`)
 
+> **Learning the language?** Start with the [intent specifications
+> guide](guide/intent/overview.md): overview, concept, and reference,
+> written for people using the language. This page is the engineering
+> contract.
+
 An `.intent` file states **requirements as model data**: one requirement per
 `intent` declaration, with a stable id (`LOAN-001`) that requirements,
 artifacts, and (later, #137's receipts) key on, the model elements that

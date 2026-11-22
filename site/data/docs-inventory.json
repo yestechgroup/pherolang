@@ -16,8 +16,8 @@
       "slug": "cmmn",
       "title": "Case management (.cmmn)",
       "description": "A `.cmmn` file declares a **case**: the adaptive, event-and-condition-driven",
-      "bytes": 14827,
-      "lines": 300
+      "bytes": 15044,
+      "lines": 305
     },
     {
       "path": "docs/DDD.md",
@@ -34,8 +34,8 @@
       "slug": "deploy",
       "title": "Deployment models (.deploy)",
       "description": "A deployment-projection layer over the other Phero Lang artifacts. The `.mox`",
-      "bytes": 16277,
-      "lines": 326
+      "bytes": 16503,
+      "lines": 331
     },
     {
       "path": "docs/DIAGNOSTICS.md",
@@ -70,8 +70,8 @@
       "slug": "events",
       "title": "Event contracts (.evt)",
       "description": "A transport-independent event-contract layer over `.mox` domain models. The",
-      "bytes": 26381,
-      "lines": 523
+      "bytes": 26602,
+      "lines": 528
     },
     {
       "path": "docs/EXPRESSIONS.md",
@@ -133,8 +133,8 @@
       "slug": "intents",
       "title": "Intent specifications (`.intent`)",
       "description": "An `.intent` file states **requirements as model data**: one requirement per",
-      "bytes": 4427,
-      "lines": 92
+      "bytes": 4647,
+      "lines": 97
     },
     {
       "path": "docs/LANGUAGE.md",
@@ -160,8 +160,8 @@
       "slug": "index",
       "title": "Phero Lang documentation",
       "description": "Phero Lang is a multi-surface modeling language: every surface follows the same",
-      "bytes": 6752,
-      "lines": 74
+      "bytes": 7466,
+      "lines": 84
     },
     {
       "path": "docs/REBRAND.md",
@@ -223,8 +223,8 @@
       "slug": "usecases",
       "title": "Use case patterns (.uc)",
       "description": "A standalone use-case modeling surface implementing the SysML v2 use case",
-      "bytes": 25498,
-      "lines": 538
+      "bytes": 25710,
+      "lines": 543
     },
     {
       "path": "docs/VERIFICATION.md",

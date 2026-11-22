@@ -78,7 +78,40 @@ terms:
     aliases: [data access object, DAO]
   - term: state machine
     definition: A declared lifecycle over an enum-typed feature, with states, triggers, guards, and terminals.
-    aliases: [workflow]
+    aliases: []
+  - term: event
+    definition: A versioned contract describing something that happened, with its payload fields.
+    aliases: []
+  - term: channel
+    definition: A named stream an event contract publishes on.
+    aliases: []
+  - term: subscription
+    definition: A declared consumer of a channel, naming the component that receives the events.
+    aliases: []
+  - term: case file
+    definition: The typed data a case carries while its plan runs.
+    aliases: []
+  - term: stage
+    definition: A group of plan items in a case, with entry and exit criteria.
+    aliases: []
+  - term: milestone
+    definition: A plan item that marks a condition reached, never work to perform.
+    aliases: []
+  - term: plan item
+    definition: A unit of available work in a case: a task, service task, stage, or milestone.
+    aliases: []
+  - term: profile
+    definition: A reusable deployment target plus its defaults, policies, and resource mappings.
+    aliases: []
+  - term: use case
+    definition: A pattern of behavior a subject performs with participating actors.
+    aliases: []
+  - term: subject
+    definition: The classifier whose behavior a use case specifies.
+    aliases: []
+  - term: intent
+    definition: A requirement with a stable id, a statement, and links to the model elements that express and verify it.
+    aliases: []
   - term: Phero implementation
     definition: A concept from an external or earlier design that Phero Lang carries with the same intent.
     aliases: []

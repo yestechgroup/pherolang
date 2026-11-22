@@ -59,6 +59,16 @@ artifact. This index routes to the right document.
 - **"I want to model the business rules"** → the [decision models
   guide](guide/dmn/overview.md): typed inputs, decision tables, and decision
   services.
+- **"I want to define events and contracts"** → the [event contracts
+  guide](guide/evt/overview.md): versioned events, channels, and subscriptions.
+- **"I want to coordinate adaptive work"** → the [case management
+  guide](guide/cmmn/overview.md): cases, stages, tasks, and milestones.
+- **"I want to deploy the application"** → the [deployment models
+  guide](guide/deploy/overview.md): architecture, profiles, and deployments.
+- **"I want to describe use cases"** → the [use case patterns
+  guide](guide/uc/overview.md): subjects, actors, and successions.
+- **"I want traceable requirements"** → the [intent specifications
+  guide](guide/intent/overview.md): stable ids, links, and the coverage pass.
 - **"I want to generate a system"** → the support-desk stack in
   [../examples/](../examples/) walks domain → policy → design → events →
   use cases → flows → deployment → case; the README's walkthrough compiles
