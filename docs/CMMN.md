@@ -1,5 +1,10 @@
 # Case management (.cmmn)
 
+> **Learning the language?** Start with the [case management
+> guide](guide/cmmn/overview.md): overview, two concepts, and reference,
+> written for people using the language. This page is the engineering
+> contract.
+
 ## Overview
 
 A `.cmmn` file declares a **case**: the adaptive, event-and-condition-driven

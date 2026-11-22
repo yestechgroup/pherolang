@@ -1,11 +1,6 @@
 {
-  "formatVersion": 1,
   "cases": [
     {
-      "id": "actor/parse-error",
-      "surface": "actor",
-      "degraded": true,
-      "spans": 9,
       "classes": {
         "keyword": 2,
         "operator": 1,
@@ -13,13 +8,13 @@
         "string": 1,
         "variable": 1
       },
-      "modifiers": {}
+      "degraded": true,
+      "id": "actor/parse-error",
+      "modifiers": {},
+      "spans": 9,
+      "surface": "actor"
     },
     {
-      "id": "actor/truncated",
-      "surface": "actor",
-      "degraded": true,
-      "spans": 8,
       "classes": {
         "keyword": 3,
         "punctuation": 2,
@@ -27,13 +22,13 @@
         "type": 1,
         "variable": 1
       },
-      "modifiers": {}
+      "degraded": true,
+      "id": "actor/truncated",
+      "modifiers": {},
+      "spans": 8,
+      "surface": "actor"
     },
     {
-      "id": "actor/valid",
-      "surface": "actor",
-      "degraded": false,
-      "spans": 18,
       "classes": {
         "function": 2,
         "keyword": 7,
@@ -42,15 +37,15 @@
         "string": 1,
         "type": 3
       },
+      "degraded": false,
+      "id": "actor/valid",
       "modifiers": {
         "declaration": 3
-      }
+      },
+      "spans": 18,
+      "surface": "actor"
     },
     {
-      "id": "cmmn/parse-error",
-      "surface": "cmmn",
-      "degraded": true,
-      "spans": 9,
       "classes": {
         "keyword": 2,
         "namespace": 1,
@@ -58,28 +53,28 @@
         "punctuation": 4,
         "string": 1
       },
+      "degraded": true,
+      "id": "cmmn/parse-error",
       "modifiers": {
         "declaration": 1
-      }
+      },
+      "spans": 9,
+      "surface": "cmmn"
     },
     {
-      "id": "cmmn/truncated",
-      "surface": "cmmn",
-      "degraded": true,
-      "spans": 7,
       "classes": {
         "keyword": 3,
         "punctuation": 2,
         "string": 1,
         "type": 1
       },
-      "modifiers": {}
+      "degraded": true,
+      "id": "cmmn/truncated",
+      "modifiers": {},
+      "spans": 7,
+      "surface": "cmmn"
     },
     {
-      "id": "cmmn/valid",
-      "surface": "cmmn",
-      "degraded": false,
-      "spans": 12,
       "classes": {
         "keyword": 4,
         "namespace": 1,
@@ -87,15 +82,15 @@
         "string": 1,
         "type": 1
       },
+      "degraded": false,
+      "id": "cmmn/valid",
       "modifiers": {
         "declaration": 2
-      }
+      },
+      "spans": 12,
+      "surface": "cmmn"
     },
     {
-      "id": "ddd/contextual-ordinary",
-      "surface": "ddd",
-      "degraded": false,
-      "spans": 23,
       "classes": {
         "function": 1,
         "keyword": 4,
@@ -105,15 +100,15 @@
         "string": 1,
         "type": 4
       },
+      "degraded": false,
+      "id": "ddd/contextual-ordinary",
       "modifiers": {
         "declaration": 6
-      }
+      },
+      "spans": 23,
+      "surface": "ddd"
     },
     {
-      "id": "ddd/contextual-real",
-      "surface": "ddd",
-      "degraded": false,
-      "spans": 21,
       "classes": {
         "function": 1,
         "keyword": 8,
@@ -122,15 +117,15 @@
         "string": 1,
         "type": 2
       },
+      "degraded": false,
+      "id": "ddd/contextual-real",
       "modifiers": {
         "declaration": 4
-      }
+      },
+      "spans": 21,
+      "surface": "ddd"
     },
     {
-      "id": "ddd/parse-error",
-      "surface": "ddd",
-      "degraded": true,
-      "spans": 9,
       "classes": {
         "keyword": 2,
         "namespace": 1,
@@ -138,28 +133,28 @@
         "punctuation": 4,
         "string": 1
       },
+      "degraded": true,
+      "id": "ddd/parse-error",
       "modifiers": {
         "declaration": 1
-      }
+      },
+      "spans": 9,
+      "surface": "ddd"
     },
     {
-      "id": "ddd/truncated",
-      "surface": "ddd",
-      "degraded": true,
-      "spans": 8,
       "classes": {
         "keyword": 3,
         "punctuation": 2,
         "string": 1,
         "type": 2
       },
-      "modifiers": {}
+      "degraded": true,
+      "id": "ddd/truncated",
+      "modifiers": {},
+      "spans": 8,
+      "surface": "ddd"
     },
     {
-      "id": "ddd/valid",
-      "surface": "ddd",
-      "degraded": false,
-      "spans": 20,
       "classes": {
         "function": 1,
         "keyword": 4,
@@ -169,15 +164,15 @@
         "string": 1,
         "type": 3
       },
+      "degraded": false,
+      "id": "ddd/valid",
       "modifiers": {
         "declaration": 5
-      }
+      },
+      "spans": 20,
+      "surface": "ddd"
     },
     {
-      "id": "deploy/parse-error",
-      "surface": "deploy",
-      "degraded": true,
-      "spans": 9,
       "classes": {
         "keyword": 2,
         "operator": 1,
@@ -185,13 +180,13 @@
         "string": 1,
         "type": 1
       },
-      "modifiers": {}
+      "degraded": true,
+      "id": "deploy/parse-error",
+      "modifiers": {},
+      "spans": 9,
+      "surface": "deploy"
     },
     {
-      "id": "deploy/truncated",
-      "surface": "deploy",
-      "degraded": true,
-      "spans": 10,
       "classes": {
         "keyword": 3,
         "punctuation": 3,
@@ -199,13 +194,13 @@
         "type": 1,
         "variable": 2
       },
-      "modifiers": {}
+      "degraded": true,
+      "id": "deploy/truncated",
+      "modifiers": {},
+      "spans": 10,
+      "surface": "deploy"
     },
     {
-      "id": "deploy/valid",
-      "surface": "deploy",
-      "degraded": false,
-      "spans": 14,
       "classes": {
         "constant": 1,
         "function": 1,
@@ -215,15 +210,15 @@
         "string": 1,
         "type": 1
       },
+      "degraded": false,
+      "id": "deploy/valid",
       "modifiers": {
         "declaration": 2
-      }
+      },
+      "spans": 14,
+      "surface": "deploy"
     },
     {
-      "id": "dmn/parse-error",
-      "surface": "dmn",
-      "degraded": true,
-      "spans": 9,
       "classes": {
         "keyword": 2,
         "operator": 1,
@@ -231,30 +226,30 @@
         "string": 1,
         "type": 1
       },
+      "degraded": true,
+      "id": "dmn/parse-error",
       "modifiers": {
         "declaration": 1
-      }
+      },
+      "spans": 9,
+      "surface": "dmn"
     },
     {
-      "id": "dmn/truncated",
-      "surface": "dmn",
-      "degraded": true,
-      "spans": 7,
       "classes": {
         "keyword": 3,
         "punctuation": 2,
         "string": 1,
         "type": 1
       },
+      "degraded": true,
+      "id": "dmn/truncated",
       "modifiers": {
         "declaration": 1
-      }
+      },
+      "spans": 7,
+      "surface": "dmn"
     },
     {
-      "id": "dmn/valid",
-      "surface": "dmn",
-      "degraded": false,
-      "spans": 16,
       "classes": {
         "function": 1,
         "keyword": 5,
@@ -262,16 +257,16 @@
         "string": 1,
         "type": 2
       },
+      "degraded": false,
+      "id": "dmn/valid",
       "modifiers": {
         "declaration": 2,
         "defaultLibrary": 1
-      }
+      },
+      "spans": 16,
+      "surface": "dmn"
     },
     {
-      "id": "evt/parse-error",
-      "surface": "evt",
-      "degraded": true,
-      "spans": 9,
       "classes": {
         "keyword": 2,
         "operator": 1,
@@ -279,13 +274,13 @@
         "string": 1,
         "type": 1
       },
-      "modifiers": {}
+      "degraded": true,
+      "id": "evt/parse-error",
+      "modifiers": {},
+      "spans": 9,
+      "surface": "evt"
     },
     {
-      "id": "evt/truncated",
-      "surface": "evt",
-      "degraded": true,
-      "spans": 9,
       "classes": {
         "keyword": 2,
         "punctuation": 3,
@@ -293,13 +288,13 @@
         "type": 2,
         "variable": 1
       },
-      "modifiers": {}
+      "degraded": true,
+      "id": "evt/truncated",
+      "modifiers": {},
+      "spans": 9,
+      "surface": "evt"
     },
     {
-      "id": "evt/valid",
-      "surface": "evt",
-      "degraded": false,
-      "spans": 19,
       "classes": {
         "keyword": 5,
         "property": 1,
@@ -307,15 +302,15 @@
         "string": 2,
         "type": 4
       },
+      "degraded": false,
+      "id": "evt/valid",
       "modifiers": {
         "declaration": 3
-      }
+      },
+      "spans": 19,
+      "surface": "evt"
     },
     {
-      "id": "ifml/lookalikes",
-      "surface": "ifml",
-      "degraded": false,
-      "spans": 40,
       "classes": {
         "keyword": 4,
         "parameter": 1,
@@ -325,15 +320,15 @@
         "type": 3,
         "variable": 8
       },
+      "degraded": false,
+      "id": "ifml/lookalikes",
       "modifiers": {
         "declaration": 3
-      }
+      },
+      "spans": 40,
+      "surface": "ifml"
     },
     {
-      "id": "ifml/parse-error",
-      "surface": "ifml",
-      "degraded": true,
-      "spans": 7,
       "classes": {
         "error": 1,
         "keyword": 1,
@@ -341,29 +336,29 @@
         "punctuation": 3,
         "type": 1
       },
+      "degraded": true,
+      "id": "ifml/parse-error",
       "modifiers": {
         "declaration": 1
-      }
+      },
+      "spans": 7,
+      "surface": "ifml"
     },
     {
-      "id": "ifml/truncated",
-      "surface": "ifml",
-      "degraded": true,
-      "spans": 6,
       "classes": {
         "keyword": 2,
         "punctuation": 2,
         "type": 2
       },
+      "degraded": true,
+      "id": "ifml/truncated",
       "modifiers": {
         "declaration": 2
-      }
+      },
+      "spans": 6,
+      "surface": "ifml"
     },
     {
-      "id": "ifml/valid",
-      "surface": "ifml",
-      "degraded": false,
-      "spans": 32,
       "classes": {
         "keyword": 4,
         "parameter": 1,
@@ -373,15 +368,15 @@
         "type": 3,
         "variable": 4
       },
+      "degraded": false,
+      "id": "ifml/valid",
       "modifiers": {
         "declaration": 3
-      }
+      },
+      "spans": 32,
+      "surface": "ifml"
     },
     {
-      "id": "intent/parse-error",
-      "surface": "intent",
-      "degraded": true,
-      "spans": 9,
       "classes": {
         "keyword": 2,
         "number": 1,
@@ -389,13 +384,13 @@
         "string": 2,
         "type": 1
       },
-      "modifiers": {}
+      "degraded": true,
+      "id": "intent/parse-error",
+      "modifiers": {},
+      "spans": 9,
+      "surface": "intent"
     },
     {
-      "id": "intent/truncated",
-      "surface": "intent",
-      "degraded": true,
-      "spans": 7,
       "classes": {
         "keyword": 2,
         "number": 1,
@@ -403,13 +398,13 @@
         "string": 2,
         "type": 1
       },
-      "modifiers": {}
+      "degraded": true,
+      "id": "intent/truncated",
+      "modifiers": {},
+      "spans": 7,
+      "surface": "intent"
     },
     {
-      "id": "intent/valid",
-      "surface": "intent",
-      "degraded": false,
-      "spans": 27,
       "classes": {
         "function": 5,
         "keyword": 6,
@@ -418,15 +413,15 @@
         "string": 2,
         "variable": 2
       },
+      "degraded": false,
+      "id": "intent/valid",
       "modifiers": {
         "declaration": 1
-      }
+      },
+      "spans": 27,
+      "surface": "intent"
     },
     {
-      "id": "mox/comments",
-      "surface": "mox",
-      "degraded": false,
-      "spans": 12,
       "classes": {
         "comment": 4,
         "keyword": 2,
@@ -435,17 +430,17 @@
         "punctuation": 2,
         "type": 2
       },
+      "degraded": false,
+      "id": "mox/comments",
       "modifiers": {
         "declaration": 3,
         "defaultLibrary": 1,
         "documentation": 2
-      }
+      },
+      "spans": 12,
+      "surface": "mox"
     },
     {
-      "id": "mox/escapes",
-      "surface": "mox",
-      "degraded": false,
-      "spans": 18,
       "classes": {
         "escape": 4,
         "keyword": 2,
@@ -456,16 +451,16 @@
         "string": 5,
         "type": 2
       },
+      "degraded": false,
+      "id": "mox/escapes",
       "modifiers": {
         "declaration": 3,
         "defaultLibrary": 1
-      }
+      },
+      "spans": 18,
+      "surface": "mox"
     },
     {
-      "id": "mox/parse-error",
-      "surface": "mox",
-      "degraded": true,
-      "spans": 10,
       "classes": {
         "keyword": 2,
         "namespace": 1,
@@ -473,15 +468,15 @@
         "punctuation": 4,
         "type": 1
       },
+      "degraded": true,
+      "id": "mox/parse-error",
       "modifiers": {
         "declaration": 2
-      }
+      },
+      "spans": 10,
+      "surface": "mox"
     },
     {
-      "id": "mox/truncated",
-      "surface": "mox",
-      "degraded": true,
-      "spans": 7,
       "classes": {
         "keyword": 2,
         "namespace": 1,
@@ -489,16 +484,16 @@
         "type": 2,
         "variable": 1
       },
+      "degraded": true,
+      "id": "mox/truncated",
       "modifiers": {
         "declaration": 1,
         "defaultLibrary": 1
-      }
+      },
+      "spans": 7,
+      "surface": "mox"
     },
     {
-      "id": "mox/valid",
-      "surface": "mox",
-      "degraded": false,
-      "spans": 28,
       "classes": {
         "annotation": 1,
         "comment": 2,
@@ -513,18 +508,18 @@
         "type": 5,
         "variable": 1
       },
+      "degraded": false,
+      "id": "mox/valid",
       "modifiers": {
         "declaration": 6,
         "defaultLibrary": 4,
         "documentation": 2,
         "readonly": 1
-      }
+      },
+      "spans": 28,
+      "surface": "mox"
     },
     {
-      "id": "shared/comments-doc",
-      "surface": "mox",
-      "degraded": false,
-      "spans": 10,
       "classes": {
         "comment": 2,
         "keyword": 2,
@@ -533,17 +528,17 @@
         "punctuation": 2,
         "type": 2
       },
+      "degraded": false,
+      "id": "shared/comments-doc",
       "modifiers": {
         "declaration": 3,
         "defaultLibrary": 1,
         "documentation": 2
-      }
+      },
+      "spans": 10,
+      "surface": "mox"
     },
     {
-      "id": "shared/crlf",
-      "surface": "mox",
-      "degraded": false,
-      "spans": 8,
       "classes": {
         "keyword": 2,
         "namespace": 1,
@@ -551,16 +546,16 @@
         "punctuation": 2,
         "type": 2
       },
+      "degraded": false,
+      "id": "shared/crlf",
       "modifiers": {
         "declaration": 3,
         "defaultLibrary": 1
-      }
+      },
+      "spans": 8,
+      "surface": "mox"
     },
     {
-      "id": "shared/emoji-combining",
-      "surface": "mox",
-      "degraded": false,
-      "spans": 10,
       "classes": {
         "keyword": 2,
         "namespace": 1,
@@ -570,16 +565,16 @@
         "string": 1,
         "type": 2
       },
+      "degraded": false,
+      "id": "shared/emoji-combining",
       "modifiers": {
         "declaration": 3,
         "defaultLibrary": 1
-      }
+      },
+      "spans": 10,
+      "surface": "mox"
     },
     {
-      "id": "shared/escapes",
-      "surface": "mox",
-      "degraded": false,
-      "spans": 18,
       "classes": {
         "escape": 4,
         "keyword": 2,
@@ -590,16 +585,16 @@
         "string": 5,
         "type": 2
       },
+      "degraded": false,
+      "id": "shared/escapes",
       "modifiers": {
         "declaration": 3,
         "defaultLibrary": 1
-      }
+      },
+      "spans": 18,
+      "surface": "mox"
     },
     {
-      "id": "shared/unicode-identifier-error",
-      "surface": "mox",
-      "degraded": true,
-      "spans": 9,
       "classes": {
         "keyword": 2,
         "namespace": 1,
@@ -607,16 +602,16 @@
         "type": 2,
         "variable": 1
       },
+      "degraded": true,
+      "id": "shared/unicode-identifier-error",
       "modifiers": {
         "declaration": 1,
         "defaultLibrary": 1
-      }
+      },
+      "spans": 9,
+      "surface": "mox"
     },
     {
-      "id": "shared/unicode-strings",
-      "surface": "mox",
-      "degraded": false,
-      "spans": 12,
       "classes": {
         "comment": 2,
         "keyword": 2,
@@ -627,17 +622,17 @@
         "string": 1,
         "type": 2
       },
+      "degraded": false,
+      "id": "shared/unicode-strings",
       "modifiers": {
         "declaration": 3,
         "defaultLibrary": 1,
         "documentation": 1
-      }
+      },
+      "spans": 12,
+      "surface": "mox"
     },
     {
-      "id": "uc/parse-error",
-      "surface": "uc",
-      "degraded": true,
-      "spans": 9,
       "classes": {
         "function": 1,
         "keyword": 2,
@@ -645,28 +640,28 @@
         "punctuation": 4,
         "string": 1
       },
+      "degraded": true,
+      "id": "uc/parse-error",
       "modifiers": {
         "declaration": 1
-      }
+      },
+      "spans": 9,
+      "surface": "uc"
     },
     {
-      "id": "uc/truncated",
-      "surface": "uc",
-      "degraded": true,
-      "spans": 5,
       "classes": {
         "keyword": 2,
         "punctuation": 1,
         "string": 1,
         "type": 1
       },
-      "modifiers": {}
+      "degraded": true,
+      "id": "uc/truncated",
+      "modifiers": {},
+      "spans": 5,
+      "surface": "uc"
     },
     {
-      "id": "uc/valid",
-      "surface": "uc",
-      "degraded": false,
-      "spans": 10,
       "classes": {
         "function": 1,
         "keyword": 3,
@@ -675,9 +670,14 @@
         "type": 1,
         "variable": 1
       },
+      "degraded": false,
+      "id": "uc/valid",
       "modifiers": {
         "declaration": 2
-      }
+      },
+      "spans": 10,
+      "surface": "uc"
     }
-  ]
+  ],
+  "formatVersion": 1
 }

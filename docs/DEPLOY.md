@@ -1,5 +1,10 @@
 # Deployment models (.deploy)
 
+> **Learning the language?** Start with the [deployment models
+> guide](guide/deploy/overview.md): overview, concept, reference, and a how-to,
+> written for people using the language. This page is the engineering
+> contract.
+
 ## Overview
 
 A deployment-projection layer over the other Phero Lang artifacts. The `.mox`
@@ -96,7 +101,7 @@ phero-ir [wire format contract](BACKENDS.md) (see also the `phero_ir::deploy`
 module docs):
 
 - Versioned independently of the domain-model marker via
-  **`DEPLOY_MODEL_FORMAT_VERSION`** (= 1), the `ActorModel` precedent.
+  **`DEPLOY_MODEL_FORMAT_VERSION`** (= 2), the `ActorModel` precedent.
   `DeployModel::from_json` rejects absent/wrong versions with
   `IrError::UnsupportedFormatVersion` (an absent version reports as 0).
 - All struct field names serialize as `camelCase` (`formatVersion`).

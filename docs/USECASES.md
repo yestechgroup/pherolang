@@ -1,5 +1,10 @@
 # Use case patterns (.uc)
 
+> **Learning the language?** Start with the [use case patterns
+> guide](guide/uc/overview.md): overview, concept, and reference,
+> written for people using the language. This page is the engineering
+> contract.
+
 ## Overview
 
 A standalone use-case modeling surface implementing the SysML v2 use case
@@ -269,7 +274,7 @@ list, driver-resolved and validated but not rewritten.
 phero-ir [wire format contract](BACKENDS.md) (see also the
 `phero_ir::usecases` module docs):
 
-- Versioned via **`USE_CASE_MODEL_FORMAT_VERSION`** (= 1), the
+- Versioned via **`USE_CASE_MODEL_FORMAT_VERSION`** (= 2), the
   `ActorModel` precedent. `UseCaseModel::from_json` rejects absent/wrong
   versions with `IrError::UnsupportedFormatVersion` (an absent version
   reports as 0).

@@ -2,6 +2,42 @@
   "formatVersion": 1,
   "generated": [
     {
+      "source": "docs/guide/cmmn/concepts/cases-and-plan-items.md",
+      "slug": "cmmn/concepts/cases-and-plan-items",
+      "collection": "guide",
+      "target": "guide/cmmn/concepts/cases-and-plan-items.md",
+      "url": "/guide/cmmn/concepts/cases-and-plan-items/",
+      "title": "Cases and plan items",
+      "type": "concept",
+      "language": "cmmn",
+      "section": "concepts",
+      "order": 10
+    },
+    {
+      "source": "docs/guide/cmmn/overview.md",
+      "slug": "cmmn/overview",
+      "collection": "guide",
+      "target": "guide/cmmn/overview.md",
+      "url": "/guide/cmmn/overview/",
+      "title": "Case management (.cmmn)",
+      "type": "overview",
+      "language": "cmmn",
+      "section": "start",
+      "order": 10
+    },
+    {
+      "source": "docs/guide/cmmn/reference/case-models.md",
+      "slug": "cmmn/reference/case-models",
+      "collection": "guide",
+      "target": "guide/cmmn/reference/case-models.md",
+      "url": "/guide/cmmn/reference/case-models/",
+      "title": "Case models",
+      "type": "reference",
+      "language": "cmmn",
+      "section": "reference",
+      "order": 10
+    },
+    {
       "source": "docs/guide/ddd/concepts/entities-values-and-dtos.md",
       "slug": "ddd/concepts/entities-values-and-dtos",
       "collection": "guide",
@@ -59,6 +95,54 @@
       "type": "tutorial",
       "language": "ddd",
       "section": "tutorials",
+      "order": 10
+    },
+    {
+      "source": "docs/guide/deploy/concepts/architecture-profiles-and-deployments.md",
+      "slug": "deploy/concepts/architecture-profiles-and-deployments",
+      "collection": "guide",
+      "target": "guide/deploy/concepts/architecture-profiles-and-deployments.md",
+      "url": "/guide/deploy/concepts/architecture-profiles-and-deployments/",
+      "title": "Architecture, profiles, and deployments",
+      "type": "concept",
+      "language": "deploy",
+      "section": "concepts",
+      "order": 10
+    },
+    {
+      "source": "docs/guide/deploy/how-to/project-an-application.md",
+      "slug": "deploy/how-to/project-an-application",
+      "collection": "guide",
+      "target": "guide/deploy/how-to/project-an-application.md",
+      "url": "/guide/deploy/how-to/project-an-application/",
+      "title": "Project an application onto a target",
+      "type": "how-to",
+      "language": "deploy",
+      "section": "how-to",
+      "order": 10
+    },
+    {
+      "source": "docs/guide/deploy/overview.md",
+      "slug": "deploy/overview",
+      "collection": "guide",
+      "target": "guide/deploy/overview.md",
+      "url": "/guide/deploy/overview/",
+      "title": "Deployment models (.deploy)",
+      "type": "overview",
+      "language": "deploy",
+      "section": "start",
+      "order": 10
+    },
+    {
+      "source": "docs/guide/deploy/reference/applications-and-profiles.md",
+      "slug": "deploy/reference/applications-and-profiles",
+      "collection": "guide",
+      "target": "guide/deploy/reference/applications-and-profiles.md",
+      "url": "/guide/deploy/reference/applications-and-profiles/",
+      "title": "Applications and profiles",
+      "type": "reference",
+      "language": "deploy",
+      "section": "reference",
       "order": 10
     },
     {
@@ -122,6 +206,54 @@
       "order": 10
     },
     {
+      "source": "docs/guide/evt/concepts/events-channels-and-subscriptions.md",
+      "slug": "evt/concepts/events-channels-and-subscriptions",
+      "collection": "guide",
+      "target": "guide/evt/concepts/events-channels-and-subscriptions.md",
+      "url": "/guide/evt/concepts/events-channels-and-subscriptions/",
+      "title": "Events, channels, and subscriptions",
+      "type": "concept",
+      "language": "evt",
+      "section": "concepts",
+      "order": 10
+    },
+    {
+      "source": "docs/guide/evt/how-to/declare-an-event-contract.md",
+      "slug": "evt/how-to/declare-an-event-contract",
+      "collection": "guide",
+      "target": "guide/evt/how-to/declare-an-event-contract.md",
+      "url": "/guide/evt/how-to/declare-an-event-contract/",
+      "title": "Declare an event contract",
+      "type": "how-to",
+      "language": "evt",
+      "section": "how-to",
+      "order": 10
+    },
+    {
+      "source": "docs/guide/evt/overview.md",
+      "slug": "evt/overview",
+      "collection": "guide",
+      "target": "guide/evt/overview.md",
+      "url": "/guide/evt/overview/",
+      "title": "Event contracts (.evt)",
+      "type": "overview",
+      "language": "evt",
+      "section": "start",
+      "order": 10
+    },
+    {
+      "source": "docs/guide/evt/reference/event-contracts.md",
+      "slug": "evt/reference/event-contracts",
+      "collection": "guide",
+      "target": "guide/evt/reference/event-contracts.md",
+      "url": "/guide/evt/reference/event-contracts/",
+      "title": "Event contracts",
+      "type": "reference",
+      "language": "evt",
+      "section": "reference",
+      "order": 10
+    },
+    {
       "source": "docs/guide/ifml/concepts/views-and-navigation.md",
       "slug": "ifml/concepts/views-and-navigation",
       "collection": "guide",
@@ -179,6 +311,42 @@
       "type": "tutorial",
       "language": "ifml",
       "section": "tutorials",
+      "order": 10
+    },
+    {
+      "source": "docs/guide/intent/concepts/requirements-as-data.md",
+      "slug": "intent/concepts/requirements-as-data",
+      "collection": "guide",
+      "target": "guide/intent/concepts/requirements-as-data.md",
+      "url": "/guide/intent/concepts/requirements-as-data/",
+      "title": "Requirements as data",
+      "type": "concept",
+      "language": "intent",
+      "section": "concepts",
+      "order": 10
+    },
+    {
+      "source": "docs/guide/intent/overview.md",
+      "slug": "intent/overview",
+      "collection": "guide",
+      "target": "guide/intent/overview.md",
+      "url": "/guide/intent/overview/",
+      "title": "Intent specifications (.intent)",
+      "type": "overview",
+      "language": "intent",
+      "section": "start",
+      "order": 10
+    },
+    {
+      "source": "docs/guide/intent/reference/intent-specifications.md",
+      "slug": "intent/reference/intent-specifications",
+      "collection": "guide",
+      "target": "guide/intent/reference/intent-specifications.md",
+      "url": "/guide/intent/reference/intent-specifications/",
+      "title": "Intent specifications",
+      "type": "reference",
+      "language": "intent",
+      "section": "reference",
       "order": 10
     },
     {
@@ -240,6 +408,54 @@
       "language": "mox",
       "section": "tutorials",
       "order": 10
+    },
+    {
+      "source": "docs/guide/uc/concepts/use-case-patterns.md",
+      "slug": "uc/concepts/use-case-patterns",
+      "collection": "guide",
+      "target": "guide/uc/concepts/use-case-patterns.md",
+      "url": "/guide/uc/concepts/use-case-patterns/",
+      "title": "Use case patterns",
+      "type": "concept",
+      "language": "uc",
+      "section": "concepts",
+      "order": 10
+    },
+    {
+      "source": "docs/guide/uc/overview.md",
+      "slug": "uc/overview",
+      "collection": "guide",
+      "target": "guide/uc/overview.md",
+      "url": "/guide/uc/overview/",
+      "title": "Use case patterns (.uc)",
+      "type": "overview",
+      "language": "uc",
+      "section": "start",
+      "order": 10
+    },
+    {
+      "source": "docs/guide/uc/reference/use-cases-and-participants.md",
+      "slug": "uc/reference/use-cases-and-participants",
+      "collection": "guide",
+      "target": "guide/uc/reference/use-cases-and-participants.md",
+      "url": "/guide/uc/reference/use-cases-and-participants/",
+      "title": "Use cases and participants",
+      "type": "reference",
+      "language": "uc",
+      "section": "reference",
+      "order": 10
+    },
+    {
+      "source": "docs/guide/cmmn/concepts/omg-cmmn-conformance.md",
+      "slug": "cmmn/concepts/omg-cmmn-conformance",
+      "collection": "guide",
+      "target": "guide/cmmn/concepts/omg-cmmn-conformance.md",
+      "url": "/guide/cmmn/concepts/omg-cmmn-conformance/",
+      "title": "OMG CMMN conformance",
+      "type": "concept",
+      "language": "cmmn",
+      "section": "concepts",
+      "order": 20
     },
     {
       "source": "docs/guide/ddd/concepts/relationship-with-sculptor.md",
