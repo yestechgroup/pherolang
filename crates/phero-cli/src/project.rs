@@ -44,7 +44,7 @@ use std::path::{Path, PathBuf};
 use phero_driver::applications::{applications, ApplicationFile};
 use phero_driver::SurfaceKind;
 
-use crate::inputs::{read_actor_pair_in, read_ddd_design, read_dmn_pair};
+use crate::inputs::{read_actor_pair_in, read_ddd_design, read_dmn_pair, read_evt_pair};
 
 /// One compiled surface artifact — the same JSON `pherolang ir` emits for
 /// the surface, kept typed so consumers can pull the model they need.
@@ -459,6 +459,39 @@ impl Project {
                         phero_driver::compile_dmn_str(&pair.path, &pair.source, pair.inputs());
                     if let Some(model) = compilation.model {
                         self.store(&member, &Artifact::Decision(model.clone()));
+                        models.push((member, model));
+                    }
+                }
+            }
+        }
+        models
+    }
+
+    /// The compiled `.evt` artifacts of `file`'s application (pherolang#382)
+    /// — the event contracts a design's `emits` links resolve against
+    /// (rule 23). Gathered exactly like [`Project::sibling_actors`].
+    pub(crate) fn sibling_events(
+        &mut self,
+        file: &Path,
+    ) -> Vec<(String, phero_ir::events::EventModel)> {
+        let key = file.display().to_string();
+        let members = self.application_of(&key);
+        let mut models = Vec::new();
+        for member in members {
+            if member == key || SurfaceKind::of_path(Path::new(&member)) != Some(SurfaceKind::Evt) {
+                continue;
+            }
+            match self.peek(&member) {
+                Some(Artifact::Event(model)) => models.push((member.clone(), model)),
+                Some(_) => {}
+                None => {
+                    let Ok(pair) = read_evt_pair(Path::new(&member), Some(self)) else {
+                        continue;
+                    };
+                    let compilation =
+                        phero_driver::compile_evt_str(&pair.path, &pair.source, pair.inputs());
+                    if let Some(model) = compilation.model {
+                        self.store(&member, &Artifact::Event(model.clone()));
                         models.push((member, model));
                     }
                 }

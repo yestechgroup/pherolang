@@ -489,7 +489,7 @@ the bare / `base`-preferred / unique-across-packages rules above.
 | `Service.decisionDependencies[]` | `decisionDependencyRefs[]` | one decision-service identity per injection |
 | `ServiceOperation.capabilities[]` | `capabilityRefs[]` | the capability identity, plus `declaredIn` when an `.actor` artifact was supplied |
 | `SearchDef.capabilities[]` | `capabilityRefs[]` | the capability identity guarding the search |
-| `ServiceOperation.emits[]` | `emittedRefs[]` | the event identity; `contract` stays absent (no `.evt` bucket) |
+| `ServiceOperation.emits[]` | `emittedRefs[]` | the event identity, plus `contract` when an `.evt` contract was supplied |
 | `ServiceOperation.invokes[]` | `decisionRefs[]` | the decision-service identity, plus `contract`/`version` when a `.dmn` artifact was supplied |
 | `SearchDef.entity` | `entityRef` | the searched class (`TypeRef`) |
 | `SearchDef.text`, `filters`, `sort` members | each member's `typeRef` | the referenced feature's declared type |
@@ -517,8 +517,9 @@ The companion shapes are fixed:
   (the first declaring block when several do), and is absent when no actor
   artifact was supplied.
 - `emittedRefs[]` entries are `{name, contract?}`, index-aligned with
-  `emits`. `contract` is always absent today: the `.ddd` compile has no
-  `.evt` bucket, so event references are unresolved by design.
+  `emits`. `contract` names the `.evt` artifact declaring the event (the
+  first providing contract in bucket order when several do), and is absent
+  when no event model was supplied at compile time.
 - `decisionRefs[]` and `decisionDependencyRefs[]` entries are
   `{service, contract?, version?}`, index-aligned with `invokes` and
   `decisionDependencies`. `contract` names the `.dmn` artifact that
@@ -548,10 +549,12 @@ is the reference implementation. The fingerprint is a staleness check, not a
 signature: it covers domain shape only (not the `.ddd` source, not
 `pheroVersion`, not `.actor`/`.dmn` artifacts, whose absence is legal). The
 design's optional dimensions pair with the artifacts the compile was given —
-the `ActorModel`s supply capabilities (recorded as `declaredIn`) and the
-`DmnModel`s supply decision services (recorded as `contract`/`version`). A
-`.ddd` compile has no `.evt` bucket, so event contracts pair at the
-union-integrity layer (`pherolang check`), never through `emittedRefs`. None
+the `ActorModel`s supply capabilities (recorded as `declaredIn`), the
+`DmnModel`s supply decision services (recorded as `contract`/`version`), and
+the `EventModel`s supply event contracts (recorded as `contract` on
+`emittedRefs`, pherolang#382). When a dimension's artifacts were not
+supplied, its pairing happens at the union-integrity layer (`pherolang
+check`). None
 of the pairing needs the `.mox`, `.actor`, `.evt`, or `.dmn` sources.
 
 **Gate.** Accept exactly `formatVersion` 2; `DddModel::from_json` and
@@ -1715,21 +1718,37 @@ service PayRunService {
 
 Like `capability` names, emitted event names are **loosely coupled**: the
 names lower into the artifact exactly as authored, and a plain
-`compile_ddd_str` never validates them — the `.ddd` compile has no `.evt`
-bucket. The `emittedRefs` companion list records the same names, with
-`contract` absent: the unresolved-by-design shape. Both directions of the
-design↔event wiring are enforced by the union integrity pass
-(`phero_driver::check_integrity`, register row **V12**):
+`compile_ddd_str` never validates them. When the host supplies an `events`
+bucket (rule 23, pherolang#382 — the CLI and the LSP pool every sibling
+`.evt` artifact of the application), the names validate: an emitted name
+no provided contract declares is the error `E0255 unknown event 'E'
+emitted by operation 'op' of service 'S'`, help naming the closest
+declared event or the declared set. Resolution is exact-match and
+union-wide — event names are flat (no package dimension) — and the
+resolved contract identity lands on `emittedRefs[].contract` (the first
+providing contract in bucket order). An authored `import "x.evt"` must be
+satisfied by the bucket when one was provided, exactly like a `.dmn`
+import; with an empty bucket everything rides unvalidated — never a claim
+that the application declares no events.
+
+Both directions of the design↔event wiring are enforced by the union
+integrity pass (`phero_driver::check_integrity`, register row **V12**),
+which stays the lint channel for artifact-level unions:
 
 - **Emission existence** — every emitted event name on every service
   operation must name an event declared in some provided `.evt` contract:
   `operation 'approve' of service 'PayRunService' emits unknown event
-  'PayRunStateChanged'`, help listing the declared event names.
+  'PayRunStateChanged'`, help listing the declared event names. (When the
+  compile had the contracts, rule 23 already rejected the unknown name
+  with `E0255`; X0003 remains the check for artifact pools assembled
+  without a compile-time bucket.)
 - **Emission coverage** — every declared event must be emitted by at
   least one service operation across the designs: `event 'E' is declared
-  but no operation emits it`. Channel `publishes` entries and
-  subscription `events [...]` lists are **consumption-side** wiring — they
-  route events to consumers and never satisfy production.
+  but no operation emits it`. Coverage is union-wide and never a
+  compile-time check — no single design can know the others' emissions.
+  Channel `publishes` entries and subscription `events [...]` lists are
+  **consumption-side** wiring — they route events to consumers and never
+  satisfy production.
 
 Checking a design alone (or a contract alone) stays per-surface and
 silent: an `emits` clause in a cluster without `.evt` artifacts is not an

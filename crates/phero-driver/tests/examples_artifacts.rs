@@ -260,6 +260,46 @@ fn support_ddd_capabilities_validate_against_the_actor_model() {
     );
 }
 
+/// The loose design↛contract coupling, proven tight for the one example
+/// that ships both dimensions: `support.ddd`'s `emits` names are declared
+/// by `support.evt`, and every resolved companion stamps the providing
+/// contract's path (pherolang#382, rule 23).
+#[test]
+fn support_ddd_emissions_resolve_against_the_event_contract() {
+    let (path, source) = example("support/support", "ddd");
+    let (domain_path, domain) = domain_of("support/support");
+    let events = compile_evt("support/support");
+    let compilation = phero_driver::compile_ddd_str(
+        path.to_str().expect("utf-8 example path"),
+        &source,
+        &phero_driver::CompileInputs::from_domains(&[(domain_path, domain)])
+            .with_events([("support/support.evt".to_string(), events)]),
+    );
+    assert_clean("support.ddd (with events)", &compilation.diagnostics);
+    let model = compilation
+        .model
+        .expect("support.ddd must lower to a design artifact under event validation");
+    let emitted: Vec<&phero_ir::ddd::EventRef> = model
+        .modules
+        .iter()
+        .flat_map(|module| module.services.iter())
+        .flat_map(|service| service.operations.iter())
+        .flat_map(|operation| operation.emitted_refs.iter())
+        .collect();
+    assert!(
+        emitted.len() >= 4,
+        "support.ddd emits at least the four ticket/refund events"
+    );
+    for reference in emitted {
+        assert_eq!(
+            reference.contract.as_deref(),
+            Some("support/support.evt"),
+            "emitted event '{}' stamps the providing contract",
+            reference.name
+        );
+    }
+}
+
 /// Compiles the flagship's intent file (issue pherolang#196) against its
 /// imported domain.
 fn compile_intent(

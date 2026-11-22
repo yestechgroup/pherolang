@@ -136,9 +136,12 @@ impl PheroBackend {
                 // design's directory — the empty slice is the exact
                 // `compile_ddd_str` behavior. pherolang#78 (rule 17): the
                 // `invokes`/`inject decision` clauses resolve the same way
-                // against every `.dmn` artifact of the directory.
+                // against every `.dmn` artifact of the directory, and
+                // pherolang#382 (rule 23) the `emits` clauses against every
+                // `.evt` contract of it.
                 let actors = self.sibling_actor_models(uri);
                 let decisions = self.sibling_decision_models(uri);
+                let events = self.sibling_event_models(uri);
                 // DD8 (issue pherolang#305): a fragment compiles through
                 // its root; a root gathers its fragment closure. The import
                 // closure spans the root **and** every fragment, each
@@ -161,7 +164,8 @@ impl PheroBackend {
                     .collect();
                 let inputs = domain_inputs(&gathered.domains)
                     .with_actors(actors)
-                    .with_decisions(decisions);
+                    .with_decisions(decisions)
+                    .with_events(events);
                 phero_driver::compile_ddd_app_str(&root_path, &root_text, &fragments, &inputs)
                     .diagnostics
                     .iter()
@@ -660,6 +664,35 @@ impl PheroBackend {
                 .with_tables(tables)
                 .with_events(events);
             let compilation = phero_driver::compile_dmn_str(&key, &text, &inputs);
+            if let Some(model) = compilation.model {
+                models.push((key, model));
+            }
+        }
+        models
+    }
+
+    /// The compiled `.evt` artifacts of the open design's application
+    /// (pherolang#382) — the event contracts its `emits` links resolve
+    /// against (rule 23). Gathered exactly like
+    /// [`Self::sibling_decision_models`], minus the tables: an `.evt`
+    /// contract compiles against its imported domain union alone.
+    fn sibling_event_models(&self, except: &Uri) -> Vec<(String, phero_ir::events::EventModel)> {
+        let Some(path) = except.to_file_path() else {
+            return Vec::new();
+        };
+        let mut models = Vec::new();
+        for (sibling, text) in self.siblings_in_application(&path, SurfaceKind::Evt) {
+            let key = sibling.display().to_string();
+            let mut fetch =
+                |resolved: &str| -> Option<String> { self.fetch_open_or_disk(resolved) };
+            let domains = phero_driver::project::gather_domain_sources(
+                &key,
+                &text,
+                |source| phero_driver::project::import_paths(SurfaceKind::Evt, source),
+                &mut fetch,
+            );
+            let inputs = domain_inputs(&domains);
+            let compilation = phero_driver::compile_evt_str(&key, &text, &inputs);
             if let Some(model) = compilation.model {
                 models.push((key, model));
             }

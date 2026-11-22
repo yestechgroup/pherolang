@@ -485,8 +485,8 @@ pub fn gather_ddd_app_imports(
     gathered
 }
 
-/// The `.mox` imports one `.ddd` source declares (`.ddd` fragments and `.dmn`
-/// decision models are other buckets).
+/// The `.mox` imports one `.ddd` source declares (`.ddd` fragments, `.dmn`
+/// decision models, and `.evt` event contracts are other buckets).
 fn ddd_domain_imports(source: &str) -> Vec<String> {
     phero_syntax::parse_ddd(source)
         .ast
@@ -494,7 +494,11 @@ fn ddd_domain_imports(source: &str) -> Vec<String> {
             ast.imports
                 .into_iter()
                 .map(|import| import.path)
-                .filter(|import| !import.ends_with(".ddd") && !import.ends_with(".dmn"))
+                .filter(|import| {
+                    !import.ends_with(".ddd")
+                        && !import.ends_with(".dmn")
+                        && !import.ends_with(".evt")
+                })
                 .collect()
         })
         .unwrap_or_default()

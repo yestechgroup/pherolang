@@ -11,7 +11,7 @@ Every diagnostic a pherolang surface emits carries a stable string code. The cod
 | `ifml.lints` | W0150–W0199 | phero-ifml lints | warning | W0155 |
 | `driver.payload` | camelCase names | phero-driver DiagnosticCode | error | n/a |
 | `driver.integrity` | X0001–X0099 | phero-driver integrity pass | error | X0015 |
-| `dmn.check` | E0200–E0299 | phero-driver .dmn surface and .ddd decision links | error | E0255 |
+| `dmn.check` | E0200–E0299 | phero-driver .dmn surface and .ddd decision/event links | error | E0256 |
 | `driver.domain` | E0300–E0349 | phero-driver .mox domain-surface checks | error | E0302 |
 | `driver.ddd` | E0350–E0449 | phero-driver `.ddd` lifecycle checks | error | E0403 |
 | `driver.intent` | E0450–E0499 | phero-driver `.intent` surface checks | error | E0455 |
@@ -109,6 +109,7 @@ Every diagnostic a pherolang surface emits carries a stable string code. The cod
 | `E0252` | error | Pinned service version not available | `decision service '<name>' is not provided at version "<pin>" invoked by <context>` — the reference carries an exact `version "X.Y.Z"` pin (pherolang#154) and no provided model declares the service at that version. The help line names the versions the bucket's same-name candidates declare (empty when none of them carries a strict `X.Y.Z` `version` metadata). The same failure shape fires on a `.cmmn` decision task with an exact pin — the CMMN side carries no numeric codes. | Pin a version a provided model declares (the help names them), import the model that declares it, or drop the pin. |
 | `E0253` | error | Ambiguous service version | `decision service '<name>' at version "<version>" is ambiguous invoked by <context>: provided by '<path>', '<path>'` — two or more provided models declare the service at the same version (pherolang#154): for an exact pin, two candidates matching the pinned version; for `version compatible`, two candidates tying at the selected highest version. The message names every declaring model's path. | Keep one model per version in the provided bucket, or pin a version only one of them declares. |
 | `E0254` | error | No usable service version | `decision service '<name>' declares no usable version invoked by <context>` — the reference carries a `version compatible` pin (pherolang#154) but none of the models providing the service declares a parseable `version` metadata (strict `X.Y.Z`, three numeric dot-separated parts); the models compile alone but cannot satisfy a compatibility selection. | Give a providing model a strict "X.Y.Z" `version` metadata line, or pin an exact version. |
+| `E0255` | error | Unknown operation-emitted event | `unknown event '<name>' emitted by operation '<op>' of service '<service>'` — the `.ddd` service operation's `emits` clause names an event no provided `.evt` contract declares; the emitted names resolve union-wide against every provided event contract (pherolang#382, the rule-10 pooling shape), and an operation that emits nothing provided is the loosely-coupled record (an empty events bucket lowers the entries as authored, unchecked — the X0003 lint channel still reports the union). | Declare the event in an `.evt` contract beside the design, import the contract that declares it, or fix the spelling. |
 
 ## Band `driver.domain` (E0300–E0349)
 

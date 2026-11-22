@@ -11,6 +11,7 @@ mod completions;
 mod core;
 mod ddd;
 mod ddd_decisions;
+mod ddd_events;
 mod deploy;
 mod dmn;
 mod evt;

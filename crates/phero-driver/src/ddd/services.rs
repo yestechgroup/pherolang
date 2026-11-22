@@ -1,5 +1,5 @@
-//! Service lowering and the delegation, inject, and decision-link
-//! deferred rules (8, 9, 17).
+//! Service lowering and the delegation, inject, decision-link, and
+//! emission-link deferred rules (8, 9, 17, 23).
 
 use std::collections::BTreeSet;
 
@@ -9,7 +9,7 @@ use phero_diagnostics::ddd::{
 };
 use phero_diagnostics::dmn::{
     E_AMBIGUOUS_SERVICE_VERSION, E_NO_USABLE_SERVICE_VERSION, E_PINNED_VERSION_NOT_AVAILABLE,
-    E_UNKNOWN_INJECTED_SERVICE, E_UNKNOWN_INVOKED_SERVICE,
+    E_UNKNOWN_INJECTED_SERVICE, E_UNKNOWN_INVOKED_SERVICE, E_UNKNOWN_OPERATION_EMITTED_EVENT,
 };
 use phero_ir::ddd::{
     DddParam, DecisionPin, Delegation, ErrorRef, Service, ServiceOperation, TransitionRef,
@@ -335,6 +335,77 @@ fn verb(site: &DecisionSite) -> &'static str {
         DecisionSite::Invoked => "invoked by",
         DecisionSite::Injected => "injected by",
     }
+}
+
+/// Rule 23 — emitted-event links must exist in the provided `.evt`
+/// contracts. Validated only when the bundle provides event models
+/// ([`crate::CompileInputs::with_events`]); plain compiles record the
+/// names unvalidated. The names resolve union-wide, **exact-match** (the
+/// event dimension's names are flat — no package, no qualified spelling;
+/// uniqueness within one contract is the `.evt` compile's concern), and
+/// pool across every provided model (a host passes all of the
+/// application's `.evt` artifacts — the rule-10 shape). An unknown
+/// reference errors with the `phero_diagnostics::dmn` code prefixed onto
+/// the message (the rule-17 shape) and a did-you-mean help line naming
+/// the declared set.
+///
+/// There is no version-pin dimension here: an `EventRef` carries the
+/// contract identity only (the `.evt` events' `version` metadata is the
+/// downstream envelope's concern, never a design-side resolution input).
+pub(crate) fn rule_23_validate_emission_links(
+    emission_checks: &[EmissionCheck<'_>],
+    events: &[(String, phero_ir::events::EventModel)],
+) -> Vec<Diagnostic> {
+    let mut local: Vec<Diagnostic> = Vec::new();
+    // An empty bucket means no event contracts were provided at all —
+    // the plain compiles' behavior exactly. A *non-empty* slice whose
+    // models declare nothing still validates (everything is unknown).
+    if events.is_empty() {
+        return local;
+    }
+    let declared: BTreeSet<String> = events
+        .iter()
+        .flat_map(|(_, model)| model.events.iter().map(|event| event.name.clone()))
+        .collect();
+    for check in emission_checks {
+        if resolve_emitted_event(check.name.text.as_str(), events).is_none() {
+            let suggestion = phero_diagnostics::did_you_mean_adaptive(&check.name.text, &declared);
+            let help = match &suggestion {
+                Some(suggestion) => format!("did you mean '{suggestion}'?"),
+                None if declared.is_empty() => "the event contracts declare no events".to_string(),
+                None => format!(
+                    "the event contracts declare: {}",
+                    declared.iter().cloned().collect::<Vec<_>>().join(", ")
+                ),
+            };
+            local.push(
+                Diagnostic::error(
+                    format!(
+                        "{E_UNKNOWN_OPERATION_EMITTED_EVENT} unknown event '{}' emitted by {}",
+                        check.name.text, check.context
+                    ),
+                    Some(check.name.span),
+                )
+                .with_help(help),
+            );
+        }
+    }
+    local
+}
+
+/// Resolves one emitted-event name against a `(path, EventModel)` bucket:
+/// the **path** of the first model (in bucket order — the decision-link
+/// no-pin precedence) whose events declare the name, `None` when no
+/// provided contract declares it. The same lookup both validation
+/// (rule 23) and the resolved-companion fill (the DD1 post-pass) run.
+pub(crate) fn resolve_emitted_event<'a>(
+    name: &str,
+    events: &'a [(String, phero_ir::events::EventModel)],
+) -> Option<&'a str> {
+    events
+        .iter()
+        .find(|(_, model)| model.events.iter().any(|event| event.name == name))
+        .map(|(path, _)| path.as_str())
 }
 
 /// Lowers a parsed `version` pin into the wire artifact (pherolang#154):
@@ -858,9 +929,20 @@ pub(crate) fn lower_module_services<'a>(
                 .map(|name| name.text.clone())
                 .collect();
             // The emitted event names lower as authored (loosely coupled:
-            // the `.ddd` compile has no `.evt` bucket — existence/coverage
-            // resolve in the union integrity pass).
+            // an empty `.evt` bucket lowers them unchecked — existence
+            // resolves in rule 23 when the bucket is provided, coverage in
+            // the union integrity pass). Each name queues an emission
+            // check beside its lowering.
             let emits: Vec<String> = op.emits.iter().map(|name| name.text.clone()).collect();
+            for name in &op.emits {
+                registries.emission_checks.push(EmissionCheck {
+                    context: format!(
+                        "operation '{}' of service '{}'",
+                        op.name.text, service.name.text
+                    ),
+                    name,
+                });
+            }
             // The invoked decision services lower as their last segment
             // (the resolution universe's spelling — rule 17); the pinned
             // entries also lower their `version` pins (pherolang#154), each

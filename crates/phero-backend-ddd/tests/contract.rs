@@ -12,8 +12,9 @@ use phero_driver::{compile_actors_str, compile_ddd_str, Severity};
 use phero_ir::ddd::{
     BuiltinRepositoryOp, CapabilityRef, DddModel, DddTypeRef, Design, DocumentField,
     DomainFingerprint, DtoDirection, DtoMember, DtoMemberKind, DtoShape, EqualityPolicy, ErrorRef,
-    IdentityPolicy, QueryPagination, QuerySortKey, QuerySpec, RepositoryOperation, SortDirection,
-    StateMachine, Stereotype, TargetKind, TargetRef, ValueSemantics, DDD_MODEL_FORMAT_VERSION,
+    EventRef, IdentityPolicy, QueryPagination, QuerySortKey, QuerySpec, RepositoryOperation,
+    SortDirection, StateMachine, Stereotype, TargetKind, TargetRef, ValueSemantics,
+    DDD_MODEL_FORMAT_VERSION,
 };
 use phero_ir::{Multiplicity, PrimitiveType, TypeRef};
 
@@ -504,6 +505,38 @@ fn emitted_and_invoked_references_must_align() {
             &violations,
             "modules[0].services[0].operations[0].decisionRefs"
         ),
+        "{violations:?}"
+    );
+}
+
+/// A resolved emitted ref may carry its contract identity (pherolang#382 —
+/// the compile stamps it when an `.evt` bucket was supplied) and passes
+/// the artifact-alone check; an empty contract string stays a violation.
+#[test]
+fn resolved_emitted_refs_carry_their_contract_through_the_alone_check() {
+    let mut model = compiled();
+    let operation = &mut model.modules[0].services[0].operations[0];
+    operation.emits.push("GhostEvent".to_string());
+    operation.emitted_refs =
+        vec![EventRef::new("GhostEvent").with_contract(Some("events.evt".to_string()))];
+    let violations = check_contract(&model);
+    assert!(
+        !violations
+            .iter()
+            .any(|violation| violation.path.contains("emittedRefs")),
+        "{violations:?}"
+    );
+
+    let mut model = compiled();
+    let operation = &mut model.modules[0].services[0].operations[0];
+    operation.emits.push("GhostEvent".to_string());
+    operation.emitted_refs =
+        vec![EventRef::new("GhostEvent").with_contract(Some("   ".to_string()))];
+    let violations = check_contract(&model);
+    assert!(
+        violations
+            .iter()
+            .any(|violation| violation.path.contains("emittedRefs")),
         "{violations:?}"
     );
 }
