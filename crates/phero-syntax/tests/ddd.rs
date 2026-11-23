@@ -1907,6 +1907,132 @@ fn machine_output_round_trips_structurally() {
 }
 
 #[test]
+fn machine_reference_parses() {
+    // The `from "<path>";` reference form (issue pherolang#388): the
+    // declaration head keeps field + enum; the lifecycle body becomes a
+    // reference to an external TypeScript/XState file, resolved relative to
+    // the declaring `.ddd` file.
+    let source = r#"
+application A {
+    module m {
+        entity D machine d: K from "machines/d.machine.ts";
+    }
+}
+"#;
+    let result = parse_ddd(source);
+    assert!(
+        result.errors.is_empty(),
+        "unexpected errors: {:?}",
+        result.errors
+    );
+    let file = result.ast.expect("expected an AST");
+    let module = expect_module(&file, "m");
+    let design = &module.designs[0];
+    let machine = design.machine.as_ref().expect("the machine");
+    assert_eq!(machine.field.text, "d");
+    assert_eq!(machine.type_.name.full_name(), "K");
+    // The inline body members are absent.
+    assert!(machine.initial.is_none());
+    assert!(machine.terminals.is_empty());
+    assert!(machine.transitions.is_empty());
+    // The reference is present, with the path exactly as written.
+    let source_ref = machine.source.as_ref().expect("the machine source");
+    assert_eq!(source_ref.path, "machines/d.machine.ts");
+    assert_eq!(
+        span_text(source, source_ref.span),
+        "from \"machines/d.machine.ts\";"
+    );
+    // The span covers the whole declaration, `machine` included.
+    assert!(source[..machine.span.start].ends_with("entity D "));
+}
+
+#[test]
+fn machine_reference_and_inline_body_are_mutually_exclusive() {
+    // Both forms at once is a parse error, not a silent merge.
+    let source = "application A { module m { entity D machine d: K from \"d.ts\" { initial Open; } } }";
+    let result = parse_ddd(source);
+    assert!(
+        !result.errors.is_empty(),
+        "a machine cannot carry both a reference and an inline body"
+    );
+    // And the inline body after nothing at all stays the inline form.
+    let inline = parse_ddd("application A { module m { entity D machine d: K { initial Open; } } }");
+    assert!(
+        inline.errors.is_empty(),
+        "unexpected errors: {:?}",
+        inline.errors
+    );
+    let machine = inline
+        .ast
+        .expect("expected an AST")
+        .application
+        .expect("application")
+        .modules
+        .first()
+        .expect("module")
+        .designs[0]
+        .machine
+        .clone()
+        .expect("the machine");
+    assert!(machine.source.is_none(), "the inline form carries no source");
+    assert!(machine.initial.is_some(), "the inline form keeps its members");
+}
+
+#[test]
+fn machine_reference_parse_failures_are_clean_errors() {
+    for (source, label) in [
+        (
+            "application A { module m { entity D machine d: K from; } }",
+            "from without a path",
+        ),
+        (
+            "application A { module m { entity D machine d: K from d.ts; } }",
+            "from with a bare name instead of a string",
+        ),
+        (
+            "application A { module m { entity D machine d: K from \"d.ts\" } }",
+            "missing terminating semicolon",
+        ),
+        (
+            "application A { module m { entity D machine d: K from \"d.ts\" as other; } }",
+            "the deferred as clause is not v1 grammar",
+        ),
+        (
+            "application A { module m { entity D machine d: K { initial Open; } from \"d.ts\"; } }",
+            "reference after an inline body",
+        ),
+    ] {
+        let result = parse_ddd(source);
+        assert!(
+            !result.errors.is_empty(),
+            "{label}: expected a parse error, got none"
+        );
+    }
+}
+
+#[test]
+fn machine_references_format_canonically_and_are_idempotent() {
+    let source = r#"
+application A {
+    module m {
+        entity D machine d: K from "machines/d.machine.ts";
+    }
+}
+"#;
+    let formatted = fmt_ddd(source);
+    assert_eq!(
+        formatted,
+        "application A {\n    module m {\n        entity D\n        machine d: K from \"machines/d.machine.ts\";\n    }\n}\n",
+        "the machine reference is already canonical, got:\n{formatted}"
+    );
+    assert_eq!(
+        fmt_ddd(&formatted),
+        formatted,
+        "formatting must be idempotent"
+    );
+}
+
+#[test]
 fn adversarial_machine_inputs_do_not_panic() {
     let sources = [
         "machine",
@@ -1918,6 +2044,9 @@ fn adversarial_machine_inputs_do_not_panic() {
         "machine status: S { Open ->",
         "machine status: S { Open -> Done when }",
         "machine status: S { Open -> Done when ( }",
+        "machine status: S from",
+        "machine status: S from \"d.ts\"",
+        "machine status: S from \"d.ts\" { initial Open; }",
         "application A { module m { entity E machine status: S { initial Open; } machine other: T { initial X; } } }",
     ];
     for source in sources {

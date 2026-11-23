@@ -294,7 +294,8 @@
 //! return_stmt       := "return" raw_expr? ";"
 //! raise             := "error" name "(" (raw_expr ("," raw_expr)*)? ")"
 //! path              := name ("." name)*
-//! machine_decl      := "machine" name ":" type_ref "{" machine_member* "}"
+//! machine_decl      := "machine" name ":" type_ref ( "{" machine_member* "}"
+//!                     | "from" string ";" )
 //! machine_member    := "initial" name ";" | "terminal" name ";"
 //!                    | transition ";"
 //! transition        := name "->" name ("via" name)? guard_clause?

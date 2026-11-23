@@ -191,7 +191,15 @@ impl<'src> Formatter<'src> {
             }
             self.push_text(":", true);
             self.scan_qname();
-            self.scan_body(BodyKind::DddMachine);
+            if matches!(self.peek_tok(), Some(Token::From)) {
+                // The reference form (issue pherolang#388): one line,
+                // `machine <field>: <Enum> from "<path>";` — no body.
+                self.advance();
+                self.take_if(|token| matches!(token, Token::Str(_)));
+                self.take_if(|token| matches!(token, Token::Other(';')));
+            } else {
+                self.scan_body(BodyKind::DddMachine);
+            }
         }
         if invariant_indent {
             self.indent -= 1;
