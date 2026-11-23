@@ -71,6 +71,16 @@ pub fn lower_design_machines(model: &DddModel) -> Vec<Machine> {
     let mut machines = Vec::new();
     for module in &model.modules {
         for design in &module.designs {
+            // A referenced machine's compiled form is the embedded IR (issue
+            // pherolang#388): passthrough, verbatim — the projection ran at
+            // compile time. The mirror lowering below stays for inline
+            // machines, whose authored form is the DSL body.
+            if let Some(machine_ir) = &design.machine_ir {
+                if let Ok(machine) = serde_json::from_value::<Machine>(machine_ir.clone()) {
+                    machines.push(machine);
+                    continue;
+                }
+            }
             let Some(machine) = &design.machine else {
                 continue;
             };
@@ -109,10 +119,10 @@ pub fn lower_design_machines(model: &DddModel) -> Vec<Machine> {
                     event,
                     target: Some(transition.to.clone()),
                     targets: Vec::new(),
-                    guard: transition
-                        .guard
-                        .as_ref()
-                        .map(|text| Guard { name: text.clone() }),
+                    guard: transition.guard.as_ref().map(|text| Guard {
+                        name: text.clone(),
+                        params: None,
+                    }),
                     actions: Vec::new(),
                     description: None,
                     delay_ms: None,

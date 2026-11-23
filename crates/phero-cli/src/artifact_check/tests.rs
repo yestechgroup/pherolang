@@ -570,19 +570,19 @@ fn application_or_modules_keys_classify_as_ddd_model() {
     let fingerprint = r#""domainFingerprint": {"algorithm": "sha256", "value": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855", "packages": []}"#;
     assert_eq!(
         check(&format!(
-            r#"{{"formatVersion": 2, "pheroVersion": "0.3.0", {fingerprint}, "application": {{"name": "Library"}}, "modules": []}}"#
+            r#"{{"formatVersion": 3, "pheroVersion": "0.3.0", {fingerprint}, "application": {{"name": "Library"}}, "modules": []}}"#
         )),
         Ok(ArtifactKind::DddModel)
     );
     assert_eq!(
         check(&format!(
-            r#"{{"formatVersion": 2, "pheroVersion": "0.3.0", {fingerprint}, "application": {{"name": "Library"}}}}"#
+            r#"{{"formatVersion": 3, "pheroVersion": "0.3.0", {fingerprint}, "application": {{"name": "Library"}}}}"#
         )),
         Ok(ArtifactKind::DddModel)
     );
     assert_eq!(
         check(&format!(
-            r#"{{"formatVersion": 2, "pheroVersion": "0.3.0", {fingerprint}, "application": {{"name": "Library"}}, "modules": [{{"name": "core"}}]}}"#
+            r#"{{"formatVersion": 3, "pheroVersion": "0.3.0", {fingerprint}, "application": {{"name": "Library"}}, "modules": [{{"name": "core"}}]}}"#
         )),
         Ok(ArtifactKind::DddModel)
     );
@@ -716,9 +716,9 @@ fn ifml_format_version_gate_names_both_versions() {
 
 #[test]
 fn ddd_format_version_gate_names_both_versions() {
-    let errors = check(r#"{"formatVersion": 3, "application": {"name": "X"}}"#).unwrap_err();
+    let errors = check(r#"{"formatVersion": 4, "application": {"name": "X"}}"#).unwrap_err();
     assert!(
-        errors[0].contains("formatVersion 3") && errors[0].contains("formatVersion 2"),
+        errors[0].contains("formatVersion 4") && errors[0].contains("formatVersion 3"),
         "errors: {errors:?}"
     );
 }
@@ -1056,7 +1056,7 @@ fn legacy_detection_matrix_covers_every_classified_artifact_kind() {
         LegacyMatrixCase {
             name: "DDD design artifact",
             current: json!({
-                "formatVersion": 2,
+                "formatVersion": 3,
                 "pheroVersion": "0.3.0",
                 "domainFingerprint": {
                     "algorithm": "sha256",
@@ -1205,9 +1205,14 @@ fn legacy_detection_matrix_covers_every_classified_artifact_kind() {
                      legacy artifact: {errors:?}",
                     case.name
                 );
+                let supported = if case.name == "DDD design artifact" {
+                    "formatVersion 3"
+                } else {
+                    "formatVersion 2"
+                };
                 assert!(
                     errors.iter().any(|error| error.contains("formatVersion 1")
-                        && error.contains("formatVersion 2")),
+                        && error.contains(supported)),
                     "{}: the gate must name both versions: {errors:?}",
                     case.name
                 );
@@ -1241,7 +1246,7 @@ fn legacy_detection_matrix_covers_every_classified_artifact_kind() {
 /// it (input-capable, so it may fill a parameter), a standalone DTO, and a
 /// service whose signature uses both boundaries.
 const GOOD_DTO_ARTIFACT: &str = r#"{
-  "formatVersion": 2,
+  "formatVersion": 3,
   "pheroVersion": "0.3.0",
   "domainFingerprint": {
     "algorithm": "sha256",

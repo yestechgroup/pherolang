@@ -1,5 +1,5 @@
 {
-  "formatVersion": 2,
+  "formatVersion": 3,
   "pheroVersion": "0.4.0",
   "domainFingerprint": {
     "algorithm": "sha256",

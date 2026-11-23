@@ -699,8 +699,27 @@ pub(crate) fn read_ddd_design(
             }
         }
     }
+    // The machine references (issue pherolang#388): each participating
+    // file's references resolve relative to that file and read from disk —
+    // machine files are not phero surfaces, so they never join the project
+    // snapshot map and carry no open-buffer preference (the dmn-table
+    // posture). A miss is simply not provided; the driver's E0403 names
+    // the written path.
+    let mut machine_sources =
+        phero_driver::project::gather_ddd_machines(&read.path, &read.source, &mut |resolved| {
+            std::fs::read_to_string(resolved).ok()
+        });
+    for (fragment_path, fragment_source) in &gathered.fragments {
+        machine_sources.extend(phero_driver::project::gather_ddd_machines(
+            fragment_path,
+            fragment_source,
+            &mut |resolved| std::fs::read_to_string(resolved).ok(),
+        ));
+    }
     Ok(DddDesignPair {
-        pair: read.pair_with_keys(import_keys, domains, |inputs| inputs)?,
+        pair: read.pair_with_keys(import_keys, domains, |inputs| {
+            inputs.with_machines(machine_sources)
+        })?,
         fragments: gathered.fragments,
     })
 }

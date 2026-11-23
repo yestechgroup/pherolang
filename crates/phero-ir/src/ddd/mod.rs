@@ -166,9 +166,9 @@ mod services;
 pub use application::{Application, Module};
 pub use designs::{
     AggregateMembership, AggregateOrigin, BuiltinRepositoryOp, Design, DesignFlags, DtoDirection,
-    DtoMember, DtoMemberKind, DtoShape, EqualityPolicy, IdentityPolicy, Invariant, QueryPagination,
-    QuerySortKey, QuerySpec, Repository, RepositoryOperation, SortDirection, StateMachine,
-    Stereotype, Transition, ValueSemantics,
+    DtoMember, DtoMemberKind, DtoShape, EqualityPolicy, IdentityPolicy, Invariant,
+    MachineProvenance, QueryPagination, QuerySortKey, QuerySpec, Repository, RepositoryOperation,
+    SortDirection, StateMachine, Stereotype, Transition, ValueSemantics,
 };
 pub use errors::{ErrorDecl, ErrorRef, ErrorScope};
 pub use fingerprint::{DomainFingerprint, DOMAIN_FINGERPRINT_ALGORITHM};
@@ -188,7 +188,14 @@ pub use services::{
 /// Bump whenever the DDD wire format changes incompatibly; this marker is
 /// versioned independently of every other artifact marker — see the
 /// [version-marker inventory](crate#version-markers).
-pub const DDD_MODEL_FORMAT_VERSION: u32 = 2;
+///
+/// 3 (issue pherolang#388): designs carrying a machine *reference* embed
+/// the compiled `machineIr` and its `machineProvenance`. Both fields are
+/// `#[serde(default, skip_serializing_if)]` — machine-less and inline
+/// -machine designs serialize unchanged — but old readers reject the new
+/// artifact by version rather than silently dropping the embed, so the
+/// bump is the loud break.
+pub const DDD_MODEL_FORMAT_VERSION: u32 = 3;
 
 /// The root of a DDD design artifact: one application with its modules of
 /// application services, class designs, and search definitions.

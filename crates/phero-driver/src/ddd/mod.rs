@@ -61,6 +61,9 @@ use graph::{
 };
 use links::fill_resolved_links;
 use machines::{collect_machine_scopes, lower_design_machine, MachineScopes};
+// The entry points resolve machine references per declaring file (issue
+// pherolang#388) before the merged compile.
+pub(crate) use machines::resolve_machine_references;
 use searches::{lower_module_searches, rule_11_bind_searches};
 use services::{
     lower_module_services, rule_17_validate_decision_links, rule_23_validate_emission_links,
@@ -270,6 +273,8 @@ pub(crate) fn compile_ddd_file(
     actors: Option<&[phero_ir::ActorModel]>,
     decisions: &[(String, phero_ir::dmn::DmnModel)],
     events: &[(String, phero_ir::events::EventModel)],
+    externals: &[machines::MachineReference],
+    reference_diagnostics: Vec<Diagnostic>,
 ) -> (Option<DddModel>, Vec<(String, Diagnostic)>) {
     // Stage 1 — the prologue: import-bucket checks feed the shared engine
     // diagnostic block (parse diagnostics, then import diagnostics, then
@@ -285,9 +290,14 @@ pub(crate) fn compile_ddd_file(
         return (None, diags);
     };
 
-    // The design's own diagnostics collect here (tagged with `path` at the
-    // end), after the parse/import/domain diagnostics.
-    let mut local: Vec<Diagnostic> = Vec::new();
+    // The application's machine references (issue pherolang#388) arrived
+    // resolved: the entry points ran [`machines::resolve_machine_references`]
+    // per declaring file before this compile — roots under their path,
+    // fragments under theirs — so the lookups key correctly. Their
+    // diagnostics splice in at the stage-1.5 position (the module stages
+    // below consume the projections); the app compile's spans are
+    // combined-source and remapped to the declaring fragment later.
+    let mut local: Vec<Diagnostic> = reference_diagnostics;
     let packages = lower::domain_namespaces(domains);
 
     // Rule 1 — the base package must name an existing domain package; a
@@ -352,11 +362,17 @@ pub(crate) fn compile_ddd_file(
         .application(application_out)
         .with_errors(error_table.application_errors().to_vec());
 
+    // The application's machine references (issue pherolang#388) arrived
+    // resolved: the entry points ran [`resolve_machine_references`] per
+    // declaring file before this compile, so fragments key under their own
+    // paths. The module stages below consume the projections.
+
     for module in &application.modules {
         // Stage 2 — the module's machine scopes, collected before its
         // services lower so their `when` conditions can bind machine states
         // (the design stage below validates the machines themselves).
-        let machines = collect_machine_scopes(module, &packages, base.as_deref(), &mut local);
+        let machines =
+            collect_machine_scopes(module, &packages, base.as_deref(), externals, &mut local);
 
         // Stage 2.5 — the module's repository scopes (issue pherolang#180):
         // each repository design's name paired with its designed class, so
@@ -408,6 +424,7 @@ pub(crate) fn compile_ddd_file(
             base.as_deref(),
             union.as_ref(),
             &machines,
+            externals,
             expr_context.as_ref(),
             &design_prep,
             &error_table,

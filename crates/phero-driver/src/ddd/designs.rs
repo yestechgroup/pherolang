@@ -7,8 +7,8 @@
 
 use phero_diagnostics::ddd::{E_AGGREGATE_NON_ENTITY, E_DTO_ENTITY_ONLY, E_DTO_OPERATION};
 use phero_ir::ddd::{
-    BuiltinRepositoryOp, DddParam, Design, DesignFlags, Invariant, Repository, RepositoryOperation,
-    Stereotype,
+    BuiltinRepositoryOp, DddParam, Design, DesignFlags, Invariant, MachineProvenance, Repository,
+    RepositoryOperation, Stereotype,
 };
 use phero_syntax::ast as dsl;
 
@@ -17,7 +17,10 @@ use crate::lower::{self, DomainPackage};
 
 use super::dtos::{DesignPrep, DtoForm};
 use super::errors::ErrorTable;
-use super::machines::{class_operations, MachineScopes};
+use super::machines::{
+    class_operations, external_machine_of, project_external_machine, MachineReference,
+    MachineScopes,
+};
 use super::*;
 
 /// Stage 5 — one module's designs: rule 3 (the target resolves), rule 2
@@ -34,6 +37,7 @@ pub(crate) fn lower_module_designs<'a>(
     base: Option<&str>,
     union: Option<&phero_ir::Model>,
     machines: &MachineScopes,
+    externals: &[MachineReference],
     expr_context: Option<&phero_expr::TypeContext>,
     prep: &DesignPrep,
     error_table: &ErrorTable,
@@ -275,18 +279,48 @@ pub(crate) fn lower_module_designs<'a>(
 
         if let Some(machine) = &design.machine {
             if form.is_none() {
-                design_out.machine = lower_design_machine(
-                    machine,
-                    design,
-                    resolved.as_ref(),
-                    union,
-                    packages,
-                    base,
-                    &machines.machines,
-                    expr_context,
-                    design_source,
-                    &mut local,
-                );
+                // A referenced machine (issue pherolang#388) lowers on its
+                // projection: the resolved IR takes the body's place, so
+                // every existing rule runs unchanged.
+                let projected;
+                let machine_to_lower =
+                    match external_machine_of(externals, &module.name.text, &machine.field.text) {
+                        Some(reference) => {
+                            projected = project_external_machine(reference, machine);
+                            // The compiled form and its provenance ride the
+                            // artifact (issue pherolang#388): a consumer reads
+                            // what the compiler verified, without needing
+                            // xstate-parser; the hash is recomputable from the
+                            // artifact alone.
+                            design_out.machine_ir = Some(reference.canonical_value.clone());
+                            design_out.machine_provenance = Some(MachineProvenance::new(
+                                reference.written_path.clone(),
+                                reference.id.clone(),
+                                reference.content_sha256.clone(),
+                            ));
+                            Some(&projected)
+                        }
+                        // A reference that failed resolution has no projection
+                        // — its E0403–E0408 diagnostic is the one report, so
+                        // the design lowers no machine (no cascade of derived
+                        // empty-body errors).
+                        None if machine.source.is_some() => None,
+                        None => Some(machine),
+                    };
+                if let Some(machine) = machine_to_lower {
+                    design_out.machine = lower_design_machine(
+                        machine,
+                        design,
+                        resolved.as_ref(),
+                        union,
+                        packages,
+                        base,
+                        &machines.machines,
+                        expr_context,
+                        design_source,
+                        &mut local,
+                    );
+                }
             }
         }
 

@@ -12,6 +12,7 @@ workspace = true
 [dependencies]
 phero-backend-common = { workspace = true }
 phero-ir = { workspace = true }
+phero-evidence = { workspace = true }
 serde_json = { workspace = true }
 
 [dev-dependencies]

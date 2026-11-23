@@ -402,6 +402,24 @@ pub struct Design {
     /// The class's lifecycle state machine, when designed.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub machine: Option<StateMachine>,
+    /// The compiled machine IR of a **referenced** machine (issue
+    /// pherolang#388): the `xstate_ir::Machine` JSON the authored
+    /// TypeScript/XState file parsed to, canonicalized (keys sorted
+    /// recursively — the IR carries `HashMap`-borne structures whose
+    /// iteration order varies run to run). The artifact is the compiled
+    /// form: a consumer reads what the compiler already verified without
+    /// needing `xstate-parser`. Absent on inline machines (the bridge
+    /// re-derives the xstate form from [`Self::machine`]) and machine-less
+    /// designs (the byte-identical discipline).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub machine_ir: Option<serde_json::Value>,
+    /// The provenance of [`Self::machine_ir`] (issue pherolang#388): the
+    /// referenced path as resolved from the declaring `.ddd` file, the
+    /// authored machine id, and the SHA-256 over the **canonical** IR JSON
+    /// — recomputable from the artifact alone, so `pherolang artifact
+    /// check` can verify the embed untampered. Absent on inline machines.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub machine_provenance: Option<MachineProvenance>,
     /// Child-scoped operations declared by the module's `extend <Class>`
     /// blocks (issue pherolang#179), in declaration order: root-side
     /// operations over the aggregate's contained children. Each carries a
@@ -409,6 +427,38 @@ pub struct Design {
     /// extend-less design omits the key (the byte-identical discipline).
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub child_operations: Vec<ServiceOperation>,
+}
+
+/// The provenance of an embedded machine IR (issue pherolang#388): where
+/// the authored TypeScript/XState file lives, which machine it declared,
+/// and the content hash over the canonical IR JSON (the tamper-evidence
+/// contract — recomputable from the artifact alone).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct MachineProvenance {
+    /// The referenced file path exactly as written in the declaring
+    /// `.ddd` file.
+    pub path: String,
+    /// The authored `createMachine` id — the machine's identity.
+    pub machine_id: String,
+    /// SHA-256 (lowercase hex) over the canonical IR JSON (keys sorted
+    /// recursively, [`crate::canonical_json`]).
+    pub content_sha256: String,
+}
+
+impl MachineProvenance {
+    /// Creates one provenance record.
+    pub fn new(
+        path: impl Into<String>,
+        machine_id: impl Into<String>,
+        content_sha256: impl Into<String>,
+    ) -> Self {
+        Self {
+            path: path.into(),
+            machine_id: machine_id.into(),
+            content_sha256: content_sha256.into(),
+        }
+    }
 }
 
 impl Design {
@@ -429,6 +479,8 @@ impl Design {
             invariants: Vec::new(),
             repository: None,
             machine: None,
+            machine_ir: None,
+            machine_provenance: None,
             child_operations: Vec::new(),
         }
     }
@@ -455,6 +507,8 @@ impl Design {
             invariants: Vec::new(),
             repository: None,
             machine: None,
+            machine_ir: None,
+            machine_provenance: None,
             child_operations: Vec::new(),
         }
     }

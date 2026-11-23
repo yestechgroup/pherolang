@@ -23,7 +23,10 @@
 //! (DD9, issue pherolang#306: read-only shape, predicate typing, sort keys,
 //! and pagination); E0400–E0402 are the named search-document checks (DF3,
 //! issue pherolang#326: an invalid `document DtoName;` reference, a source
-//! mismatch, and an inline-plus-named conflict).
+//! mismatch, and an inline-plus-named conflict); E0403–E0408 are the
+//! machine-reference checks (issue pherolang#388: an unprovided file, an
+//! unparseable one, a file with no machines or several, an anonymous
+//! machine, and a machine outside the flat single-target subset).
 //! Claim a new code by adding a documented constant plus an `Entry` to
 //! `ENTRIES`.
 
@@ -251,6 +254,37 @@ pub const E_DOCUMENT_SOURCE_MISMATCH: &str = "E0401";
 /// `search '<search>' declares both an inline document block and a named
 /// document reference` — exactly one document shape per search (DF3).
 pub const E_DOCUMENT_FORM_CONFLICT: &str = "E0402";
+/// `referenced machine file '<path>' was not provided` — the host (CLI/LSP)
+/// did not supply content for the path a `machine … from "<path>";`
+/// reference names: the file does not exist relative to the declaring
+/// `.ddd` file, or the host could not read it (issue pherolang#388).
+pub const E_MACHINE_REF_NOT_PROVIDED: &str = "E0403";
+/// `referenced machine file '<path>' did not parse: <detail>` — the file
+/// exists but is not a representable XState machine: a TypeScript syntax
+/// error, or one of the fail-closed parser's typed rejections (an inline
+/// guard, a non-literal scalar, …) whose message is carried verbatim
+/// (issue pherolang#388).
+pub const E_MACHINE_REF_PARSE: &str = "E0404";
+/// `referenced machine file '<path>' declares no machine` — the file parsed
+/// as TypeScript but contains no `createMachine` call, so it binds nothing
+/// (issue pherolang#388).
+pub const E_MACHINE_REF_EMPTY: &str = "E0405";
+/// `referenced machine file '<path>' declares several machines: '<id>',
+/// …` — v1 binds exactly one machine per referenced file; a file exporting
+/// several must name one (the deferred `as` clause) or be split
+/// (issue pherolang#388).
+pub const E_MACHINE_REF_SEVERAL: &str = "E0406";
+/// `referenced machine file '<path>' carries no stable machine id` — the
+/// authored `createMachine` declared no `id`, so the parser synthesized an
+/// index-derived one; the id joins the machine's provenance and must be
+/// authored (issue pherolang#388).
+pub const E_MACHINE_REF_NO_ID: &str = "E0407";
+/// `referenced machine '<id>' declares <detail>` — the machine uses a
+/// construct the design mirror cannot carry: a nested (compound or
+/// parallel) state, a transition targeting several states, a transition
+/// with no target, or an automatic (`onDone`/`invoke`/`after`) transition.
+/// The mirror is flat and event-driven (issue pherolang#388).
+pub const E_MACHINE_REF_SHAPE: &str = "E0408";
 
 pub(crate) const ENTRIES: &[Entry] = &[
     Entry {
@@ -668,5 +702,53 @@ pub(crate) const ENTRIES: &[Entry] = &[
         title: "Conflicting search document forms",
         meaning: "`search '<search>' declares both an inline document block and a named document reference` — a search carries exactly one document shape (DF3).",
         fix: "Keep the reusable `document DtoName;` reference or the inline `document { ... }` block, not both.",
+    },
+    Entry {
+        code: E_MACHINE_REF_NOT_PROVIDED,
+        band: DDD_BAND,
+        severity: Severity::Error,
+        title: "Referenced machine file was not provided",
+        meaning: "`referenced machine file '<path>' was not provided` — the `machine … from \"<path>\";` reference names a file the host did not supply: it does not exist relative to the declaring `.ddd` file, or the host could not read it (issue pherolang#388).",
+        fix: "Create the file at the referenced path (relative to the `.ddd` file), or fix the written spelling.",
+    },
+    Entry {
+        code: E_MACHINE_REF_PARSE,
+        band: DDD_BAND,
+        severity: Severity::Error,
+        title: "Referenced machine file did not parse",
+        meaning: "`referenced machine file '<path>' did not parse: <detail>` — the file is not a representable XState machine. The detail carries the parser's typed message verbatim: a TypeScript syntax error, or a fail-closed rejection (an inline guard function, a non-literal scalar, …) — the recommended convention is serialized guards, string or `{ type, params }` objects (issue pherolang#388).",
+        fix: "Author the machine in the serialized XState v5 forms the parser represents; the detail names the construct to rewrite.",
+    },
+    Entry {
+        code: E_MACHINE_REF_EMPTY,
+        band: DDD_BAND,
+        severity: Severity::Error,
+        title: "Referenced machine file declares no machine",
+        meaning: "`referenced machine file '<path>' declares no machine` — the file parsed as TypeScript but contains no `createMachine` call, so the reference binds nothing (issue pherolang#388).",
+        fix: "Add a `createMachine({ id: …, initial: …, states: … })` to the file, or point the reference at the file that carries it.",
+    },
+    Entry {
+        code: E_MACHINE_REF_SEVERAL,
+        band: DDD_BAND,
+        severity: Severity::Error,
+        title: "Referenced machine file declares several machines",
+        meaning: "`referenced machine file '<path>' declares several machines: '<id>', …` — v1 binds exactly one machine per referenced file, so a multi-machine file cannot say which machine the design advances (issue pherolang#388).",
+        fix: "Split the machines into one file each (or defer to the future `as` clause once it exists).",
+    },
+    Entry {
+        code: E_MACHINE_REF_NO_ID,
+        band: DDD_BAND,
+        severity: Severity::Error,
+        title: "Referenced machine carries no stable id",
+        meaning: "`referenced machine file '<path>' carries no stable machine id` — the authored `createMachine` declared no `id`, so the parser synthesized an index-derived placeholder; the id joins the machine's provenance (`machineId` in the artifact) and must be authored (issue pherolang#388).",
+        fix: "Add a stable string `id` to the `createMachine` call.",
+    },
+    Entry {
+        code: E_MACHINE_REF_SHAPE,
+        band: DDD_BAND,
+        severity: Severity::Error,
+        title: "Referenced machine is outside the flat subset",
+        meaning: "`referenced machine '<id>' declares <detail>` — the machine uses a construct the design mirror cannot carry: a nested (compound or parallel) state, a transition targeting several states, a transition with no target, or an automatic (`onDone`/`invoke`/`after`) transition. The mirror is flat and event-driven, closed over the bound enum (issue pherolang#388).",
+        fix: "Flatten the machine's states, give every transition exactly one target, and drive it by events only.",
     },
 ];

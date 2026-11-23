@@ -28,7 +28,9 @@ ariadne = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 sha2 = { workspace = true }
+phero-evidence = { workspace = true }
 xstate-ir = { workspace = true }
+xstate-parser = { workspace = true }
 dsntk-recognizer = { workspace = true }
 dsntk-feel = { workspace = true }
 dsntk-feel-parser = { workspace = true }

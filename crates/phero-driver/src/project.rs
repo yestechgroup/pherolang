@@ -949,6 +949,63 @@ fn gather_tables(
     tables
 }
 
+/// The `machine … from "<path>"` paths one `.ddd` source names (issue
+/// pherolang#388), in source order, duplicates included: the root's
+/// application modules and, for a fragment file, its top-level module
+/// blocks.
+pub fn ddd_machine_ref_paths(source: &str) -> Vec<String> {
+    fn push_design_machines(module: &phero_syntax::DddModule, paths: &mut Vec<String>) {
+        for design in &module.designs {
+            if let Some(machine) = &design.machine {
+                if let Some(reference) = &machine.source {
+                    paths.push(reference.path.clone());
+                }
+            }
+        }
+    }
+    phero_syntax::parse_ddd(source)
+        .ast
+        .map(|ast| {
+            let mut paths = Vec::new();
+            if let Some(application) = &ast.application {
+                for module in &application.modules {
+                    push_design_machines(module, &mut paths);
+                }
+            }
+            for fragment in &ast.fragments {
+                push_design_machines(fragment, &mut paths);
+            }
+            paths
+        })
+        .unwrap_or_default()
+}
+
+/// The machine-reference TypeScript sources one `.ddd` source names (issue
+/// pherolang#388), keyed by the **(design path, machine path)** pair the
+/// driver matches: the design path is `path_key` (the file the source
+/// compiles under — for a fragment, the fragment), the machine path the
+/// string **as written**. `fetch` is asked for each written path resolved
+/// relative to the declaring file's directory; a miss is simply not
+/// provided — the driver's unprovided-reference diagnostic (E0403) names
+/// it. A duplicate reference never re-provides.
+pub fn gather_ddd_machines(
+    path_key: &str,
+    source: &str,
+    fetch: &mut Fetch<'_>,
+) -> Vec<(String, String, String)> {
+    let mut machines: Vec<(String, String, String)> = Vec::new();
+    for written in ddd_machine_ref_paths(source) {
+        if machines.iter().any(|(_, existing, _)| existing == &written) {
+            continue;
+        }
+        let resolved = crate::engine_common::dir_of(path_key).join(&written);
+        if let Some(content) = fetch(resolved.to_string_lossy().as_ref()) {
+            machines.push((path_key.to_string(), written, content));
+        }
+    }
+    machines
+}
+
 /// Gathers the `.evt` contracts one `.dmn` file imports, each resolved relative
 /// to `path_key`'s directory, compiled through the ordinary event pipeline, and
 /// keyed by the import string **as written**. A missing or non-compiling

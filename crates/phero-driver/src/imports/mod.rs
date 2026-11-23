@@ -235,3 +235,66 @@ pub struct DomainImports {
     /// The `import sigil` content of the compilation's files.
     pub sigil: SigilImports,
 }
+
+/// The TypeScript/XState source texts of the `.ddd` machine *references* of
+/// a compilation (issue pherolang#388).
+///
+/// Mirrors [`SchemaImports`]: the driver is filesystem-free, so a host that
+/// reads files from disk (the CLI, the language servers) provides each
+/// referenced machine's source text through this type. Keys are the
+/// **(design file path, machine path)** pair, both exactly as the host
+/// names them — the design path must match the path the `.ddd` file is
+/// compiled under (a fragment is keyed under its *own* path, the file that
+/// declares the reference), and the machine path must match the string
+/// written in the `machine … from "<path>";` declaration. Content provided
+/// for another design file does not satisfy a reference; a declared
+/// reference without provided content is the error diagnostic
+/// ``referenced machine file '<path>' was not provided``.
+///
+/// Re-providing a `(design, machine)` pair replaces the earlier entry (last
+/// wins).
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct MachineSources {
+    entries: ImportEntries,
+}
+
+impl MachineSources {
+    /// Creates an empty provider.
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    /// Provides the TypeScript text for one `(design path, machine path)`
+    /// pair.
+    pub fn provide(
+        mut self,
+        design_path: impl Into<String>,
+        machine_path: impl Into<String>,
+        source: impl Into<String>,
+    ) -> Self {
+        self.entries.insert(design_path, machine_path, source);
+        self
+    }
+
+    /// Inserts one `(design path, machine path)` pair, replacing any earlier
+    /// entry for the same pair.
+    pub fn insert(
+        &mut self,
+        design_path: impl Into<String>,
+        machine_path: impl Into<String>,
+        source: impl Into<String>,
+    ) {
+        self.entries.insert(design_path, machine_path, source);
+    }
+
+    /// The provided TypeScript text for the `(design path, machine path)`
+    /// pair, if any.
+    pub fn get(&self, design_path: &str, machine_path: &str) -> Option<&str> {
+        self.entries.get(design_path, machine_path)
+    }
+
+    /// `true` when no content is provided at all.
+    pub fn is_empty(&self) -> bool {
+        self.entries.is_empty()
+    }
+}

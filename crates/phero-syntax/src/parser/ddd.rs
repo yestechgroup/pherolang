@@ -1897,9 +1897,14 @@ pub(crate) fn junk_ddd_machine_member<'src>(
         })
 }
 
-/// A `machine <field>: <Enum> { ... }` block of a design declaration. Body
-/// members are `initial`/`terminal` lines and transitions; the per-kind
-/// lists fold exactly like the search members.
+/// A `machine <field>: <Enum> { ... }` block of a design declaration, or
+/// its reference form `machine <field>: <Enum> from "<path>";` (issue
+/// pherolang#388). Body members are `initial`/`terminal` lines and
+/// transitions; the per-kind lists fold exactly like the search members.
+/// The two forms are mutually exclusive: after the enum type comes either
+/// the `{` of the inline body or the `from` reference clause — the parser
+/// refuses both (and neither). `from` is the existing lexer keyword token
+/// ([`Token::From`]), special here exactly as it is in the DTO suffix.
 pub(crate) fn ddd_machine_decl<'src>(
 ) -> impl Parser<'src, Tokens<'src>, DddMachine, MoxExtra<'src>> + Clone {
     let initial = ddd_keyword(ddd::INITIAL)
@@ -1913,20 +1918,35 @@ pub(crate) fn ddd_machine_decl<'src>(
         terminal.map(DddMachineMember::Terminal),
         ddd_machine_transition().map(DddMachineMember::Transition),
     ));
+    let inline_body = kw(Token::LBrace)
+        .ignore_then(member.repeated().collect::<Vec<_>>())
+        .then_ignore(kw(Token::RBrace))
+        .map(|members| (members, None));
+    let reference = kw(Token::From)
+        .ignore_then(string_lit())
+        .then_ignore(kw(Token::Other(';')))
+        .map_with(|path, e| {
+            (
+                Vec::new(),
+                Some(DddMachineSource {
+                    path,
+                    span: e.span(),
+                }),
+            )
+        });
     ddd_keyword(ddd::MACHINE)
         .ignore_then(name())
         .then_ignore(kw(Token::Other(':')))
         .then(tref())
-        .then_ignore(kw(Token::LBrace))
-        .then(member.repeated().collect::<Vec<_>>())
-        .then_ignore(kw(Token::RBrace))
-        .map_with(|((field, type_), members), e| {
+        .then(inline_body.or(reference))
+        .map_with(|((field, type_), (members, source)), e| {
             let mut machine = DddMachine {
                 field,
                 type_,
                 initial: None,
                 terminals: Vec::new(),
                 transitions: Vec::new(),
+                source,
                 span: e.span(),
             };
             for member in members {

@@ -44,6 +44,7 @@ deliberately has no write path.
 | `phero-driver` `golden_artifact` | `tests/conformance/artifacts/*.phero.json` (domain and `.actors.phero.json` pairs) |
 | `phero-driver` `ddd_golden` | `tests/conformance/ddd/*.ddd.json`, including `ddd/app/app.ddd.json` |
 | `phero-driver` `ddd_machine_golden` | `tests/conformance/ddd/payrun.ddd.json`, `payrun.xstate.json` |
+| `phero-driver` `ddd_machine_refs` | `tests/conformance/ddd/payrun-ref.ddd.json` |
 | `phero-driver` `evt_golden` | `tests/conformance/events/orders.evt.json` |
 | `phero-driver` `deploy_golden` | `tests/conformance/deploy/svc.deploy.json` |
 | `phero-driver` `usecase_golden` | `tests/conformance/usecases/delivery.uc.json` |

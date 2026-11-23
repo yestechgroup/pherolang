@@ -118,7 +118,7 @@ const GOOD_INSTANCE: &str = r#"{
 "#;
 
 const GOOD_DDD_ARTIFACT: &str = r#"{
-  "formatVersion": 2,
+  "formatVersion": 3,
   "pheroVersion": "0.3.0",
   "domainFingerprint": {
     "algorithm": "sha256",
@@ -219,16 +219,36 @@ fn artifact_check_rejects_a_ddd_artifact_missing_a_resolved_companion() {
 
 #[test]
 fn artifact_check_rejects_unsupported_format_version_and_names_it() {
-    let cases: Vec<(&str, String)> = vec![
-        ("ir_v3.phero.json", version_bump(GOOD_IR_ARTIFACT)),
+    // Each case: (name, artifact, the claimed (wrong) version, the
+    // supported version). A root whose supported version is 2 claims 3;
+    // the DDD root reads 3, so its wrong claim is 4.
+    let cases: Vec<(&str, String, &str, &str)> = vec![
+        (
+            "ir_v3.phero.json",
+            version_bump(GOOD_IR_ARTIFACT),
+            "formatVersion 3",
+            "formatVersion 2",
+        ),
         (
             "actor_v3.actors.phero.json",
             version_bump(GOOD_ACTOR_ARTIFACT),
+            "formatVersion 3",
+            "formatVersion 2",
         ),
-        ("instance_v3.json", version_bump(GOOD_INSTANCE)),
-        ("ddd_v3.ddd.json", version_bump(GOOD_DDD_ARTIFACT)),
+        (
+            "instance_v3.json",
+            version_bump(GOOD_INSTANCE),
+            "formatVersion 3",
+            "formatVersion 2",
+        ),
+        (
+            "ddd_v4.ddd.json",
+            GOOD_DDD_ARTIFACT.replace("\"formatVersion\": 3", "\"formatVersion\": 4"),
+            "formatVersion 4",
+            "formatVersion 3",
+        ),
     ];
-    for (name, contents) in cases {
+    for (name, contents, wrong, supported) in cases {
         let path = write_artifact(name, &contents);
         let output = pherolang()
             .args(["artifact", "check", path.to_str().unwrap()])
@@ -237,12 +257,12 @@ fn artifact_check_rejects_unsupported_format_version_and_names_it() {
         assert_eq!(output.status.code(), Some(1), "{name} must fail");
         let stderr = String::from_utf8_lossy(&output.stderr);
         assert!(
-            stderr.contains("formatVersion 3"),
-            "{name} must name the found version; stderr was: {stderr}"
+            stderr.contains(wrong),
+            "{name} must name the found version ({wrong}); stderr was: {stderr}"
         );
         assert!(
-            stderr.contains("formatVersion 2"),
-            "{name} must name the supported version; stderr was: {stderr}"
+            stderr.contains(supported),
+            "{name} must name the supported version ({supported}); stderr was: {stderr}"
         );
         assert!(
             stderr.contains(name),
@@ -598,7 +618,7 @@ fn graph_edges_carry_non_empty_endpoints() {
 /// it and a standalone DTO (which carries no `class`), with a service that
 /// uses both boundaries in its signature.
 const GOOD_DTO_DDD_ARTIFACT: &str = r#"{
-  "formatVersion": 2,
+  "formatVersion": 3,
   "pheroVersion": "0.3.0",
   "domainFingerprint": {
     "algorithm": "sha256",

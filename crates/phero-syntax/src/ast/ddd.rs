@@ -606,13 +606,31 @@ pub struct DddMachine {
     /// The enum the states are drawn from.
     pub type_: TypeRef,
     /// The `initial <State>;` line, when written; the driver requires exactly
-    /// one.
+    /// one. Always absent on the reference form.
     pub initial: Option<Name>,
-    /// The `terminal <State>;` lines in source order.
+    /// The `terminal <State>;` lines in source order. Always empty on the
+    /// reference form.
     pub terminals: Vec<Name>,
-    /// The transitions in source order.
+    /// The transitions in source order. Always empty on the reference form.
     pub transitions: Vec<DddMachineTransition>,
+    /// The `from "<path>";` external reference (issue pherolang#388): the
+    /// lifecycle is authored in a TypeScript/XState file bound by reference;
+    /// the declaration head still owns field + enum. `None` for the inline
+    /// body form — the parser refuses both forms at once.
+    pub source: Option<DddMachineSource>,
     /// Span of the whole declaration, `machine` keyword included.
+    pub span: Span,
+}
+
+/// The `from "<path>";` reference clause of a [`DddMachine`] (issue
+/// pherolang#388): the path is kept exactly as written; resolving it
+/// relative to the declaring file and reading the content is the host's
+/// job (the driver stays filesystem-free, the `import schema` discipline).
+#[derive(Debug, Clone, PartialEq)]
+pub struct DddMachineSource {
+    /// The referenced file path exactly as written.
+    pub path: String,
+    /// Span of the whole clause, `from` included.
     pub span: Span,
 }
 

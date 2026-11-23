@@ -138,6 +138,90 @@ fn ir_ddd_file_emits_the_machine_and_its_derivations() {
 }
 
 #[test]
+fn check_succeeds_on_the_machine_reference_fixture() {
+    // Project mode: the reference resolves relative to the fixture, the
+    // referenced file reads from disk, the design compiles whole.
+    let path = workspace_root().join("tests/conformance/ddd/payrun-ref.ddd");
+    let output = pherolang()
+        .args(["check", path.to_str().unwrap()])
+        .output()
+        .expect("run pherolang check");
+    assert!(
+        output.status.success(),
+        "stderr: {:?}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+}
+
+#[test]
+fn ir_ddd_reference_emits_the_embed_and_provenance() {
+    let path = workspace_root().join("tests/conformance/ddd/payrun-ref.ddd");
+    let output = pherolang()
+        .args(["ir", path.to_str().unwrap()])
+        .output()
+        .expect("run pherolang ir");
+    assert!(
+        output.status.success(),
+        "stderr: {:?}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let emitted = phero_ir::ddd::DddModel::from_json(&String::from_utf8_lossy(&output.stdout))
+        .expect("stdout is DDD design JSON");
+    let design = &emitted.modules[0].designs[0];
+    let provenance = design
+        .machine_provenance
+        .as_ref()
+        .expect("the provenance rides the artifact");
+    assert_eq!(provenance.path, "machines/payrun.machine.ts");
+    assert_eq!(provenance.machine_id, "payrun");
+    let machine_ir = design.machine_ir.as_ref().expect("the embed rides too");
+    assert_eq!(machine_ir["id"], "payrun");
+    assert_eq!(machine_ir["initial"], "Draft");
+}
+
+#[test]
+fn a_missing_machine_file_is_a_clean_error() {
+    // The reference names a file that does not exist: E0403 on stderr, the
+    // written path named, exit 1 — the import-schema posture, no panic.
+    let dir = std::env::temp_dir().join(format!(
+        "pherolang-cli-388-{}-{}",
+        std::process::id(),
+        std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .expect("clock")
+            .as_nanos()
+    ));
+    std::fs::create_dir_all(&dir).expect("scratch dir");
+    std::fs::write(dir.join("domain.mox"), DDD_DOMAIN).expect("write mox");
+    std::fs::write(
+        dir.join("ref.ddd"),
+        r#"import "domain.mox"
+
+application Demo {
+    module core {
+        entity Thing
+        machine state: ThingState from "machines/thing.machine.ts";
+    }
+}
+"#,
+    )
+    .expect("write ddd");
+    let output = pherolang()
+        .args(["check", dir.join("ref.ddd").to_str().unwrap()])
+        .output()
+        .expect("run pherolang check");
+    assert!(!output.status.success(), "the missing file must fail");
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(
+        stderr
+            .contains("E0403 referenced machine file 'machines/thing.machine.ts' was not provided"),
+        "the written path is named: {stderr}"
+    );
+    assert!(!stderr.contains("panicked"), "no panic: {stderr}");
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[test]
 fn fmt_check_passes_on_the_machine_ddd_fixture() {
     let path = workspace_root().join("tests/conformance/ddd/payrun.ddd");
     let output = pherolang()

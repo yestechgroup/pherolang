@@ -16,6 +16,7 @@
 use std::collections::{BTreeMap, BTreeSet};
 use std::fmt;
 
+use phero_evidence::sha256_hex;
 use phero_ir::ddd::{
     DddModel, DddParam, DddTypeRef, DecisionRef, Delegation, Design, DomainFingerprint,
     DtoDirection, DtoMember, DtoMemberKind, DtoShape, EqualityPolicy, ErrorDecl, ErrorRef,
@@ -734,6 +735,14 @@ fn validate_design(
     }
     validate_semantics(design, path, violations);
 
+    // The machine-reference embed (issue pherolang#388): the artifact is
+    // the compiled form, so the pieces must all be present or all absent,
+    // the IR must parse as machine IR, the hash must match the canonical
+    // embed (recomputable from the artifact alone — tamper evidence), and
+    // the mirror must agree with the authored machine. Nothing here needs
+    // the sources.
+    validate_machine_embed(design, path, violations);
+
     match design.stereotype {
         Stereotype::Entity => {
             if design.flags.non_persistent {
@@ -810,6 +819,179 @@ fn validate_design(
 /// carries **exactly** the fixed strict block, and an `entity`/`dto` design
 /// carries none. Every violation is reported at the design's `semantics`
 /// path, so a hand-edited artifact is diagnosable without the compiler.
+/// The machine-reference embed's artifact-only contract (issue
+/// pherolang#388): `machineIr` and `machineProvenance` are all-or-nothing,
+/// both require the mirror, the IR parses as machine IR (the shallow
+/// artifact-only shape — the full parse was the compiler's job), the
+/// provenance hash matches the canonical embed (recomputable from the
+/// artifact alone — the tamper evidence), and the mirror's
+/// initial/terminals/transitions agree with the authored machine. A
+/// non-entity design carries none of it.
+fn validate_machine_embed(design: &Design, path: &str, violations: &mut Vec<Violation>) {
+    let embed = design.machine_ir.as_ref();
+    let provenance = design.machine_provenance.as_ref();
+
+    if provenance.is_some() && embed.is_none() {
+        violations.push(Violation::new(
+            format!("{path}.machineProvenance"),
+            "a machine provenance without its embedded machineIr; the artifact lost \
+             the compiled form it attests",
+        ));
+    }
+    if embed.is_some() && provenance.is_none() {
+        violations.push(Violation::new(
+            format!("{path}.machineIr"),
+            "an embedded machineIr without its provenance; the artifact lost the \
+             content hash",
+        ));
+    }
+    if (embed.is_some() || provenance.is_some()) && design.machine.is_none() {
+        violations.push(Violation::new(
+            format!("{path}.machineIr"),
+            "an embedded machine with no design machine; only a referenced machine \
+             carries one",
+        ));
+    }
+    if design.stereotype != Stereotype::Entity && (embed.is_some() || provenance.is_some()) {
+        violations.push(Violation::new(
+            format!("{path}.machineIr"),
+            "only an entity design may embed a machine IR",
+        ));
+    }
+
+    let Some(machine_ir) = embed else {
+        return;
+    };
+    let Some(provenance) = provenance else {
+        return;
+    };
+
+    // The shallow machine-IR shape: a string id, a string initial, and an
+    // array of named states. Anything else is not machine IR.
+    let id = machine_ir.get("id").and_then(serde_json::Value::as_str);
+    let ir_initial = machine_ir
+        .get("initial")
+        .and_then(serde_json::Value::as_str);
+    let states = machine_ir
+        .get("states")
+        .and_then(serde_json::Value::as_array);
+    if id.is_none() || ir_initial.is_none() || states.is_none() {
+        violations.push(Violation::new(
+            format!("{path}.machineIr"),
+            "the embedded machineIr is not machine IR (no string id, initial, and \
+             states)",
+        ));
+        return;
+    }
+
+    // Tamper evidence: the hash is over the canonical embed, recomputable
+    // from the artifact alone.
+    let canonical = phero_ir::canonical_json(machine_ir);
+    if sha256_hex(canonical.as_bytes()) != provenance.content_sha256 {
+        violations.push(Violation::new(
+            format!("{path}.machineProvenance"),
+            "the content hash does not match the embedded machineIr; the embed was \
+             edited after compilation",
+        ));
+    }
+
+    // The mirror must agree with the authored machine: same initial, the
+    // terminals exactly the final states, the transitions exactly the
+    // authored event-driven edges.
+    let Some(machine) = design.machine.as_ref() else {
+        return;
+    };
+    let Some(ir_initial) = ir_initial else {
+        return;
+    };
+    let Some(states) = states else {
+        return;
+    };
+    let named = |state: &serde_json::Value| {
+        state
+            .get("name")
+            .and_then(serde_json::Value::as_str)
+            .unwrap_or_default()
+            .to_string()
+    };
+    if ir_initial != machine.initial {
+        violations.push(Violation::new(
+            format!("{path}.machine"),
+            format!(
+                "the machine's initial '{}' disagrees with the authored machine's \
+                 initial '{ir_initial}'",
+                machine.initial
+            ),
+        ));
+    }
+    let mut ir_terminals: Vec<String> = states
+        .iter()
+        .filter(|state| state.get("type").and_then(serde_json::Value::as_str) == Some("final"))
+        .map(named)
+        .collect();
+    ir_terminals.sort();
+    let mut mirror_terminals = machine.terminals.clone();
+    mirror_terminals.sort();
+    if ir_terminals != mirror_terminals {
+        violations.push(Violation::new(
+            format!("{path}.machine"),
+            format!(
+                "the machine's terminals {mirror_terminals:?} disagree with the \
+                 authored machine's final states {ir_terminals:?}"
+            ),
+        ));
+    }
+    let mut ir_edges: Vec<(String, String, String)> = states
+        .iter()
+        .flat_map(|state| {
+            let from = named(state);
+            state
+                .get("transitions")
+                .and_then(serde_json::Value::as_array)
+                .map(|transitions| {
+                    transitions
+                        .iter()
+                        .map(|transition| {
+                            (
+                                from.clone(),
+                                transition
+                                    .get("target")
+                                    .and_then(serde_json::Value::as_str)
+                                    .unwrap_or_default()
+                                    .to_string(),
+                                transition
+                                    .get("event")
+                                    .and_then(serde_json::Value::as_str)
+                                    .unwrap_or_default()
+                                    .to_string(),
+                            )
+                        })
+                        .collect::<Vec<_>>()
+                })
+                .unwrap_or_default()
+        })
+        .collect();
+    ir_edges.sort();
+    let mut mirror_edges: Vec<(String, String, String)> = machine
+        .transitions
+        .iter()
+        .map(|transition| {
+            (
+                transition.from.clone(),
+                transition.to.clone(),
+                transition.trigger.clone().unwrap_or_default(),
+            )
+        })
+        .collect();
+    mirror_edges.sort();
+    if ir_edges != mirror_edges {
+        violations.push(Violation::new(
+            format!("{path}.machine"),
+            "the machine's transitions disagree with the authored machine's edges".to_string(),
+        ));
+    }
+}
+
 fn validate_semantics(design: &Design, path: &str, violations: &mut Vec<Violation>) {
     let semantics_path = format!("{path}.semantics");
     match design.stereotype {

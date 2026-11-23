@@ -252,6 +252,8 @@ pub use graph::{GraphApplication, GraphEdge, GraphModel, GraphNode};
 pub use model::{Annotation, Model, Package};
 pub use types::{DefaultValue, Multiplicity, OppositeRef, PrimitiveType, TypeRef, Upper};
 pub use vocabulary::{VocabularyDef, VocabularyEntry, VocabularyFacet};
+pub use wire::canonical_json;
+pub use wire::canonical_json_value;
 
 #[cfg(test)]
 mod tests;
