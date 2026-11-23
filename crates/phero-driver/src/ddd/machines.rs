@@ -3,7 +3,7 @@
 //! machine-local helpers.
 
 use phero_diagnostics::ddd::{
-    E_MACHINE_REF_EMPTY, E_MACHINE_REF_NO_ID, E_MACHINE_REF_NOT_PROVIDED, E_MACHINE_REF_PARSE,
+    E_MACHINE_REF_EMPTY, E_MACHINE_REF_NOT_PROVIDED, E_MACHINE_REF_NO_ID, E_MACHINE_REF_PARSE,
     E_MACHINE_REF_SEVERAL, E_MACHINE_REF_SHAPE,
 };
 use phero_ir::ddd::{StateMachine, Transition};
@@ -52,18 +52,15 @@ pub(crate) fn collect_machine_scopes(
         // diagnostic is the one report, so the design contributes no
         // scope at all (no cascade of derived empty-body errors).
         let projected;
-        let machine = match external_machine_of(
-            externals,
-            &module.name.text,
-            &machine_decl.field.text,
-        ) {
-            Some(reference) => {
-                projected = project_external_machine(reference, machine_decl);
-                &projected
-            }
-            None if machine_decl.source.is_some() => continue,
-            None => machine_decl,
-        };
+        let machine =
+            match external_machine_of(externals, &module.name.text, &machine_decl.field.text) {
+                Some(reference) => {
+                    projected = project_external_machine(reference, machine_decl);
+                    &projected
+                }
+                None if machine_decl.source.is_some() => continue,
+                None => machine_decl,
+            };
         let help = format!(
             "the machine '{}: {}' of module '{}' must target a class declared \
              in the imported domains",
@@ -251,10 +248,11 @@ pub(crate) fn resolve_machine_references(
                         ),
                         Some(reference.span),
                     )
-                    .with_help(format!(
+                    .with_help(
                         "the path resolves relative to the declaring design file; \
                          create the file or fix the spelling"
-                    )),
+                            .to_string(),
+                    ),
                 );
                 continue;
             };
@@ -345,8 +343,8 @@ pub(crate) fn resolve_machine_references(
                 field: machine.field.text.clone(),
                 written_path: reference.path.clone(),
                 id: parsed.id.clone(),
-                canonical_value: canonical_value,
-                content_sha256: content_sha256,
+                canonical_value,
+                content_sha256,
                 machine: parsed.clone(),
             });
         }
@@ -378,16 +376,10 @@ fn check_machine_shape(machine: &xstate_ir::Machine) -> Result<(), String> {
         }
         for transition in state.on_done.iter().chain(state.transitions.iter()) {
             if transition.event.is_empty() {
-                return Err(format!(
-                    "an automatic transition on state '{}'",
-                    state.name
-                ));
+                return Err(format!("an automatic transition on state '{}'", state.name));
             }
             if transition.delay_ms.is_some() {
-                return Err(format!(
-                    "a timed transition on state '{}'",
-                    state.name
-                ));
+                return Err(format!("a timed transition on state '{}'", state.name));
             }
             if transition.targets.len() > 1 {
                 return Err(format!(

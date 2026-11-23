@@ -872,7 +872,9 @@ fn validate_machine_embed(design: &Design, path: &str, violations: &mut Vec<Viol
     let ir_initial = machine_ir
         .get("initial")
         .and_then(serde_json::Value::as_str);
-    let states = machine_ir.get("states").and_then(serde_json::Value::as_array);
+    let states = machine_ir
+        .get("states")
+        .and_then(serde_json::Value::as_array);
     if id.is_none() || ir_initial.is_none() || states.is_none() {
         violations.push(Violation::new(
             format!("{path}.machineIr"),
@@ -985,10 +987,7 @@ fn validate_machine_embed(design: &Design, path: &str, violations: &mut Vec<Viol
     if ir_edges != mirror_edges {
         violations.push(Violation::new(
             format!("{path}.machine"),
-            format!(
-                "the machine's transitions disagree with the authored machine's \
-                 edges"
-            ),
+            "the machine's transitions disagree with the authored machine's edges".to_string(),
         ));
     }
 }

@@ -272,8 +272,7 @@ impl MachineSources {
         machine_path: impl Into<String>,
         source: impl Into<String>,
     ) -> Self {
-        self.entries
-            .insert(design_path, machine_path, source);
+        self.entries.insert(design_path, machine_path, source);
         self
     }
 

@@ -1949,14 +1949,16 @@ application A {
 #[test]
 fn machine_reference_and_inline_body_are_mutually_exclusive() {
     // Both forms at once is a parse error, not a silent merge.
-    let source = "application A { module m { entity D machine d: K from \"d.ts\" { initial Open; } } }";
+    let source =
+        "application A { module m { entity D machine d: K from \"d.ts\" { initial Open; } } }";
     let result = parse_ddd(source);
     assert!(
         !result.errors.is_empty(),
         "a machine cannot carry both a reference and an inline body"
     );
     // And the inline body after nothing at all stays the inline form.
-    let inline = parse_ddd("application A { module m { entity D machine d: K { initial Open; } } }");
+    let inline =
+        parse_ddd("application A { module m { entity D machine d: K { initial Open; } } }");
     assert!(
         inline.errors.is_empty(),
         "unexpected errors: {:?}",
@@ -1974,8 +1976,14 @@ fn machine_reference_and_inline_body_are_mutually_exclusive() {
         .machine
         .clone()
         .expect("the machine");
-    assert!(machine.source.is_none(), "the inline form carries no source");
-    assert!(machine.initial.is_some(), "the inline form keeps its members");
+    assert!(
+        machine.source.is_none(),
+        "the inline form carries no source"
+    );
+    assert!(
+        machine.initial.is_some(),
+        "the inline form keeps its members"
+    );
 }
 
 #[test]

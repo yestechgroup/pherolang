@@ -995,10 +995,7 @@ pub fn gather_ddd_machines(
 ) -> Vec<(String, String, String)> {
     let mut machines: Vec<(String, String, String)> = Vec::new();
     for written in ddd_machine_ref_paths(source) {
-        if machines
-            .iter()
-            .any(|(_, existing, _)| existing == &written)
-        {
+        if machines.iter().any(|(_, existing, _)| existing == &written) {
             continue;
         }
         let resolved = crate::engine_common::dir_of(path_key).join(&written);

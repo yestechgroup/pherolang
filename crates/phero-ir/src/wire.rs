@@ -316,6 +316,43 @@ macro_rules! total_order_float {
 
 pub(crate) use total_order_float;
 
+/// The canonical form of a JSON value: **every object's keys sorted,
+/// recursively** (arrays keep their order), serialized to compact JSON.
+///
+/// This is the determinism contract for embedded foreign JSON (issue
+/// pherolang#388): the machine IR carries `HashMap`-borne structures whose
+/// iteration order varies run to run, so a value embedded into an artifact
+/// must be projected through this function first — or the same authored
+/// file serializes differently on every compile and no golden, hash, or
+/// receipt can pin it. The embedded form and the provenance hash are both
+/// taken over these bytes, which also makes the hash recomputable from the
+/// artifact alone.
+pub fn canonical_json(value: &serde_json::Value) -> String {
+    let canonical = canonical_json_value(value);
+    serde_json::to_string(&canonical).expect("canonical JSON is always serializable")
+}
+
+/// The canonical form of a JSON value as a value: objects rebuilt with
+/// their keys in sorted order, recursively. Embed this form so the
+/// artifact's own serialization is deterministic.
+pub fn canonical_json_value(value: &serde_json::Value) -> serde_json::Value {
+    match value {
+        serde_json::Value::Object(map) => {
+            let mut keys: Vec<&String> = map.keys().collect();
+            keys.sort();
+            let sorted = keys
+                .into_iter()
+                .map(|key| (key.clone(), canonical_json_value(&map[key])))
+                .collect::<serde_json::Map<String, serde_json::Value>>();
+            serde_json::Value::Object(sorted)
+        }
+        serde_json::Value::Array(items) => {
+            serde_json::Value::Array(items.iter().map(canonical_json_value).collect())
+        }
+        other => other.clone(),
+    }
+}
+
 #[cfg(test)]
 pub(crate) mod tests {
     use serde::de::DeserializeOwned;
@@ -511,42 +548,5 @@ pub(crate) mod tests {
         let parsed: T = from_json(&pretty).expect("sample must round-trip through to_json_pretty");
         assert_eq!(&parsed, sample);
         assert_eq!(to_json_pretty(&parsed).expect("re-serialize"), pretty);
-    }
-}
-
-/// The canonical form of a JSON value: **every object's keys sorted,
-/// recursively** (arrays keep their order), serialized to compact JSON.
-///
-/// This is the determinism contract for embedded foreign JSON (issue
-/// pherolang#388): the machine IR carries `HashMap`-borne structures whose
-/// iteration order varies run to run, so a value embedded into an artifact
-/// must be projected through this function first — or the same authored
-/// file serializes differently on every compile and no golden, hash, or
-/// receipt can pin it. The embedded form and the provenance hash are both
-/// taken over these bytes, which also makes the hash recomputable from the
-/// artifact alone.
-pub fn canonical_json(value: &serde_json::Value) -> String {
-    let canonical = canonical_json_value(value);
-    serde_json::to_string(&canonical).expect("canonical JSON is always serializable")
-}
-
-/// The canonical form of a JSON value as a value: objects rebuilt with
-/// their keys in sorted order, recursively. Embed this form so the
-/// artifact's own serialization is deterministic.
-pub fn canonical_json_value(value: &serde_json::Value) -> serde_json::Value {
-    match value {
-        serde_json::Value::Object(map) => {
-            let mut keys: Vec<&String> = map.keys().collect();
-            keys.sort();
-            let sorted = keys
-                .into_iter()
-                .map(|key| (key.clone(), canonical_json_value(&map[key])))
-                .collect::<serde_json::Map<String, serde_json::Value>>();
-            serde_json::Value::Object(sorted)
-        }
-        serde_json::Value::Array(items) => {
-            serde_json::Value::Array(items.iter().map(canonical_json_value).collect())
-        }
-        other => other.clone(),
     }
 }

@@ -1925,7 +1925,15 @@ pub(crate) fn ddd_machine_decl<'src>(
     let reference = kw(Token::From)
         .ignore_then(string_lit())
         .then_ignore(kw(Token::Other(';')))
-        .map_with(|path, e| (Vec::new(), Some(DddMachineSource { path, span: e.span() })));
+        .map_with(|path, e| {
+            (
+                Vec::new(),
+                Some(DddMachineSource {
+                    path,
+                    span: e.span(),
+                }),
+            )
+        });
     ddd_keyword(ddd::MACHINE)
         .ignore_then(name())
         .then_ignore(kw(Token::Other(':')))

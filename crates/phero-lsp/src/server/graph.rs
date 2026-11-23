@@ -653,9 +653,7 @@ impl PheroBackend {
                             written.hash(&mut hasher);
                             hash_text(
                                 &mut hasher,
-                                machine_fetch(
-                                    directory.join(&written).to_string_lossy().as_ref(),
-                                ),
+                                machine_fetch(directory.join(&written).to_string_lossy().as_ref()),
                             );
                         }
                     }

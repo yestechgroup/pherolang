@@ -13,10 +13,10 @@
       "sha256": "a40798a71597e4392aab0bb8b6baa74130c9859cf300bd294260edd9ccfc6892"
     },
     {
-      "formatVersion": 2,
+      "formatVersion": 3,
       "kind": "dddDesign",
       "path": "support.ddd.json",
-      "sha256": "e1560e99214a3af20d2917d7de873fb23317e7f570f046daaaaec58cef142b8c"
+      "sha256": "6db786da28575de9cefbadcb136e96aaa76308de649d8948b93600bc158ec8c5"
     },
     {
       "formatVersion": 2,

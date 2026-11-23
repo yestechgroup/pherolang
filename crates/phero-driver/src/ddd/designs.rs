@@ -17,7 +17,10 @@ use crate::lower::{self, DomainPackage};
 
 use super::dtos::{DesignPrep, DtoForm};
 use super::errors::ErrorTable;
-use super::machines::{class_operations, external_machine_of, project_external_machine, MachineScopes, MachineReference};
+use super::machines::{
+    class_operations, external_machine_of, project_external_machine, MachineReference,
+    MachineScopes,
+};
 use super::*;
 
 /// Stage 5 — one module's designs: rule 3 (the target resolves), rule 2
@@ -280,33 +283,30 @@ pub(crate) fn lower_module_designs<'a>(
                 // projection: the resolved IR takes the body's place, so
                 // every existing rule runs unchanged.
                 let projected;
-                let machine_to_lower = match external_machine_of(
-                    externals,
-                    &module.name.text,
-                    &machine.field.text,
-                ) {
-                    Some(reference) => {
-                        projected = project_external_machine(reference, machine);
-                        // The compiled form and its provenance ride the
-                        // artifact (issue pherolang#388): a consumer reads
-                        // what the compiler verified, without needing
-                        // xstate-parser; the hash is recomputable from the
-                        // artifact alone.
-                        design_out.machine_ir = Some(reference.canonical_value.clone());
-                        design_out.machine_provenance = Some(MachineProvenance::new(
-                            reference.written_path.clone(),
-                            reference.id.clone(),
-                            reference.content_sha256.clone(),
-                        ));
-                        Some(&projected)
-                    }
-                    // A reference that failed resolution has no projection
-                    // — its E0403–E0408 diagnostic is the one report, so
-                    // the design lowers no machine (no cascade of derived
-                    // empty-body errors).
-                    None if machine.source.is_some() => None,
-                    None => Some(machine),
-                };
+                let machine_to_lower =
+                    match external_machine_of(externals, &module.name.text, &machine.field.text) {
+                        Some(reference) => {
+                            projected = project_external_machine(reference, machine);
+                            // The compiled form and its provenance ride the
+                            // artifact (issue pherolang#388): a consumer reads
+                            // what the compiler verified, without needing
+                            // xstate-parser; the hash is recomputable from the
+                            // artifact alone.
+                            design_out.machine_ir = Some(reference.canonical_value.clone());
+                            design_out.machine_provenance = Some(MachineProvenance::new(
+                                reference.written_path.clone(),
+                                reference.id.clone(),
+                                reference.content_sha256.clone(),
+                            ));
+                            Some(&projected)
+                        }
+                        // A reference that failed resolution has no projection
+                        // — its E0403–E0408 diagnostic is the one report, so
+                        // the design lowers no machine (no cascade of derived
+                        // empty-body errors).
+                        None if machine.source.is_some() => None,
+                        None => Some(machine),
+                    };
                 if let Some(machine) = machine_to_lower {
                     design_out.machine = lower_design_machine(
                         machine,

@@ -1814,8 +1814,7 @@ fn machine_ir_embeds_canonically_sorted_keys() {
     let canonical_b = crate::canonical_json(&insertion_b);
     assert_eq!(canonical_a, canonical_b);
     assert_eq!(
-        canonical_a,
-        r#"{"a":{"b":3,"y":{"m":1,"n":true}},"z":1}"#,
+        canonical_a, r#"{"a":{"b":3,"y":{"m":1,"n":true}},"z":1}"#,
         "keys sort recursively, containers included"
     );
 }

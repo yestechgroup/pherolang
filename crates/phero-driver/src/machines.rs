@@ -119,10 +119,10 @@ pub fn lower_design_machines(model: &DddModel) -> Vec<Machine> {
                     event,
                     target: Some(transition.to.clone()),
                     targets: Vec::new(),
-                    guard: transition
-                        .guard
-                        .as_ref()
-                        .map(|text| Guard { name: text.clone(), params: None }),
+                    guard: transition.guard.as_ref().map(|text| Guard {
+                        name: text.clone(),
+                        params: None,
+                    }),
                     actions: Vec::new(),
                     description: None,
                     delay_ms: None,

@@ -166,9 +166,9 @@ mod services;
 pub use application::{Application, Module};
 pub use designs::{
     AggregateMembership, AggregateOrigin, BuiltinRepositoryOp, Design, DesignFlags, DtoDirection,
-    DtoMember, DtoMemberKind, DtoShape, EqualityPolicy, IdentityPolicy, Invariant, MachineProvenance,
-    QueryPagination, QuerySortKey, QuerySpec, Repository, RepositoryOperation, SortDirection,
-    StateMachine, Stereotype, Transition, ValueSemantics,
+    DtoMember, DtoMemberKind, DtoShape, EqualityPolicy, IdentityPolicy, Invariant,
+    MachineProvenance, QueryPagination, QuerySortKey, QuerySpec, Repository, RepositoryOperation,
+    SortDirection, StateMachine, Stereotype, Transition, ValueSemantics,
 };
 pub use errors::{ErrorDecl, ErrorRef, ErrorScope};
 pub use fingerprint::{DomainFingerprint, DOMAIN_FINGERPRINT_ALGORITHM};

@@ -372,7 +372,7 @@ pub(crate) fn compile_ddd_file(
         // services lower so their `when` conditions can bind machine states
         // (the design stage below validates the machines themselves).
         let machines =
-            collect_machine_scopes(module, &packages, base.as_deref(), &externals, &mut local);
+            collect_machine_scopes(module, &packages, base.as_deref(), externals, &mut local);
 
         // Stage 2.5 — the module's repository scopes (issue pherolang#180):
         // each repository design's name paired with its designed class, so
@@ -424,7 +424,7 @@ pub(crate) fn compile_ddd_file(
             base.as_deref(),
             union.as_ref(),
             &machines,
-            &externals,
+            externals,
             expr_context.as_ref(),
             &design_prep,
             &error_table,

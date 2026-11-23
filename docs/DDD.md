@@ -1227,7 +1227,7 @@ machine status: PayRunStatus {
 ```
 
 The driver validates the machine before it lowers (`lower_design_machine`
-in `crates/phero-driver/src/ddd.rs`; behavior pinned by
+in `crates/phero-driver/src/ddd/machines.rs`; behavior pinned by
 `crates/phero-driver/tests/ddd_machines.rs`):
 
 - Only an **entity** design carries a machine — a value object is
@@ -1351,6 +1351,70 @@ ddd_machine_golden`.
 contract (entity + field — `phero_driver::machines::derived_events`), which
 is what makes the push plane's `state_changed` vocabulary reachable for a
 plain CRUD model once its lifecycle is modeled.
+
+### Machine references (issue [#388](https://github.com/yestechgroup/pherolang/issues/388))
+
+Instead of an inline body, a design's lifecycle may be **authored in
+TypeScript/XState** and bound by reference:
+
+```
+machine status: PayRunStatus from "machines/payrun.machine.ts";
+```
+
+The declaration head keeps `field` + enum — the model still owns the
+binding (the feature exists, it carries exactly that enum type, the design
+is an entity). Only the body moves: the referenced file is parsed with
+restingstate's **fail-closed** `xstate-parser` (rev-pinned at the same
+commit as `xstate-ir`; unrepresentable constructs are typed rejections,
+never silent drops), and the parsed IR is projected onto the same
+`StateMachine` mirror the inline form lowers — so every downstream
+consumer (transition bindings, condition scoping, the xstate bridge, the
+graph) keeps working unchanged. The lowering direction inverts: the TS
+file is the single authoring surface and the IR the single machine form.
+The two forms are mutually exclusive; the inline form stays valid (soft
+deprecation once consumers prove out).
+
+**Resolution.** The path resolves **relative to the declaring `.ddd`
+file** (the `import schema` precedent; a fragment's reference names the
+file relative to the fragment). Machine files are not phero surfaces:
+hosts read them from disk, with no open-buffer preference (the `.dmn`
+table posture). Guards are **names, not expressions** — the serialized
+XState v5 forms (a plain string, or a `{ type, params }` object whose
+`params` ride the IR verbatim); an inline guard function is a compile
+error carrying the parser's typed message.
+
+**Validation (fail-closed, one diagnostic per rule):**
+
+| Rule | Code |
+|---|---|
+| File missing / unreadable | `E0403` — the written path named |
+| File did not parse (syntax, or a fail-closed rejection, message verbatim) | `E0404` |
+| File declares no machine | `E0405` |
+| File declares several machines (v1 binds exactly one; names the ids) | `E0406` |
+| No authored `id` (the parser synthesizes `machine-<index>`; the id joins the provenance) | `E0407` |
+| Outside the flat subset: nested (compound/parallel) states, automatic transitions (`after`/`always`/`onDone`/`invoke`), multi-target or target-less transitions | `E0408` |
+
+Every inline rule then runs on the projection unchanged: entity-only,
+enum closure, exactly-one initial, terminal rules, determinism,
+reachability. Restingstate's structural `validate_machine` is subsumed by
+these stricter driver rules (one validation vocabulary; no
+`xstate-core` dependency).
+
+**Artifact shape.** The artifact is the compiled form: a referenced design
+additionally carries `machineIr` — the parsed `xstate_ir::Machine` JSON —
+and `machineProvenance` `{ path, machineId, contentSha256 }`. A consumer
+reads what the compiler verified without needing `xstate-parser`.
+`contentSha256` is taken over the **canonical** IR JSON (keys sorted
+recursively — the IR carries `HashMap`-borne structures whose iteration
+order varies run to run), so the same authored file compiles
+byte-identically and the hash is recomputable **from the artifact alone**:
+`pherolang artifact check` re-derives it and rejects a tampered embed.
+`DDD_MODEL_FORMAT_VERSION` is 3; both fields are serde-defaulted and
+absent on inline machines, so machine-less and inline artifacts serialize
+unchanged apart from the marker. The committed golden is
+`tests/conformance/ddd/payrun-ref.ddd.json` (+ the fixture's TS file under
+`tests/conformance/ddd/machines/`); the passthrough is pinned by
+`crates/phero-driver/tests/ddd_machine_refs.rs`.
 
 ## Value objects
 

@@ -9,8 +9,6 @@
 
 use super::*;
 
-use tower::{Service, ServiceExt};
-use tower_lsp_server::jsonrpc;
 use tower_lsp_server::LspService;
 
 /// A scratch directory the machine files read from disk.
@@ -39,11 +37,7 @@ const GOOD_TS: &str = "import { createMachine } from 'xstate';\n\nexport const p
 /// typed rejection.
 const BROKEN_TS: &str = "import { createMachine } from 'xstate';\n\nexport const payrunMachine = createMachine({\n  id: 'payrun',\n  initial: 'Draft',\n  states: {\n    Draft: { on: { POST: { target: 'Posted', guard: ({ context }) => context.ok } } },\n    Posted: { type: 'final' },\n  },\n});\n";
 
-async fn open_design(
-    service: &mut LspService<PheroBackend>,
-    uri: &Uri,
-    text: &str,
-) {
+async fn open_design(service: &mut LspService<PheroBackend>, uri: &Uri, text: &str) {
     open_at(service, uri, text).await;
 }
 

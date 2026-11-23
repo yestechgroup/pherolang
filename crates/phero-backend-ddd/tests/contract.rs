@@ -1758,19 +1758,22 @@ fn with_machine_reference(model: &DddModel) -> DddModel {
         .expect("the machine")
         .terminals
         .push("OnLoan".to_string());
-    design.machine.as_mut().expect("the machine").transitions.push({
-        let mut transition =
-            phero_ir::ddd::Transition::new("Available", "OnLoan");
-        transition.trigger = Some("BORROW".to_string());
-        transition
-    });
+    design
+        .machine
+        .as_mut()
+        .expect("the machine")
+        .transitions
+        .push({
+            let mut transition = phero_ir::ddd::Transition::new("Available", "OnLoan");
+            transition.trigger = Some("BORROW".to_string());
+            transition
+        });
     design.machine_ir = Some(machine_ir);
-    design.machine_provenance =
-        Some(phero_ir::ddd::MachineProvenance::new(
-            "machines/book.machine.ts",
-            "book",
-            hash,
-        ));
+    design.machine_provenance = Some(phero_ir::ddd::MachineProvenance::new(
+        "machines/book.machine.ts",
+        "book",
+        hash,
+    ));
     model
 }
 
@@ -1787,7 +1790,8 @@ fn a_consistent_machine_reference_passes_the_contract() {
 #[test]
 fn provenance_without_the_embed_is_reported() {
     let mut model = with_machine_reference(&compiled());
-    model.modules[0].designs
+    model.modules[0]
+        .designs
         .iter_mut()
         .find(|design| design.class.as_deref() == Some("Book"))
         .expect("the Book design")
@@ -1804,7 +1808,8 @@ fn provenance_without_the_embed_is_reported() {
 #[test]
 fn the_embed_without_provenance_is_reported() {
     let mut model = with_machine_reference(&compiled());
-    model.modules[0].designs
+    model.modules[0]
+        .designs
         .iter_mut()
         .find(|design| design.class.as_deref() == Some("Book"))
         .expect("the Book design")
@@ -1821,7 +1826,8 @@ fn the_embed_without_provenance_is_reported() {
 #[test]
 fn a_tampered_hash_is_reported() {
     let mut model = with_machine_reference(&compiled());
-    let design = model.modules[0].designs
+    let design = model.modules[0]
+        .designs
         .iter_mut()
         .find(|design| design.class.as_deref() == Some("Book"))
         .expect("the Book design");
@@ -1841,7 +1847,8 @@ fn a_tampered_hash_is_reported() {
 #[test]
 fn an_embed_that_is_no_machine_ir_is_reported() {
     let mut model = with_machine_reference(&compiled());
-    let design = model.modules[0].designs
+    let design = model.modules[0]
+        .designs
         .iter_mut()
         .find(|design| design.class.as_deref() == Some("Book"))
         .expect("the Book design");
@@ -1858,7 +1865,8 @@ fn an_embed_that_is_no_machine_ir_is_reported() {
 #[test]
 fn a_mirror_that_disagrees_with_the_embed_is_reported() {
     let mut model = with_machine_reference(&compiled());
-    let design = model.modules[0].designs
+    let design = model.modules[0]
+        .designs
         .iter_mut()
         .find(|design| design.class.as_deref() == Some("Book"))
         .expect("the Book design");
@@ -1878,7 +1886,8 @@ fn a_mirror_that_disagrees_with_the_embed_is_reported() {
 #[test]
 fn an_embed_on_a_value_design_is_reported() {
     let mut model = with_machine_reference(&compiled());
-    let design = model.modules[0].designs
+    let design = model.modules[0]
+        .designs
         .iter_mut()
         .find(|design| design.class.as_deref() == Some("Book"))
         .expect("the Book design");

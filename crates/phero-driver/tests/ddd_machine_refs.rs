@@ -145,7 +145,8 @@ fn the_projection_is_the_inline_mirror() {
         )]),
     );
     let model = compilation.model.expect("the compilation lowered");
-    let design = model.modules[0].designs
+    let design = model.modules[0]
+        .designs
         .iter()
         .find(|design| design.class.as_deref() == Some("PayRun"))
         .expect("the PayRun design");
@@ -159,13 +160,25 @@ fn the_projection_is_the_inline_mirror() {
     let events: Vec<&str> = machine
         .transitions
         .iter()
-        .map(|transition| transition.trigger.as_deref().expect("every referenced transition carries its event"))
+        .map(|transition| {
+            transition
+                .trigger
+                .as_deref()
+                .expect("every referenced transition carries its event")
+        })
         .collect();
     let mut sorted = events.clone();
     sorted.sort_unstable();
     assert_eq!(
         sorted,
-        vec!["APPROVE", "CALCULATE", "POST", "REVERSE", "SCHEDULE", "SUBMIT"],
+        vec![
+            "APPROVE",
+            "CALCULATE",
+            "POST",
+            "REVERSE",
+            "SCHEDULE",
+            "SUBMIT"
+        ],
         "the authored TS event names are the mirror's trigger names, got {events:?}"
     );
 }
@@ -411,19 +424,19 @@ fn service_conditions_bind_referenced_machine_states() {
     // The module's condition scoping sees the referenced machine: its
     // states bind as enum values in `when` conditions.
     assert_clean(
-        &reference_design(&format!(
+        &reference_design(
             r#"
-        entity PayRun repository PayRunRepository {{
+        entity PayRun repository PayRunRepository {
             findById;
             save;
             PayRun[] findByState(String state) when (status == Posted);
-        }}
+        }
         machine status: PayRunStatus from "machines/payrun.machine.ts";
-        service PayRunService {{
+        service PayRunService {
             boolean approve() capability Approve when (status == AwaitingApproval);
-        }}
-"#
-        )),
+        }
+"#,
+        ),
         Some(PAYRUN_TS),
     );
 }
@@ -498,11 +511,15 @@ fn the_same_compile_is_byte_identical() {
     // canonical embed pins the bytes.
     let first = compile_reference().to_json().expect("serialize");
     let second = compile_reference().to_json().expect("serialize");
-    assert_eq!(first, second, "two compiles of the same file agree byte for byte");
+    assert_eq!(
+        first, second,
+        "two compiles of the same file agree byte for byte"
+    );
 }
 
 #[test]
-fn the_bridge_passes_the_embedded_ir_through() {    // lower_design_machines emits the authored form verbatim for referenced
+fn the_bridge_passes_the_embedded_ir_through() {
+    // lower_design_machines emits the authored form verbatim for referenced
     // machines — no re-derivation from the mirror.
     let model = compile_reference();
     let lowered = lower_design_machines(&model);
@@ -534,8 +551,7 @@ fn the_canonical_reference_fixture_matches_its_golden() {
         .with_machines([(
             "tests/conformance/ddd/payrun-ref.ddd".to_string(),
             "machines/payrun.machine.ts".to_string(),
-            include_str!("../../../tests/conformance/ddd/machines/payrun.machine.ts")
-                .to_string(),
+            include_str!("../../../tests/conformance/ddd/machines/payrun.machine.ts").to_string(),
         )]),
     );
     assert!(
@@ -552,11 +568,8 @@ fn the_canonical_reference_fixture_matches_its_golden() {
     let golden_path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
         .join("../../tests/conformance/ddd/payrun-ref.ddd.json");
     if std::env::var("PHERO_UPDATE_FIXTURES").is_ok() {
-        std::fs::write(
-            &golden_path,
-            model.to_json_pretty().expect("serialize"),
-        )
-        .expect("rewrite golden");
+        std::fs::write(&golden_path, model.to_json_pretty().expect("serialize"))
+            .expect("rewrite golden");
         eprintln!("updated {}", golden_path.display());
         return;
     }

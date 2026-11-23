@@ -101,7 +101,8 @@ fn ir_ddd_file_emits_the_ddd_design_artifact() {
 }
 
 #[test]
-fn ir_ddd_file_emits_the_machine_and_its_derivations() {    let path = workspace_root().join("tests/conformance/ddd/payrun.ddd");
+fn ir_ddd_file_emits_the_machine_and_its_derivations() {
+    let path = workspace_root().join("tests/conformance/ddd/payrun.ddd");
     let output = pherolang()
         .args(["ir", path.to_str().unwrap()])
         .output()
@@ -212,7 +213,8 @@ application Demo {
     assert!(!output.status.success(), "the missing file must fail");
     let stderr = String::from_utf8_lossy(&output.stderr);
     assert!(
-        stderr.contains("E0403 referenced machine file 'machines/thing.machine.ts' was not provided"),
+        stderr
+            .contains("E0403 referenced machine file 'machines/thing.machine.ts' was not provided"),
         "the written path is named: {stderr}"
     );
     assert!(!stderr.contains("panicked"), "no panic: {stderr}");

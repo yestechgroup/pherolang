@@ -989,10 +989,8 @@ pub(super) fn gather_machines(
     root_text: &str,
     fragments: &[(String, String)],
 ) -> Vec<(String, String, String)> {
-    let mut fetch =
-        |resolved: &str| -> Option<String> { std::fs::read_to_string(resolved).ok() };
-    let mut machines =
-        phero_driver::project::gather_ddd_machines(root_path, root_text, &mut fetch);
+    let mut fetch = |resolved: &str| -> Option<String> { std::fs::read_to_string(resolved).ok() };
+    let mut machines = phero_driver::project::gather_ddd_machines(root_path, root_text, &mut fetch);
     for (fragment_path, fragment_source) in fragments {
         machines.extend(phero_driver::project::gather_ddd_machines(
             fragment_path,
