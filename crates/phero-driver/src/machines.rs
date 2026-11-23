@@ -112,7 +112,7 @@ pub fn lower_design_machines(model: &DddModel) -> Vec<Machine> {
                     guard: transition
                         .guard
                         .as_ref()
-                        .map(|text| Guard { name: text.clone() }),
+                        .map(|text| Guard { name: text.clone(), params: None }),
                     actions: Vec::new(),
                     description: None,
                     delay_ms: None,

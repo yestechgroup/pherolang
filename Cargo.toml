@@ -78,7 +78,7 @@ sigil-syntax = { git = "https://github.com/yestechgroup/sigil.git", rev = "69115
 # compatibility boundary; the lowering contract lives in docs/DDD.md).
 # The repository is public, so a clean checkout (and `cargo install --git`)
 # fetches it without credentials.
-xstate-ir = { git = "https://github.com/yestechgroup/restingstate.git", rev = "380580b6407f6530c6fb89e1ce87621567f009c5" }
+xstate-ir = { git = "https://github.com/yestechgroup/restingstate.git", rev = "da0c804d3c30a0bcc938562e39a4b7d7505c663b" }
 
 # The dsntk decision-table toolchain (yestechgroup fork of DecisionToolkit/dsntk),
 # pinned by rev — the `.dmn` surface validates external markdown decision tables
