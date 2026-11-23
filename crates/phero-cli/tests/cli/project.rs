@@ -152,7 +152,13 @@ fn build_emits_all_artifacts_for_a_project_directory() {
         let json = std::fs::read_to_string(&path)
             .unwrap_or_else(|error| panic!("artifact for {name}: {error}"));
         let artifact: serde_json::Value = serde_json::from_str(&json).expect("valid JSON");
-        assert_eq!(artifact["formatVersion"], serde_json::json!(2), "{name}");
+        // Each kind carries its own wire marker — the design artifact's is
+        // versioned independently (issue pherolang#388 moved it to 3).
+        let expected = serde_json::json!(match name {
+            "design.ddd" => phero_ir::ddd::DDD_MODEL_FORMAT_VERSION,
+            _ => 2,
+        });
+        assert_eq!(artifact["formatVersion"], expected, "{name}");
         assert!(
             json.contains(marker),
             "{name} artifact carries its declaration: {json}"

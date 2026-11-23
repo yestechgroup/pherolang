@@ -822,7 +822,7 @@ mod tests {
         };
         phero_ir::ddd::DddModel::from_json(&format!(
             r#"{{
-  "formatVersion": 2,
+  "formatVersion": 3,
   {provenance}
   "application": {{ "name": "App" }},
   "modules": [{{ "name": "m", "designs": [{designs}] }}]
