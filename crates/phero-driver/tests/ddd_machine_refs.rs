@@ -502,8 +502,7 @@ fn the_same_compile_is_byte_identical() {
 }
 
 #[test]
-fn the_bridge_passes_the_embedded_ir_through() {
-    // lower_design_machines emits the authored form verbatim for referenced
+fn the_bridge_passes_the_embedded_ir_through() {    // lower_design_machines emits the authored form verbatim for referenced
     // machines — no re-derivation from the mirror.
     let model = compile_reference();
     let lowered = lower_design_machines(&model);
@@ -517,4 +516,56 @@ fn the_bridge_passes_the_embedded_ir_through() {
         *authored,
         "the bridge emits the authored IR, not a mirror re-derivation"
     );
+}
+
+#[test]
+fn the_canonical_reference_fixture_matches_its_golden() {
+    // The canonical fixture compiles through the real entry point and
+    // byte-compares against the committed artifact golden — the artifact
+    // is the product, pinned byte for byte.
+    let design = include_str!("../../../tests/conformance/ddd/payrun-ref.ddd");
+    let compilation = compile_ddd_str(
+        "tests/conformance/ddd/payrun-ref.ddd",
+        design,
+        &CompileInputs::from_domains(&[(
+            "tests/conformance/ddd/payrun.mox".to_string(),
+            include_str!("../../../tests/conformance/ddd/payrun.mox").to_string(),
+        )])
+        .with_machines([(
+            "tests/conformance/ddd/payrun-ref.ddd".to_string(),
+            "machines/payrun.machine.ts".to_string(),
+            include_str!("../../../tests/conformance/ddd/machines/payrun.machine.ts")
+                .to_string(),
+        )]),
+    );
+    assert!(
+        compilation
+            .diagnostics
+            .iter()
+            .all(|(_, diagnostic)| !diagnostic.is_error()),
+        "the canonical fixture compiles clean: {:?}",
+        compilation.diagnostics
+    );
+    let model = compilation.model.expect("the compilation lowered");
+    // The committed golden byte-pins the artifact; `PHERO_UPDATE_FIXTURES=1`
+    // rewrites it (the ddd_golden discipline).
+    let golden_path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("../../tests/conformance/ddd/payrun-ref.ddd.json");
+    if std::env::var("PHERO_UPDATE_FIXTURES").is_ok() {
+        std::fs::write(
+            &golden_path,
+            model.to_json_pretty().expect("serialize"),
+        )
+        .expect("rewrite golden");
+        eprintln!("updated {}", golden_path.display());
+        return;
+    }
+    let golden = std::fs::read_to_string(&golden_path).expect("read golden");
+    assert_eq!(
+        model.to_json_pretty().expect("serialize"),
+        golden,
+        "the artifact golden is byte-pinned"
+    );
+    let reparsed = phero_ir::ddd::DddModel::from_json(&golden).expect("the golden parses");
+    assert_eq!(reparsed, model, "the golden round-trips");
 }

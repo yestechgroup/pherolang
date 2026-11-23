@@ -47,7 +47,10 @@ pub(crate) fn collect_machine_scopes(
         };
         // A referenced machine (issue pherolang#388) contributes its
         // *projection*: the resolved IR takes the body's place, so the
-        // scope sees the authored states and events.
+        // scope sees the authored states and events. A reference that
+        // failed resolution has no projection — its E0403–E0408
+        // diagnostic is the one report, so the design contributes no
+        // scope at all (no cascade of derived empty-body errors).
         let projected;
         let machine = match external_machine_of(
             externals,
@@ -58,6 +61,7 @@ pub(crate) fn collect_machine_scopes(
                 projected = project_external_machine(reference, machine_decl);
                 &projected
             }
+            None if machine_decl.source.is_some() => continue,
             None => machine_decl,
         };
         let help = format!(

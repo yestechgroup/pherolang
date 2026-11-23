@@ -623,15 +623,41 @@ impl PheroBackend {
         // DD8: a `.ddd` document compiles as one application, so its key
         // covers the root text and every fragment's text — an edit to the
         // root (or a sibling fragment) must invalidate each participant's
-        // index and diagnostics.
+        // index and diagnostics. The machine references (issue
+        // pherolang#388) join the same way: an edit to a referenced `.ts`
+        // file must invalidate the declaring design's key, or the editor
+        // keeps serving stale machines.
         if surface == DocumentSurface::Known(SurfaceKind::Ddd) {
             if let Some(uri) = Uri::from_file_path(path) {
                 if let Some((root_path, root_text, fragments)) = self.ddd_app_sources(&uri, text) {
                     root_path.hash(&mut hasher);
                     root_text.hash(&mut hasher);
-                    for fragment in fragments {
+                    for fragment in &fragments {
                         fragment.path.hash(&mut hasher);
                         fragment.source.hash(&mut hasher);
+                    }
+                    let machine_fetch = |resolved: &str| -> Option<String> {
+                        std::fs::read_to_string(resolved).ok()
+                    };
+                    for (design_path, design_text) in
+                        std::iter::once((root_path.as_str(), root_text.as_str())).chain(
+                            fragments
+                                .iter()
+                                .map(|fragment| (fragment.path.as_str(), fragment.source.as_str())),
+                        )
+                    {
+                        let directory = Path::new(design_path)
+                            .parent()
+                            .unwrap_or_else(|| Path::new("."));
+                        for written in phero_driver::project::ddd_machine_ref_paths(design_text) {
+                            written.hash(&mut hasher);
+                            hash_text(
+                                &mut hasher,
+                                machine_fetch(
+                                    directory.join(&written).to_string_lossy().as_ref(),
+                                ),
+                            );
+                        }
                     }
                 }
             }
@@ -719,7 +745,16 @@ impl PheroBackend {
                         source: source.clone(),
                     })
                     .collect();
-                let inputs = super::pipeline::domain_inputs(&gathered.domains);
+                let inputs = super::pipeline::domain_inputs(&gathered.domains)
+                    // The machine references (issue pherolang#388): disk
+                    // reads relative to each declaring file — a `.ts` file
+                    // is not a phero surface and never joins the open
+                    // documents.
+                    .with_machines(super::pipeline::gather_machines(
+                        &root_path,
+                        &root_text,
+                        &gathered.fragments,
+                    ));
                 let compilation =
                     phero_driver::compile_ddd_app_str(&root_path, &root_text, &fragments, &inputs);
                 (

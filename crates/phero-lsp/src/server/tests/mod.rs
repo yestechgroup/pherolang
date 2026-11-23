@@ -18,6 +18,7 @@ mod graph_cache;
 mod harness;
 mod hover;
 mod ifml;
+mod machine_refs;
 mod references;
 mod rename;
 mod semantic_tokens;

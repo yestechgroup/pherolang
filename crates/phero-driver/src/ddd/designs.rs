@@ -280,7 +280,7 @@ pub(crate) fn lower_module_designs<'a>(
                 // projection: the resolved IR takes the body's place, so
                 // every existing rule runs unchanged.
                 let projected;
-                let machine = match external_machine_of(
+                let machine_to_lower = match external_machine_of(
                     externals,
                     &module.name.text,
                     &machine.field.text,
@@ -298,22 +298,29 @@ pub(crate) fn lower_module_designs<'a>(
                             reference.id.clone(),
                             reference.content_sha256.clone(),
                         ));
-                        &projected
+                        Some(&projected)
                     }
-                    None => machine,
+                    // A reference that failed resolution has no projection
+                    // — its E0403–E0408 diagnostic is the one report, so
+                    // the design lowers no machine (no cascade of derived
+                    // empty-body errors).
+                    None if machine.source.is_some() => None,
+                    None => Some(machine),
                 };
-                design_out.machine = lower_design_machine(
-                    machine,
-                    design,
-                    resolved.as_ref(),
-                    union,
-                    packages,
-                    base,
-                    &machines.machines,
-                    expr_context,
-                    design_source,
-                    &mut local,
-                );
+                if let Some(machine) = machine_to_lower {
+                    design_out.machine = lower_design_machine(
+                        machine,
+                        design,
+                        resolved.as_ref(),
+                        union,
+                        packages,
+                        base,
+                        &machines.machines,
+                        expr_context,
+                        design_source,
+                        &mut local,
+                    );
+                }
             }
         }
 

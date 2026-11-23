@@ -165,7 +165,14 @@ impl PheroBackend {
                 let inputs = domain_inputs(&gathered.domains)
                     .with_actors(actors)
                     .with_decisions(decisions)
-                    .with_events(events);
+                    .with_events(events)
+                    // The machine references (issue pherolang#388): each
+                    // participating file's references resolve relative to
+                    // that file and read from disk — a `.ts` file is not a
+                    // phero surface, so it never joins the open documents
+                    // (the dmn-table posture). A miss is simply not
+                    // provided; the driver's E0403 names the written path.
+                    .with_machines(gather_machines(&root_path, &root_text, &gathered.fragments));
                 phero_driver::compile_ddd_app_str(&root_path, &root_text, &fragments, &inputs)
                     .diagnostics
                     .iter()
@@ -969,6 +976,31 @@ pub(super) fn domain_inputs(domains: &[(String, String)]) -> phero_driver::Compi
         schemas,
         sigil: sigil.map(|sigil| sigil.imports).unwrap_or_default(),
     })
+}
+
+/// The machine-reference TypeScript sources of one `.ddd` application
+/// (issue pherolang#388): the root's and every fragment's references, each
+/// resolved relative to its declaring file and read from disk — a `.ts`
+/// file is not a phero surface, so it never joins the open documents (the
+/// dmn-table posture). A miss is simply not provided; the driver's E0403
+/// names the written path.
+pub(super) fn gather_machines(
+    root_path: &str,
+    root_text: &str,
+    fragments: &[(String, String)],
+) -> Vec<(String, String, String)> {
+    let mut fetch =
+        |resolved: &str| -> Option<String> { std::fs::read_to_string(resolved).ok() };
+    let mut machines =
+        phero_driver::project::gather_ddd_machines(root_path, root_text, &mut fetch);
+    for (fragment_path, fragment_source) in fragments {
+        machines.extend(phero_driver::project::gather_ddd_machines(
+            fragment_path,
+            fragment_source,
+            &mut fetch,
+        ));
+    }
+    machines
 }
 
 /// Converts an `.ifml` diagnostic — the workspace's shared record tagged

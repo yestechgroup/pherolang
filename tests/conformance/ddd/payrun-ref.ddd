@@ -1,0 +1,13 @@
+import "payrun.mox";
+
+application PayrollRef {
+    base nz.example.payroll
+    module payroll {
+        entity PayRun repository PayRunRepository {
+            findById;
+            save;
+            PayRun[] findByState(String state) when (status == Posted);
+        }
+        machine status: PayRunStatus from "machines/payrun.machine.ts";
+    }
+}

@@ -1,0 +1,288 @@
+{
+  "formatVersion": 3,
+  "pheroVersion": "0.4.0",
+  "domainFingerprint": {
+    "algorithm": "sha256",
+    "value": "4811bfdbdd2947c59512f6f1322eebe8de607c0ac631b9de6582d39eb608b44c",
+    "packages": [
+      "nz.example.payroll"
+    ]
+  },
+  "application": {
+    "name": "PayrollRef",
+    "base": "nz.example.payroll"
+  },
+  "modules": [
+    {
+      "name": "payroll",
+      "designs": [
+        {
+          "class": "PayRun",
+          "typeRef": {
+            "type": "class",
+            "value": {
+              "package": "nz.example.payroll",
+              "name": "PayRun"
+            }
+          },
+          "stereotype": "entity",
+          "flags": {
+            "auditable": true,
+            "optimisticLocking": true
+          },
+          "isAggregateRoot": true,
+          "repository": {
+            "name": "PayRunRepository",
+            "operations": [
+              {
+                "name": "findById",
+                "builtin": "findById"
+              },
+              {
+                "name": "save",
+                "builtin": "save"
+              },
+              {
+                "name": "findByState",
+                "returnType": {
+                  "type": "class",
+                  "value": {
+                    "package": "nz.example.payroll",
+                    "name": "PayRun"
+                  }
+                },
+                "returnMultiplicity": {
+                  "lower": 0,
+                  "upper": "unbounded"
+                },
+                "params": [
+                  {
+                    "name": "state",
+                    "type": {
+                      "type": "primitive",
+                      "value": "string"
+                    }
+                  }
+                ],
+                "condition": "status == Posted"
+              }
+            ]
+          },
+          "machine": {
+            "field": "status",
+            "enumType": {
+              "type": "enum",
+              "value": {
+                "package": "nz.example.payroll",
+                "name": "PayRunStatus"
+              }
+            },
+            "initial": "Draft",
+            "terminals": [
+              "Posted",
+              "Reversed"
+            ],
+            "transitions": [
+              {
+                "from": "Draft",
+                "to": "Calculating",
+                "trigger": "CALCULATE"
+              },
+              {
+                "from": "Draft",
+                "to": "Reversed",
+                "trigger": "REVERSE"
+              },
+              {
+                "from": "Calculating",
+                "to": "AwaitingApproval",
+                "trigger": "SUBMIT"
+              },
+              {
+                "from": "AwaitingApproval",
+                "to": "Approved",
+                "trigger": "APPROVE"
+              },
+              {
+                "from": "Approved",
+                "to": "Processing",
+                "trigger": "SCHEDULE"
+              },
+              {
+                "from": "Processing",
+                "to": "Posted",
+                "trigger": "POST"
+              }
+            ]
+          },
+          "machineIr": {
+            "context": {
+              "fields": []
+            },
+            "id": "payrun",
+            "initial": "Draft",
+            "setup": null,
+            "states": [
+              {
+                "children": [],
+                "description": null,
+                "entry": [],
+                "exit": [],
+                "initial": null,
+                "invoke": null,
+                "name": "Draft",
+                "on_done": [],
+                "output": null,
+                "tags": [],
+                "transitions": [
+                  {
+                    "actions": [],
+                    "description": null,
+                    "event": "CALCULATE",
+                    "guard": null,
+                    "target": "Calculating",
+                    "targets": []
+                  },
+                  {
+                    "actions": [],
+                    "description": null,
+                    "event": "REVERSE",
+                    "guard": null,
+                    "target": "Reversed",
+                    "targets": []
+                  }
+                ],
+                "type": "atomic"
+              },
+              {
+                "children": [],
+                "description": null,
+                "entry": [],
+                "exit": [],
+                "initial": null,
+                "invoke": null,
+                "name": "Calculating",
+                "on_done": [],
+                "output": null,
+                "tags": [],
+                "transitions": [
+                  {
+                    "actions": [],
+                    "description": null,
+                    "event": "SUBMIT",
+                    "guard": null,
+                    "target": "AwaitingApproval",
+                    "targets": []
+                  }
+                ],
+                "type": "atomic"
+              },
+              {
+                "children": [],
+                "description": null,
+                "entry": [],
+                "exit": [],
+                "initial": null,
+                "invoke": null,
+                "name": "AwaitingApproval",
+                "on_done": [],
+                "output": null,
+                "tags": [],
+                "transitions": [
+                  {
+                    "actions": [],
+                    "description": null,
+                    "event": "APPROVE",
+                    "guard": null,
+                    "target": "Approved",
+                    "targets": []
+                  }
+                ],
+                "type": "atomic"
+              },
+              {
+                "children": [],
+                "description": null,
+                "entry": [],
+                "exit": [],
+                "initial": null,
+                "invoke": null,
+                "name": "Approved",
+                "on_done": [],
+                "output": null,
+                "tags": [],
+                "transitions": [
+                  {
+                    "actions": [],
+                    "description": null,
+                    "event": "SCHEDULE",
+                    "guard": null,
+                    "target": "Processing",
+                    "targets": []
+                  }
+                ],
+                "type": "atomic"
+              },
+              {
+                "children": [],
+                "description": null,
+                "entry": [],
+                "exit": [],
+                "initial": null,
+                "invoke": null,
+                "name": "Processing",
+                "on_done": [],
+                "output": null,
+                "tags": [],
+                "transitions": [
+                  {
+                    "actions": [],
+                    "description": null,
+                    "event": "POST",
+                    "guard": null,
+                    "target": "Posted",
+                    "targets": []
+                  }
+                ],
+                "type": "atomic"
+              },
+              {
+                "children": [],
+                "description": null,
+                "entry": [],
+                "exit": [],
+                "initial": null,
+                "invoke": null,
+                "name": "Posted",
+                "on_done": [],
+                "output": null,
+                "tags": [],
+                "transitions": [],
+                "type": "final"
+              },
+              {
+                "children": [],
+                "description": null,
+                "entry": [],
+                "exit": [],
+                "initial": null,
+                "invoke": null,
+                "name": "Reversed",
+                "on_done": [],
+                "output": null,
+                "tags": [],
+                "transitions": [],
+                "type": "final"
+              }
+            ]
+          },
+          "machineProvenance": {
+            "path": "machines/payrun.machine.ts",
+            "machineId": "payrun",
+            "contentSha256": "5aca796db97ff88b925f8bf6cdd2c2c50bc9aa7828ff9dc1422e1108238c2757"
+          }
+        }
+      ]
+    }
+  ]
+}
