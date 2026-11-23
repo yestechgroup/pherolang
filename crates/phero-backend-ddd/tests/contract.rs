@@ -1695,3 +1695,205 @@ fn a_named_document_cannot_carry_inline_entries() {
         "{violations:?}"
     );
 }
+
+// --- machine references (issue pherolang#388) -------------------------------
+
+use phero_evidence::sha256_hex;
+
+/// The embedded IR of a minimal two-state machine, in canonical form (keys
+/// sorted recursively), and the hash over it.
+fn machine_embed() -> (serde_json::Value, String, &'static str) {
+    let machine_ir = serde_json::json!({
+        "context": { "fields": [] },
+        "id": "book",
+        "initial": "Available",
+        "setup": null,
+        "states": [
+            {
+                "children": [], "description": null, "entry": [], "exit": [],
+                "initial": null, "invoke": null, "name": "Available",
+                "on_done": [], "output": null, "tags": [],
+                "transitions": [
+                    { "actions": [], "description": null, "event": "BORROW",
+                      "guard": null, "target": "OnLoan", "targets": [] }
+                ],
+                "type": "atomic"
+            },
+            {
+                "children": [], "description": null, "entry": [], "exit": [],
+                "initial": null, "invoke": null, "name": "OnLoan",
+                "on_done": [], "output": null, "tags": [],
+                "transitions": [],
+                "type": "final"
+            }
+        ],
+    });
+    let canonical = phero_ir::canonical_json(&machine_ir);
+    let hash = sha256_hex(canonical.as_bytes());
+    (machine_ir, hash, "Available")
+}
+
+/// Installs a consistent referenced-machine embed on the `Book` design:
+/// the projected mirror, the canonical IR, and the matching provenance.
+fn with_machine_reference(model: &DddModel) -> DddModel {
+    let mut model = model.clone();
+    let (machine_ir, hash, initial) = machine_embed();
+    let design = model.modules[0]
+        .designs
+        .iter_mut()
+        .find(|design| design.class.as_deref() == Some("Book"))
+        .expect("the Book design");
+    design.stereotype = Stereotype::Entity;
+    design.machine = Some(StateMachine::new(
+        "state",
+        TypeRef::Enum {
+            package: "nz.example.library".to_string(),
+            name: "MediaStatus".to_string(),
+        },
+        initial,
+    ));
+    design
+        .machine
+        .as_mut()
+        .expect("the machine")
+        .terminals
+        .push("OnLoan".to_string());
+    design.machine.as_mut().expect("the machine").transitions.push({
+        let mut transition =
+            phero_ir::ddd::Transition::new("Available", "OnLoan");
+        transition.trigger = Some("BORROW".to_string());
+        transition
+    });
+    design.machine_ir = Some(machine_ir);
+    design.machine_provenance =
+        Some(phero_ir::ddd::MachineProvenance::new(
+            "machines/book.machine.ts",
+            "book",
+            hash,
+        ));
+    model
+}
+
+#[test]
+fn a_consistent_machine_reference_passes_the_contract() {
+    let model = with_machine_reference(&compiled());
+    assert!(
+        check_contract(&model).is_empty(),
+        "a consistent embed is contract-complete: {:?}",
+        check_contract(&model)
+    );
+}
+
+#[test]
+fn provenance_without_the_embed_is_reported() {
+    let mut model = with_machine_reference(&compiled());
+    model.modules[0].designs
+        .iter_mut()
+        .find(|design| design.class.as_deref() == Some("Book"))
+        .expect("the Book design")
+        .machine_ir = None;
+    let violations = check_contract(&model);
+    assert!(
+        violations
+            .iter()
+            .any(|violation| violation.path.ends_with(".machineProvenance")),
+        "provenance without the embed: {violations:?}"
+    );
+}
+
+#[test]
+fn the_embed_without_provenance_is_reported() {
+    let mut model = with_machine_reference(&compiled());
+    model.modules[0].designs
+        .iter_mut()
+        .find(|design| design.class.as_deref() == Some("Book"))
+        .expect("the Book design")
+        .machine_provenance = None;
+    let violations = check_contract(&model);
+    assert!(
+        violations
+            .iter()
+            .any(|violation| violation.path.ends_with(".machineIr")),
+        "the embed without provenance: {violations:?}"
+    );
+}
+
+#[test]
+fn a_tampered_hash_is_reported() {
+    let mut model = with_machine_reference(&compiled());
+    let design = model.modules[0].designs
+        .iter_mut()
+        .find(|design| design.class.as_deref() == Some("Book"))
+        .expect("the Book design");
+    // Flip one authored byte in the embed: the hash no longer matches.
+    if let Some(machine_ir) = design.machine_ir.as_mut() {
+        machine_ir["initial"] = serde_json::json!("Shelved");
+    }
+    let violations = check_contract(&model);
+    assert!(
+        violations
+            .iter()
+            .any(|violation| violation.path.ends_with(".machineProvenance")),
+        "a lying hash is the one report: {violations:?}"
+    );
+}
+
+#[test]
+fn an_embed_that_is_no_machine_ir_is_reported() {
+    let mut model = with_machine_reference(&compiled());
+    let design = model.modules[0].designs
+        .iter_mut()
+        .find(|design| design.class.as_deref() == Some("Book"))
+        .expect("the Book design");
+    design.machine_ir = Some(serde_json::json!({ "not": "a machine" }));
+    let violations = check_contract(&model);
+    assert!(
+        violations
+            .iter()
+            .any(|violation| violation.path.ends_with(".machineIr")),
+        "a non-IR embed: {violations:?}"
+    );
+}
+
+#[test]
+fn a_mirror_that_disagrees_with_the_embed_is_reported() {
+    let mut model = with_machine_reference(&compiled());
+    let design = model.modules[0].designs
+        .iter_mut()
+        .find(|design| design.class.as_deref() == Some("Book"))
+        .expect("the Book design");
+    // The mirror claims another initial than the authored machine.
+    let machine = design.machine.as_mut().expect("the machine");
+    machine.initial = "OnLoan".to_string();
+    let violations = check_contract(&model);
+    assert!(
+        violations
+            .iter()
+            .any(|violation| violation.path.ends_with(".machine")
+                && violation.message.contains("initial")),
+        "the mirror must agree with the embed: {violations:?}"
+    );
+}
+
+#[test]
+fn an_embed_on_a_value_design_is_reported() {
+    let mut model = with_machine_reference(&compiled());
+    let design = model.modules[0].designs
+        .iter_mut()
+        .find(|design| design.class.as_deref() == Some("Book"))
+        .expect("the Book design");
+    design.stereotype = Stereotype::Value;
+    let violations = check_contract(&model);
+    assert!(
+        violations
+            .iter()
+            .any(|violation| violation.path.ends_with(".machine")),
+        "a value carries no lifecycle: {violations:?}"
+    );
+    assert!(
+        violations
+            .iter()
+            .any(|violation| violation.path.ends_with(".machineIr")),
+        "and no embed: {violations:?}"
+    );
+}
