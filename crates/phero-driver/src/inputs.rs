@@ -44,7 +44,7 @@
 //! assert!(compilation.diagnostics.is_empty());
 //! ```
 
-use crate::imports::DomainImports;
+use crate::imports::{DomainImports, MachineSources};
 use crate::project::{CmmnBuckets, DeployPairs, UcBuckets};
 
 /// The gather-once compile inputs of one artifact compilation.
@@ -78,6 +78,10 @@ pub struct CompileInputs {
     tables: Vec<(String, String)>,
     /// The `import schema`/`import sigil` content of the domain files.
     imports: DomainImports,
+    /// The `.ddd` machine-reference TypeScript texts, keyed by the
+    /// **(design path, machine path)** pair as the host names them (issue
+    /// pherolang#388).
+    machines: MachineSources,
 }
 
 impl CompileInputs {
@@ -166,6 +170,19 @@ impl CompileInputs {
         self
     }
 
+    /// Adds the `.ddd` machine-reference TypeScript texts, keyed by the
+    /// **(design path, machine path)** pair as the host names them (issue
+    /// pherolang#388).
+    pub fn with_machines<I>(mut self, sources: I) -> Self
+    where
+        I: IntoIterator<Item = (String, String, String)>,
+    {
+        for (design_path, machine_path, source) in sources {
+            self.machines.insert(design_path, machine_path, source);
+        }
+        self
+    }
+
     /// The raw `.mox` domain texts keyed by resolved path.
     pub fn domains(&self) -> &[(String, String)] {
         &self.domains
@@ -216,6 +233,12 @@ impl CompileInputs {
     /// The domain files' `import schema`/`import sigil` content.
     pub fn imports(&self) -> &DomainImports {
         &self.imports
+    }
+
+    /// The `.ddd` machine-reference TypeScript texts, keyed by the
+    /// **(design path, machine path)** pair (issue pherolang#388).
+    pub fn machines(&self) -> &MachineSources {
+        &self.machines
     }
 }
 

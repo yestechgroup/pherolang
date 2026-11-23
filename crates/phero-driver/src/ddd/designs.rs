@@ -17,7 +17,7 @@ use crate::lower::{self, DomainPackage};
 
 use super::dtos::{DesignPrep, DtoForm};
 use super::errors::ErrorTable;
-use super::machines::{class_operations, MachineScopes};
+use super::machines::{class_operations, external_machine_of, project_external_machine, MachineScopes, MachineReference};
 use super::*;
 
 /// Stage 5 — one module's designs: rule 3 (the target resolves), rule 2
@@ -34,6 +34,7 @@ pub(crate) fn lower_module_designs<'a>(
     base: Option<&str>,
     union: Option<&phero_ir::Model>,
     machines: &MachineScopes,
+    externals: &[MachineReference],
     expr_context: Option<&phero_expr::TypeContext>,
     prep: &DesignPrep,
     error_table: &ErrorTable,
@@ -275,6 +276,21 @@ pub(crate) fn lower_module_designs<'a>(
 
         if let Some(machine) = &design.machine {
             if form.is_none() {
+                // A referenced machine (issue pherolang#388) lowers on its
+                // projection: the resolved IR takes the body's place, so
+                // every existing rule runs unchanged.
+                let projected;
+                let machine = match external_machine_of(
+                    externals,
+                    &module.name.text,
+                    &machine.field.text,
+                ) {
+                    Some(reference) => {
+                        projected = project_external_machine(reference, machine);
+                        &projected
+                    }
+                    None => machine,
+                };
                 design_out.machine = lower_design_machine(
                     machine,
                     design,

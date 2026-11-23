@@ -85,7 +85,7 @@ pub use entry::{
     compile_evt, compile_evt_str, compile_files, compile_intent, compile_intent_str, compile_str,
     compile_usecase, compile_usecase_str, compile_with_imports,
 };
-pub use imports::{DomainImports, SchemaImports, SigilImports};
+pub use imports::{DomainImports, MachineSources, SchemaImports, SigilImports};
 pub use intents::IntentLinkSite;
 pub use session::{
     parse_actors_query, parse_cmmn_query, parse_ddd_query, parse_deploy_query, parse_dmn_query,

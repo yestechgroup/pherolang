@@ -1,10 +1,16 @@
 //! State-machine lowering: machine scope collection, transition
-//! lowering, and the machine-local helpers.
+//! lowering, machine-reference resolution (issue pherolang#388), and the
+//! machine-local helpers.
 
+use phero_diagnostics::ddd::{
+    E_MACHINE_REF_EMPTY, E_MACHINE_REF_NO_ID, E_MACHINE_REF_NOT_PROVIDED, E_MACHINE_REF_PARSE,
+    E_MACHINE_REF_SEVERAL, E_MACHINE_REF_SHAPE,
+};
 use phero_ir::ddd::{StateMachine, Transition};
 use phero_syntax::ast as dsl;
 
 use crate::diagnostic::Diagnostic;
+use crate::imports::MachineSources;
 use crate::lower::{self, DomainPackage};
 
 use super::designs::stereotype_label;
@@ -24,6 +30,7 @@ pub(crate) fn collect_machine_scopes(
     module: &dsl::DddModule,
     packages: &[DomainPackage],
     base: Option<&str>,
+    externals: &[MachineReference],
     local: &mut Vec<Diagnostic>,
 ) -> MachineScopes {
     let mut machines: Vec<ResolvedMachine> = Vec::new();
@@ -35,8 +42,23 @@ pub(crate) fn collect_machine_scopes(
         if dto_form(design).is_some() {
             continue;
         }
-        let Some(machine) = &design.machine else {
+        let Some(machine_decl) = &design.machine else {
             continue;
+        };
+        // A referenced machine (issue pherolang#388) contributes its
+        // *projection*: the resolved IR takes the body's place, so the
+        // scope sees the authored states and events.
+        let projected;
+        let machine = match external_machine_of(
+            externals,
+            &module.name.text,
+            &machine_decl.field.text,
+        ) {
+            Some(reference) => {
+                projected = project_external_machine(reference, machine_decl);
+                &projected
+            }
+            None => machine_decl,
         };
         let help = format!(
             "the machine '{}: {}' of module '{}' must target a class declared \
@@ -155,6 +177,253 @@ pub(crate) fn collect_machine_scopes(
     }
 }
 
+/// One resolved `machine … from "<path>";` reference (issue pherolang#388):
+/// the file was provided, parsed, and shape-checked at compile time. The
+/// module+field key matches the design the declaration head binds.
+pub(crate) struct MachineReference {
+    /// The declaring module's name.
+    pub module: String,
+    /// The declaration head's field — the machine's binding key.
+    pub field: String,
+    /// The parsed machine IR.
+    pub machine: xstate_ir::Machine,
+}
+
+/// The resolved machine reference of one `(module, field)` pair, if the
+/// design declared the reference form and it resolved.
+pub(crate) fn external_machine_of<'a>(
+    references: &'a [MachineReference],
+    module: &str,
+    field: &str,
+) -> Option<&'a MachineReference> {
+    references
+        .iter()
+        .find(|reference| reference.module == module && reference.field == field)
+}
+
+/// Stage 1.5 — the machine references of one file's modules (issue
+/// pherolang#388): every `machine … from "<path>";` declaration's file is
+/// looked up in the provided [`MachineSources`] under **the declaring
+/// file's path**, parsed with restingstate's fail-closed `xstate-parser`,
+/// and checked against the flat single-target subset the design mirror can
+/// carry. Roots and fragments call it with their own path, the file that
+/// declares the reference (`compile_ddd_app_str` concatenates the
+/// per-file results before the merged compile). An unresolved or rejected
+/// reference contributes no machine — its diagnostic is the one report.
+pub(crate) fn resolve_machine_references(
+    path: &str,
+    modules: &[dsl::DddModule],
+    sources: &MachineSources,
+    local: &mut Vec<Diagnostic>,
+) -> Vec<MachineReference> {
+    let mut references = Vec::new();
+    for module in modules {
+        for design in &module.designs {
+            let Some(machine) = &design.machine else {
+                continue;
+            };
+            let Some(reference) = &machine.source else {
+                continue;
+            };
+            let Some(source) = sources.get(path, &reference.path) else {
+                local.push(
+                    Diagnostic::error(
+                        format!(
+                            "{E_MACHINE_REF_NOT_PROVIDED} referenced machine file '{}' \
+                             was not provided",
+                            reference.path
+                        ),
+                        Some(reference.span),
+                    )
+                    .with_help(format!(
+                        "the path resolves relative to the declaring design file; \
+                         create the file or fix the spelling"
+                    )),
+                );
+                continue;
+            };
+            let machines = match xstate_parser::parse_all(source) {
+                Ok(machines) => machines,
+                Err(error) => {
+                    // The fail-closed parser's typed rejection surfaces
+                    // verbatim — it names the construct and teaches the
+                    // convention.
+                    local.push(Diagnostic::error(
+                        format!(
+                            "{E_MACHINE_REF_PARSE} referenced machine file '{}' did \
+                             not parse: {error}",
+                            reference.path
+                        ),
+                        Some(reference.span),
+                    ));
+                    continue;
+                }
+            };
+            let [parsed] = machines.as_slice() else {
+                if machines.is_empty() {
+                    local.push(Diagnostic::error(
+                        format!(
+                            "{E_MACHINE_REF_EMPTY} referenced machine file '{}' \
+                             declares no machine",
+                            reference.path
+                        ),
+                        Some(reference.span),
+                    ));
+                } else {
+                    let ids = machines
+                        .iter()
+                        .map(|machine| format!("'{}'", machine.id))
+                        .collect::<Vec<_>>()
+                        .join(", ");
+                    local.push(Diagnostic::error(
+                        format!(
+                            "{E_MACHINE_REF_SEVERAL} referenced machine file '{}' \
+                             declares several machines: {ids}",
+                            reference.path
+                        ),
+                        Some(reference.span),
+                    ));
+                }
+                continue;
+            };
+            // A stable id: the parser synthesizes `machine-<index>` for an
+            // anonymous `createMachine` — an index-derived placeholder, not
+            // an authored identity. With exactly one machine the
+            // placeholder is always `machine-0`; a machine genuinely given
+            // that id is refused too (the collision is the author's to
+            // avoid).
+            if parsed.id.is_empty() || parsed.id == "machine-0" {
+                local.push(Diagnostic::error(
+                    format!(
+                        "{E_MACHINE_REF_NO_ID} referenced machine file '{}' carries \
+                         no stable machine id; the authored createMachine must \
+                         declare one",
+                        reference.path
+                    ),
+                    Some(reference.span),
+                ));
+                continue;
+            }
+            if let Err(detail) = check_machine_shape(parsed) {
+                local.push(Diagnostic::error(
+                    format!(
+                        "{E_MACHINE_REF_SHAPE} referenced machine '{}' declares {detail}",
+                        parsed.id
+                    ),
+                    Some(reference.span),
+                ));
+                continue;
+            }
+            references.push(MachineReference {
+                module: module.name.text.clone(),
+                field: machine.field.text.clone(),
+                machine: parsed.clone(),
+            });
+        }
+    }
+    references
+}
+
+/// The flat single-target subset the design mirror can carry (issue
+/// pherolang#388): every state atomic or final, every transition
+/// event-driven with exactly one target. Nested (compound/parallel)
+/// states, automatic transitions (`after`/`always`/`onDone` — the parser
+/// surfaces them with an empty event name — and `invoke`), timed
+/// transitions, and multi-target transitions are each rejected with the
+/// construct named.
+fn check_machine_shape(machine: &xstate_ir::Machine) -> Result<(), String> {
+    for state in &machine.states {
+        if matches!(
+            state.node_type,
+            xstate_ir::StateType::Compound | xstate_ir::StateType::Parallel
+        ) || !state.children.is_empty()
+        {
+            return Err(format!("nested state '{}'", state.name));
+        }
+        if state.invoke.is_some() {
+            return Err(format!(
+                "an invoked actor on state '{}' — the mirror is event-driven only",
+                state.name
+            ));
+        }
+        for transition in state.on_done.iter().chain(state.transitions.iter()) {
+            if transition.event.is_empty() {
+                return Err(format!(
+                    "an automatic transition on state '{}'",
+                    state.name
+                ));
+            }
+            if transition.delay_ms.is_some() {
+                return Err(format!(
+                    "a timed transition on state '{}'",
+                    state.name
+                ));
+            }
+            if transition.targets.len() > 1 {
+                return Err(format!(
+                    "a transition on state '{}' targeting several states",
+                    state.name
+                ));
+            }
+            if transition.target.is_none() {
+                return Err(format!(
+                    "a transition on state '{}' with no target",
+                    state.name
+                ));
+            }
+        }
+    }
+    Ok(())
+}
+
+/// Projects a resolved machine reference onto the DSL inline form (issue
+/// pherolang#388): the declaration head keeps field + enum, and the
+/// initial/terminals/transitions are projected from the parsed IR, so the
+/// *existing* validations (enum closure, reachability, trigger
+/// determinism, terminal rules) and every downstream consumer run
+/// unchanged. The projection's names carry the reference clause's span —
+/// a projected state has no authored span of its own. Guard typing is
+/// skipped naturally: the projection carries no `when` clauses.
+pub(crate) fn project_external_machine(
+    reference: &MachineReference,
+    decl: &dsl::DddMachine,
+) -> dsl::DddMachine {
+    let span = decl
+        .source
+        .as_ref()
+        .map(|source| source.span)
+        .unwrap_or(decl.span);
+    let name = |text: &str| dsl::Name {
+        text: text.to_string(),
+        span,
+        escaped: false,
+    };
+    let mut projected = dsl::DddMachine {
+        field: decl.field.clone(),
+        type_: decl.type_.clone(),
+        initial: Some(name(&reference.machine.initial)),
+        terminals: Vec::new(),
+        transitions: Vec::new(),
+        source: None,
+        span: decl.span,
+    };
+    for state in &reference.machine.states {
+        if state.node_type == xstate_ir::StateType::Final {
+            projected.terminals.push(name(&state.name));
+        }
+        for transition in &state.transitions {
+            projected.transitions.push(dsl::DddMachineTransition {
+                from: name(&state.name),
+                to: name(transition.target.as_deref().unwrap_or_default()),
+                trigger: Some(name(&transition.event)),
+                guard: None,
+                span,
+            });
+        }
+    }
+    projected
+}
+
 /// The lowerCamel of a name (`PayRunStatus` → `payRunStatus`) — the
 /// enum-derived spelling that qualifies a machine field in a multi-machine
 /// module (issue pherolang#180), the same derivation a bare machine arrow's
@@ -188,6 +457,12 @@ pub(crate) fn lower_design_machine(
     source: &str,
     local: &mut Vec<Diagnostic>,
 ) -> Option<StateMachine> {
+    // A referenced machine (issue pherolang#388) arrives here as its
+    // *projection* — the caller resolved the reference and projected the
+    // IR onto the inline form — so the existing rules (enum closure,
+    // reachability, trigger determinism, terminal rules) run unchanged.
+    // Guard typing is skipped naturally: the projection carries no `when`
+    // clauses.
     let mut ok = true;
 
     // A lifecycle is entity semantics (the repository-placement precedent):

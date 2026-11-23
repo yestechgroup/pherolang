@@ -223,7 +223,7 @@ const BANDS: &[Band] = &[
         range: "E0350–E0449",
         owner: "phero-driver `.ddd` lifecycle checks",
         severity_note: "error",
-        next_free: "E0403",
+        next_free: "E0409",
     },
     Band {
         id: "driver.intent",

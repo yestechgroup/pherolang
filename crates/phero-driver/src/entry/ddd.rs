@@ -2,6 +2,7 @@
 //! with optional capability validation (actor models) and decision-link
 //! validation (decision models).
 
+use phero_syntax::ast as dsl;
 use salsa::Database as Db;
 
 use crate::compilation::DddCompilation;
@@ -66,6 +67,28 @@ fn compile_ddd_with(
     );
     let actors = actor_models(inputs);
 
+    // The machine references resolve per declaring file (issue
+    // pherolang#388) — here the design file is its own declaring file. The
+    // diagnostics ride into the compile (the stage-1.5 position) untagged:
+    // `compile_ddd_file` tags its own diagnostics with the design path.
+    let (externals, reference_diagnostics) = parsed
+        .ast
+        .as_ref()
+        .and_then(|ast| ast.application.as_ref())
+        .map_or_else(
+            || (Vec::new(), Vec::new()),
+            |application| {
+                let mut diags = Vec::new();
+                let externals = ddd::resolve_machine_references(
+                    &design_path,
+                    &application.modules,
+                    inputs.machines(),
+                    &mut diags,
+                );
+                (externals, diags)
+            },
+        );
+
     let (model, diagnostics) = ddd::compile_ddd_file(
         &design_path,
         &design.text(db),
@@ -76,6 +99,8 @@ fn compile_ddd_with(
         actors.as_deref(),
         inputs.decisions(),
         inputs.events(),
+        &externals,
+        reference_diagnostics,
     );
     finish_surface(domains, model, diagnostics, DddCompilation::assemble)
 }
@@ -488,6 +513,20 @@ pub fn compile_ddd_app_str(
         return DddCompilation::assemble(None, None, diagnostics);
     };
 
+    // The root's machine references resolve before the fragments merge
+    // (issue pherolang#388): the merge would put fragment designs into
+    // `application.modules`, and their references must resolve under the
+    // fragment's own path key instead. The diagnostics are tagged with the
+    // root path — the root's spans are root-local, so the later remap
+    // keeps them.
+    let mut reference_diagnostics = Vec::new();
+    let mut externals = ddd::resolve_machine_references(
+        path,
+        &application.modules,
+        inputs.machines(),
+        &mut reference_diagnostics,
+    );
+
     // The combined source keeps root spans at their authored offsets and
     // pads each fragment before parsing, so every AST span is already a
     // combined-source span. Ranges map diagnostics back to their file.
@@ -503,6 +542,7 @@ pub fn compile_ddd_app_str(
     let root_imports = ast.imports.clone();
     let mut fragment_origins: Vec<(String, Vec<phero_syntax::Import>)> = Vec::new();
     let mut merged_imports = ast.imports.clone();
+    let mut fragment_module_lists: Vec<(String, Vec<dsl::DddModule>)> = Vec::new();
     for fragment in fragments {
         let base = combined.len();
         let padded = format!("{}{}", " ".repeat(base), fragment.source);
@@ -527,6 +567,7 @@ pub fn compile_ddd_app_str(
                 ));
             } else {
                 fragment_origins.push((fragment.path.clone(), fragment_ast.imports.clone()));
+                fragment_module_lists.push((fragment.path.clone(), fragment_ast.fragments.clone()));
                 fragment_modules.extend(fragment_ast.fragments);
                 merged_imports.extend(fragment_ast.imports);
             }
@@ -558,6 +599,24 @@ pub fn compile_ddd_app_str(
     }
     let lowered = lower_domains_from(&db, &origins, &files, inputs.imports());
     let actors = actor_models(inputs);
+
+    // The fragments' machine references resolve under their own paths
+    // (issue pherolang#388): a fragment's `from "<path>"` names a file
+    // relative to the fragment. The fragment modules carry combined-source
+    // spans, so their diagnostics ride untagged into the compile — the
+    // root-path tagging happens inside `compile_ddd_file`, and the remap
+    // then attributes them to the declaring fragment.
+    for (fragment_path, modules) in &fragment_module_lists {
+        let mut fragment_diags = Vec::new();
+        externals.extend(ddd::resolve_machine_references(
+            fragment_path,
+            modules,
+            inputs.machines(),
+            &mut fragment_diags,
+        ));
+        reference_diagnostics.extend(fragment_diags);
+    }
+
     let (model, local_diagnostics) = ddd::compile_ddd_file(
         path,
         &combined,
@@ -568,6 +627,8 @@ pub fn compile_ddd_app_str(
         actors.as_deref(),
         inputs.decisions(),
         inputs.events(),
+        &externals,
+        reference_diagnostics,
     );
     diagnostics.extend(local_diagnostics);
     let diagnostics = remap_diagnostics(diagnostics, path, &ranges);
