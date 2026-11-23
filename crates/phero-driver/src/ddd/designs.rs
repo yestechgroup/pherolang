@@ -7,8 +7,8 @@
 
 use phero_diagnostics::ddd::{E_AGGREGATE_NON_ENTITY, E_DTO_ENTITY_ONLY, E_DTO_OPERATION};
 use phero_ir::ddd::{
-    BuiltinRepositoryOp, DddParam, Design, DesignFlags, Invariant, Repository, RepositoryOperation,
-    Stereotype,
+    BuiltinRepositoryOp, DddParam, Design, DesignFlags, Invariant, MachineProvenance, Repository,
+    RepositoryOperation, Stereotype,
 };
 use phero_syntax::ast as dsl;
 
@@ -287,6 +287,17 @@ pub(crate) fn lower_module_designs<'a>(
                 ) {
                     Some(reference) => {
                         projected = project_external_machine(reference, machine);
+                        // The compiled form and its provenance ride the
+                        // artifact (issue pherolang#388): a consumer reads
+                        // what the compiler verified, without needing
+                        // xstate-parser; the hash is recomputable from the
+                        // artifact alone.
+                        design_out.machine_ir = Some(reference.canonical_value.clone());
+                        design_out.machine_provenance = Some(MachineProvenance::new(
+                            reference.written_path.clone(),
+                            reference.id.clone(),
+                            reference.content_sha256.clone(),
+                        ));
                         &projected
                     }
                     None => machine,

@@ -427,3 +427,94 @@ fn service_conditions_bind_referenced_machine_states() {
         Some(PAYRUN_TS),
     );
 }
+
+// --- the artifact embed (issue pherolang#388) --------------------------------
+
+use phero_driver::machines::lower_design_machines;
+
+/// Compiles the happy-path reference design and returns the model.
+fn compile_reference() -> phero_ir::ddd::DddModel {
+    let compilation = compile_ddd_str(
+        DESIGN_PATH,
+        &reference_design(
+            r#"
+        entity PayRun repository PayRunRepository {
+            findById;
+            save;
+        }
+        machine status: PayRunStatus from "machines/payrun.machine.ts";
+"#,
+        ),
+        &CompileInputs::from_domains(&[(
+            "tests/conformance/ddd/payrun.mox".to_string(),
+            PAYRUN_DOMAIN.to_string(),
+        )])
+        .with_machines([(
+            DESIGN_PATH.to_string(),
+            MACHINE_PATH.to_string(),
+            PAYRUN_TS.to_string(),
+        )]),
+    );
+    compilation.model.expect("the compilation lowered")
+}
+
+#[test]
+fn the_embed_and_provenance_ride_the_artifact() {
+    let model = compile_reference();
+    let design = model.modules[0]
+        .designs
+        .iter()
+        .find(|design| design.class.as_deref() == Some("PayRun"))
+        .expect("the PayRun design");
+    let provenance = design
+        .machine_provenance
+        .as_ref()
+        .expect("the provenance rides the artifact");
+    assert_eq!(provenance.path, "machines/payrun.machine.ts");
+    assert_eq!(provenance.machine_id, "payrun");
+    // The hash is over the canonical IR JSON — recomputable from the
+    // artifact alone.
+    let canonical = phero_ir::canonical_json(design.machine_ir.as_ref().expect("the embed"));
+    assert_eq!(
+        provenance.content_sha256,
+        phero_evidence::sha256_hex(canonical.as_bytes()),
+        "the provenance hash is over the canonical embedded IR"
+    );
+    // The embedded IR is canonical: re-canonicalizing changes nothing.
+    assert_eq!(
+        design.machine_ir.as_ref().expect("the embed").to_string(),
+        canonical,
+    );
+    // The authored context: the machine's field, the lifecycle the TS
+    // declared.
+    let machine_ir = design.machine_ir.as_ref().expect("the embed");
+    assert_eq!(machine_ir["id"], "payrun");
+    assert_eq!(machine_ir["initial"], "Draft");
+}
+
+#[test]
+fn the_same_compile_is_byte_identical() {
+    // HashMap-borne IR structures serialize in varying order; the
+    // canonical embed pins the bytes.
+    let first = compile_reference().to_json().expect("serialize");
+    let second = compile_reference().to_json().expect("serialize");
+    assert_eq!(first, second, "two compiles of the same file agree byte for byte");
+}
+
+#[test]
+fn the_bridge_passes_the_embedded_ir_through() {
+    // lower_design_machines emits the authored form verbatim for referenced
+    // machines — no re-derivation from the mirror.
+    let model = compile_reference();
+    let lowered = lower_design_machines(&model);
+    assert_eq!(lowered.len(), 1);
+    let authored = model.modules[0].designs[0]
+        .machine_ir
+        .as_ref()
+        .expect("the embed");
+    assert_eq!(
+        serde_json::to_value(&lowered[0]).expect("serialize"),
+        *authored,
+        "the bridge emits the authored IR, not a mirror re-derivation"
+    );
+}

@@ -185,8 +185,20 @@ pub(crate) struct MachineReference {
     pub module: String,
     /// The declaration head's field — the machine's binding key.
     pub field: String,
+    /// The referenced file path exactly as written (the provenance's
+    /// `path`).
+    pub written_path: String,
+    /// The authored id (the provenance's `machineId`).
+    pub id: String,
     /// The parsed machine IR.
     pub machine: xstate_ir::Machine,
+    /// The IR's canonical JSON **value** (keys sorted recursively —
+    /// [`phero_ir::canonical_json_value`]): the exact form the artifact
+    /// embeds, so its serialization is deterministic.
+    pub canonical_value: serde_json::Value,
+    /// SHA-256 (lowercase hex) over the canonical JSON **string** — the
+    /// provenance's `contentSha256`, recomputable from the artifact alone.
+    pub content_sha256: String,
 }
 
 /// The resolved machine reference of one `(module, field)` pair, if the
@@ -314,9 +326,23 @@ pub(crate) fn resolve_machine_references(
                 ));
                 continue;
             }
+            // The embed and its hash both come from the canonical form (the
+            // determinism contract): the IR's `HashMap`-borne structures
+            // serialize in varying iteration order, so the canonical
+            // projection — keys sorted recursively — is the form the
+            // artifact embeds and the hash is taken over.
+            let parsed_value =
+                serde_json::to_value(parsed).expect("the parsed machine IR is JSON-serializable");
+            let canonical_value = phero_ir::canonical_json_value(&parsed_value);
+            let canonical = phero_ir::canonical_json(&parsed_value);
+            let content_sha256 = phero_evidence::sha256_hex(canonical.as_bytes());
             references.push(MachineReference {
                 module: module.name.text.clone(),
                 field: machine.field.text.clone(),
+                written_path: reference.path.clone(),
+                id: parsed.id.clone(),
+                canonical_value: canonical_value,
+                content_sha256: content_sha256,
                 machine: parsed.clone(),
             });
         }

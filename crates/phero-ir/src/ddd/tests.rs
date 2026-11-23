@@ -11,7 +11,7 @@ const PHERO_VERSION: &str = env!("CARGO_PKG_VERSION");
 /// The canonical bytes of an empty design artifact: the version marker
 /// plus the provenance line (the [`crate::Model`] precedent).
 fn empty_model_json() -> String {
-    format!(r#"{{"formatVersion":2,"pheroVersion":"{PHERO_VERSION}"}}"#)
+    format!(r#"{{"formatVersion":3,"pheroVersion":"{PHERO_VERSION}"}}"#)
 }
 
 fn class_ref(name: &str) -> TypeRef {
@@ -162,6 +162,8 @@ fn sample_model() -> DddModel {
                         ],
                     }),
                     machine: None,
+                    machine_ir: None,
+                    machine_provenance: None,
                     child_operations: Vec::new(),
                 },
                 Design {
@@ -177,6 +179,8 @@ fn sample_model() -> DddModel {
                     invariants: Vec::new(),
                     repository: None,
                     machine: None,
+                    machine_ir: None,
+                    machine_provenance: None,
                     child_operations: Vec::new(),
                 },
                 Design {
@@ -197,6 +201,8 @@ fn sample_model() -> DddModel {
                     invariants: Vec::new(),
                     repository: None,
                     machine: None,
+                    machine_ir: None,
+                    machine_provenance: None,
                     child_operations: Vec::new(),
                 },
             ],
@@ -208,7 +214,7 @@ fn sample_model() -> DddModel {
 fn new_and_default_stamp_format_version() {
     assert_eq!(sample_model().format_version, DDD_MODEL_FORMAT_VERSION);
     assert_eq!(DddModel::default().format_version, DDD_MODEL_FORMAT_VERSION);
-    assert_eq!(DDD_MODEL_FORMAT_VERSION, 2);
+    assert_eq!(DDD_MODEL_FORMAT_VERSION, 3);
 }
 
 /// The shared wire-contract characterization (see
@@ -225,7 +231,7 @@ fn empty_model_serializes_as_exactly_format_version() {
 #[test]
 fn wire_format_is_camel_case_with_no_snake_case_keys() {
     let json = sample_model().to_json().expect("serialize");
-    assert!(json.contains("\"formatVersion\":2"), "{json}");
+    assert!(json.contains("\"formatVersion\":3"), "{json}");
     assert!(json.contains("\"returnType\""), "{json}");
     assert!(json.contains("\"isAbstract\":true"), "{json}");
     assert!(json.contains("\"optimisticLocking\":true"), "{json}");
@@ -450,13 +456,13 @@ fn resolved_identity_fields_serialize_as_advertised() {
 /// alone).
 #[test]
 fn artifacts_without_phero_version_still_deserialize() {
-    let model = DddModel::from_json(r#"{"formatVersion":2}"#).expect("no provenance needed");
+    let model = DddModel::from_json(r#"{"formatVersion":3}"#).expect("no provenance needed");
     assert_eq!(model.format_version, DDD_MODEL_FORMAT_VERSION);
     assert!(model.phero_version.is_none());
     assert!(model.modules.is_empty());
     assert_eq!(
         model.to_json().expect("serialize"),
-        r#"{"formatVersion":2}"#,
+        r#"{"formatVersion":3}"#,
         "an unprovenanced artifact stays unprovenanced"
     );
 
@@ -567,6 +573,8 @@ fn default_flags_and_abstract_false_are_omitted() {
         invariants: Vec::new(),
         repository: None,
         machine: None,
+        machine_ir: None,
+        machine_provenance: None,
         child_operations: Vec::new(),
     };
     assert_eq!(
@@ -596,6 +604,8 @@ fn all_flags_serialize_with_camel_case_keys() {
         invariants: Vec::new(),
         repository: None,
         machine: None,
+        machine_ir: None,
+        machine_provenance: None,
         child_operations: Vec::new(),
     };
     assert_eq!(
@@ -667,10 +677,10 @@ fn semantics_round_trips_and_stays_additive() {
 
 #[test]
 fn from_json_rejects_wrong_format_version() {
-    let json = r#"{"formatVersion": 3, "modules": []}"#;
+    let json = r#"{"formatVersion": 4, "modules": []}"#;
     match DddModel::from_json(json) {
         Err(IrError::UnsupportedFormatVersion { found, expected }) => {
-            assert_eq!(found, 3);
+            assert_eq!(found, 4);
             assert_eq!(expected, DDD_MODEL_FORMAT_VERSION);
         }
         other => panic!("expected UnsupportedFormatVersion, got {other:?}"),
@@ -693,7 +703,7 @@ fn from_json_rejects_zero_and_missing_format_version() {
 #[test]
 fn from_json_tolerates_unknown_fields() {
     let json = r#"{
-        "formatVersion": 2,
+        "formatVersion": 3,
         "nobodyKnowsMe": {"nested": [1, 2, 3]},
         "application": {"name": "Library", "base": "nz.example.library"}
     }"#;
@@ -1312,7 +1322,7 @@ fn empty_model_bytes_are_unchanged_by_dd3() {
         DddModel::new().to_json().expect("serialize"),
         empty_model_json()
     );
-    assert_eq!(DDD_MODEL_FORMAT_VERSION, 2);
+    assert_eq!(DDD_MODEL_FORMAT_VERSION, 3);
 }
 
 /// DF1 (issue pherolang#324): the pairing block round-trips, and a hand-built
@@ -1680,5 +1690,132 @@ fn a_query_operation_round_trips_through_the_artifact() {
             .query,
         Some(sample_query()),
         "the query block survives the round trip"
+    );
+}
+
+// --- machine references (issue pherolang#388) -------------------------------
+
+/// A machine-bearing entity design with an embedded referenced machine:
+/// the DSL mirror plus the compiled IR and its provenance.
+fn referenced_machine_design() -> Design {
+    let mut design = Design::new("PayRun", Stereotype::Entity);
+    design.stereotype = Stereotype::Entity;
+    design.machine = Some(StateMachine::new(
+        "status",
+        TypeRef::Enum {
+            package: "nz.example.payroll".to_string(),
+            name: "PayRunStatus".to_string(),
+        },
+        "Draft",
+    ));
+    design.machine_ir = Some(serde_json::json!({
+        "id": "payrun",
+        "initial": "Draft",
+        "states": [{ "name": "Draft", "transitions": [] }],
+    }));
+    design.machine_provenance = Some(MachineProvenance::new(
+        "machines/payrun.machine.ts",
+        "payrun",
+        "abc123",
+    ));
+    design
+}
+
+fn design_json(design: &Design) -> String {
+    DddModel::new()
+        .module(Module {
+            name: "payroll".to_string(),
+            errors: Vec::new(),
+            services: Vec::new(),
+            designs: vec![design.clone()],
+            searches: Vec::new(),
+        })
+        .to_json()
+        .expect("serialize")
+}
+
+#[test]
+fn a_referenced_machine_embeds_the_ir_and_provenance() {
+    let json = design_json(&referenced_machine_design());
+    assert!(
+        json.contains(r#""machineIr":"#),
+        "the compiled IR rides the artifact: {json}"
+    );
+    assert!(
+        json.contains(r#""machineProvenance":"#),
+        "the provenance rides the artifact: {json}"
+    );
+    assert!(
+        json.contains(r#""machineId":"payrun""#),
+        "the authored id joins the provenance: {json}"
+    );
+    assert!(
+        json.contains(r#""contentSha256":"abc123""#),
+        "the provenance hash joins the provenance: {json}"
+    );
+    // Round trip: the embed survives deserialization.
+    let parsed = DddModel::from_json(&json).expect("deserialize");
+    assert_eq!(parsed, referenced_machine_model());
+}
+
+fn referenced_machine_model() -> DddModel {
+    DddModel::new().module(Module {
+        name: "payroll".to_string(),
+        errors: Vec::new(),
+        services: Vec::new(),
+        designs: vec![referenced_machine_design()],
+        searches: Vec::new(),
+    })
+}
+
+#[test]
+fn a_design_without_a_machine_reference_omits_both_keys() {
+    // The byte-identical discipline: a plain inline-machine design (and a
+    // machine-less design) serializes no machineIr/machineProvenance keys.
+    let mut design = Design::new("AuditLog", Stereotype::Entity);
+    design.stereotype = Stereotype::Entity;
+    design.machine = Some(StateMachine::new(
+        "state",
+        TypeRef::Enum {
+            package: "nz.example.payroll".to_string(),
+            name: "AuditState".to_string(),
+        },
+        "Open",
+    ));
+    let json = design_json(&design);
+    assert!(
+        !json.contains("machineIr"),
+        "an inline machine embeds nothing: {json}"
+    );
+    assert!(
+        !json.contains("machineProvenance"),
+        "an inline machine carries no provenance: {json}"
+    );
+    let machine_less = design_json(&Design::new("Book", Stereotype::Entity));
+    assert!(!machine_less.contains("machineIr"));
+    assert!(!machine_less.contains("machineProvenance"));
+}
+
+#[test]
+fn machine_ir_embeds_canonically_sorted_keys() {
+    // The parsed IR carries HashMap-borne structures (SetupConfig) whose
+    // iteration order varies run to run: the canonical embed sorts keys
+    // recursively, so the same authored file serializes byte-identically
+    // on every compile.
+    let insertion_a = serde_json::json!({
+        "z": 1,
+        "a": { "y": serde_json::json!({ "n": true, "m": 1 }), "b": 3 },
+    });
+    let insertion_b = serde_json::json!({
+        "a": { "b": 3, "y": serde_json::json!({ "m": 1, "n": true }) },
+        "z": 1,
+    });
+    let canonical_a = crate::canonical_json(&insertion_a);
+    let canonical_b = crate::canonical_json(&insertion_b);
+    assert_eq!(canonical_a, canonical_b);
+    assert_eq!(
+        canonical_a,
+        r#"{"a":{"b":3,"y":{"m":1,"n":true}},"z":1}"#,
+        "keys sort recursively, containers included"
     );
 }

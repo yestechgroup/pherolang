@@ -2689,6 +2689,7 @@ dependencies = [
  "dsntk-feel-parser",
  "dsntk-recognizer",
  "phero-diagnostics",
+ "phero-evidence",
  "phero-expr",
  "phero-ifml",
  "phero-ir",

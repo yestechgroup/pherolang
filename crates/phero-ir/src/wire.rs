@@ -397,7 +397,9 @@ pub(crate) mod tests {
         assert_root_wired!(DmnModel, DMN_MODEL_FORMAT_VERSION);
         assert_root_wired!(GraphModel, GRAPH_MODEL_FORMAT_VERSION);
 
-        for json in ["{}", "{\"formatVersion\":3}"] {
+        // `99` is no root's version (the uniform "wrong" probe); bump it if
+        // any marker ever reaches it.
+        for json in ["{}", "{\"formatVersion\":99}"] {
             rejects_version::<Model>(json);
             rejects_version::<ActorModel>(json);
             rejects_version::<DddModel>(json);
@@ -474,7 +476,15 @@ pub(crate) mod tests {
             );
             value.to_string()
         };
-        for (json, found) in [(with_version(Some(0)), 0u32), (with_version(Some(3)), 3)] {
+        // A wrong version is a future one (the marker plus one) and the
+        // absent one: both reject with `found`/`expected` pinned.
+        for (json, found) in [
+            (with_version(Some(0)), 0u32),
+            (
+                with_version(Some((T::FORMAT_VERSION + 1) as u64)),
+                T::FORMAT_VERSION + 1,
+            ),
+        ] {
             let error = from_json::<T>(&json).expect_err("wrong version must be rejected");
             assert!(
                 matches!(error, IrError::UnsupportedFormatVersion { found: f, expected } if f == found && expected == T::FORMAT_VERSION),
@@ -501,5 +511,42 @@ pub(crate) mod tests {
         let parsed: T = from_json(&pretty).expect("sample must round-trip through to_json_pretty");
         assert_eq!(&parsed, sample);
         assert_eq!(to_json_pretty(&parsed).expect("re-serialize"), pretty);
+    }
+}
+
+/// The canonical form of a JSON value: **every object's keys sorted,
+/// recursively** (arrays keep their order), serialized to compact JSON.
+///
+/// This is the determinism contract for embedded foreign JSON (issue
+/// pherolang#388): the machine IR carries `HashMap`-borne structures whose
+/// iteration order varies run to run, so a value embedded into an artifact
+/// must be projected through this function first — or the same authored
+/// file serializes differently on every compile and no golden, hash, or
+/// receipt can pin it. The embedded form and the provenance hash are both
+/// taken over these bytes, which also makes the hash recomputable from the
+/// artifact alone.
+pub fn canonical_json(value: &serde_json::Value) -> String {
+    let canonical = canonical_json_value(value);
+    serde_json::to_string(&canonical).expect("canonical JSON is always serializable")
+}
+
+/// The canonical form of a JSON value as a value: objects rebuilt with
+/// their keys in sorted order, recursively. Embed this form so the
+/// artifact's own serialization is deterministic.
+pub fn canonical_json_value(value: &serde_json::Value) -> serde_json::Value {
+    match value {
+        serde_json::Value::Object(map) => {
+            let mut keys: Vec<&String> = map.keys().collect();
+            keys.sort();
+            let sorted = keys
+                .into_iter()
+                .map(|key| (key.clone(), canonical_json_value(&map[key])))
+                .collect::<serde_json::Map<String, serde_json::Value>>();
+            serde_json::Value::Object(sorted)
+        }
+        serde_json::Value::Array(items) => {
+            serde_json::Value::Array(items.iter().map(canonical_json_value).collect())
+        }
+        other => other.clone(),
     }
 }
