@@ -21,5 +21,6 @@ mod ifml;
 mod machine_refs;
 mod references;
 mod rename;
+mod rosetta;
 mod semantic_tokens;
 mod symbol;

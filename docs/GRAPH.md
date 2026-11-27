@@ -895,7 +895,8 @@ compiled artifact and spanned index are reused from a per-file memo
 (`GraphMemo` in `crates/phero-lsp/src/server/graph.rs`). The key is a hash of
 the file's own text plus the **open-or-disk text of every import it
 resolves** (`resolved_imports`, plus a `.mox` file's `import
-schema`/`import sigil` paths, which are not application edges) — so one
+schema` paths and, for `import sigil`, every rosetta file of the discovered
+pool the compile reads — none of them application edges, pherolang#398) — so one
 keystroke recompiles the edited file and the files importing it, never the
 rest of the directory, and a `.ddd` whose imported `.mox` changed
 recompiles even with its own text untouched. A `didChange` that only bumps

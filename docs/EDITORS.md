@@ -29,6 +29,10 @@ resolve, and what the editor shares with `pherolang graph build` — is owned
 by [GRAPH.md](GRAPH.md#the-lsp-contract); this page deliberately does not
 restate it. All ten surfaces (`.mox`, `.actor`, `.ddd`, `.evt`, `.dmn`,
 `.deploy`, `.uc`, `.cmmn`, `.ifml`, `.intent`) are served by the one process.
+`.rosetta` is not yet a surface, but the diagnostics of a `.mox` file's
+`import sigil` content are published on the rosetta file itself, and the
+`.mox` gets one error on the `import sigil` line naming the broken file
+(pherolang#398).
 
 A ten-second smoke test without an editor: start `pherolang lsp` in a
 terminal, paste a framed `initialize` request, and read the capabilities
