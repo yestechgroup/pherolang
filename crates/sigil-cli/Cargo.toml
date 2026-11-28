@@ -1,0 +1,33 @@
+[package]
+name = "sigil-cli"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+# Staging import (RN4, ADR 0012): not published until RN11 settles names.
+publish = false
+description = "Command-line interface for the sigil Rune DSL toolchain"
+
+[[bin]]
+name = "sigil"
+path = "src/main.rs"
+
+[dependencies]
+sigil-diag = { workspace = true }
+sigil-syntax = { workspace = true }
+sigil-model = { workspace = true }
+sigil-resolve = { workspace = true }
+serde_json = { workspace = true }
+
+[dev-dependencies]
+criterion = { workspace = true }
+# The workspace's canonical key order for written goldens (`serde_json`
+# `preserve_order` unifies workspace-wide; AGENTS.md).
+phero-backend-common = { workspace = true }
+
+[[bench]]
+name = "pipeline"
+harness = false
+
+[lints]
+workspace = true

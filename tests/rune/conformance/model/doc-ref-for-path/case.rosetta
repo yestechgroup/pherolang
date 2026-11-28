@@ -1,0 +1,11 @@
+namespace demo.docs
+
+body CFTC CFTCBody <"Commodity Futures Trading Commission">
+corpus CFTC Part45 <"Part 45">
+segment S1
+segment S2
+
+type Product:
+	[docReference CFTC Part45 S1 "S1"]
+	productId string (1..1)
+		[docReference for productId CFTC Part45 S1 "S1" S2 "S2" rationale "why" provision "prov text" reportedField]
