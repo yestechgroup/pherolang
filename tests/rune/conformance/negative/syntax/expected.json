@@ -656,7 +656,7 @@
   "syntaxDiagnostics": [
     {
       "code": "E0500",
-      "message": "found end of input expected '/', any, or )",
+      "message": "found end of input expected )",
       "severity": "error"
     }
   ]

@@ -1,98 +1,49 @@
-//! Chumsky-based parser for the Rune `.rosetta` grammar (Milestone 1 subset).
-//!
-//! Grammar subset (see `docs/reference/Rosetta.xtext` for the full grammar):
-//! - model header: `override? namespace`, `scope`, `version`, imports,
-//!   qualifiable configurations
-//! - elements: `type`, `choice`, `enum`, `annotation`, `typeAlias`,
-//!   `basicType`, `recordType`, `library function`
-//! - attributes with full cardinalities, definitions (`<"...">`),
-//!   annotation refs (`[metadata scheme]`, qualifiers), doc references,
-//!   labels, rule references
-//!
-//! Expressions (type-level conditions) are parsed by `expr.rs` per the
-//! full grammar.
-//!
-//! Unsupported constructs (`func`, `rule`, `report`, `schema`, ...) produce
-//! a diagnostic identifying the construct and are skipped up to the next
-//! element boundary.
+//! The Rune declaration grammar over [`RuneToken`]s (the expression grammar
+//! is [`super::expr`]). It is a token-level port of the scannerless sigil
+//! parser, which transcribed `docs/rune/reference/Rosetta.xtext`: the
+//! productions, their alternative order and their keyword stop sets are
+//! unchanged (RN9, ADR 0012 D2). Only the primitives below differ: they match
+//! tokens instead of characters, so spans now cover exactly a construct's
+//! text and no longer its trailing whitespace.
 
 use chumsky::prelude::*;
-use sigil_diag::{Diagnostic, SourceFile, Span};
+use phero_parser::{ParseError, Span};
 
-use crate::ast::*;
+use crate::rune::ast::*;
+use crate::rune::lexer::{lex, RuneToken};
+use crate::words::{
+    RUNE_DOC_REFERENCE_WORDS, RUNE_ELEMENT_WORDS, RUNE_HYPHEN_KEYWORDS, RUNE_REPORT_STOP_WORDS,
+};
 
-pub(crate) type AErr<'src> = extra::Err<Rich<'src, char, SimpleSpan>>;
+/// The parser input: Rune tokens over the shared byte-span token slice.
+pub(crate) type I<'src> = phero_parser::Tokens<'src, RuneToken<'src>>;
 
-/// Convert a chumsky span into the toolchain-wide span type.
-pub(crate) fn span_of(span: SimpleSpan) -> Span {
-    Span::new(span.start(), span.end())
+pub(crate) type AErr<'src> = extra::Err<Rich<'src, RuneToken<'src>, Span>>;
+
+/// The span of a parsed region. Spans are already byte spans (the
+/// [`phero_parser::Tokens`] input), so this is the identity; it stays so the
+/// grammar reads as it did.
+pub(crate) fn span_of(span: Span) -> Span {
+    span
 }
 
-/// Keywords that start a top-level element. Used to keep identifiers from
-/// swallowing element starts (e.g. enum values, choice options).
-const ELEMENT_KEYWORDS: &[&str] = &[
-    "namespace",
-    "type",
-    "enum",
-    "choice",
-    "annotation",
-    "typeAlias",
-    "basicType",
-    "recordType",
-    "library",
-    "func",
-    "report",
-    "rule",
-    "schema",
-    "body",
-    "corpus",
-    "segment",
-    "metaType",
-];
-
-/// Constructs we recognise but do not yet model. Every grammar element is
-/// modelled as of phase 4, so this list is empty and the W0001 path is
-/// dead code kept for future grammar additions.
-const UNSUPPORTED_KEYWORDS: &[&str] = &[];
-
-pub(crate) fn ws<'src>() -> impl Parser<'src, &'src str, (), AErr<'src>> + Clone {
-    let line = just("//")
-        .ignore_then(none_of('\n').repeated())
-        .then_ignore(just('\n').or_not())
-        .ignored();
-    let block = just("/*")
-        .ignore_then(any().and_is(just("*/").not()).repeated().ignored())
-        .ignore_then(just("*/"))
-        .ignored();
-    let space = any().filter(|c: &char| c.is_whitespace()).ignored();
-    choice((block, line, space)).repeated().ignored()
+/// Whitespace and comments: the lexer drops them, so this matches nothing.
+/// It stays so the transcribed grammar's `then_ignore(ws())` calls read as
+/// they did.
+pub(crate) fn ws<'src>() -> impl Parser<'src, I<'src>, (), AErr<'src>> + Clone {
+    empty()
 }
 
 /// An Xtext `ID`: `^? [A-Za-z_] [A-Za-z0-9_]*`.
 /// Returns `(was_caret_escaped, unescaped_name)`.
-fn id_token<'src>() -> impl Parser<'src, &'src str, (bool, String), AErr<'src>> + Clone {
-    let start = any().filter(|c: &char| c.is_ascii_alphabetic() || *c == '_');
-    let rest = any().filter(|c: &char| c.is_ascii_alphanumeric() || *c == '_');
-    let ident = start
-        .then(rest.repeated().collect::<Vec<char>>())
-        .map(|(first, rest_chars)| {
-            let mut name = String::new();
-            name.push(first);
-            name.extend(rest_chars);
-            name
-        });
-    just('^')
-        .to(true)
-        .or_not()
-        .then(ident)
-        .then_ignore(ws())
-        .map(|(escaped, name)| (escaped.unwrap_or(false), name))
+fn id_token<'src>() -> impl Parser<'src, I<'src>, (bool, String), AErr<'src>> + Clone {
+    select! { RuneToken::Ident((text, escaped)) => (escaped, text.to_string()) }
         .labelled("identifier")
 }
 
 /// A plain identifier (ValidID). Rune allows a few keywords as identifiers,
 /// which falls out naturally here because keywords are matched textually.
-pub(crate) fn name<'src>() -> impl Parser<'src, &'src str, String, AErr<'src>> + Clone {
+pub(crate) fn name<'src>() -> impl Parser<'src, I<'src>, String, AErr<'src>> + Clone {
     id_token().map(|(_, name)| name)
 }
 
@@ -104,9 +55,9 @@ pub(crate) fn name<'src>() -> impl Parser<'src, &'src str, String, AErr<'src>> +
 /// `ID`/`ValidID` and a name can never swallow the next element's first
 /// word. The textual matcher has no lexer to lean on, so the same set is
 /// excluded explicitly.
-fn element_name<'src>() -> impl Parser<'src, &'src str, String, AErr<'src>> + Clone {
+fn element_name<'src>() -> impl Parser<'src, I<'src>, String, AErr<'src>> + Clone {
     fn stop_words() -> Vec<&'static str> {
-        let mut stop: Vec<&'static str> = ELEMENT_KEYWORDS.to_vec();
+        let mut stop: Vec<&'static str> = RUNE_ELEMENT_WORDS.to_vec();
         stop.extend(["reporting", "eligibility"]);
         stop
     }
@@ -125,36 +76,10 @@ fn element_name<'src>() -> impl Parser<'src, &'src str, String, AErr<'src>> + Cl
 /// `segment` and rule references). Besides the element keywords, the
 /// report-structural keywords are keyword tokens too and must never be
 /// swallowed by the greedy reference lists.
-fn report_ref_name<'src>() -> impl Parser<'src, &'src str, String, AErr<'src>> + Clone {
-    const STOP: &[&str] = &[
-        "in",
-        "from",
-        "when",
-        "with",
-        "type",
-        "and",
-        "reporting",
-        "eligibility",
-        "namespace",
-        "enum",
-        "choice",
-        "annotation",
-        "typeAlias",
-        "basicType",
-        "recordType",
-        "library",
-        "func",
-        "report",
-        "rule",
-        "schema",
-        "body",
-        "corpus",
-        "segment",
-        "metaType",
-    ];
+fn report_ref_name<'src>() -> impl Parser<'src, I<'src>, String, AErr<'src>> + Clone {
     name()
         .try_map(move |text: String, span| {
-            if STOP.contains(&text.as_str()) {
+            if RUNE_REPORT_STOP_WORDS.contains(&text.as_str()) {
                 Err(Rich::custom(span, "report reference"))
             } else {
                 Ok(text)
@@ -164,7 +89,7 @@ fn report_ref_name<'src>() -> impl Parser<'src, &'src str, String, AErr<'src>> +
 }
 
 /// A qualified name over [`report_ref_name`].
-fn report_ref_qname<'src>() -> impl Parser<'src, &'src str, SpannedQName, AErr<'src>> + Clone {
+fn report_ref_qname<'src>() -> impl Parser<'src, I<'src>, SpannedQName, AErr<'src>> + Clone {
     report_ref_name()
         .separated_by(sym("."))
         .at_least(1)
@@ -177,85 +102,113 @@ fn report_ref_qname<'src>() -> impl Parser<'src, &'src str, SpannedQName, AErr<'
 }
 
 /// Matches exactly the keyword `k`, rejecting `^k` caret escapes.
-pub(crate) fn kw<'src>(k: &'static str) -> impl Parser<'src, &'src str, (), AErr<'src>> + Clone {
-    id_token()
-        .try_map(move |(escaped, text), span| {
-            if !escaped && text == k {
-                Ok(())
-            } else {
-                Err(Rich::custom(span, format!("expected '{k}'")))
-            }
-        })
-        .labelled(k)
+pub(crate) fn kw<'src>(k: &'static str) -> impl Parser<'src, I<'src>, (), AErr<'src>> + Clone {
+    select! { RuneToken::Ident((text, false)) if text == k => () }.labelled(k)
 }
 
-/// Matches a hyphenated keyword token (e.g. `post-condition`, `real-time`,
-/// `T+1`). These are Xtext keyword tokens rather than `ID`s, so the matcher
-/// is character-based and requires a non-identifier right boundary.
-pub(crate) fn word_kw<'src>(
-    k: &'static str,
-) -> impl Parser<'src, &'src str, (), AErr<'src>> + Clone {
-    just(k)
-        .to(())
-        .then_ignore(
-            any()
-                .filter(|c: &char| c.is_ascii_alphanumeric() || *c == '_')
-                .not(),
-        )
-        .then_ignore(ws())
-        .labelled(k)
+/// Matches a keyword that is not a plain identifier in the Xtext grammar:
+/// a hyphenated keyword token (`post-condition`, `real-time`), a timing word
+/// `T+1`…`T+5` (three adjacent tokens, so `T + 1` stays arithmetic), or a word
+/// keyword (`ASATP`, `in`), which is an identifier matched by text.
+pub(crate) fn word_kw<'src>(k: &'static str) -> Boxed<'src, 'src, I<'src>, (), AErr<'src>> {
+    if RUNE_HYPHEN_KEYWORDS.contains(&k) {
+        return select! { RuneToken::Word(word) if word == k => () }
+            .labelled(k)
+            .boxed();
+    }
+    if let Some(digit) = k.strip_prefix("T+") {
+        return select! { RuneToken::Ident(("T", false)) = e => e.span() }
+            .then(select! { RuneToken::Punct("+") = e => e.span() })
+            .then(select! { RuneToken::Int(n) = e if n == digit => e.span() })
+            .try_map(move |((t, plus), n): ((Span, Span), Span), span| {
+                if t.end == plus.start && plus.end == n.start {
+                    Ok(())
+                } else {
+                    Err(Rich::custom(span, format!("expected '{k}'")))
+                }
+            })
+            .labelled(k)
+            .boxed();
+    }
+    kw(k).boxed()
 }
 
-pub(crate) fn sym<'src>(s: &'static str) -> impl Parser<'src, &'src str, (), AErr<'src>> + Clone {
-    just(s).to(()).then_ignore(ws()).labelled(s.to_string())
+pub(crate) fn sym<'src>(s: &'static str) -> impl Parser<'src, I<'src>, (), AErr<'src>> + Clone {
+    select! { RuneToken::Punct(p) if p == s => () }.labelled(s)
 }
 
 /// An Xtext `STRING` terminal: single- or double-quoted with escapes.
-pub(crate) fn string_lit<'src>() -> impl Parser<'src, &'src str, String, AErr<'src>> + Clone {
-    let escape = just('\\').ignore_then(choice((
-        just('\\'),
-        just('"'),
-        just('\''),
-        just('n').to('\n'),
-        just('t').to('\t'),
-        just('r').to('\r'),
-        just('b').to('\u{0008}'),
-        just('f').to('\u{000C}'),
-        any(),
-    )));
-    let dq = escape
-        .or(none_of("\"\\"))
-        .repeated()
-        .collect::<Vec<char>>()
-        .delimited_by(just('"'), just('"'))
-        .map(|cs| cs.into_iter().collect::<String>());
-    let sq = escape
-        .or(none_of("'"))
-        .repeated()
-        .collect::<Vec<char>>()
-        .delimited_by(just('\''), just('\''))
-        .map(|cs| cs.into_iter().collect::<String>());
-    dq.or(sq).then_ignore(ws()).labelled("string literal")
+pub(crate) fn string_lit<'src>() -> impl Parser<'src, I<'src>, String, AErr<'src>> + Clone {
+    select! { RuneToken::Str(raw) => unescape(raw) }.labelled("string literal")
+}
+
+/// The payload of a quoted string token: quotes stripped, and `\\`, `\"`,
+/// `\'`, `\n`, `\t`, `\r`, `\b`, `\f` decoded. Any other escaped
+/// character stands for itself, as in the Xtext `STRING` terminal.
+fn unescape(raw: &str) -> String {
+    let inner = &raw[1..raw.len() - 1];
+    let mut out = String::with_capacity(inner.len());
+    let mut chars = inner.chars();
+    while let Some(c) = chars.next() {
+        if c != '\\' {
+            out.push(c);
+            continue;
+        }
+        match chars.next() {
+            Some('n') => out.push('\n'),
+            Some('t') => out.push('\t'),
+            Some('r') => out.push('\r'),
+            Some('b') => out.push('\u{0008}'),
+            Some('f') => out.push('\u{000C}'),
+            Some(other) => out.push(other),
+            None => {}
+        }
+    }
+    out
+}
+
+/// A `+`/`-` sign token with its span.
+fn sign<'src>() -> impl Parser<'src, I<'src>, (char, Span), AErr<'src>> + Clone {
+    select! {
+        RuneToken::Punct("+") = e => ('+', e.span()),
+        RuneToken::Punct("-") = e => ('-', e.span()),
+    }
+}
+
+/// An unsigned-digits token with its span.
+fn digits_token<'src>() -> impl Parser<'src, I<'src>, (&'src str, Span), AErr<'src>> + Clone {
+    select! { RuneToken::Int(digits) = e => (digits, e.span()) }
+}
+
+/// An optional sign that must touch the digits after it (`-1`, never `- 1`).
+fn signed_digits<'src>() -> impl Parser<'src, I<'src>, (Option<char>, &'src str), AErr<'src>> + Clone
+{
+    sign()
+        .or_not()
+        .then(digits_token())
+        .try_map(|(sign, (digits, digits_span)), span| match sign {
+            Some((_, sign_span)) if sign_span.end != digits_span.start => {
+                Err(Rich::custom(span, "a sign must touch its digits"))
+            }
+            Some((sign, _)) => Ok((Some(sign), digits)),
+            None => Ok((None, digits)),
+        })
 }
 
 /// Unsigned integer (`INT` terminal).
-fn uint<'src>() -> impl Parser<'src, &'src str, u32, AErr<'src>> + Clone {
-    text::int(10)
-        .try_map(|s: &str, span| {
+fn uint<'src>() -> impl Parser<'src, I<'src>, u32, AErr<'src>> + Clone {
+    digits_token()
+        .try_map(|(s, _), span| {
             s.parse::<u32>()
                 .map_err(|_| Rich::custom(span, format!("'{s}' is out of range")))
         })
-        .then_ignore(ws())
         .labelled("integer")
 }
 
 /// Signed integer literal, keeping the source text verbatim (sign included).
-pub(crate) fn int_lit_raw<'src>() -> impl Parser<'src, &'src str, String, AErr<'src>> + Clone {
-    one_of("+-")
-        .or_not()
-        .then(text::int(10))
-        .then_ignore(ws())
-        .try_map(|(sign, digits): (Option<char>, &str), span| {
+pub(crate) fn int_lit_raw<'src>() -> impl Parser<'src, I<'src>, String, AErr<'src>> + Clone {
+    signed_digits()
+        .try_map(|(sign, digits), span| {
             digits
                 .parse::<i128>()
                 .map(|_| match sign {
@@ -268,74 +221,65 @@ pub(crate) fn int_lit_raw<'src>() -> impl Parser<'src, &'src str, String, AErr<'
 }
 
 /// Signed integer literal.
-pub(crate) fn int_lit<'src>() -> impl Parser<'src, &'src str, i128, AErr<'src>> + Clone {
-    let sign = one_of("+-").or_not();
-    sign.then(text::int(10))
-        .try_map(|(sign, s): (Option<char>, &str), span| {
+pub(crate) fn int_lit<'src>() -> impl Parser<'src, I<'src>, i128, AErr<'src>> + Clone {
+    signed_digits()
+        .try_map(|(sign, s), span| {
             let negative = sign == Some('-');
             s.parse::<i128>()
                 .map(|v| if negative { -v } else { v })
                 .map_err(|_| Rich::custom(span, format!("'{s}' is out of range")))
         })
-        .then_ignore(ws())
         .labelled("integer literal")
 }
 
 /// `BigDecimal` literal — requires a fractional part, per the grammar
-/// (`sign? ('.' INT | INT '.' | INT '.' INT) exponent?`). Structured rather
-/// than a greedy scan so that a trailing `-` (as in `2.0->>x`) is never
-/// swallowed.
-pub(crate) fn number_lit<'src>() -> impl Parser<'src, &'src str, String, AErr<'src>> + Clone {
-    // Xtext's `INT` terminal is `('0'..'9')+`; chumsky's `text::int`
-    // additionally forbids leading zeros (`[1-9][0-9]* | 0`), which would
-    // reject fraction parts like `0.01` or `1.00` and exponents like `1e01`.
-    let digits = || {
-        any()
-            .filter(|c: &char| c.is_ascii_digit())
-            .repeated()
-            .at_least(1)
-            .to_slice()
-            .map(|digits: &str| digits.to_owned())
+/// (`sign? ('.' INT | INT '.' | INT '.' INT) exponent?`).
+///
+/// The `INT '.' INT` and `'.' INT` forms (with any exponent) are one
+/// [`RuneToken::Decimal`]. The bare `INT '.'` form is an int token and a
+/// touching `.` (optionally followed by a touching `e5`/`e`,`-`,`5`
+/// exponent). A sign must touch the number, as in the Xtext terminal.
+pub(crate) fn number_lit<'src>() -> impl Parser<'src, I<'src>, String, AErr<'src>> + Clone {
+    let decimal = select! { RuneToken::Decimal(text) = e => (text.to_string(), e.span()) };
+    let exponent_word = select! {
+        RuneToken::Ident((word, false)) = e
+            if (word.starts_with('e') || word.starts_with('E'))
+                && word.len() > 1
+                && word[1..].bytes().all(|b| b.is_ascii_digit()) => (word.to_string(), e.span()),
     };
-    let core = just(".")
-        .ignore_then(digits())
-        .map(|fraction| format!(".{fraction}"))
-        .or(digits()
-            .then_ignore(just("."))
-            .then(digits().map(|f| format!(".{f}")).or_not())
-            .map(|(whole, fraction)| match fraction {
-                Some(fraction) => format!("{whole}{fraction}"),
-                None => format!("{whole}."),
-            }));
-    let exponent = one_of("eE")
-        .then(one_of("+-").or_not())
-        .then(digits())
-        .map(|((marker, sign), digits)| match sign {
-            Some(sign) => format!("{marker}{sign}{digits}"),
-            None => format!("{marker}{digits}"),
-        })
-        .or_not();
-    one_of("+-")
-        .or_not()
-        .then(core)
-        .then(exponent)
-        .then_ignore(ws())
-        .map(|((sign, core), exponent)| {
-            let mut text = String::new();
-            if let Some(sign) = sign {
-                text.push(sign);
+    let int_dot = digits_token()
+        .then(select! { RuneToken::Punct(".") = e => e.span() })
+        .then(exponent_word.or_not())
+        .try_map(|(((digits, digits_span), dot), exponent), span| {
+            if digits_span.end != dot.start {
+                return Err(Rich::custom(span, "number literal"));
             }
-            text.push_str(&core);
-            if let Some(exponent) = exponent {
+            let mut text = format!("{digits}.");
+            let mut end = dot.end;
+            if let Some((exponent, exponent_span)) = exponent {
+                if exponent_span.start != end {
+                    return Err(Rich::custom(span, "number literal"));
+                }
                 text.push_str(&exponent);
+                end = exponent_span.end;
             }
-            text
+            Ok((text, Span::from(digits_span.start..end)))
+        });
+    sign()
+        .or_not()
+        .then(decimal.or(int_dot))
+        .try_map(|(sign, (core, core_span)), span| match sign {
+            Some((_, sign_span)) if sign_span.end != core_span.start => {
+                Err(Rich::custom(span, "a sign must touch its number"))
+            }
+            Some((sign, _)) => Ok(format!("{sign}{core}")),
+            None => Ok(core),
         })
         .labelled("number literal")
 }
 
 /// Qualified name: `ValidID ('.' ValidID)*`
-pub(crate) fn qname<'src>() -> impl Parser<'src, &'src str, QName, AErr<'src>> + Clone {
+pub(crate) fn qname<'src>() -> impl Parser<'src, I<'src>, QName, AErr<'src>> + Clone {
     name()
         .separated_by(sym("."))
         .at_least(1)
@@ -345,7 +289,7 @@ pub(crate) fn qname<'src>() -> impl Parser<'src, &'src str, QName, AErr<'src>> +
 }
 
 /// A qualified name together with the span of its text.
-fn spanned_qname<'src>() -> impl Parser<'src, &'src str, SpannedQName, AErr<'src>> + Clone {
+fn spanned_qname<'src>() -> impl Parser<'src, I<'src>, SpannedQName, AErr<'src>> + Clone {
     qname()
         .map_with(|name, ex| SpannedQName {
             name,
@@ -355,19 +299,19 @@ fn spanned_qname<'src>() -> impl Parser<'src, &'src str, SpannedQName, AErr<'src
 }
 
 /// `<"definition text">` or nothing.
-fn definable<'src>() -> impl Parser<'src, &'src str, Option<String>, AErr<'src>> + Clone {
+fn definable<'src>() -> impl Parser<'src, I<'src>, Option<String>, AErr<'src>> + Clone {
     sym("<")
         .ignore_then(string_lit())
         .then_ignore(sym(">"))
         .or_not()
 }
 
-pub(crate) fn bool_kw<'src>() -> impl Parser<'src, &'src str, bool, AErr<'src>> + Clone {
+pub(crate) fn bool_kw<'src>() -> impl Parser<'src, I<'src>, bool, AErr<'src>> + Clone {
     kw("True").to(true).or(kw("False").to(false))
 }
 
 /// `('[' ']')` — marks library function parameters as arrays.
-fn array_marker<'src>() -> impl Parser<'src, &'src str, bool, AErr<'src>> + Clone {
+fn array_marker<'src>() -> impl Parser<'src, I<'src>, bool, AErr<'src>> + Clone {
     sym("[")
         .ignore_then(sym("]"))
         .to(true)
@@ -375,7 +319,7 @@ fn array_marker<'src>() -> impl Parser<'src, &'src str, bool, AErr<'src>> + Clon
         .map(|v| v.unwrap_or(false))
 }
 
-pub fn annotation_path<'src>() -> impl Parser<'src, &'src str, AnnotationPath, AErr<'src>> + Clone {
+pub fn annotation_path<'src>() -> impl Parser<'src, I<'src>, AnnotationPath, AErr<'src>> + Clone {
     let segment = choice((sym("->>").to(true), sym("->").to(false)))
         .then(name())
         .map(|(deep, attribute)| AnnotationPathSegment { attribute, deep });
@@ -403,7 +347,7 @@ pub fn annotation_path<'src>() -> impl Parser<'src, &'src str, AnnotationPath, A
         .labelled("annotation path")
 }
 
-fn qualifier_value<'src>() -> impl Parser<'src, &'src str, QualifierValue, AErr<'src>> + Clone {
+fn qualifier_value<'src>() -> impl Parser<'src, I<'src>, QualifierValue, AErr<'src>> + Clone {
     let path = qname()
         .then(
             sym("->")
@@ -420,7 +364,7 @@ fn qualifier_value<'src>() -> impl Parser<'src, &'src str, QualifierValue, AErr<
 }
 
 fn annotation_qualifier<'src>(
-) -> impl Parser<'src, &'src str, AnnotationQualifier, AErr<'src>> + Clone {
+) -> impl Parser<'src, I<'src>, AnnotationQualifier, AErr<'src>> + Clone {
     string_lit()
         .then_ignore(sym("="))
         .then(qualifier_value())
@@ -433,7 +377,7 @@ fn annotation_qualifier<'src>(
 }
 
 /// `[annotation attribute "qual"=value ...]`
-pub fn annotation_ref<'src>() -> impl Parser<'src, &'src str, AnnotationRef, AErr<'src>> + Clone {
+pub fn annotation_ref<'src>() -> impl Parser<'src, I<'src>, AnnotationRef, AErr<'src>> + Clone {
     sym("[")
         .ignore_then(qname())
         .then(name().or_not())
@@ -448,8 +392,7 @@ pub fn annotation_ref<'src>() -> impl Parser<'src, &'src str, AnnotationRef, AEr
         .labelled("annotation reference")
 }
 
-fn document_rationale<'src>() -> impl Parser<'src, &'src str, DocumentRationale, AErr<'src>> + Clone
-{
+fn document_rationale<'src>() -> impl Parser<'src, I<'src>, DocumentRationale, AErr<'src>> + Clone {
     let rationale = kw("rationale").ignore_then(string_lit());
     let author = kw("rationale_author").ignore_then(string_lit());
     rationale
@@ -467,22 +410,14 @@ fn document_rationale<'src>() -> impl Parser<'src, &'src str, DocumentRationale,
             }))
 }
 
-/// Keywords that continue a `[docReference ...]` after the body/corpus/
-/// segment reference lists. Xtext lexes them as keyword tokens, so they can
-/// never satisfy a `QualifiedName` in the reference lists; the keyword
-/// alternatives must win over the greedy pair repetition.
-const DOC_REFERENCE_KEYWORDS: &[&str] = &[
-    "rationale",
-    "rationale_author",
-    "structured_provision",
-    "provision",
-    "reportedField",
-];
-
-fn doc_ref_name<'src>() -> impl Parser<'src, &'src str, String, AErr<'src>> + Clone {
+/// A name in a `[docReference ...]` reference list. The words that continue
+/// the annotation ([`RUNE_DOC_REFERENCE_WORDS`]) are keyword tokens in Xtext,
+/// so they never satisfy a `QualifiedName` here and win over the greedy pair
+/// repetition.
+fn doc_ref_name<'src>() -> impl Parser<'src, I<'src>, String, AErr<'src>> + Clone {
     name()
         .try_map(|text: String, span| {
-            if DOC_REFERENCE_KEYWORDS.contains(&text.as_str()) {
+            if RUNE_DOC_REFERENCE_WORDS.contains(&text.as_str()) {
                 Err(Rich::custom(span, "doc reference"))
             } else {
                 Ok(text)
@@ -491,7 +426,7 @@ fn doc_ref_name<'src>() -> impl Parser<'src, &'src str, String, AErr<'src>> + Cl
         .labelled("doc reference")
 }
 
-fn doc_ref_qname<'src>() -> impl Parser<'src, &'src str, QName, AErr<'src>> + Clone {
+fn doc_ref_qname<'src>() -> impl Parser<'src, I<'src>, QName, AErr<'src>> + Clone {
     doc_ref_name()
         .separated_by(sym("."))
         .at_least(1)
@@ -501,7 +436,7 @@ fn doc_ref_qname<'src>() -> impl Parser<'src, &'src str, QName, AErr<'src>> + Cl
 }
 
 /// `[docReference for path Body Corpus (Segment "ref")* ...]`
-pub fn doc_reference<'src>() -> impl Parser<'src, &'src str, DocReference, AErr<'src>> + Clone {
+pub fn doc_reference<'src>() -> impl Parser<'src, I<'src>, DocReference, AErr<'src>> + Clone {
     let for_clause = kw("for").ignore_then(annotation_path()).or_not();
     let item = doc_ref_qname().then(string_lit().or_not());
     let structured = kw("structured_provision")
@@ -550,8 +485,7 @@ pub fn doc_reference<'src>() -> impl Parser<'src, &'src str, DocReference, AErr<
 }
 
 /// `[label for path "label"]`
-pub fn label_annotation<'src>() -> impl Parser<'src, &'src str, LabelAnnotation, AErr<'src>> + Clone
-{
+pub fn label_annotation<'src>() -> impl Parser<'src, I<'src>, LabelAnnotation, AErr<'src>> + Clone {
     let for_clause = kw("for").ignore_then(annotation_path()).or_not();
     sym("[")
         .ignore_then(kw("label"))
@@ -567,7 +501,7 @@ pub fn label_annotation<'src>() -> impl Parser<'src, &'src str, LabelAnnotation,
 }
 
 /// `[ruleReference CDM.Rule]` / `[ruleReference empty]`
-pub fn rule_reference<'src>() -> impl Parser<'src, &'src str, RuleReference, AErr<'src>> + Clone {
+pub fn rule_reference<'src>() -> impl Parser<'src, I<'src>, RuleReference, AErr<'src>> + Clone {
     let for_clause = kw("for").ignore_then(annotation_path()).or_not();
     sym("[")
         .ignore_then(kw("ruleReference"))
@@ -586,7 +520,7 @@ pub fn rule_reference<'src>() -> impl Parser<'src, &'src str, RuleReference, AEr
 /// The `[...]` fragment shared by data types, attributes and enum values.
 fn references_and_annotations<'src>() -> impl Parser<
     'src,
-    &'src str,
+    I<'src>,
     (
         Vec<DocReference>,
         Vec<AnnotationRef>,
@@ -628,7 +562,7 @@ fn references_and_annotations<'src>() -> impl Parser<
 }
 
 /// A type reference with optional arguments: `number(digits: 30)`.
-pub fn type_call<'src>() -> impl Parser<'src, &'src str, TypeCall, AErr<'src>> + Clone {
+pub fn type_call<'src>() -> impl Parser<'src, I<'src>, TypeCall, AErr<'src>> + Clone {
     let argument = name()
         .then_ignore(sym(":"))
         .then(
@@ -662,7 +596,7 @@ pub fn type_call<'src>() -> impl Parser<'src, &'src str, TypeCall, AErr<'src>> +
 }
 
 /// `(min..max)` or `(min..*)`. Required on every attribute.
-fn cardinality<'src>() -> impl Parser<'src, &'src str, Cardinality, AErr<'src>> + Clone {
+fn cardinality<'src>() -> impl Parser<'src, I<'src>, Cardinality, AErr<'src>> + Clone {
     sym("(")
         .ignore_then(uint())
         .then_ignore(sym(".."))
@@ -676,7 +610,7 @@ fn cardinality<'src>() -> impl Parser<'src, &'src str, Cardinality, AErr<'src>> 
         .labelled("cardinality")
 }
 
-fn attribute<'src>() -> impl Parser<'src, &'src str, AttributeDef, AErr<'src>> + Clone {
+fn attribute<'src>() -> impl Parser<'src, I<'src>, AttributeDef, AErr<'src>> + Clone {
     kw("override")
         .to(true)
         .or_not()
@@ -710,7 +644,7 @@ fn attribute<'src>() -> impl Parser<'src, &'src str, AttributeDef, AErr<'src>> +
 
 /// A `choice` option: a bare type reference with implicit `(0..1)`
 /// cardinality and no `override` marker.
-fn choice_option<'src>() -> impl Parser<'src, &'src str, AttributeDef, AErr<'src>> + Clone {
+fn choice_option<'src>() -> impl Parser<'src, I<'src>, AttributeDef, AErr<'src>> + Clone {
     type_call()
         .then(definable())
         .then(references_and_annotations())
@@ -719,7 +653,7 @@ fn choice_option<'src>() -> impl Parser<'src, &'src str, AttributeDef, AErr<'src
                 // An option names a type; a lone element keyword is the start of
                 // the next element, not an option.
                 if type_call.name.segment_count() == 1
-                    && ELEMENT_KEYWORDS.contains(&type_call.name.0.as_str())
+                    && RUNE_ELEMENT_WORDS.contains(&type_call.name.0.as_str())
                 {
                     Err(Rich::custom(span, "choice option"))
                 } else {
@@ -747,7 +681,7 @@ fn choice_option<'src>() -> impl Parser<'src, &'src str, AttributeDef, AErr<'src
         .labelled("choice option")
 }
 
-fn enum_value<'src>() -> impl Parser<'src, &'src str, EnumValueDef, AErr<'src>> + Clone {
+fn enum_value<'src>() -> impl Parser<'src, I<'src>, EnumValueDef, AErr<'src>> + Clone {
     element_name()
         .then(kw("displayName").ignore_then(string_lit()).or_not())
         .then(definable())
@@ -765,7 +699,7 @@ fn enum_value<'src>() -> impl Parser<'src, &'src str, EnumValueDef, AErr<'src>> 
         .labelled("enum value")
 }
 
-fn type_parameters<'src>() -> impl Parser<'src, &'src str, Vec<TypeParameter>, AErr<'src>> + Clone {
+fn type_parameters<'src>() -> impl Parser<'src, I<'src>, Vec<TypeParameter>, AErr<'src>> + Clone {
     let parameter = name().then(type_call()).then(definable()).map_with(
         |((name, type_call), definition), ex| TypeParameter {
             name,
@@ -783,65 +717,9 @@ fn type_parameters<'src>() -> impl Parser<'src, &'src str, Vec<TypeParameter>, A
         .map(|p| p.unwrap_or_default())
 }
 
-/// Lookahead recognising the start of a top-level element.
-///
-/// Refines plain keyword matching: `type Foo:` is a boundary, but the
-/// `type` inside `report ... with type Foo ...` is not.
-fn element_boundary<'src>() -> impl Parser<'src, &'src str, (), AErr<'src>> + Clone {
-    fn boundary<'src>() -> impl Parser<'src, &'src str, (), AErr<'src>> + Clone {
-        let colon_or_extends = choice((sym(":").to(()), kw("extends").to(())));
-        let type_like = choice((
-            kw("type")
-                .ignore_then(name())
-                .ignore_then(colon_or_extends.clone().rewind()),
-            kw("enum")
-                .ignore_then(name())
-                .ignore_then(colon_or_extends.clone().rewind()),
-            kw("choice")
-                .ignore_then(name())
-                .ignore_then(colon_or_extends.clone().rewind()),
-            kw("annotation")
-                .ignore_then(name())
-                .ignore_then(sym(":").rewind()),
-            kw("typeAlias")
-                .ignore_then(name())
-                .ignore_then(choice((sym(":").to(()), sym("(").to(()))).rewind()),
-            kw("func").ignore_then(name()).ignore_then(
-                choice((sym(":").to(()), sym("(").to(()), kw("extends").to(()))).rewind(),
-            ),
-        ));
-        let basic = kw("basicType")
-            .ignore_then(name())
-            .ignore_then(choice((sym("(").to(()), sym("<").to(()))).rewind());
-        let library = kw("library")
-            .ignore_then(kw("function"))
-            .ignore_then(name())
-            .ignore_then(sym("(").rewind());
-        let simple = choice((
-            kw("namespace").to(()),
-            kw("schema").to(()),
-            kw("body").to(()),
-            kw("corpus").to(()),
-            kw("segment").to(()),
-            kw("metaType").to(()),
-        ));
-        choice((type_like, basic, library, simple))
-    }
-    boundary()
-}
-
-/// Consumes tokens until the next element boundary or EOF (not consuming it).
-fn skip_to_element_boundary<'src>() -> impl Parser<'src, &'src str, (), AErr<'src>> + Clone {
-    any()
-        .and_is(element_boundary().not())
-        .ignored()
-        .repeated()
-        .then_ignore(ws())
-}
-
-fn data_def<'src>(choice: bool) -> impl Parser<'src, &'src str, DataDef, AErr<'src>> + Clone {
+fn data_def<'src>(choice: bool) -> impl Parser<'src, I<'src>, DataDef, AErr<'src>> + Clone {
     let header = if choice { kw("choice") } else { kw("type") };
-    let body: Boxed<'src, 'src, &'src str, (Vec<AttributeDef>, Vec<ConditionDef>), AErr<'src>> =
+    let body: Boxed<'src, 'src, I<'src>, (Vec<AttributeDef>, Vec<ConditionDef>), AErr<'src>> =
         if choice {
             choice_option()
                 .repeated()
@@ -853,9 +731,12 @@ fn data_def<'src>(choice: bool) -> impl Parser<'src, &'src str, DataDef, AErr<'s
                 .repeated()
                 .collect::<Vec<_>>()
                 .then(
-                    crate::expr::condition_def(kw("condition"), crate::expr::expression())
-                        .repeated()
-                        .collect::<Vec<_>>(),
+                    crate::rune::expr::condition_def(
+                        kw("condition"),
+                        crate::rune::expr::expression(),
+                    )
+                    .repeated()
+                    .collect::<Vec<_>>(),
                 )
                 .boxed()
         };
@@ -871,7 +752,7 @@ fn data_def<'src>(choice: bool) -> impl Parser<'src, &'src str, DataDef, AErr<'s
              ex| {
                 let mut span = span_of(ex.span());
                 if let Some(last_condition) = conditions.last() {
-                    span = span.merge(last_condition.span);
+                    span = span.union(last_condition.span);
                 }
                 DataDef {
                     name,
@@ -888,7 +769,7 @@ fn data_def<'src>(choice: bool) -> impl Parser<'src, &'src str, DataDef, AErr<'s
         .labelled(if choice { "choice" } else { "type" })
 }
 
-fn enum_def<'src>() -> impl Parser<'src, &'src str, EnumDef, AErr<'src>> + Clone {
+fn enum_def<'src>() -> impl Parser<'src, I<'src>, EnumDef, AErr<'src>> + Clone {
     kw("enum")
         .ignore_then(name())
         .then(kw("extends").ignore_then(spanned_qname()).or_not())
@@ -910,7 +791,7 @@ fn enum_def<'src>() -> impl Parser<'src, &'src str, EnumDef, AErr<'src>> + Clone
         .labelled("enum")
 }
 
-fn annotation_decl<'src>() -> impl Parser<'src, &'src str, AnnotationDecl, AErr<'src>> + Clone {
+fn annotation_decl<'src>() -> impl Parser<'src, I<'src>, AnnotationDecl, AErr<'src>> + Clone {
     kw("annotation")
         .ignore_then(name())
         .then_ignore(sym(":"))
@@ -934,7 +815,7 @@ fn annotation_decl<'src>() -> impl Parser<'src, &'src str, AnnotationDecl, AErr<
         .labelled("annotation")
 }
 
-fn type_alias<'src>() -> impl Parser<'src, &'src str, TypeAliasDef, AErr<'src>> + Clone {
+fn type_alias<'src>() -> impl Parser<'src, I<'src>, TypeAliasDef, AErr<'src>> + Clone {
     // Grammar rule `RosettaTypeAlias`: `'typeAlias' RosettaNamed
     // TypeParameters? ':' RosettaDefinable? RosettaTyped Annotations*
     // conditions += Condition*` — a type alias owns conditions directly
@@ -948,7 +829,7 @@ fn type_alias<'src>() -> impl Parser<'src, &'src str, TypeAliasDef, AErr<'src>> 
         .then(type_call())
         .then(references_and_annotations())
         .then(
-            crate::expr::condition_def(kw("condition"), crate::expr::expression())
+            crate::rune::expr::condition_def(kw("condition"), crate::rune::expr::expression())
                 .repeated()
                 .collect::<Vec<_>>(),
         )
@@ -970,7 +851,7 @@ fn type_alias<'src>() -> impl Parser<'src, &'src str, TypeAliasDef, AErr<'src>> 
         .labelled("type alias")
 }
 
-fn basic_type<'src>() -> impl Parser<'src, &'src str, BasicTypeDecl, AErr<'src>> + Clone {
+fn basic_type<'src>() -> impl Parser<'src, I<'src>, BasicTypeDecl, AErr<'src>> + Clone {
     kw("basicType")
         .ignore_then(name())
         .then(type_parameters())
@@ -984,7 +865,7 @@ fn basic_type<'src>() -> impl Parser<'src, &'src str, BasicTypeDecl, AErr<'src>>
         .labelled("basic type")
 }
 
-fn record_type<'src>() -> impl Parser<'src, &'src str, RecordTypeDecl, AErr<'src>> + Clone {
+fn record_type<'src>() -> impl Parser<'src, I<'src>, RecordTypeDecl, AErr<'src>> + Clone {
     let feature = name()
         .then(type_call())
         .map_with(|(name, type_call), ex| RecordFeature {
@@ -1007,8 +888,7 @@ fn record_type<'src>() -> impl Parser<'src, &'src str, RecordTypeDecl, AErr<'src
         .labelled("record type")
 }
 
-fn library_function<'src>() -> impl Parser<'src, &'src str, LibraryFunctionDecl, AErr<'src>> + Clone
-{
+fn library_function<'src>() -> impl Parser<'src, I<'src>, LibraryFunctionDecl, AErr<'src>> + Clone {
     let parameter = name()
         .then(type_call())
         .then(array_marker())
@@ -1039,7 +919,7 @@ fn library_function<'src>() -> impl Parser<'src, &'src str, LibraryFunctionDecl,
 }
 
 /// `(attr: Enum->VALUE)` — the dispatch head of a `FunctionDispatch`.
-fn function_dispatch<'src>() -> impl Parser<'src, &'src str, FunctionDispatchDef, AErr<'src>> + Clone
+fn function_dispatch<'src>() -> impl Parser<'src, I<'src>, FunctionDispatchDef, AErr<'src>> + Clone
 {
     sym("(")
         .ignore_then(name().map_with(|attribute, ex| (attribute, span_of(ex.span()))))
@@ -1063,7 +943,7 @@ fn function_dispatch<'src>() -> impl Parser<'src, &'src str, FunctionDispatchDef
 /// wins over an annotation reference of the same name, matching the
 /// grammar's alternative order.
 fn transform_annotation<'src>(
-) -> impl Parser<'src, &'src str, TransformAnnotationDef, AErr<'src>> + Clone {
+) -> impl Parser<'src, I<'src>, TransformAnnotationDef, AErr<'src>> + Clone {
     let kind = kw("ingest")
         .to(TransformKind::Ingest)
         .or(kw("enrich").to(TransformKind::Enrich))
@@ -1084,7 +964,7 @@ fn transform_annotation<'src>(
 /// transform annotations win, then doc references, then annotation refs.
 fn func_annotations<'src>() -> impl Parser<
     'src,
-    &'src str,
+    I<'src>,
     (
         Vec<TransformAnnotationDef>,
         Vec<DocReference>,
@@ -1121,9 +1001,9 @@ fn func_annotations<'src>() -> impl Parser<
 }
 
 /// `alias name: <"...">? expr` (grammar rule `ShortcutDeclaration`).
-fn shortcut<'src, P>(expression: P) -> impl Parser<'src, &'src str, ShortcutDef, AErr<'src>> + Clone
+fn shortcut<'src, P>(expression: P) -> impl Parser<'src, I<'src>, ShortcutDef, AErr<'src>> + Clone
 where
-    P: Parser<'src, &'src str, SpannedExpr, AErr<'src>> + Clone,
+    P: Parser<'src, I<'src>, SpannedExpr, AErr<'src>> + Clone,
 {
     kw("alias")
         .ignore_then(name())
@@ -1140,7 +1020,7 @@ where
 }
 
 /// One `-> feature` step of an operation path.
-fn path_segment<'src>() -> impl Parser<'src, &'src str, PathSegmentDef, AErr<'src>> + Clone {
+fn path_segment<'src>() -> impl Parser<'src, I<'src>, PathSegmentDef, AErr<'src>> + Clone {
     sym("->")
         .ignore_then(name().map_with(|feature, ex| PathSegmentDef {
             feature,
@@ -1150,11 +1030,9 @@ fn path_segment<'src>() -> impl Parser<'src, &'src str, PathSegmentDef, AErr<'sr
 }
 
 /// `set|add root (-> segment)*: <"...">? ExpressionWithAsKey`.
-fn operation<'src, P>(
-    expression: P,
-) -> impl Parser<'src, &'src str, OperationDef, AErr<'src>> + Clone
+fn operation<'src, P>(expression: P) -> impl Parser<'src, I<'src>, OperationDef, AErr<'src>> + Clone
 where
-    P: Parser<'src, &'src str, SpannedExpr, AErr<'src>> + Clone,
+    P: Parser<'src, I<'src>, SpannedExpr, AErr<'src>> + Clone,
 {
     choice((kw("set").to(false), kw("add").to(true)))
         .then(name().map_with(|assign_root, ex| (assign_root, span_of(ex.span()))))
@@ -1179,7 +1057,7 @@ where
 /// `func Name (dispatch)? (extends F)? : <"...">? (transform|refs|annos)*
 /// (inputs: attrs+)? (output: attr?)? shortcuts* conditions* operations*
 /// postConditions*` — the section order is fixed by the grammar.
-fn func_def<'src>() -> impl Parser<'src, &'src str, FunctionDef, AErr<'src>> + Clone {
+fn func_def<'src>() -> impl Parser<'src, I<'src>, FunctionDef, AErr<'src>> + Clone {
     #[derive(Debug, Clone)]
     struct Head {
         name: String,
@@ -1190,7 +1068,7 @@ fn func_def<'src>() -> impl Parser<'src, &'src str, FunctionDef, AErr<'src>> + C
         doc_references: Vec<DocReference>,
         annotations: Vec<AnnotationRef>,
     }
-    let expression = crate::expr::expression();
+    let expression = crate::rune::expr::expression();
     let head = kw("func")
         .ignore_then(name())
         .then(function_dispatch().or_not())
@@ -1225,19 +1103,22 @@ fn func_def<'src>() -> impl Parser<'src, &'src str, FunctionDef, AErr<'src>> + C
     )
     .then(shortcut(expression.clone()).repeated().collect::<Vec<_>>())
     .then(
-        crate::expr::condition_def(kw("condition"), expression.clone())
+        crate::rune::expr::condition_def(kw("condition"), expression.clone())
             .repeated()
             .collect::<Vec<_>>(),
     )
     .then(
-        operation(crate::expr::expression_with_as_key())
+        operation(crate::rune::expr::expression_with_as_key())
             .repeated()
             .collect::<Vec<_>>(),
     )
     .then(
-        crate::expr::condition_def(crate::parser::word_kw("post-condition"), expression)
-            .repeated()
-            .collect::<Vec<_>>(),
+        crate::rune::expr::condition_def(
+            crate::rune::parser::word_kw("post-condition"),
+            expression,
+        )
+        .repeated()
+        .collect::<Vec<_>>(),
     )
     .map_with(
         |((((((head, inputs), output), shortcuts), conditions), operations), post_conditions),
@@ -1264,7 +1145,7 @@ fn func_def<'src>() -> impl Parser<'src, &'src str, FunctionDef, AErr<'src>> + C
 }
 
 /// `reporting rule Name (from T)? : <"...">? docRefs* expr`.
-fn rule_def<'src>() -> impl Parser<'src, &'src str, RuleDef, AErr<'src>> + Clone {
+fn rule_def<'src>() -> impl Parser<'src, I<'src>, RuleDef, AErr<'src>> + Clone {
     choice((kw("reporting").to(false), kw("eligibility").to(true)))
         .then_ignore(kw("rule"))
         .then(name())
@@ -1272,7 +1153,7 @@ fn rule_def<'src>() -> impl Parser<'src, &'src str, RuleDef, AErr<'src>> + Clone
         .then_ignore(sym(":"))
         .then(definable())
         .then(doc_reference().repeated().collect::<Vec<_>>())
-        .then(crate::expr::expression())
+        .then(crate::rune::expr::expression())
         .map_with(
             |(((((eligibility, name), input), definition), doc_references), expression), ex| {
                 RuleDef {
@@ -1290,7 +1171,7 @@ fn rule_def<'src>() -> impl Parser<'src, &'src str, RuleDef, AErr<'src>> + Clone
 }
 
 /// The `real-time | T+1..T+5 | ASATP` timing keyword.
-fn report_timing<'src>() -> impl Parser<'src, &'src str, ReportTiming, AErr<'src>> + Clone {
+fn report_timing<'src>() -> impl Parser<'src, I<'src>, ReportTiming, AErr<'src>> + Clone {
     choice((
         word_kw("real-time").to(ReportTiming::RealTime),
         word_kw("ASATP").to(ReportTiming::Asatp),
@@ -1310,7 +1191,7 @@ fn report_timing<'src>() -> impl Parser<'src, &'src str, ReportTiming, AErr<'src
 /// same shape as a doc reference — re-assembled by shape afterwards: bare
 /// names are the body and corpora, names followed by a string are segment
 /// references.
-fn report_def<'src>() -> impl Parser<'src, &'src str, ReportDef, AErr<'src>> + Clone {
+fn report_def<'src>() -> impl Parser<'src, I<'src>, ReportDef, AErr<'src>> + Clone {
     let item = report_ref_qname().then(string_lit().or_not());
     kw("report")
         .ignore_then(item.repeated().at_least(1).collect::<Vec<_>>())
@@ -1410,7 +1291,7 @@ fn report_def<'src>() -> impl Parser<'src, &'src str, ReportDef, AErr<'src>> + C
 }
 
 /// `rule source Name (extends S)? { Data: (+|-) attr [ruleReference R]* }`.
-fn rule_source_def<'src>() -> impl Parser<'src, &'src str, RuleSourceDef, AErr<'src>> + Clone {
+fn rule_source_def<'src>() -> impl Parser<'src, I<'src>, RuleSourceDef, AErr<'src>> + Clone {
     let attribute = choice((sym("+").to(true), sym("-").to(false)))
         .then(name().map_with(|attribute, ex| (attribute, span_of(ex.span()))))
         .then(rule_reference().repeated().collect::<Vec<_>>())
@@ -1449,7 +1330,7 @@ fn rule_source_def<'src>() -> impl Parser<'src, &'src str, RuleSourceDef, AErr<'
 
 /// `schema Name Format <"...">? annotations*` (main-branch grammar; the
 /// 9.58.1 oracle has no Schema construct).
-fn schema_def<'src>() -> impl Parser<'src, &'src str, SchemaDef, AErr<'src>> + Clone {
+fn schema_def<'src>() -> impl Parser<'src, I<'src>, SchemaDef, AErr<'src>> + Clone {
     kw("schema")
         .ignore_then(element_name())
         .then(element_name().map_with(|format, ex| (format, span_of(ex.span()))))
@@ -1469,7 +1350,7 @@ fn schema_def<'src>() -> impl Parser<'src, &'src str, SchemaDef, AErr<'src>> + C
 }
 
 /// `body Type Name <"...">?`.
-fn body_def<'src>() -> impl Parser<'src, &'src str, BodyDef, AErr<'src>> + Clone {
+fn body_def<'src>() -> impl Parser<'src, I<'src>, BodyDef, AErr<'src>> + Clone {
     kw("body")
         .ignore_then(element_name())
         .then(element_name())
@@ -1490,7 +1371,7 @@ fn body_def<'src>() -> impl Parser<'src, &'src str, BodyDef, AErr<'src>> + Clone
 /// body reference and then fail to find a name). The token sequence after
 /// the corpus type is `[qname]? [string]? [qname]`, so it is collected
 /// greedily and re-assembled by shape instead.
-fn corpus_def<'src>() -> impl Parser<'src, &'src str, CorpusDef, AErr<'src>> + Clone {
+fn corpus_def<'src>() -> impl Parser<'src, I<'src>, CorpusDef, AErr<'src>> + Clone {
     #[derive(Debug, Clone)]
     enum Part {
         Ref(SpannedQName),
@@ -1542,7 +1423,7 @@ fn corpus_def<'src>() -> impl Parser<'src, &'src str, CorpusDef, AErr<'src>> + C
 }
 
 /// `segment Name`.
-fn segment_decl<'src>() -> impl Parser<'src, &'src str, SegmentDecl, AErr<'src>> + Clone {
+fn segment_decl<'src>() -> impl Parser<'src, I<'src>, SegmentDecl, AErr<'src>> + Clone {
     kw("segment")
         .ignore_then(element_name())
         .map_with(|name, ex| SegmentDecl {
@@ -1553,7 +1434,7 @@ fn segment_decl<'src>() -> impl Parser<'src, &'src str, SegmentDecl, AErr<'src>>
 }
 
 /// `metaType Name Type`.
-fn meta_type_decl<'src>() -> impl Parser<'src, &'src str, MetaTypeDecl, AErr<'src>> + Clone {
+fn meta_type_decl<'src>() -> impl Parser<'src, I<'src>, MetaTypeDecl, AErr<'src>> + Clone {
     kw("metaType")
         .ignore_then(element_name())
         .then(type_call())
@@ -1565,38 +1446,7 @@ fn meta_type_decl<'src>() -> impl Parser<'src, &'src str, MetaTypeDecl, AErr<'sr
         .labelled("metaType")
 }
 
-/// `func ...`, `rule ...`, `report ...`, etc. — recognised but not yet
-/// modelled; skipped up to the next element boundary.
-fn unsupported_element<'src>(
-) -> impl Parser<'src, &'src str, UnsupportedElement, AErr<'src>> + Clone {
-    id_token()
-        .try_map(|(escaped, text), span| {
-            if !escaped && UNSUPPORTED_KEYWORDS.contains(&text.as_str()) {
-                Ok(text)
-            } else {
-                Err(Rich::custom(span, "unsupported construct"))
-            }
-        })
-        .then(
-            choice((
-                kw("source").to("source"),
-                kw("rule").to("rule"),
-                kw("function").to("function"),
-            ))
-            .or_not(),
-        )
-        .then(skip_to_element_boundary())
-        .map_with(|((keyword, suffix), _), ex| UnsupportedElement {
-            keyword: match suffix {
-                Some(suffix) => format!("{keyword} {suffix}"),
-                None => keyword,
-            },
-            span: span_of(ex.span()),
-        })
-        .labelled("element")
-}
-
-fn element<'src>() -> impl Parser<'src, &'src str, Element, AErr<'src>> + Clone {
+fn element<'src>() -> impl Parser<'src, I<'src>, Element, AErr<'src>> + Clone {
     choice((
         func_def().map(Element::Function),
         rule_def().map(Element::Rule),
@@ -1618,7 +1468,7 @@ fn element<'src>() -> impl Parser<'src, &'src str, Element, AErr<'src>> + Clone 
     ))
 }
 
-fn import_decl<'src>() -> impl Parser<'src, &'src str, ImportDecl, AErr<'src>> + Clone {
+fn import_decl<'src>() -> impl Parser<'src, I<'src>, ImportDecl, AErr<'src>> + Clone {
     kw("import")
         .ignore_then(qname())
         .then(sym(".").ignore_then(sym("*")).to(true).or_not())
@@ -1636,7 +1486,7 @@ fn import_decl<'src>() -> impl Parser<'src, &'src str, ImportDecl, AErr<'src>> +
 }
 
 fn qualifiable_configuration<'src>(
-) -> impl Parser<'src, &'src str, QualifiableConfiguration, AErr<'src>> + Clone {
+) -> impl Parser<'src, I<'src>, QualifiableConfiguration, AErr<'src>> + Clone {
     kw("isEvent")
         .to(QualifiableType::Event)
         .or(kw("isProduct").to(QualifiableType::Product))
@@ -1654,7 +1504,7 @@ fn qualifiable_configuration<'src>(
         .labelled("qualifiable configuration")
 }
 
-pub fn source_unit<'src>() -> impl Parser<'src, &'src str, SourceUnit, AErr<'src>> + Clone {
+pub fn source_unit<'src>() -> impl Parser<'src, I<'src>, SourceUnit, AErr<'src>> + Clone {
     let header = ws().ignore_then(
         kw("override")
             .to(true)
@@ -1682,12 +1532,7 @@ pub fn source_unit<'src>() -> impl Parser<'src, &'src str, SourceUnit, AErr<'src
     header
         .then(import_decl().repeated().collect::<Vec<_>>())
         .then(qualifiable_configuration().repeated().collect::<Vec<_>>())
-        .then(
-            element()
-                .or(unsupported_element().map(Element::Unsupported))
-                .repeated()
-                .collect::<Vec<_>>(),
-        )
+        .then(element().repeated().collect::<Vec<_>>())
         .then_ignore(end())
         .map_with(
             |((((namespace, scope, version), imports), configurations), elements), ex| SourceUnit {
@@ -1703,52 +1548,46 @@ pub fn source_unit<'src>() -> impl Parser<'src, &'src str, SourceUnit, AErr<'src
         .labelled("model")
 }
 
-/// Parse one `.rosetta` file into a spanned AST plus parse diagnostics.
+/// The result of parsing one `.rosetta` file: the spanned AST (`None` when
+/// any parse error occurred — this parser has no recovery yet) and the
+/// errors, each with a byte span.
+#[derive(Debug, Clone)]
+pub struct RuneParseResult {
+    pub ast: Option<SourceUnit>,
+    pub errors: Vec<ParseError>,
+}
+
+/// Parse one `.rosetta` file into a spanned AST plus parse errors.
 ///
 /// Runs on a dedicated thread with a large stack: chumsky's combinator
 /// trees are stack-hungry during construction and backtracking, and real
-/// models can be deeply nested.
-pub fn parse(file: &SourceFile) -> (Option<SourceUnit>, Vec<Diagnostic>) {
-    let file = file.clone();
+/// models can be deeply nested. (A nesting budget replaces the thread when
+/// recovery lands.)
+pub fn parse_rune(source: &str) -> RuneParseResult {
+    let source = source.to_string();
     std::thread::Builder::new()
         .stack_size(256 * 1024 * 1024)
-        .spawn(move || parse_inner(&file))
+        .spawn(move || parse_inner(&source))
         .expect("failed to spawn parser thread")
         .join()
         .expect("parser thread panicked")
 }
 
-fn parse_inner(file: &SourceFile) -> (Option<SourceUnit>, Vec<Diagnostic>) {
-    let mut diagnostics = Vec::new();
-    match source_unit().parse(&file.text).into_result() {
-        Ok(unit) => {
-            for element in &unit.elements {
-                if let crate::ast::Element::Unsupported(unsupported) = element {
-                    diagnostics.push(Diagnostic::warning(
-                        "W0001",
-                        format!(
-                            "unsupported construct '{}' skipped (not yet modelled by sigil)",
-                            unsupported.keyword
-                        ),
-                        file,
-                        unsupported.span,
-                    ));
-                }
-            }
-            (Some(unit), diagnostics)
-        }
-        Err(errors) => {
-            for e in errors {
-                let span = Span::new(e.span().start, e.span().end);
-                diagnostics.push(Diagnostic::error(
-                    phero_diagnostics::E_RUNE_SYNTAX,
-                    format!("{e}"),
-                    file,
-                    span,
-                ));
-            }
-            (None, diagnostics)
-        }
+fn parse_inner(source: &str) -> RuneParseResult {
+    let tokens = lex(source);
+    let (ast, errors) = source_unit()
+        .parse(phero_parser::Tokens::new(&tokens))
+        .into_output_errors();
+    let errors: Vec<ParseError> = errors
+        .into_iter()
+        .map(|error| ParseError {
+            message: error.to_string(),
+            span: *error.span(),
+        })
+        .collect();
+    RuneParseResult {
+        ast: if errors.is_empty() { ast } else { None },
+        errors,
     }
 }
 
@@ -1757,20 +1596,34 @@ mod tests {
     use super::*;
 
     fn parse_ok(src: &str) -> SourceUnit {
-        let file = SourceFile::new("test.rosetta", src);
-        let (unit, diags) = parse(&file);
-        assert!(diags.is_empty(), "unexpected diagnostics: {diags:#?}");
-        unit.unwrap()
+        let result = parse_rune(src);
+        assert!(
+            result.errors.is_empty(),
+            "unexpected errors: {:#?}",
+            result.errors
+        );
+        result.ast.unwrap()
+    }
+
+    /// Runs one combinator over `src`, the way the old character-level tests
+    /// called `.parse(src)` directly.
+    fn run<'a, T>(
+        parser: impl Parser<'a, I<'a>, T, AErr<'a>>,
+        tokens: &'a [(RuneToken<'a>, Span)],
+    ) -> Result<T, String> {
+        parser
+            .then_ignore(end())
+            .parse(phero_parser::Tokens::new(tokens))
+            .into_result()
+            .map_err(|errors| format!("{errors:?}"))
     }
 
     #[test]
     fn parses_multi_digit_fraction_literals() {
         fn num(src: &str) -> String {
-            number_lit()
-                .then_ignore(end())
-                .parse(src)
-                .into_result()
-                .unwrap_or_else(|e| panic!("{src} should be a number literal: {e:?}"))
+            let tokens = lex(src);
+            run(number_lit(), &tokens)
+                .unwrap_or_else(|e| panic!("{src} should be a number literal: {e}"))
         }
         // One fraction digit (already worked).
         assert_eq!(num("0.5"), "0.5");
@@ -1784,11 +1637,11 @@ mod tests {
         assert_eq!(num("1.0e01"), "1.0e01");
         // Bare `INT '.'` stays parseable, but `..` is never a fraction.
         assert_eq!(num("1."), "1.");
-        assert!(number_lit().then_ignore(end()).parse("1..1").has_errors());
+        assert!(run(number_lit(), &lex("1..1")).is_err());
         // A fraction is required: a bare integer (or `1e01`) is `Integer`,
         // not `BigDecimal`.
-        assert!(number_lit().then_ignore(end()).parse("123").has_errors());
-        assert!(number_lit().then_ignore(end()).parse("1e01").has_errors());
+        assert!(run(number_lit(), &lex("123")).is_err());
+        assert!(run(number_lit(), &lex("1e01")).is_err());
     }
 
     #[test]
@@ -1991,10 +1844,8 @@ mod tests {
         }
     }
 
-    /// Phase 4 retired W0001: every construct that used to be skipped now
-    /// parses into a modelled element. This test fails if a future grammar
-    /// addition is handled by adding a keyword to `UNSUPPORTED_KEYWORDS`
-    /// instead of a parser.
+    /// Every grammar element is modelled: each construct below parses into its
+    /// own element kind (the skipped-construct path is gone, RN9).
     #[test]
     fn no_supported_construct_is_skipped() {
         let text = "\
@@ -2018,13 +1869,7 @@ rule source MySource {
 		+ x
 }
 ";
-        let file = SourceFile::new("t.rosetta", text);
-        let (unit, diags) = parse(&file);
-        assert!(
-            diags.iter().all(|d| d.code != "W0001"),
-            "no construct may trigger W0001 any more: {diags:?}"
-        );
-        let unit = unit.unwrap();
+        let unit = parse_ok(text);
         let kinds: Vec<String> = unit
             .elements
             .iter()
@@ -2038,7 +1883,6 @@ rule source MySource {
                 Element::Corpus(_) => "corpus".to_string(),
                 Element::Segment(_) => "segment".to_string(),
                 Element::MetaType(_) => "metaType".to_string(),
-                Element::Unsupported(_) => "UNSUPPORTED".to_string(),
                 _ => "other".to_string(),
             })
             .collect();
@@ -2061,9 +1905,9 @@ rule source MySource {
 
     #[test]
     fn syntax_error_is_reported() {
-        let file = SourceFile::new("t.rosetta", "namespace t\ntype Broken\n");
-        let (_, diags) = parse(&file);
-        assert!(!diags.is_empty());
+        let result = parse_rune("namespace t\ntype Broken\n");
+        assert!(!result.errors.is_empty());
+        assert!(result.ast.is_none());
     }
 
     #[test]
@@ -2117,8 +1961,7 @@ rule source MySource {
 
     #[test]
     fn doc_reference_bare_string_segments_fail_to_parse() {
-        let file = SourceFile::new(
-            "t.rosetta",
+        let result = parse_rune(
             "namespace t\n\
              body CFTC CFTCBody <\"b\">\n\
              corpus CFTC Part45 <\"p\">\n\
@@ -2128,12 +1971,10 @@ rule source MySource {
              \t[docReference CFTC Part45 \"S1\" \"S2\"]\n\
              \tproductId string (1..1)\n",
         );
-        let (_, diags) = parse(&file);
         assert!(
-            diags
-                .iter()
-                .any(|d| d.code == phero_diagnostics::E_RUNE_SYNTAX),
-            "bare-string segments must stay a syntax error (oracle-correct): {diags:?}"
+            !result.errors.is_empty(),
+            "bare-string segments must stay a syntax error (oracle-correct): {:?}",
+            result.errors
         );
     }
 

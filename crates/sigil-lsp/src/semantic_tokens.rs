@@ -257,7 +257,7 @@ fn push_annotation_ref(a: &AnnotationRef, text: &str, out: &mut Vec<Highlight>) 
     // The referenced annotation's attribute (`[metadata id]`): no span in
     // the model, so re-derive it from the text after the name region.
     if let Some(attr) = &a.attribute {
-        let rest = Span::new(name_span.end.min(a.span.end), a.span.end);
+        let rest = Span::from(name_span.end.min(a.span.end)..a.span.end);
         if rest.start < rest.end {
             let attr_span = features::find_name_region(text, rest, attr);
             // A proper sub-region means the attribute was found; the
@@ -500,7 +500,7 @@ fn scan(text: &str, highlights: &[Highlight]) -> Vec<RawToken> {
                     .map_or(bytes.len(), |rel| i + rel)
                     .min(bytes.len());
                 out.push(RawToken {
-                    span: Span::new(i, end),
+                    span: Span::from(i..end),
                     class: Class::Comment,
                     declaration: false,
                 });
@@ -512,7 +512,7 @@ fn scan(text: &str, highlights: &[Highlight]) -> Vec<RawToken> {
                     .map_or(bytes.len(), |rel| i + 2 + rel + 2)
                     .min(bytes.len());
                 out.push(RawToken {
-                    span: Span::new(i, end),
+                    span: Span::from(i..end),
                     class: Class::Comment,
                     declaration: false,
                 });
@@ -532,7 +532,7 @@ fn scan(text: &str, highlights: &[Highlight]) -> Vec<RawToken> {
                 }
                 let end = j.min(bytes.len());
                 out.push(RawToken {
-                    span: Span::new(i, end),
+                    span: Span::from(i..end),
                     class: Class::String,
                     declaration: false,
                 });
@@ -548,7 +548,7 @@ fn scan(text: &str, highlights: &[Highlight]) -> Vec<RawToken> {
                     j += 1;
                 }
                 out.push(RawToken {
-                    span: Span::new(i, j),
+                    span: Span::from(i..j),
                     class: Class::Number,
                     declaration: false,
                 });
@@ -592,7 +592,7 @@ fn classify_ident(
     start: usize,
     end: usize,
 ) -> Option<RawToken> {
-    let span = Span::new(start, end);
+    let span = Span::from(start..end);
     let name_start = if text.as_bytes()[start] == b'^' {
         start + 1
     } else {
@@ -652,12 +652,12 @@ fn line_segments(text: &str, span: Span) -> Vec<Span> {
     let mut start = span.start;
     for (rel, b) in text[span.start..end].bytes().enumerate() {
         if b == b'\n' {
-            out.push(Span::new(start, span.start + rel));
+            out.push(Span::from(start..span.start + rel));
             start = span.start + rel + 1;
         }
     }
     if start < end {
-        out.push(Span::new(start, end));
+        out.push(Span::from(start..end));
     }
     out
 }

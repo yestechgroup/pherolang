@@ -49,8 +49,8 @@ impl Analysis {
     }
 
     /// Convert the analysis results for one document into LSP diagnostics.
-    /// Includes both syntax diagnostics (`E0001`, `W0001`, ...) and
-    /// resolution diagnostics (`E01xx`).
+    /// Includes both syntax diagnostics (`E0500`) and
+    /// resolution diagnostics (`E052x`, `W0580`).
     pub fn diagnostics_for(
         &self,
         uri: &str,

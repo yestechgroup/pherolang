@@ -10,6 +10,7 @@ description = "Source spans and diagnostics for the sigil Rune DSL toolchain"
 
 [dependencies]
 phero-diagnostics = { workspace = true }
+phero-parser = { workspace = true }
 serde = { workspace = true }
 
 [lints]

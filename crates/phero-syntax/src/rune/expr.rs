@@ -11,37 +11,26 @@
 //! Each grammar level is a [`chumsky::recursive::Recursive`] parser over the same
 //! spanned [`SpannedExpr`] output so the mutually recursive rules can be
 //! declared up front. Word operators containing hyphens (`one-of`,
-//! `to-date-time`, ...) are Xtext keyword tokens rather than `ID`s, so
-//! they get a character-based keyword matcher with a right-hand boundary
-//! check, and the longer forms are tried first (`to-date-time` before
-//! `to-date`), mirroring the lexer's longest-match behaviour.
+//! `to-date-time`, ...) are single keyword tokens from the lexer, as in
+//! Xtext, so a bare `one-of` is the operator and never `one - of`.
 
 use chumsky::prelude::*;
-use sigil_diag::Span;
+use phero_parser::{ParseError, Span};
 
-use crate::ast::*;
-use crate::parser::{
-    bool_kw, int_lit_raw, kw, name, number_lit, qname, span_of, string_lit, sym, type_call, ws,
-    AErr,
+use crate::rune::ast::*;
+use crate::rune::lexer::lex;
+use crate::rune::parser::{
+    bool_kw, int_lit_raw, kw, name, number_lit, qname, span_of, string_lit, sym, type_call,
+    word_kw, ws, AErr, I,
 };
+use crate::words::RUNE_EXPRESSION_WORDS;
 
 type E<'src> = AErr<'src>;
 
-/// Identifiers that are keyword tokens of expression operators. In Xtext
-/// these are *not* `ID`s (only the `ValidID` whitelist words are), so a
-/// cross-reference can never consume them; the expression parser mirrors
-/// that so expressions terminate correctly at word operators.
-const EXPRESSION_KEYWORDS: &[&str] = &[
-    "then", "and", "or", "contains", "disjoint", "default", "join", "exists", "single", "multiple",
-    "is", "absent", "count", "flatten", "distinct", "reverse", "first", "last", "sum", "min",
-    "max", "sort", "choice", "switch", "as", "filter", "extract", "reduce", "if", "else", "True",
-    "False", "empty", "item", "only", "required", "optional", "any", "all",
-];
-
 /// An identifier usable as a symbol / feature / key inside expressions.
-fn expr_name<'src>() -> impl Parser<'src, &'src str, String, E<'src>> + Clone {
+fn expr_name<'src>() -> impl Parser<'src, I<'src>, String, E<'src>> + Clone {
     name().try_map(|text: String, span| {
-        if EXPRESSION_KEYWORDS.contains(&text.as_str()) {
+        if RUNE_EXPRESSION_WORDS.contains(&text.as_str()) {
             Err(Rich::custom(span, format!("'{text}' is a keyword here")))
         } else {
             Ok(text)
@@ -50,7 +39,7 @@ fn expr_name<'src>() -> impl Parser<'src, &'src str, String, E<'src>> + Clone {
 }
 
 /// Qualified name over [`expr_name`].
-fn expr_qname<'src>() -> impl Parser<'src, &'src str, QName, E<'src>> + Clone {
+fn expr_qname<'src>() -> impl Parser<'src, I<'src>, QName, E<'src>> + Clone {
     expr_name()
         .separated_by(sym("."))
         .at_least(1)
@@ -63,23 +52,20 @@ fn node(kind: ExprKind, span: Span) -> SpannedExpr {
     SpannedExpr { kind, span }
 }
 
-/// A keyword containing hyphens (e.g. `one-of`, `to-date-time`). These are
-/// Xtext keyword tokens, not `ID`s, so the matcher is character-based and
-/// requires a non-identifier right boundary.
-fn op_kw<'src>(s: &'static str) -> Boxed<'src, 'src, &'src str, (), E<'src>> {
-    let boundary = any()
-        .filter(|c: &char| c.is_ascii_alphanumeric() || *c == '_')
-        .not();
-    just(s)
-        .to(())
-        .then_ignore(boundary)
-        .then_ignore(ws())
-        .labelled(s.to_string())
-        .boxed()
+/// A keyword-token operator: a hyphenated keyword (`one-of`,
+/// `to-date-time`, …, a single [`RuneToken::Word`]), `...` (punctuation), or a
+/// word keyword (`switch`, `sort`, …) matched by text. In Xtext these are
+/// keyword tokens rather than `ID`s; the lexer's longest match settles
+/// `to-date-time` against `to-date`.
+fn op_kw<'src>(s: &'static str) -> Boxed<'src, 'src, I<'src>, (), E<'src>> {
+    if s == "..." {
+        return sym("...").boxed();
+    }
+    word_kw(s)
 }
 
 /// `Necessity` (`required` | `optional`).
-fn necessity<'src>() -> impl Parser<'src, &'src str, AstNecessity, E<'src>> + Clone {
+fn necessity<'src>() -> impl Parser<'src, I<'src>, AstNecessity, E<'src>> + Clone {
     kw("required")
         .to(AstNecessity::Required)
         .or(kw("optional").to(AstNecessity::Optional))
@@ -87,7 +73,7 @@ fn necessity<'src>() -> impl Parser<'src, &'src str, AstNecessity, E<'src>> + Cl
 }
 
 /// `CardinalityModifier` (`any` | `all`).
-fn card_mod<'src>() -> impl Parser<'src, &'src str, AstCardinalityMod, E<'src>> + Clone {
+fn card_mod<'src>() -> impl Parser<'src, I<'src>, AstCardinalityMod, E<'src>> + Clone {
     kw("any")
         .to(AstCardinalityMod::Any)
         .or(kw("all").to(AstCardinalityMod::All))
@@ -96,8 +82,8 @@ fn card_mod<'src>() -> impl Parser<'src, &'src str, AstCardinalityMod, E<'src>> 
 
 /// `SwitchCaseOrDefault`.
 fn switch_case<'src>(
-    expression: impl Parser<'src, &'src str, SpannedExpr, E<'src>> + Clone,
-) -> impl Parser<'src, &'src str, AstSwitchCase, E<'src>> + Clone {
+    expression: impl Parser<'src, I<'src>, SpannedExpr, E<'src>> + Clone,
+) -> impl Parser<'src, I<'src>, AstSwitchCase, E<'src>> + Clone {
     let guard = choice((
         bool_kw()
             .map_with(|v, ex| node(ExprKind::Boolean(v), span_of(ex.span())))
@@ -135,8 +121,8 @@ fn switch_case<'src>(
 /// closure parameters sit *before* the bracket (`a, b [a + b]`); a bracket
 /// directly after the operator is the parameter-less form (`[a + b]`).
 fn explicit_inline_function<'src>(
-    expression: impl Parser<'src, &'src str, SpannedExpr, E<'src>> + Clone,
-) -> impl Parser<'src, &'src str, AstInlineFunction, E<'src>> + Clone {
+    expression: impl Parser<'src, I<'src>, SpannedExpr, E<'src>> + Clone,
+) -> impl Parser<'src, I<'src>, AstInlineFunction, E<'src>> + Clone {
     // Closure parameters are plain `ID`s: keywords (`filter`, `sort`, ...)
     // can never be parameter names.
     expr_name()
@@ -163,15 +149,15 @@ fn explicit_inline_function<'src>(
 /// (`=>(References|Annotations)*`) that resolves the `[` ambiguity in
 /// favour of annotations.
 pub fn condition_def<'src, P>(
-    head: impl Parser<'src, &'src str, (), E<'src>> + Clone,
+    head: impl Parser<'src, I<'src>, (), E<'src>> + Clone,
     expression: P,
-) -> impl Parser<'src, &'src str, ConditionDef, E<'src>> + Clone
+) -> impl Parser<'src, I<'src>, ConditionDef, E<'src>> + Clone
 where
-    P: Parser<'src, &'src str, SpannedExpr, E<'src>> + Clone,
+    P: Parser<'src, I<'src>, SpannedExpr, E<'src>> + Clone,
 {
     let fragment = choice((
-        crate::parser::doc_reference().map(|d| (vec![d], Vec::new())),
-        crate::parser::annotation_ref().map(|a| (Vec::new(), vec![a])),
+        crate::rune::parser::doc_reference().map(|d| (vec![d], Vec::new())),
+        crate::rune::parser::annotation_ref().map(|a| (Vec::new(), vec![a])),
     ));
     head.ignore_then(name().or_not())
         .then_ignore(sym(":"))
@@ -203,8 +189,7 @@ where
 }
 
 /// `ExpressionWithAsKey`: an expression with an optional trailing `as-key`.
-pub fn expression_with_as_key<'src>() -> impl Parser<'src, &'src str, SpannedExpr, E<'src>> + Clone
-{
+pub fn expression_with_as_key<'src>() -> impl Parser<'src, I<'src>, SpannedExpr, E<'src>> + Clone {
     expression()
         .then(op_kw("as-key").to(()).or_not())
         .map(|(expr, as_key)| {
@@ -223,31 +208,30 @@ pub fn expression_with_as_key<'src>() -> impl Parser<'src, &'src str, SpannedExp
 
 /// Parse a standalone expression (used by tests and tools; the grammar is
 /// identical to condition bodies).
-pub fn parse_expression_str(text: &str) -> Result<SpannedExpr, Vec<sigil_diag::Diagnostic>> {
-    let file = sigil_diag::SourceFile::new("<expr>", text);
-    let inner = std::thread::Builder::new()
+pub fn parse_rune_expression(text: &str) -> Result<SpannedExpr, Vec<ParseError>> {
+    let text = text.to_string();
+    std::thread::Builder::new()
         .stack_size(64 * 1024 * 1024)
         .spawn(move || {
-            let out = expression().then_ignore(end()).parse(file.text.as_str());
-            out.into_result().map_err(|errors| {
-                errors
-                    .into_iter()
-                    .map(|e| {
-                        let span = Span::new(e.span().start, e.span().end);
-                        sigil_diag::Diagnostic::error(
-                            phero_diagnostics::E_RUNE_SYNTAX,
-                            format!("{e}"),
-                            &file,
-                            span,
-                        )
-                    })
-                    .collect::<Vec<_>>()
-            })
+            let tokens = lex(&text);
+            let result = expression()
+                .then_ignore(end())
+                .parse(phero_parser::Tokens::new(&tokens))
+                .into_result()
+                .map_err(|errors| {
+                    errors
+                        .into_iter()
+                        .map(|error| ParseError {
+                            message: error.to_string(),
+                            span: *error.span(),
+                        })
+                        .collect::<Vec<_>>()
+                });
+            result
         })
         .expect("failed to spawn parser thread")
         .join()
-        .expect("parser thread panicked");
-    inner
+        .expect("parser thread panicked")
 }
 
 /// One postfix step (`UnaryOperation` continuation alternatives). Each
@@ -289,7 +273,7 @@ enum AstUnaryOp {
 
 impl Step {
     fn apply(self, argument: SpannedExpr, step_span: Span) -> SpannedExpr {
-        let span = argument.span.merge(step_span);
+        let span = argument.span.union(step_span);
         let argument = || Box::new(argument);
         let kind = match self {
             Step::Feature { feature, deep } => ExprKind::FeatureCall {
@@ -390,7 +374,7 @@ impl Step {
 
 /// The full expression grammar; returns the top-level `Expression`
 /// (`ThenOperation`) parser.
-pub fn expression<'src>() -> impl Parser<'src, &'src str, SpannedExpr, E<'src>> + Clone {
+pub fn expression<'src>() -> impl Parser<'src, I<'src>, SpannedExpr, E<'src>> + Clone {
     let mut then_p = Recursive::declare();
     let mut or_p = Recursive::declare();
     let mut and_p = Recursive::declare();
@@ -408,7 +392,7 @@ pub fn expression<'src>() -> impl Parser<'src, &'src str, SpannedExpr, E<'src>> 
         |argument: SpannedExpr, body: Option<SpannedExpr>| {
             let span = body
                 .as_ref()
-                .map_or(argument.span, |b| argument.span.merge(b.span));
+                .map_or(argument.span, |b| argument.span.union(b.span));
             SpannedExpr {
                 kind: ExprKind::Functional {
                     op: AstFunctionalOp::Then,
@@ -609,7 +593,7 @@ pub fn expression<'src>() -> impl Parser<'src, &'src str, SpannedExpr, E<'src>> 
                 |left, (op, right): (WordOp, Option<SpannedExpr>)| {
                     let span = right
                         .as_ref()
-                        .map_or(left.span, |r| left.span.merge(r.span));
+                        .map_or(left.span, |r| left.span.union(r.span));
                     make_word_node(op, left, right, span)
                 },
             )
@@ -618,7 +602,7 @@ pub fn expression<'src>() -> impl Parser<'src, &'src str, SpannedExpr, E<'src>> 
                 |left, (op, right): (WordOp, Option<SpannedExpr>)| {
                     let span = right
                         .as_ref()
-                        .map_or(left.span, |r| left.span.merge(r.span));
+                        .map_or(left.span, |r| left.span.union(r.span));
                     make_word_node(op, left, right, span)
                 },
             )),
@@ -643,10 +627,9 @@ pub fn expression<'src>() -> impl Parser<'src, &'src str, SpannedExpr, E<'src>> 
         }
     };
     let functional_step = |op: AstFunctionalOp, keyword: &'static str, implicit: bool| {
-        let explicit: Boxed<'src, 'src, &'src str, Option<AstInlineFunction>, E<'src>> =
+        let explicit: Boxed<'src, 'src, I<'src>, Option<AstInlineFunction>, E<'src>> =
             explicit_inline_function(then_p.clone()).map(Some).boxed();
-        let function: Boxed<'src, 'src, &'src str, Option<AstInlineFunction>, E<'src>> = if implicit
-        {
+        let function: Boxed<'src, 'src, I<'src>, Option<AstInlineFunction>, E<'src>> = if implicit {
             explicit
                 .or(or_p.clone().map(|body: SpannedExpr| {
                     Some(AstInlineFunction {
@@ -662,8 +645,8 @@ pub fn expression<'src>() -> impl Parser<'src, &'src str, SpannedExpr, E<'src>> 
             .ignore_then(function.or_not().map(Option::flatten))
             .map(move |function| Step::Functional(op, function))
     };
-    let mut arms: Vec<Boxed<'src, 'src, &'src str, Step, E<'src>>> = Vec::new();
-    let mut push = |parser: Boxed<'src, 'src, &'src str, Step, E<'src>>| arms.push(parser);
+    let mut arms: Vec<Boxed<'src, 'src, I<'src>, Step, E<'src>>> = Vec::new();
+    let mut push = |parser: Boxed<'src, 'src, I<'src>, Step, E<'src>>| arms.push(parser);
     push(feature_step.boxed());
     push(exists_step.boxed());
     push(kw("is").ignore_then(kw("absent")).to(Step::Absent).boxed());
@@ -827,10 +810,10 @@ fn binary_level_no_left<'src, P, O, T, F>(
     op: O,
     next: P,
     make: F,
-) -> impl Parser<'src, &'src str, SpannedExpr, E<'src>> + Clone
+) -> impl Parser<'src, I<'src>, SpannedExpr, E<'src>> + Clone
 where
-    P: Parser<'src, &'src str, SpannedExpr, E<'src>> + Clone,
-    O: Parser<'src, &'src str, T, E<'src>> + Clone,
+    P: Parser<'src, I<'src>, SpannedExpr, E<'src>> + Clone,
+    O: Parser<'src, I<'src>, T, E<'src>> + Clone,
     F: Fn(Span, T, SpannedExpr, SpannedExpr) -> SpannedExpr + Clone + 'src,
 {
     op.clone()
@@ -845,7 +828,7 @@ where
         .foldl(
             ws().ignore_then(op.then(next)).repeated(),
             move |left, (op_value, right)| {
-                let span = left.span.merge(right.span);
+                let span = left.span.union(right.span);
                 make(span, op_value, left, right)
             },
         )
@@ -855,17 +838,17 @@ where
 /// `A (op A)*` with a fixed operator (or / and).
 fn binary_level<'src, P, F>(
     next: P,
-    op: impl Parser<'src, &'src str, (), E<'src>> + Clone,
+    op: impl Parser<'src, I<'src>, (), E<'src>> + Clone,
     make: F,
-) -> impl Parser<'src, &'src str, SpannedExpr, E<'src>> + Clone
+) -> impl Parser<'src, I<'src>, SpannedExpr, E<'src>> + Clone
 where
-    P: Parser<'src, &'src str, SpannedExpr, E<'src>> + Clone,
+    P: Parser<'src, I<'src>, SpannedExpr, E<'src>> + Clone,
     F: Fn(Span, SpannedExpr, SpannedExpr) -> SpannedExpr + Clone,
 {
     next.clone().foldl(
         ws().ignore_then(op.clone().ignore_then(next)).repeated(),
         move |left, right| {
-            let span = left.span.merge(right.span);
+            let span = left.span.union(right.span);
             make(span, left, right)
         },
     )
@@ -876,16 +859,16 @@ fn binary_level_with_op<'src, P, O, F>(
     next: P,
     op: O,
     make: F,
-) -> impl Parser<'src, &'src str, SpannedExpr, E<'src>> + Clone
+) -> impl Parser<'src, I<'src>, SpannedExpr, E<'src>> + Clone
 where
-    P: Parser<'src, &'src str, SpannedExpr, E<'src>> + Clone,
-    O: Parser<'src, &'src str, AstArithOp, E<'src>> + Clone,
+    P: Parser<'src, I<'src>, SpannedExpr, E<'src>> + Clone,
+    O: Parser<'src, I<'src>, AstArithOp, E<'src>> + Clone,
     F: Fn(Span, AstArithOp, SpannedExpr, SpannedExpr) -> SpannedExpr + Clone,
 {
     next.clone().foldl(
         ws().ignore_then(op.then(next)).repeated(),
         move |left, (op, right)| {
-            let span = left.span.merge(right.span);
+            let span = left.span.union(right.span);
             make(span, op, left, right)
         },
     )
@@ -896,17 +879,17 @@ fn modifiable_level<'src, P, O, OpT, F>(
     next: P,
     op: O,
     make: F,
-) -> impl Parser<'src, &'src str, SpannedExpr, E<'src>> + Clone
+) -> impl Parser<'src, I<'src>, SpannedExpr, E<'src>> + Clone
 where
-    P: Parser<'src, &'src str, SpannedExpr, E<'src>> + Clone,
-    O: Parser<'src, &'src str, OpT, E<'src>> + Clone,
+    P: Parser<'src, I<'src>, SpannedExpr, E<'src>> + Clone,
+    O: Parser<'src, I<'src>, OpT, E<'src>> + Clone,
     F: Fn(Span, OpT, Option<AstCardinalityMod>, SpannedExpr, SpannedExpr) -> SpannedExpr + Clone,
 {
     next.clone().foldl(
         ws().ignore_then(card_mod().or_not().then(op).then(next))
             .repeated(),
         move |left, ((card_mod, op), right)| {
-            let span = left.span.merge(right.span);
+            let span = left.span.union(right.span);
             make(span, op, card_mod, left, right)
         },
     )
@@ -914,7 +897,7 @@ where
 
 /// `RosettaOnlyExistsElement`: a symbol reference or `item`, followed by
 /// `->feature` chains.
-fn only_exists_segment<'src>() -> impl Parser<'src, &'src str, SpannedExpr, E<'src>> + Clone {
+fn only_exists_segment<'src>() -> impl Parser<'src, I<'src>, SpannedExpr, E<'src>> + Clone {
     choice((kw("item").to(None), expr_qname().map(Some)))
         .then(
             sym("->")
@@ -955,9 +938,9 @@ fn only_exists_segment<'src>() -> impl Parser<'src, &'src str, SpannedExpr, E<'s
 
 /// `PrimaryExpression`.
 fn primary<'src>(
-    expression: Boxed<'src, 'src, &'src str, SpannedExpr, E<'src>>,
-    or_expression: Boxed<'src, 'src, &'src str, SpannedExpr, E<'src>>,
-) -> Boxed<'src, 'src, &'src str, SpannedExpr, E<'src>> {
+    expression: Boxed<'src, 'src, I<'src>, SpannedExpr, E<'src>>,
+    or_expression: Boxed<'src, 'src, I<'src>, SpannedExpr, E<'src>>,
+) -> Boxed<'src, 'src, I<'src>, SpannedExpr, E<'src>> {
     // `ExpressionWithAsKey` (constructor values).
     let with_as_key = expression
         .clone()

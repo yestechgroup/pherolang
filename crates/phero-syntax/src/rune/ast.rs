@@ -1,11 +1,11 @@
-//! Spanned AST produced by the sigil parser.
+//! The spanned Rune AST produced by [`super::parse_rune`].
 //!
 //! This tree mirrors the surface grammar of the Rune DSL (see
 //! `docs/reference/Rosetta.xtext`). It is intentionally separate from the
 //! semantic model in `sigil-model`: the parser is replaceable, this tree is
 //! not the canonical representation.
 
-use sigil_diag::Span;
+use phero_parser::Span;
 
 /// A dot-separated qualified name, e.g. `cdm.base.staticdata.party.Party`.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
@@ -109,10 +109,6 @@ pub enum Element {
     Corpus(CorpusDef),
     Segment(SegmentDecl),
     MetaType(MetaTypeDecl),
-    /// A construct recognised but not yet modelled. It carries a diagnostic;
-    /// the element is skipped. Dead since phase 4 (every grammar element is
-    /// modelled) but kept so future grammar additions have a place to land.
-    Unsupported(UnsupportedElement),
 }
 
 impl Element {
@@ -134,7 +130,7 @@ impl Element {
             Element::Segment(s) => Some(&s.name),
             Element::MetaType(m) => Some(&m.name),
             // Reports are anonymous root elements.
-            Element::Report(_) | Element::Unsupported(_) => None,
+            Element::Report(_) => None,
         }
     }
 
@@ -156,15 +152,8 @@ impl Element {
             Element::Corpus(c) => c.span,
             Element::Segment(s) => s.span,
             Element::MetaType(m) => m.span,
-            Element::Unsupported(u) => u.span,
         }
     }
-}
-
-#[derive(Debug, Clone)]
-pub struct UnsupportedElement {
-    pub keyword: String,
-    pub span: Span,
 }
 
 /// `type Foo extends Bar: <"..."> ...`

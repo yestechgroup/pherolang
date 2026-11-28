@@ -6,11 +6,11 @@ license.workspace = true
 repository.workspace = true
 # Staging import (RN4, ADR 0012): not published until RN11 settles names.
 publish = false
-description = "Chumsky-based parser for the Rune (.rosetta) DSL producing a spanned AST"
+description = "The Rune (.rosetta) syntax layer over phero_syntax::rune: lowering to sigil-model and project discovery"
 
 [dependencies]
 phero-diagnostics = { workspace = true }
-chumsky = { workspace = true }
+phero-syntax = { workspace = true }
 sigil-diag = { workspace = true }
 sigil-model = { workspace = true }
 

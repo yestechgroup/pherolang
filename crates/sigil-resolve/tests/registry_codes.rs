@@ -5,11 +5,9 @@
 
 use std::path::{Path, PathBuf};
 
-/// The one allowed literal: sigil's `W0001` unsupported-construct skip is
-/// unreachable (`UNSUPPORTED_KEYWORDS` is empty) and deliberately not
-/// migrated. RN9's parser fold deletes the path together with the
-/// `Element::Unsupported` AST variant.
-const ALLOWED: &[(&str, &str)] = &[("sigil-syntax/src/parser.rs", "W0001")];
+/// Literals the guard tolerates. Empty: the unreachable `W0001` skip went
+/// with the scannerless parser (RN9), so no `sigil-*` source spells a code.
+const ALLOWED: &[(&str, &str)] = &[];
 
 fn crates_dir() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR"))
