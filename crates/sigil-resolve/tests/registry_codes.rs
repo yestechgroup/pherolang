@@ -95,8 +95,8 @@ fn every_rune_constant_is_a_registered_rune_entry() {
         phero_diagnostics::E_RUNE_UNKNOWN_MEMBER,
         phero_diagnostics::W_RUNE_DEPRECATED_REFERENCE,
     ] {
-        let entry = phero_diagnostics::lookup(code)
-            .unwrap_or_else(|| panic!("{code} is not registered"));
+        let entry =
+            phero_diagnostics::lookup(code).unwrap_or_else(|| panic!("{code} is not registered"));
         assert!(
             entry.band.starts_with("rune."),
             "{code} belongs to {}, not a rune band",

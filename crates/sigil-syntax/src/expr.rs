@@ -234,7 +234,12 @@ pub fn parse_expression_str(text: &str) -> Result<SpannedExpr, Vec<sigil_diag::D
                     .into_iter()
                     .map(|e| {
                         let span = Span::new(e.span().start, e.span().end);
-                        sigil_diag::Diagnostic::error(phero_diagnostics::E_RUNE_SYNTAX, format!("{e}"), &file, span)
+                        sigil_diag::Diagnostic::error(
+                            phero_diagnostics::E_RUNE_SYNTAX,
+                            format!("{e}"),
+                            &file,
+                            span,
+                        )
                     })
                     .collect::<Vec<_>>()
             })

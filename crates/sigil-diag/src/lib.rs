@@ -7,7 +7,6 @@
 //! caret renderer — goes with its last users: the parser fold (RN9), the
 //! `sigil` binary's retirement (RN10) and `sigil-lsp`'s retirement (RN15).
 
-
 /// Byte-offset span into a source file (start inclusive, end exclusive).
 ///
 /// This is the fundamental location type; it deliberately has no dependency

@@ -487,14 +487,15 @@ pub(crate) fn compile_sigil_imports(
     let resolution = sigil_resolve::resolve(files_for_resolution);
     for diagnostic in &resolution.diagnostics {
         let span = diagnostic.span.map(|span| Span::from(span.start..span.end));
+        // The registry code leads the message, the driver's numeric-code
+        // convention (`E0450 malformed intent id …`); the model path stays as
+        // help, because a resolution error's span is often in another file.
+        let message = format!("{} {}", diagnostic.code, diagnostic.message);
         let mapped = match diagnostic.severity {
-            sigil_diag::Severity::Error => Diagnostic::error(diagnostic.message.clone(), span),
-            sigil_diag::Severity::Warning => Diagnostic::warning(diagnostic.message.clone(), span),
+            sigil_diag::Severity::Error => Diagnostic::error(message, span),
+            sigil_diag::Severity::Warning => Diagnostic::warning(message, span),
         }
-        .with_help(format!(
-            "sigil {} in {} (at {})",
-            diagnostic.code, diagnostic.file, diagnostic.path
-        ));
+        .with_help(format!("in {} (at {})", diagnostic.file, diagnostic.path));
         if mapped.is_error() {
             // The diagnostic's file is the rosetta key: every selected
             // namespace carrying that key fails (the key is shared when
@@ -629,15 +630,11 @@ fn parse_candidate(mox_path: &str, key: &str, text: &str) -> Candidate {
         .iter()
         .map(|diagnostic| {
             let span = Span::from(diagnostic.span.start..diagnostic.span.end);
+            let message = format!("{} {}", diagnostic.code, diagnostic.message);
             let mapped = match diagnostic.severity {
-                sigil_diag::Severity::Error => {
-                    Diagnostic::error(diagnostic.message.clone(), Some(span))
-                }
-                sigil_diag::Severity::Warning => {
-                    Diagnostic::warning(diagnostic.message.clone(), Some(span))
-                }
-            }
-            .with_help(format!("sigil {}", diagnostic.code));
+                sigil_diag::Severity::Error => Diagnostic::error(message, Some(span)),
+                sigil_diag::Severity::Warning => Diagnostic::warning(message, Some(span)),
+            };
             (key.to_string(), mapped)
         })
         .collect();
