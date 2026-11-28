@@ -1,0 +1,18 @@
+[package]
+name = "sigil-model"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "Semantic model (Ecore-mirroring IR) for the Rune DSL"
+
+[dependencies]
+sigil-diag = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+
+[dev-dependencies]
+proptest = "1"
+# Cyclic dev-dependency (allowed): the round-trip property test generates
+# IR expressions, prints them, and re-parses them with the real parser.
+sigil-syntax = { workspace = true }
