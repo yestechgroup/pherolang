@@ -115,6 +115,22 @@
 //! Every binary and postfix level also has Xtext's left-parameter-less form,
 //! where the operator stands alone and applies to the implicit `item`
 //! (`condition C: one-of`).
+//!
+//! # Recovery and limits
+//!
+//! - **Element-level recovery.** A broken element keeps its own precise error,
+//!   then the parser skips at least one token and every token up to the next
+//!   element start: an identifier in `crate::words::RUNE_ELEMENT_WORDS`, or
+//!   `reporting`/`eligibility`. Parsing resumes there, so every broken element
+//!   is reported. Skipping always consumes a token, so recovery terminates.
+//! - **Stray input.** A run of tokens that starts no element gets one error
+//!   spanning the run: `expected a Rune element (type, choice, enum, …), found X`.
+//! - **Partial units.** [`RuneParseResult::ast`] is the unit of every element
+//!   that parsed. It is `None` only when the header fails or the nesting
+//!   budget is exceeded. Callers that must not lower a broken file (the
+//!   `sigil_syntax::parse` shim) drop the unit whenever there are errors.
+//! - **Nesting budget.** Input nested more than [`MAX_NESTING_DEPTH`] (256)
+//!   brackets deep is refused before parsing, with one error and no unit.
 
 pub mod ast;
 mod expr;
@@ -122,7 +138,7 @@ pub mod lexer;
 mod parser;
 
 pub use expr::parse_rune_expression;
-pub use parser::{parse_rune, RuneParseResult};
+pub use parser::{parse_rune, RuneParseResult, MAX_NESTING_DEPTH};
 
 #[cfg(test)]
 mod grammar_doc_tests {
