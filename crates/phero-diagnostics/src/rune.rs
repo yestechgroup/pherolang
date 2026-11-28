@@ -3,7 +3,7 @@
 //! - `rune.syntax` `E0500`–`E0519`: the Rune parser (`sigil-syntax`, which
 //!   folds into `phero_syntax::rune` in RN9);
 //! - `rune.resolve` `E0520`–`E0579`: name resolution and scoping
-//!   (`sigil-resolve`, later `phero-rune-resolve`);
+//!   (`phero-rune-resolve`);
 //! - `rune.lints` `W0580`–`W0599`: resolution warnings.
 //!
 //! The codes replace sigil's own string literals (`E0001`, `E0101`–`E0107`,

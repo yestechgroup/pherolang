@@ -1,12 +1,12 @@
 //! Lowering: convert the parser AST into the parser-independent semantic
-//! model in `sigil-model`.
+//! model in `phero-rune-model`.
 
 use crate::ast::{
     AnnotationDecl as AstAnnotation, AttributeDef, DataDef, DocReference as AstDocReference,
     Element, EnumDef, QualifiableType as AstQualifiableType, TypeAliasDef, TypeCall,
     TypeCallArgumentValue,
 };
-use sigil_model as m;
+use phero_rune_model as m;
 /// Lower one parsed file into a `ModelFile`.
 pub fn lower(file_name: &str, unit: &crate::ast::SourceUnit) -> m::ModelFile {
     m::ModelFile {
@@ -804,9 +804,9 @@ mod tests {
         let doc = match model
             .elements
             .iter()
-            .find(|e| matches!(e, sigil_model::SemanticElement::Data(_)))
+            .find(|e| matches!(e, phero_rune_model::SemanticElement::Data(_)))
         {
-            Some(sigil_model::SemanticElement::Data(d)) => &d.attributes[0].doc_references[0],
+            Some(phero_rune_model::SemanticElement::Data(d)) => &d.attributes[0].doc_references[0],
             other => panic!("expected data, got {other:?}"),
         };
         assert_eq!(

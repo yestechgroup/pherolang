@@ -14,7 +14,7 @@ use serde::Serialize;
 use serde_json::json;
 
 // Read-only traversal API, defined in the sibling module and re-exported
-// here so `sigil_model::expr::{ExprVisitor, walk, ExprFamily}` is the
+// here so `phero_rune_model::expr::{ExprVisitor, walk, ExprFamily}` is the
 // single place consumers look.
 pub use crate::expr_visit::{walk, ExprFamily, ExprVisitor};
 

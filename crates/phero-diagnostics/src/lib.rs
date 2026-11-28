@@ -260,14 +260,14 @@ const BANDS: &[Band] = &[
     Band {
         id: "rune.resolve",
         range: "E0520–E0579",
-        owner: "Rune name resolution (`sigil-resolve`)",
+        owner: "Rune name resolution (`phero-rune-resolve`)",
         severity_note: "error",
         next_free: "E0527",
     },
     Band {
         id: "rune.lints",
         range: "W0580–W0599",
-        owner: "Rune resolution warnings (`sigil-resolve`)",
+        owner: "Rune resolution warnings (`phero-rune-resolve`)",
         severity_note: "warning",
         next_free: "W0581",
     },

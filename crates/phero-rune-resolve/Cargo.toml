@@ -1,5 +1,5 @@
 [package]
-name = "sigil-resolve"
+name = "phero-rune-resolve"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
@@ -12,7 +12,7 @@ description = "Name resolution and scoping for the Rune DSL"
 phero-diagnostics = { workspace = true }
 sigil-diag = { workspace = true }
 sigil-syntax = { workspace = true }
-sigil-model = { workspace = true }
+phero-rune-model = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 

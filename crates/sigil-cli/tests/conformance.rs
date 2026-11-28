@@ -5,9 +5,9 @@
 
 use std::path::{Path, PathBuf};
 
+use phero_rune_model::ModelFile;
+use phero_rune_resolve::{canonical_json, resolve};
 use sigil_diag::{Diagnostic, SourceFile};
-use sigil_model::ModelFile;
-use sigil_resolve::{canonical_json, resolve};
 
 fn conformance_root() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR"))

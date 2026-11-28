@@ -12,9 +12,9 @@
 //!    namespace,
 //! 5. fully-qualified names resolve against the global index.
 
+use phero_rune_model::{ModelFile, SemanticElement, TypeRef};
 use serde::Serialize;
 use sigil_diag::{Severity, Span};
-use sigil_model::{ModelFile, SemanticElement, TypeRef};
 
 /// The namespace of Rune's built-in library, implicitly wildcard-imported
 /// into every model.
@@ -751,7 +751,7 @@ impl<'a> ElementResolver<'a> {
     fn resolve_attributes(
         &mut self,
         path: &str,
-        attributes: &mut [sigil_model::Attribute],
+        attributes: &mut [phero_rune_model::Attribute],
         owner: ElementKind,
     ) {
         for (idx, attribute) in attributes.iter_mut().enumerate() {
@@ -832,7 +832,7 @@ impl<'a> ElementResolver<'a> {
     fn resolve_annotations(
         &mut self,
         path: &str,
-        annotations: &mut [sigil_model::AnnotationRef],
+        annotations: &mut [phero_rune_model::AnnotationRef],
         owner: ElementKind,
     ) {
         for annotation in annotations.iter_mut() {
@@ -903,7 +903,7 @@ impl<'a> ElementResolver<'a> {
     fn resolve_transform_refs(
         &mut self,
         path: &str,
-        transforms: &mut [sigil_model::TransformAnnotation],
+        transforms: &mut [phero_rune_model::TransformAnnotation],
     ) {
         for (idx, transform) in transforms.iter_mut().enumerate() {
             let Some(name) = transform.reference.clone() else {
@@ -914,7 +914,7 @@ impl<'a> ElementResolver<'a> {
                 Some(id) => {
                     if matches!(element_at(self.res, id), SemanticElement::Schema(_)) {
                         transform.reference_resolved =
-                            Some(sigil_model::TransformRefTarget::Schema(id.0));
+                            Some(phero_rune_model::TransformRefTarget::Schema(id.0));
                     } else {
                         self.res.diagnostics.push(ResolutionDiagnostic::error(
                             phero_diagnostics::E_RUNE_WRONG_KIND,
@@ -947,7 +947,7 @@ impl<'a> ElementResolver<'a> {
                                     .any(|v| v.as_str() == value)
                                 {
                                     transform.reference_resolved =
-                                        Some(sigil_model::TransformRefTarget::Format(
+                                        Some(phero_rune_model::TransformRefTarget::Format(
                                             id.0,
                                             value.to_string(),
                                         ));
@@ -999,9 +999,11 @@ impl<'a> ElementResolver<'a> {
                                     .iter()
                                     .any(|v| v.as_str() == name)
                                 {
-                                    transform.reference_resolved = Some(
-                                        sigil_model::TransformRefTarget::Format(id.0, name.clone()),
-                                    );
+                                    transform.reference_resolved =
+                                        Some(phero_rune_model::TransformRefTarget::Format(
+                                            id.0,
+                                            name.clone(),
+                                        ));
                                 } else {
                                     self.res.diagnostics.push(ResolutionDiagnostic::error(
                                         phero_diagnostics::E_RUNE_UNKNOWN_SYMBOL,
@@ -1045,7 +1047,7 @@ impl<'a> ElementResolver<'a> {
     /// enum of the same simple name shadowing it (mirroring the
     /// transform-ref scope). The written format string is kept raw in the
     /// model; the in-scope enum is linked via `format_resolved`.
-    fn resolve_schema_format(&mut self, path: &str, schema: &mut sigil_model::Schema) {
+    fn resolve_schema_format(&mut self, path: &str, schema: &mut phero_rune_model::Schema) {
         let name = schema.format.clone();
         let span = schema.format_span;
         match lookup(self.res, self.ctx, self.index, false, "SerializationFormat") {
@@ -1093,7 +1095,7 @@ impl<'a> ElementResolver<'a> {
     fn resolve_named_ref(
         &mut self,
         path: &str,
-        reference: &mut sigil_model::NamedRef,
+        reference: &mut phero_rune_model::NamedRef,
         kind: impl Fn(&SemanticElement) -> bool,
         kind_name: &str,
     ) {
@@ -1125,7 +1127,7 @@ impl<'a> ElementResolver<'a> {
     }
 
     /// Resolve a `[ruleReference R]` target (a reporting rule).
-    fn resolve_rule_ref(&mut self, path: &str, rule: &mut sigil_model::RuleReference) {
+    fn resolve_rule_ref(&mut self, path: &str, rule: &mut phero_rune_model::RuleReference) {
         if rule.empty {
             return;
         }
@@ -1169,10 +1171,10 @@ impl<'a> ElementResolver<'a> {
     fn resolve_expr_heads(
         &mut self,
         path: &str,
-        expr: &mut sigil_model::expr::Expr,
+        expr: &mut phero_rune_model::expr::Expr,
         frames: &mut Vec<Vec<String>>,
     ) {
-        use sigil_model::expr::Expr;
+        use phero_rune_model::expr::Expr;
         match expr {
             Expr::SymbolReference { symbol, .. } => {
                 self.resolve_head(path, symbol, frames);
@@ -1539,7 +1541,7 @@ const EXTERNAL_CONFIG_ANNOTATION: &str = "com.rosetta.model.externalConfig";
 /// Whether one of the element's annotations resolves to the builtin
 /// `deprecated` annotation (matched by qualified name, so a user-defined
 /// lookalike annotation does not trigger it).
-fn is_deprecated(res: &Resolution, annotations: &[sigil_model::AnnotationRef]) -> bool {
+fn is_deprecated(res: &Resolution, annotations: &[phero_rune_model::AnnotationRef]) -> bool {
     annotations.iter().any(|a| {
         a.annotation_resolved
             .map(|rid| res.qname(ElementId(rid)) == DEPRECATED_ANNOTATION)
@@ -1603,7 +1605,7 @@ fn emit_deprecation_warnings(res: &mut Resolution) {
         res: &Resolution,
         file: &str,
         path: &str,
-        annotations: &[sigil_model::AnnotationRef],
+        annotations: &[phero_rune_model::AnnotationRef],
     ) {
         for annotation in annotations {
             if let Some(id) = annotation.annotation_resolved {
@@ -1617,7 +1619,7 @@ fn emit_deprecation_warnings(res: &mut Resolution) {
         res: &Resolution,
         file: &str,
         path: &str,
-        references: &[sigil_model::NamedRef],
+        references: &[phero_rune_model::NamedRef],
     ) {
         for reference in references {
             if let Some(id) = reference.resolved {
@@ -1631,7 +1633,7 @@ fn emit_deprecation_warnings(res: &mut Resolution) {
         res: &Resolution,
         file: &str,
         path: &str,
-        reference: &sigil_model::NamedRef,
+        reference: &phero_rune_model::NamedRef,
     ) {
         warn_named_refs(warnings, res, file, path, std::slice::from_ref(reference));
     }
@@ -1777,7 +1779,7 @@ fn emit_deprecation_warnings(res: &mut Resolution) {
                         );
                     }
                     for (idx, transform) in f.transform.iter().enumerate() {
-                        if let Some(sigil_model::TransformRefTarget::Schema(id)) =
+                        if let Some(phero_rune_model::TransformRefTarget::Schema(id)) =
                             &transform.reference_resolved
                         {
                             warn_resolved(
@@ -1986,7 +1988,10 @@ fn type_json(type_ref: &TypeRef, res: &Resolution) -> serde_json::Value {
     })
 }
 
-fn annotations_json(annos: &[sigil_model::AnnotationRef], res: &Resolution) -> serde_json::Value {
+fn annotations_json(
+    annos: &[phero_rune_model::AnnotationRef],
+    res: &Resolution,
+) -> serde_json::Value {
     serde_json::Value::Array(
         annos
             .iter()
@@ -2005,7 +2010,7 @@ fn annotations_json(annos: &[sigil_model::AnnotationRef], res: &Resolution) -> s
 }
 
 fn rule_references_json(
-    rules: &[sigil_model::RuleReference],
+    rules: &[phero_rune_model::RuleReference],
     res: &Resolution,
 ) -> Vec<serde_json::Value> {
     rules
@@ -2019,7 +2024,10 @@ fn rule_references_json(
         .collect()
 }
 
-fn attributes_json(attributes: &[sigil_model::Attribute], res: &Resolution) -> serde_json::Value {
+fn attributes_json(
+    attributes: &[phero_rune_model::Attribute],
+    res: &Resolution,
+) -> serde_json::Value {
     serde_json::Value::Array(
         attributes
             .iter()
@@ -2041,7 +2049,7 @@ fn attributes_json(attributes: &[sigil_model::Attribute], res: &Resolution) -> s
 }
 
 fn conditions_json(
-    conditions: &[sigil_model::Condition],
+    conditions: &[phero_rune_model::Condition],
     res: &Resolution,
 ) -> Vec<serde_json::Value> {
     conditions
@@ -2059,7 +2067,7 @@ fn conditions_json(
 }
 
 fn parameters_json(
-    parameters: &[sigil_model::TypeParameter],
+    parameters: &[phero_rune_model::TypeParameter],
     res: &Resolution,
 ) -> serde_json::Value {
     serde_json::Value::Array(
@@ -2280,7 +2288,7 @@ fn element_json(element: &SemanticElement, res: &Resolution) -> serde_json::Valu
 /// A by-name reference renders as the resolved FQN, falling back to the
 /// written name when unresolved (matching the oracle dumper, which emits
 /// FQNs of resolved targets).
-fn named_ref_json(reference: &sigil_model::NamedRef, res: &Resolution) -> serde_json::Value {
+fn named_ref_json(reference: &phero_rune_model::NamedRef, res: &Resolution) -> serde_json::Value {
     match reference.resolved {
         Some(id) => json!(res.element_names[id]),
         None => json!(reference.name),
@@ -2292,12 +2300,12 @@ fn named_ref_json(reference: &sigil_model::NamedRef, res: &Resolution) -> serde_
 /// literal as `<enum FQN>.<VALUE>` — falling back to the written name when
 /// unresolved.
 fn transform_ref_json(
-    transform: &sigil_model::TransformAnnotation,
+    transform: &phero_rune_model::TransformAnnotation,
     res: &Resolution,
 ) -> serde_json::Value {
     let name = match &transform.reference_resolved {
-        Some(sigil_model::TransformRefTarget::Schema(id)) => res.element_names[*id].clone(),
-        Some(sigil_model::TransformRefTarget::Format(enum_id, value)) => {
+        Some(phero_rune_model::TransformRefTarget::Schema(id)) => res.element_names[*id].clone(),
+        Some(phero_rune_model::TransformRefTarget::Format(enum_id, value)) => {
             format!("{}.{}", res.qname(ElementId(*enum_id)), value)
         }
         None => match &transform.reference {

@@ -11,7 +11,7 @@ The oracle relationship is deliberately explicit:
 
 > The Java implementation is the behavioural oracle; the Rune grammar
 > (`docs/reference/Rosetta.xtext`) describes the surface language; sigil's
-> semantic model (`sigil-model`) is the compatibility boundary.
+> semantic model (`phero-rune-model`) is the compatibility boundary.
 
 ## Compatibility levels
 
@@ -51,7 +51,7 @@ Milestone 1 targets levels 1–2 for the model subset below.
 | label | `[label "text"]`, `[label for path "t"]` | `LabelAnnotation` | `LabelAnnotation` | n/a | done |
 | rule reference | `[ruleReference Rules]` / `[ruleReference empty]` | `RuleReferenceAnnotation` | `RuleReference` | target kind | done (phase 4) |
 | builtin types | `int`, `string`, `date`, `metadata`, ... | `RosettaBuiltinsService` | embedded `builtin/*.rosetta` | yes | done |
-| scoping | local → imports → same-ns → `com.rosetta.model.*` → FQN | `RosettaScopeProvider` | `sigil-resolve` | yes | done |
+| scoping | local → imports → same-ns → `com.rosetta.model.*` → FQN | `RosettaScopeProvider` | `phero-rune-resolve` | yes | done |
 | condition | `condition Foo: <expr>` inside a type | `simple.Condition` | `Condition` + `expr::Expr` | annotations + symbol heads | done (phase 3/4) |
 | func | `func Foo:` (inputs/output/aliases/ops) | `simple.Function` | `SemanticElement::Function` | yes (function-scoped) | done (phase 4) |
 | func dispatch | `func Foo(attr: Enum->VALUE)` | `simple.FunctionDispatch` | `Function.dispatch` | dispatch refs | done (phase 4)* |
@@ -66,7 +66,7 @@ Milestone 1 targets levels 1–2 for the model subset below.
 | schema | `schema Foo JSON` | `Schema` | `SemanticElement::Schema` | annotations + format | done (phase 4)* |
 | body / corpus / segment | `body T Foo`, `corpus ...`, `segment Foo` | `RosettaBody` / `RosettaCorpus` / `RosettaSegment` | respective elements | n/a | done (phase 4) |
 | metaType | `metaType Foo number` | `RosettaMetaType` | `SemanticElement::MetaType` | type | done (phase 4) |
-| expressions | literals, paths, operators, `filter`/`extract`/... | `RosettaExpression` hierarchy | `sigil_model::expr::Expr` (+ normalized JSON and printer) | symbol heads (phase 4) | done (parse, IR, differential) |
+| expressions | literals, paths, operators, `filter`/`extract`/... | `RosettaExpression` hierarchy | `phero_rune_model::expr::Expr` (+ normalized JSON and printer) | symbol heads (phase 4) | done (parse, IR, differential) |
 
 Rows marked `*` use syntax or metamodel features that the published 9.58.1
 oracle does not have (see "Oracle-version caveats"); they are covered by

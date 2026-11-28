@@ -2,8 +2,8 @@
 //! resolve to a `Schema` element or a `SerializationFormat` enum literal
 //! (`SchemaOrFormat` scope, Rosetta.xtext:185); `[enrich]` has no reference.
 
+use phero_rune_resolve::{canonical_json, resolve};
 use sigil_diag::SourceFile;
-use sigil_resolve::{canonical_json, resolve};
 
 fn resolved_json(src: &str) -> serde_json::Value {
     let source = SourceFile::new("test.rosetta", src.to_string());

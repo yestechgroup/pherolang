@@ -2850,6 +2850,8 @@ dependencies = [
  "phero-ifml",
  "phero-ir",
  "phero-parser",
+ "phero-rune-model",
+ "phero-rune-resolve",
  "phero-syntax",
  "phero-testkit",
  "phero-verify",
@@ -2859,8 +2861,6 @@ dependencies = [
  "serde_json",
  "sha2",
  "sigil-diag",
- "sigil-model",
- "sigil-resolve",
  "sigil-syntax",
  "xstate-ir",
  "xstate-parser",
@@ -2959,6 +2959,29 @@ dependencies = [
  "chumsky",
  "serde",
  "thiserror",
+]
+
+[[package]]
+name = "phero-rune-model"
+version = "0.4.0"
+dependencies = [
+ "proptest",
+ "serde",
+ "serde_json",
+ "sigil-diag",
+ "sigil-syntax",
+]
+
+[[package]]
+name = "phero-rune-resolve"
+version = "0.4.0"
+dependencies = [
+ "phero-diagnostics",
+ "phero-rune-model",
+ "serde",
+ "serde_json",
+ "sigil-diag",
+ "sigil-syntax",
 ]
 
 [[package]]
@@ -3832,10 +3855,10 @@ dependencies = [
  "criterion",
  "phero-backend-common",
  "phero-diagnostics",
+ "phero-rune-model",
+ "phero-rune-resolve",
  "serde_json",
  "sigil-diag",
- "sigil-model",
- "sigil-resolve",
  "sigil-syntax",
 ]
 
@@ -3857,35 +3880,12 @@ dependencies = [
  "lsp-server",
  "lsp-types",
  "phero-diagnostics",
+ "phero-rune-model",
+ "phero-rune-resolve",
  "proptest",
  "serde",
  "serde_json",
  "sigil-diag",
- "sigil-model",
- "sigil-resolve",
- "sigil-syntax",
-]
-
-[[package]]
-name = "sigil-model"
-version = "0.4.0"
-dependencies = [
- "proptest",
- "serde",
- "serde_json",
- "sigil-diag",
- "sigil-syntax",
-]
-
-[[package]]
-name = "sigil-resolve"
-version = "0.4.0"
-dependencies = [
- "phero-diagnostics",
- "serde",
- "serde_json",
- "sigil-diag",
- "sigil-model",
  "sigil-syntax",
 ]
 
@@ -3894,9 +3894,9 @@ name = "sigil-syntax"
 version = "0.4.0"
 dependencies = [
  "phero-diagnostics",
+ "phero-rune-model",
  "phero-syntax",
  "sigil-diag",
- "sigil-model",
 ]
 
 [[package]]

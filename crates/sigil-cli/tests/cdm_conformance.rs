@@ -17,7 +17,7 @@
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::{Path, PathBuf};
 
-use sigil_resolve::{resolve, ElementKind};
+use phero_rune_resolve::{resolve, ElementKind};
 
 /// The pinned CDM revision (see `scripts/rune/fetch-cdm.sh`); the snapshot must
 /// always record exactly this SHA.

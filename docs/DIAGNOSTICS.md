@@ -16,8 +16,8 @@ Every diagnostic a pherolang surface emits carries a stable string code. The cod
 | `driver.ddd` | E0350–E0449 | phero-driver `.ddd` lifecycle checks | error | E0409 |
 | `driver.intent` | E0450–E0499 | phero-driver `.intent` surface checks | error | E0455 |
 | `rune.syntax` | E0500–E0519 | the Rune (`.rosetta`) parser (`sigil-syntax`) | error | E0501 |
-| `rune.resolve` | E0520–E0579 | Rune name resolution (`sigil-resolve`) | error | E0527 |
-| `rune.lints` | W0580–W0599 | Rune resolution warnings (`sigil-resolve`) | warning | W0581 |
+| `rune.resolve` | E0520–E0579 | Rune name resolution (`phero-rune-resolve`) | error | E0527 |
+| `rune.lints` | W0580–W0599 | Rune resolution warnings (`phero-rune-resolve`) | warning | W0581 |
 
 ## Band `ifml.resolver` (E0001–E0099)
 

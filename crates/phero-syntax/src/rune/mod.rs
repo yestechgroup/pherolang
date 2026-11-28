@@ -6,9 +6,9 @@
 //! goldens and the CDM corpus snapshot are checked against. The grammar is a
 //! transcription of its Xtext grammar (`docs/rune/reference/Rosetta.xtext`);
 //! the EBNF below is the condensed, normative form of what this parser
-//! accepts. Resolution and the semantic model live in `sigil-resolve` and
-//! `sigil-model` (later `phero-rune-*`), and lowering this AST into that model
-//! is `sigil_syntax::lower` until RN11 moves it.
+//! accepts. Resolution and the semantic model live in `phero-rune-resolve` and
+//! `phero-rune-model`; lowering this AST into that model is
+//! `sigil_syntax::lower`.
 //!
 //! Rune has its own token enum ([`lexer::RuneToken`]) rather than rows in the
 //! shared `.mox`-family token table, for the reasons ADR 0013 records. It

@@ -7,18 +7,18 @@ may rely on, what is explicitly *not* stable, and what a rev bump means.
 
 The guiding principle is the same one stated in
 [docs/compatibility.md](compatibility.md): sigil's semantic model
-(`sigil-model`) is the compatibility boundary — not the parser, not the
+(`phero-rune-model`) is the compatibility boundary — not the parser, not the
 AST, not the LSP internals.
 
 ## The boundary at a glance
 
 | Surface | Entry point | Status |
 | --- | --- | --- |
-| Semantic model types | `sigil-model` (`ModelFile`, `SemanticElement`, `expr::Expr`, …) | **stable** (the boundary) |
-| Canonical JSON artifact | `sigil_resolve::canonical_json`, format `sigil-model/1` | **stable** (shape contract below) |
-| Resolution | `sigil_resolve::resolve`, `Resolution`, `ElementId`, `ElementKind` | **stable** (semantics below) |
+| Semantic model types | `phero-rune-model` (`ModelFile`, `SemanticElement`, `expr::Expr`, …) | **stable** (the boundary) |
+| Canonical JSON artifact | `phero_rune_resolve::canonical_json`, format `sigil-model/1` | **stable** (shape contract below) |
+| Resolution | `phero_rune_resolve::resolve`, `Resolution`, `ElementId`, `ElementKind` | **stable** (semantics below) |
 | Multi-file ingestion | `sigil_syntax::project::{discover_rosetta_files, load_user_files}` | **stable** (walk rules below) |
-| Expression traversal | `sigil_model::expr::{ExprVisitor, walk, ExprFamily, Expr::family}` | **stable** (protocol below) |
+| Expression traversal | `phero_rune_model::expr::{ExprVisitor, walk, ExprFamily, Expr::family}` | **stable** (protocol below) |
 | Parser AST (`sigil_syntax::ast`), lowering internals | — | *not* stable |
 | LSP internals, CLI arg parsing, bench data, conformance fixture JSONs | — | *not* stable (fixtures are test artifacts, not API) |
 
@@ -26,15 +26,15 @@ Everything marked **stable** is documented against the current source; the
 symbol names and file locations below were verified against the tree this
 document ships in.
 
-## 1. `sigil-model`: the data boundary
+## 1. `phero-rune-model`: the data boundary
 
-The crate docs say it directly (`crates/sigil-model/src/lib.rs:1-7`): the
+The crate docs say it directly (`crates/phero-rune-model/src/lib.rs`): the
 model mirrors the Rune Ecore metamodel (`com.regnosys.rosetta`,
 `...rosetta.simple`) rather than the surface grammar, knows nothing about
 chumsky or the parser, and "this crate is the compatibility boundary for the
 rest of the toolchain". `sigil-syntax` ASTs are *lowered* into these types;
-`sigil-resolve` fills in the `resolved` fields. An embedder can build
-`ModelFile`s itself and call `sigil_resolve::resolve` without touching the
+`phero-rune-resolve` fills in the `resolved` fields. An embedder can build
+`ModelFile`s itself and call `phero_rune_resolve::resolve` without touching the
 parser at all.
 
 Note for matchers: `SemanticElement` and `expr::Expr` are exhaustive enums
@@ -64,7 +64,7 @@ The serde attributes on the model types *are* the wire contract:
   diagnostics) by `canonical_json`.
 - **`skip_serializing_if`**: `DocReference.for_path` is
   `#[serde(rename = "forPath", skip_serializing_if = "Option::is_none")]`
-  (`crates/sigil-model/src/lib.rs:135`). The key is **absent** (not `null`)
+  (`crates/phero-rune-model/src/lib.rs`). The key is **absent** (not `null`)
   for plain `[docReference ...]` uses. Consumers must treat a missing
   `forPath` as "no attribute-anchored path", and must expect the key to
   appear at all — it is a sigil-only extension (see §6).
@@ -73,9 +73,9 @@ The serde attributes on the model types *are* the wire contract:
 
 ### The canonical JSON artifact (`sigil-model/1`)
 
-`sigil model <files...>` and `sigil_resolve::canonical_json` emit a single
+`sigil model <files...>` and `phero_rune_resolve::canonical_json` emit a single
 JSON object with `"format": "sigil-model/1"` (constant defined at
-`crates/sigil-resolve/src/lib.rs:1722`; the Java oracle dumper emits the
+`crates/phero-rune-resolve/src/lib.rs`; the Java oracle dumper emits the
 same shape with the value `"sigil-model/1 (oracle)"`). Top-level keys:
 `format`, `files`, `diagnostics`.
 
@@ -83,8 +83,8 @@ Shape rules an embedder can rely on:
 
 - Element objects are hand-rendered by `element_json` /
   `type_json` / `annotations_json` / `rule_references_json`
-  (`crates/sigil-resolve/src/lib.rs:1354-1651`) — not by the serde derives —
-  so the *element* JSON contract is owned by `sigil-resolve`. The serde
+  (`crates/phero-rune-resolve/src/lib.rs`) — not by the serde derives —
+  so the *element* JSON contract is owned by `phero-rune-resolve`. The serde
   derives govern the pieces embedded verbatim (`docReferences`, `labels`,
   `imports`, `configurations`), which is why the `forPath` rename above
   shows up in canonical JSON too.
@@ -118,7 +118,7 @@ Shape rules an embedder can rely on:
 The `sigil-model/1` format constant is the version marker: a change that
 breaks the shape a consumer parses must bump it.
 
-## 2. `sigil_resolve::resolve()` semantics
+## 2. `phero_rune_resolve::resolve()` semantics
 
 ```rust
 pub fn resolve(user_files: Vec<ModelFile>) -> Resolution
@@ -126,7 +126,7 @@ pub fn resolve(user_files: Vec<ModelFile>) -> Resolution
 
 - **Builtins are auto-prepended.** `resolve` calls `builtin_files()`, which
   parses the two `include_str!`-embedded `.rosetta` files
-  (`crates/sigil-resolve/builtin/basictypes.rosetta` and
+  (`crates/phero-rune-resolve/builtin/basictypes.rosetta` and
   `annotations.rosetta`, mirroring `RosettaBuiltinsService`) and prepends
   them. The builtin files therefore sit at **file indices 0 and 1** of
   `Resolution.files`, and their elements occupy the first flat element ids
@@ -192,7 +192,7 @@ scan, which is the behavioural source of truth:
 
 ### `ElementKind` and the `Resolution` query methods
 
-`crates/sigil-resolve/src/lib.rs`:
+`crates/phero-rune-resolve/src/lib.rs`:
 
 - `ElementKind` — one variant per `SemanticElement` variant (one per EClass
   that appears as a model root). `ElementKind::ALL` lists them in
@@ -213,9 +213,9 @@ scan, which is the behavioural source of truth:
 
 ### Expression traversal: `ExprVisitor`, `walk`, `Expr::family`
 
-Defined in `crates/sigil-model/src/expr_visit.rs` and re-exported at
-`sigil_model::expr::{ExprVisitor, walk, ExprFamily}` so consumers have a
-single import site (`crates/sigil-model/src/expr.rs:16-19`):
+Defined in `crates/phero-rune-model/src/expr_visit.rs` and re-exported at
+`phero_rune_model::expr::{ExprVisitor, walk, ExprFamily}` so consumers have a
+single import site (`crates/phero-rune-model/src/expr.rs`):
 
 - `walk(expr, visitor)` is a depth-first, **pre-order**, read-only
   traversal: per node it calls `ExprVisitor::visit_expr`, then exactly one
@@ -263,7 +263,7 @@ These are documented divergences, not accidents; see
   head symbol of a `SymbolReference` resolves; `->`/`->>` feature-call
   chains inside expressions are kept as written
   (`resolve_expr_heads` doc comment,
-  `crates/sigil-resolve/src/lib.rs:897-904`; compatibility.md
+  `crates/phero-rune-resolve/src/lib.rs`; compatibility.md
   "Expression symbol resolution" known limitations). Similarly unresolved
   by design: bare heads that only resolve via the expected type, and
   `ChoiceOperation` attributes / `switch` reference guards / `to-enum` /

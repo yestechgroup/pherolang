@@ -12,7 +12,7 @@ use crate::position::PositionEncoding;
 /// every change — models are multi-file, so a change in one file can
 /// invalidate resolution results in any other.
 pub struct Analysis {
-    pub resolution: sigil_resolve::Resolution,
+    pub resolution: phero_rune_resolve::Resolution,
     /// Syntax diagnostics per file (keyed by URI, i.e. the `SourceFile`
     /// name used for parsing).
     pub syntax: BTreeMap<String, Vec<sigil_diag::Diagnostic>>,
@@ -24,7 +24,7 @@ pub struct Analysis {
 impl Analysis {
     pub fn empty() -> Self {
         Analysis {
-            resolution: sigil_resolve::resolve(Vec::new()),
+            resolution: phero_rune_resolve::resolve(Vec::new()),
             syntax: BTreeMap::new(),
             builtin_docs: builtin_documents(),
         }
@@ -42,7 +42,7 @@ impl Analysis {
             }
         }
         Analysis {
-            resolution: sigil_resolve::resolve(models),
+            resolution: phero_rune_resolve::resolve(models),
             syntax,
             builtin_docs: builtin_documents(),
         }
@@ -112,7 +112,7 @@ fn severity(s: sigil_diag::Severity) -> DiagnosticSeverity {
 pub const BUILTIN_SCHEME: &str = "builtin:";
 
 fn builtin_documents() -> BTreeMap<String, Document> {
-    sigil_resolve::builtin_sources()
+    phero_rune_resolve::builtin_sources()
         .into_iter()
         .map(|(name, text)| (format!("{BUILTIN_SCHEME}{name}"), Document::new(text, 0)))
         .collect()

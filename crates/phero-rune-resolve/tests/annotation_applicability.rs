@@ -4,8 +4,8 @@
 //! metadata in the grammar). Other builtin annotations keep their usual
 //! targets.
 
+use phero_rune_resolve::{canonical_json, resolve};
 use sigil_diag::SourceFile;
-use sigil_resolve::{canonical_json, resolve};
 
 fn resolved(src: &str) -> serde_json::Value {
     let source = SourceFile::new("test.rosetta", src.to_string());

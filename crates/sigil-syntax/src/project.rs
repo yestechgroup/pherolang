@@ -17,8 +17,8 @@
 
 use std::path::{Path, PathBuf};
 
+use phero_rune_model::ModelFile;
 use sigil_diag::{Diagnostic, SourceFile};
-use sigil_model::ModelFile;
 
 /// Maximum directory depth for [`discover_rosetta_files`], mirrored from
 /// the language server's workspace scan.
@@ -48,7 +48,7 @@ pub fn discover_rosetta_files(roots: &[PathBuf]) -> Vec<PathBuf> {
 }
 
 /// Load and parse a mixed set of files and directories into
-/// [`ModelFile`]s, ready to be handed to `sigil_resolve::resolve`.
+/// [`ModelFile`]s, ready to be handed to `phero_rune_resolve::resolve`.
 ///
 /// Each path is used as-is if it is a file, or expanded with
 /// [`discover_rosetta_files`] if it is a directory. The combined file list

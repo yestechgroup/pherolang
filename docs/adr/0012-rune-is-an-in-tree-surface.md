@@ -89,8 +89,8 @@ nobody uses.
 | Today | Becomes | Issue |
 |---|---|---|
 | `sigil-syntax` | the `phero_syntax::rune` module (`parse_rune`, later `format_rune`) | RN9, RN17 |
-| `sigil-model` | `phero-rune-model` | RN11 |
-| `sigil-resolve` | `phero-rune-resolve` | RN11 |
+| `sigil-model` | `phero-rune-model` | RN11 (done) |
+| `sigil-resolve` | `phero-rune-resolve` | RN11 (done) |
 | `sigil-diag` | retired into `phero-parser` (span) and `phero-diagnostics` (record, codes) | RN8 |
 | `sigil-cli` | retired into `phero-cli` (`check`/`build`/`ir` on `.rosetta`) | RN10 |
 | `sigil-lsp` | retired into `phero-lsp` (graph-snapshot serving) | RN15 |

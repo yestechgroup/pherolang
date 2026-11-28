@@ -4,9 +4,9 @@
 
 use std::path::{Path, PathBuf};
 
+use phero_rune_model::{ModelFile, SemanticElement};
+use phero_rune_resolve::{resolve, ElementId, ElementKind, Resolution};
 use sigil_diag::SourceFile;
-use sigil_model::{ModelFile, SemanticElement};
-use sigil_resolve::{resolve, ElementId, ElementKind, Resolution};
 
 fn conformance_root() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR"))

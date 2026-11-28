@@ -115,7 +115,7 @@ impl World {
 
     /// Re-parse and re-resolve every document in the workspace together.
     /// Full-workspace reanalysis keeps results consistent across files; the
-    /// built-in `com.rosetta.model` library is included by `sigil_resolve`.
+    /// built-in `com.rosetta.model` library is included by `phero_rune_resolve`.
     pub fn reanalyze(&mut self) {
         self.analysis = Analysis::compute(&self.docs);
     }

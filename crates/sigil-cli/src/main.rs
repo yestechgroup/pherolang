@@ -2,9 +2,9 @@
 
 use std::process::ExitCode;
 
+use phero_rune_model::ModelFile;
+use phero_rune_resolve::{canonical_json, resolve};
 use sigil_diag::{Diagnostic, SourceFile};
-use sigil_model::ModelFile;
-use sigil_resolve::{canonical_json, resolve};
 
 #[derive(PartialEq)]
 enum Command {

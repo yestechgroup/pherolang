@@ -3,7 +3,7 @@
 //!
 //! The lexer, spanned AST and parser live in `phero-syntax`. What stays here
 //! until RN11 is what depends on the semantic model or the filesystem:
-//! - [`lower`] / [`lower_expression`]: AST → `sigil_model` (phero-syntax must
+//! - [`lower`] / [`lower_expression`]: AST → `phero_rune_model` (phero-syntax must
 //!   not depend on the model);
 //! - [`project`]: `.rosetta` discovery;
 //! - the historical entry points [`parse`] / [`parse_expression_str`], which

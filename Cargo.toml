@@ -26,11 +26,12 @@ members = [
     "crates/phero-dates",
     "crates/phero-testkit",
     # The Rune (`.rosetta`) toolchain, imported from yestechgroup/sigil
-    # (ADR 0012; staging — RN8/RN9/RN11 converge and rename these).
+    # (ADR 0012). Model and resolver carry Phero names since RN11; the
+    # staged sigil-* crates retire in RN10/RN15.
     "crates/sigil-diag",
     "crates/sigil-syntax",
-    "crates/sigil-model",
-    "crates/sigil-resolve",
+    "crates/phero-rune-model",
+    "crates/phero-rune-resolve",
     "crates/sigil-cli",
     "crates/sigil-lsp",
 ]
@@ -74,12 +75,12 @@ phero-dates = { path = "crates/phero-dates" }
 phero-testkit = { path = "crates/phero-testkit" }
 
 # The Rune DSL (`.rosetta`) toolchain, in-tree since ADR 0012 (imported
-# from yestechgroup/sigil at 0e1e4b1; RN11 renames model/resolve to
-# phero-rune-*, RN8/RN9/RN10/RN15 retire the rest).
+# from yestechgroup/sigil at 0e1e4b1). The model and resolver are
+# phero-rune-* since RN11; RN10/RN15 retire the staged sigil-* crates.
 sigil-diag = { path = "crates/sigil-diag" }
 sigil-syntax = { path = "crates/sigil-syntax" }
-sigil-model = { path = "crates/sigil-model" }
-sigil-resolve = { path = "crates/sigil-resolve" }
+phero-rune-model = { path = "crates/phero-rune-model" }
+phero-rune-resolve = { path = "crates/phero-rune-resolve" }
 
 # The restingstate statechart toolchain, pinned by rev — `.ddd` state
 # machines lower into its language-neutral Machine IR (xstate-ir is the

@@ -1,5 +1,5 @@
 [package]
-name = "sigil-model"
+name = "phero-rune-model"
 version.workspace = true
 edition.workspace = true
 license.workspace = true

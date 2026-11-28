@@ -16,8 +16,8 @@ serde = { workspace = true }
 serde_json = { workspace = true }
 sigil-diag = { workspace = true }
 sigil-syntax = { workspace = true }
-sigil-model = { workspace = true }
-sigil-resolve = { workspace = true }
+phero-rune-model = { workspace = true }
+phero-rune-resolve = { workspace = true }
 
 [dev-dependencies]
 phero-diagnostics = { workspace = true }
