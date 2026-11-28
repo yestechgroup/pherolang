@@ -18,6 +18,7 @@ mod graph;
 mod ifml;
 mod mox;
 mod pipeline;
+mod rosetta;
 mod semantic_tokens;
 #[cfg(test)]
 mod tests;
@@ -128,6 +129,9 @@ pub struct PheroBackend {
     /// clears the entry, so a stale answer is never served; the version check
     /// is the second guard (and makes a repeated request cheap).
     semantic_cache: Mutex<HashMap<Uri, (i32, SemanticTokens)>>,
+    /// The `import sigil` content diagnostics published on `.rosetta`
+    /// URIs, per owning `.mox` document (pherolang#398).
+    rosetta_diagnostics: Mutex<rosetta::RosettaDiagnostics>,
 }
 
 impl PheroBackend {
@@ -152,6 +156,7 @@ impl PheroBackend {
             graph_memo: Mutex::new(graph::GraphMemo::default()),
             compile_count,
             semantic_cache: Mutex::new(HashMap::new()),
+            rosetta_diagnostics: Mutex::new(rosetta::RosettaDiagnostics::default()),
         }
     }
 
@@ -269,6 +274,10 @@ impl LanguageServer for PheroBackend {
             .unwrap()
             .remove(&params.text_document.uri);
         self.invalidate_graph();
+        // A closed `.mox` stops owning its imported rosetta files'
+        // diagnostics (pherolang#398).
+        self.publish_rosetta(&params.text_document.uri, Vec::new())
+            .await;
         self.client
             .publish_diagnostics(params.text_document.uri, vec![], None)
             .await;

@@ -594,7 +594,8 @@ impl PheroBackend {
     /// compile's own import fetch does ([`PheroBackend::fetch_open_or_disk`]).
     /// `resolved_imports` deliberately omits `.mox`'s `import
     /// schema`/`import sigil` declarations (they are not application
-    /// edges), so those are hashed separately here.
+    /// edges), so those are hashed separately here — for `import sigil`,
+    /// the whole discovered rosetta pool, not only the named file.
     ///
     /// A content key was chosen over `(version, mtime)`: open buffers have
     /// no mtime, a version bump with identical text should not recompile,
@@ -618,6 +619,22 @@ impl PheroBackend {
             for import in mox_schema_imports(text, path) {
                 import.hash(&mut hasher);
                 hash_text(&mut hasher, std::fs::read_to_string(&import).ok());
+            }
+            // pherolang#398: sigil resolution also reads every rosetta
+            // file discovered next to a named import (the transitive
+            // namespace pool), so an edit to an unnamed sibling must
+            // invalidate too. The pool is gathered exactly as the compile
+            // gathers it; a pool that cannot be read hashes as absent.
+            let source = [(path.display().to_string(), text.to_string())];
+            match phero_driver::workspace_imports::collect_sigil_imports(&source) {
+                Ok(pool) => {
+                    1u8.hash(&mut hasher);
+                    for (tag, rosetta) in &pool.sources {
+                        tag.hash(&mut hasher);
+                        rosetta.hash(&mut hasher);
+                    }
+                }
+                Err(_) => 0u8.hash(&mut hasher),
             }
         }
         // DD8: a `.ddd` document compiles as one application, so its key

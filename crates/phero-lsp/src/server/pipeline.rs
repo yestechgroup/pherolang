@@ -93,22 +93,39 @@ impl PheroBackend {
                 // from disk like the CLI's, so models carrying them stop
                 // showing permanent false "not provided" errors. Documents
                 // key by URI; imports resolve relative to the file on disk.
-                let imports = uri
-                    .to_file_path()
+                let disk_path = uri.to_file_path().map(|path| path.into_owned());
+                let imports = disk_path
+                    .as_deref()
                     .and_then(|path| {
                         phero_driver::workspace_imports::collect_for_source(
                             uri.as_str(),
-                            &path,
+                            path,
                             &text,
                         )
                         .ok()
                     })
                     .unwrap_or_default();
-                let db = self.db.lock().unwrap();
-                phero_driver::compile_with_imports(&*db, file, &imports)
+                let compiled = {
+                    let db = self.db.lock().unwrap();
+                    phero_driver::compile_with_imports(&*db, file, &imports)
+                };
+                // pherolang#398: the `import sigil` diagnostics are routed
+                // like the CLI's — import-level ones on this document,
+                // content ones on their rosetta file plus an anchor here.
+                let routed = super::rosetta::route_sigil_diagnostics(
+                    uri.as_str(),
+                    disk_path.as_deref(),
+                    &text,
+                    &map,
+                    &imports,
+                    &compiled.sigil_diagnostics,
+                );
+                self.publish_rosetta(uri, routed.rosetta).await;
+                compiled
                     .diagnostics
                     .iter()
                     .map(|diagnostic| to_lsp_diagnostic(diagnostic, &map))
+                    .chain(routed.own)
                     .collect()
             }
             DocumentSurface::Known(SurfaceKind::Ifml) => {
@@ -230,11 +247,33 @@ impl PheroBackend {
             | DocumentSurface::Known(SurfaceKind::Uc)
             | DocumentSurface::Known(SurfaceKind::Cmmn)
             | DocumentSurface::Known(SurfaceKind::Intent) => self.snapshot_diagnostics(uri),
+            // An open `.rosetta` is not a phero surface, but it may carry
+            // the diagnostics an importing `.mox` routed to it
+            // (pherolang#398) — re-publish those rather than clearing them.
+            DocumentSurface::Other if super::rosetta::is_rosetta(uri) => {
+                self.rosetta_diagnostics.lock().unwrap().union_for(uri)
+            }
             DocumentSurface::Other => Vec::new(),
         };
         self.client
             .publish_diagnostics(uri.clone(), lsp_diagnostics, version)
             .await;
+    }
+
+    /// Replaces what `owner` (a `.mox` document) contributes to the
+    /// `.rosetta` diagnostics and republishes every rosetta URI whose set
+    /// it touched (pherolang#398).
+    pub(super) async fn publish_rosetta(&self, owner: &Uri, fresh: Vec<(Uri, Vec<Diagnostic>)>) {
+        let touched = self
+            .rosetta_diagnostics
+            .lock()
+            .unwrap()
+            .replace_owner(owner, fresh);
+        for (file, diagnostics) in touched {
+            self.client
+                .publish_diagnostics(file, diagnostics, None)
+                .await;
+        }
     }
 
     /// Compiles one open `.ifml` document: its import tree is gathered
