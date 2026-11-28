@@ -97,6 +97,9 @@ export const EXEMPT_DOC_LANGS = new Set([
   // Neovim editor setup (docs/EDITORS.md): the language-server registration
   // snippet is Lua, left to Shiki like every other non-Phero fence.
   'lua',
+  // Emacs editor setup (docs/rune/lsp.md): the eglot registration snippet is
+  // Emacs Lisp, left to Shiki like the Lua one.
+  'elisp',
   'xml',
   'diff',
   'sql',
