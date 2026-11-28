@@ -8,7 +8,7 @@
 //! operations (`contains disjoint default join`) → postfix/unary →
 //! primary.
 //!
-//! Each grammar level is a [`chumsky::Recursive`] parser over the same
+//! Each grammar level is a [`chumsky::recursive::Recursive`] parser over the same
 //! spanned [`SpannedExpr`] output so the mutually recursive rules can be
 //! declared up front. Word operators containing hyphens (`one-of`,
 //! `to-date-time`, ...) are Xtext keyword tokens rather than `ID`s, so
