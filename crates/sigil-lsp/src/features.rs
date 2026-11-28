@@ -37,7 +37,7 @@ pub(crate) fn find_name_region(text: &str, span: Span, name: &str) -> Span {
         let before_ok = start == 0 || !hay[..start].chars().next_back().is_some_and(ident);
         let after_ok = end == hay.len() || !hay[end..].chars().next().is_some_and(ident);
         if before_ok && after_ok {
-            return Span::new(span.start + start, span.start + end);
+            return Span::from(span.start + start..span.start + end);
         }
         from = start + 1;
     }
@@ -51,7 +51,7 @@ fn trim_span_end(text: &str, span: Span) -> Span {
     while end > span.start && text[..end].ends_with([' ', '\t', '\n', '\r']) {
         end -= 1;
     }
-    Span::new(span.start, end)
+    Span::from(span.start..end)
 }
 
 /// The sub-span covering the whole (possibly qualified, possibly
@@ -85,7 +85,7 @@ pub(crate) fn type_ref_name_span(r: &TypeRef, text: &str) -> Span {
             _ => break,
         }
     }
-    Span::new(r.span.start.min(end), i)
+    Span::from(r.span.start.min(end)..i)
 }
 
 fn range_of(doc: &Document, span: Span, enc: PositionEncoding) -> lsp_types::Range {
@@ -790,7 +790,6 @@ fn element_symbol(
             m.span,
             Vec::new(),
         ),
-        Element::Unsupported(_) => None,
     }
 }
 
@@ -1448,7 +1447,7 @@ fn rename_region(text: &str, span: Span) -> Span {
     if start > 0 && text.as_bytes()[start - 1] == b'^' {
         start -= 1;
     }
-    Span::new(start, end)
+    Span::from(start..end)
 }
 
 /// The simple (last segment) name of an element by flat id.

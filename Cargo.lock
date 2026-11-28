@@ -3844,6 +3844,7 @@ name = "sigil-diag"
 version = "0.4.0"
 dependencies = [
  "phero-diagnostics",
+ "phero-parser",
  "serde",
 ]
 
@@ -3892,8 +3893,8 @@ dependencies = [
 name = "sigil-syntax"
 version = "0.4.0"
 dependencies = [
- "chumsky",
  "phero-diagnostics",
+ "phero-syntax",
  "sigil-diag",
  "sigil-model",
 ]

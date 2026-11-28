@@ -242,7 +242,6 @@ fn lower_element(element: &Element) -> Option<m::SemanticElement> {
             type_ref: lower_type_call(&met.type_call),
             span: met.span,
         }),
-        Element::Unsupported(_) => return None,
     })
 }
 
@@ -787,7 +786,7 @@ fn lower_condition(c: &crate::ast::ConditionDef) -> m::Condition {
 mod tests {
     use sigil_diag::SourceFile;
 
-    use crate::parser::parse;
+    use crate::parse;
 
     #[test]
     fn doc_reference_for_path_is_lowered() {

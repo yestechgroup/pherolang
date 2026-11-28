@@ -7,44 +7,15 @@
 //! caret renderer — goes with its last users: the parser fold (RN9), the
 //! `sigil` binary's retirement (RN10) and `sigil-lsp`'s retirement (RN15).
 
-/// Byte-offset span into a source file (start inclusive, end exclusive).
-///
-/// This is the fundamental location type; it deliberately has no dependency
-/// on any parser library so that diagnostics can be produced by any layer.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default)]
-pub struct Span {
-    pub start: usize,
-    pub end: usize,
-}
+/// The workspace's one byte-offset span (`phero_parser::Span`, half-open):
+/// sigil's own struct is retired in favour of it (RN9, ADR 0012). Build one
+/// with `Span::from(start..end)` and join two with `a.union(b)` (chumsky's
+/// `Span` trait), or [`merge`].
+pub use phero_parser::Span;
 
-impl Span {
-    pub fn new(start: usize, end: usize) -> Self {
-        Self { start, end }
-    }
-
-    pub fn point(at: usize) -> Self {
-        Self { start: at, end: at }
-    }
-
-    /// Smallest span covering both `self` and `other`.
-    pub fn merge(self, other: Span) -> Span {
-        Span {
-            start: self.start.min(other.start),
-            end: self.end.max(other.end),
-        }
-    }
-}
-
-impl From<std::ops::Range<usize>> for Span {
-    fn from(r: std::ops::Range<usize>) -> Self {
-        Span::new(r.start, r.end)
-    }
-}
-
-impl From<Span> for std::ops::Range<usize> {
-    fn from(s: Span) -> Self {
-        s.start..s.end
-    }
+/// The smallest span covering both `a` and `b`.
+pub fn merge(a: Span, b: Span) -> Span {
+    Span::from(a.start.min(b.start)..a.end.max(b.end))
 }
 
 /// Convert a byte offset in `text` to a 1-based (line, column) pair.
@@ -245,7 +216,7 @@ mod tests {
     #[test]
     fn snippet_points_at_line() {
         let f = SourceFile::new("a.rosetta", "type Foo:\n    attr int (1..1)\n");
-        let s = f.snippet(Span::new(14, 18));
+        let s = f.snippet(Span::from(14..18));
         assert!(s.contains("a.rosetta:2:5"), "{s}");
         assert!(s.contains("attr int"), "{s}");
     }
