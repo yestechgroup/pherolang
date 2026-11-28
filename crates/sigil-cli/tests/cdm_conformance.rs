@@ -96,7 +96,7 @@ fn analyse(corpus: &Path) -> serde_json::Value {
         sigil_syntax::project::load_user_files(&[corpus.to_path_buf()]);
 
     // Per-file parse status: `parse` yields a unit iff the file parsed, and
-    // a file that failed to parse gets E0001 diagnostics, so the first
+    // a file that failed to parse gets E0500 diagnostics, so the first
     // diagnostic code per unparsed file names the failure.
     let parsed: BTreeSet<String> = models.iter().map(|m| m.name.clone()).collect();
     let mut parse_per_file: BTreeMap<String, String> = BTreeMap::new();

@@ -1,7 +1,7 @@
 {
   "diagnostics": [
     {
-      "code": "W0101",
+      "code": "W0580",
       "file": "case.rosetta",
       "location": "case.rosetta:10:10",
       "message": "'test.model.deprecated.OldSchema' is deprecated",

@@ -1,7 +1,7 @@
 {
   "diagnostics": [
     {
-      "code": "E0104",
+      "code": "E0523",
       "file": "case.rosetta",
       "location": "case.rosetta:18:1",
       "message": "duplicate definition of 'res.errors.Dup'",
@@ -19,7 +19,7 @@
       }
     },
     {
-      "code": "E0101",
+      "code": "E0520",
       "file": "case.rosetta",
       "location": "case.rosetta:10:10",
       "message": "unknown type 'Unknown'",
@@ -37,7 +37,7 @@
       }
     },
     {
-      "code": "E0102",
+      "code": "E0521",
       "file": "case.rosetta",
       "location": "case.rosetta:11:3",
       "message": "unknown annotation 'notAnAnnotation'",
@@ -55,7 +55,7 @@
       }
     },
     {
-      "code": "E0103",
+      "code": "E0522",
       "file": "case.rosetta",
       "location": "case.rosetta:13:3",
       "message": "annotation 'com.rosetta.model.metadata' has no attribute 'bogus'",
@@ -73,7 +73,7 @@
       }
     },
     {
-      "code": "E0105",
+      "code": "E0524",
       "file": "case.rosetta",
       "location": "case.rosetta:3:1",
       "message": "inheritance cycle involving 'res.errors.LoopA'",

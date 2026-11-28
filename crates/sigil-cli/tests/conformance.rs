@@ -141,7 +141,7 @@ fn conformance_corpus_matches_expected() {
     }
 }
 
-/// The E0101 diagnostic in the resolution-errors expectation must point at
+/// The E0520 diagnostic in the resolution-errors expectation must point at
 /// the `Unknown` reference in the source: this guards that spans survive the
 /// lowering → resolution → canonical-JSON round-trip with the right
 /// coordinates.
@@ -167,8 +167,11 @@ fn error_case_expected_spans_point_at_source() {
 
     let diag = expected["diagnostics"]
         .as_array()
-        .and_then(|ds| ds.iter().find(|d| d["code"] == "E0101"))
-        .expect("E0101 diagnostic in expected.json");
+        .and_then(|ds| {
+            ds.iter()
+                .find(|d| d["code"] == phero_diagnostics::E_RUNE_UNKNOWN_SYMBOL)
+        })
+        .expect("E0520 diagnostic in expected.json");
     assert_eq!(diag["file"], "case.rosetta");
     assert_eq!(diag["span"]["start"]["line"], line);
     assert_eq!(diag["span"]["start"]["column"], column);

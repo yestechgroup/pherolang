@@ -1,7 +1,7 @@
 {
   "diagnostics": [
     {
-      "code": "E0102",
+      "code": "E0521",
       "file": "case.rosetta",
       "location": "case.rosetta:7:2",
       "message": "annotation 'externalConfig' may only be applied to a schema",
@@ -19,7 +19,7 @@
       }
     },
     {
-      "code": "E0102",
+      "code": "E0521",
       "file": "case.rosetta",
       "location": "case.rosetta:11:2",
       "message": "annotation 'externalConfig' may only be applied to a schema",

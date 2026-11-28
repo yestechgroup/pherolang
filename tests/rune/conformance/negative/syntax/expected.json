@@ -655,7 +655,7 @@
   "format": "sigil-model/1",
   "syntaxDiagnostics": [
     {
-      "code": "E0001",
+      "code": "E0500",
       "message": "found end of input expected '/', any, or )",
       "severity": "error"
     }

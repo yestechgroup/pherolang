@@ -1,7 +1,7 @@
 {
   "diagnostics": [
     {
-      "code": "E0102",
+      "code": "E0521",
       "file": "case.rosetta",
       "location": "case.rosetta:18:3",
       "message": "unknown annotation 'ruleReference'",
@@ -19,7 +19,7 @@
       }
     },
     {
-      "code": "E0101",
+      "code": "E0520",
       "file": "case.rosetta",
       "location": null,
       "message": "unknown symbol 'instruction'",

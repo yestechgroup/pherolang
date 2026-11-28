@@ -52,7 +52,7 @@ type T:
 "#;
     let es = errors(src);
     assert_eq!(es.len(), 1, "{es:?}");
-    assert_eq!(es[0]["code"], "E0102");
+    assert_eq!(es[0]["code"], phero_diagnostics::E_RUNE_UNKNOWN_ANNOTATION);
     assert!(
         es[0]["message"]
             .as_str()
@@ -78,7 +78,7 @@ func F:
 "#;
     let es = errors(src);
     assert_eq!(es.len(), 1, "{es:?}");
-    assert_eq!(es[0]["code"], "E0102");
+    assert_eq!(es[0]["code"], phero_diagnostics::E_RUNE_UNKNOWN_ANNOTATION);
     assert_eq!(es[0]["path"], "func F");
 }
 

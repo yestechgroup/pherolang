@@ -3831,6 +3831,7 @@ version = "0.4.0"
 dependencies = [
  "criterion",
  "phero-backend-common",
+ "phero-diagnostics",
  "serde_json",
  "sigil-diag",
  "sigil-model",
@@ -3854,6 +3855,7 @@ dependencies = [
  "crossbeam-channel",
  "lsp-server",
  "lsp-types",
+ "phero-diagnostics",
  "proptest",
  "serde",
  "serde_json",

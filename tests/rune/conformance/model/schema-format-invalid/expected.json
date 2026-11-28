@@ -1,7 +1,7 @@
 {
   "diagnostics": [
     {
-      "code": "E0107",
+      "code": "E0526",
       "file": "case.rosetta",
       "location": "case.rosetta:4:18",
       "message": "'FIXML' is not a value of 'com.rosetta.model.SerializationFormat'",

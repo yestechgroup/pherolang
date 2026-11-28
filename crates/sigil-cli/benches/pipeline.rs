@@ -55,7 +55,7 @@ fn clean_units(files: &[SourceFile]) -> Vec<(String, SourceUnit)> {
 /// Parse every fixture and require a clean parse. When `clean_resolve` is
 /// set, also require a clean resolution. The vendored hero model uses
 /// `[ruleReference]`, an annotation outside the 9.58.1 builtin library, so
-/// it legitimately resolves with `E0102`s; the synthetic fixture must be
+/// it legitimately resolves with `E0521`s; the synthetic fixture must be
 /// fully clean.
 fn clean_models(units: &[(String, SourceUnit)], clean_resolve: bool) -> Vec<ModelFile> {
     let models: Vec<ModelFile> = units
