@@ -140,17 +140,21 @@ fn mirrored_output(out: &Path, input: &Path, extension: &str) -> PathBuf {
 
 // --- goldens -----------------------------------------------------------------
 
+/// One example per surface, relative to `examples/`: the support
+/// application's file, or the surface's catalogue example where the support
+/// application has none (Rune).
 const EXAMPLES: &[(&str, &str)] = &[
-    ("mox", "support.mox"),
-    ("ifml", "support.ifml"),
-    ("ddd", "support.ddd"),
-    ("actor", "support.actor"),
-    ("evt", "support.evt"),
-    ("deploy", "support.deploy"),
-    ("uc", "support.uc"),
-    ("cmmn", "support.cmmn"),
-    ("dmn", "support.dmn"),
-    ("intent", "support.intent"),
+    ("mox", "support/support.mox"),
+    ("ifml", "support/support.ifml"),
+    ("ddd", "support/support.ddd"),
+    ("actor", "support/support.actor"),
+    ("evt", "support/support.evt"),
+    ("deploy", "support/support.deploy"),
+    ("uc", "support/support.uc"),
+    ("cmmn", "support/support.cmmn"),
+    ("dmn", "support/support.dmn"),
+    ("intent", "support/support.intent"),
+    ("rosetta", "pricing/pricing.rosetta"),
 ];
 
 fn golden_dir() -> PathBuf {
@@ -201,12 +205,12 @@ fn render_file(input: &Path, format: &str) -> String {
 
 #[test]
 fn json_goldens_for_every_support_example() {
-    for (surface, file) in EXAMPLES {
-        let input = workspace_root().join("examples/support").join(file);
+    for (_, file) in EXAMPLES {
+        let input = workspace_root().join("examples").join(file);
         let generated = render_file(&input, "json");
-        let golden = golden_dir()
-            .join("json")
-            .join(format!("support.{surface}.json"));
+        // `support.mox.json`, …, `pricing.rosetta.json`.
+        let name = Path::new(file).file_name().unwrap().to_string_lossy();
+        let golden = golden_dir().join("json").join(format!("{name}.json"));
         assert_eq!(golden_or_update(&golden, &generated), generated);
     }
 }

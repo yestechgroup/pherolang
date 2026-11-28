@@ -2,8 +2,8 @@
 //!
 //! # The compiler is the source of truth
 //!
-//! This crate owns no grammar. Each of the nine surfaces (`.mox`, `.ifml`,
-//! `.ddd`, `.actor`, `.evt`, `.deploy`, `.uc`, `.cmmn`, `.dmn`) is lexed by the
+//! This crate owns no grammar. Each surface (`.mox`, `.ifml`, `.ddd`,
+//! `.actor`, `.evt`, `.deploy`, `.uc`, `.cmmn`, `.dmn`, `.intent`, `.rosetta`) is lexed by the
 //! lexer the compiler uses and parsed by the parser the compiler uses; the
 //! semantic pass is a walk over the spanned AST those produce. Keyword tables
 //! are borrowed from [`phero_syntax::words`] and [`phero_ifml::words`], never

@@ -275,12 +275,12 @@ impl ImportOutcome {
 /// A parsed candidate of the pool: its mox path, its entry key (the tag for
 /// its diagnostics), its text (duplicate recognition), and the sigil model
 /// when it parsed.
-struct Candidate {
-    mox_path: String,
-    key: String,
-    text: String,
-    file: Option<ModelFile>,
-    diagnostics: Vec<(String, Diagnostic)>,
+pub(crate) struct Candidate {
+    pub(crate) mox_path: String,
+    pub(crate) key: String,
+    pub(crate) text: String,
+    pub(crate) file: Option<ModelFile>,
+    pub(crate) diagnostics: Vec<(String, Diagnostic)>,
 }
 
 /// One lowered sigil element: what a resolved reference to it means in the
@@ -580,7 +580,7 @@ pub(crate) fn compile_sigil_imports(
 /// (namespace, text) pair was not selected before; extends the namespace
 /// frontier with its own namespace and everything it imports. Returns
 /// whether the candidate was newly selected.
-fn select(
+pub(crate) fn select(
     index: usize,
     candidates: &[Candidate],
     frontier: &mut Vec<String>,
@@ -623,7 +623,7 @@ fn not_provided(decl: &mox::ImportSchemaDecl) -> Diagnostic {
 
 /// Parses one pool candidate, mapping sigil's syntax diagnostics (spans are
 /// byte offsets into the rosetta text, like ours).
-fn parse_candidate(mox_path: &str, key: &str, text: &str) -> Candidate {
+pub(crate) fn parse_candidate(mox_path: &str, key: &str, text: &str) -> Candidate {
     let source = sigil_diag::SourceFile::new(key.to_string(), text.to_string());
     let (unit, diags) = sigil_syntax::parse(&source);
     let diagnostics: Vec<(String, Diagnostic)> = diags

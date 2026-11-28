@@ -160,6 +160,7 @@ pub(crate) fn compile_one(
         SurfaceKind::Cmmn => compile_cmmn(file, ctx),
         SurfaceKind::Dmn => compile_dmn(file, ctx),
         SurfaceKind::Intent => compile_intent(file, ctx),
+        SurfaceKind::Rune => compile_rune_files(std::slice::from_ref(&file.to_path_buf()), ctx),
     }
 }
 
@@ -183,6 +184,14 @@ pub(crate) fn compile_surface(
         [file] => {
             let kind = SurfaceKind::of_path(file).unwrap_or(SurfaceKind::Mox);
             compile_one(kind, file, &mut ctx)
+        }
+        // Several `.rosetta` files: one model over exactly those files, the
+        // former `sigil model <files>`.
+        _ if files
+            .iter()
+            .all(|file| SurfaceKind::of_path(file) == Some(SurfaceKind::Rune)) =>
+        {
+            compile_rune_files(files, &mut ctx)
         }
         _ => compile_domains(files, &mut ctx),
     }
@@ -485,6 +494,82 @@ fn compile_intent(file: &Path, ctx: &mut CompileContext<'_>) -> Compiled {
     Ok(compiled)
 }
 
+/// The `.rosetta` pipeline (RN10). One file compiles with its pool, the
+/// `.rosetta` files under its directory, resolving the namespaces it imports
+/// (the `import sigil` rule); several files compile exactly as given. The
+/// artifact is the `sigil-model/1` JSON (`phero_driver::rune`). A file fails
+/// on an error-severity diagnostic of its own, or when a resolved file does
+/// not parse; then every diagnostic renders, so the failure is never silent.
+fn compile_rune_files(files: &[PathBuf], ctx: &mut CompileContext<'_>) -> Compiled {
+    use phero_driver::rune::{compile_rune, RuneSelection};
+
+    let named: Vec<String> = files
+        .iter()
+        .map(|file| file.display().to_string())
+        .collect();
+    let (paths, selection) = match files {
+        [file] => {
+            let mut paths = vec![file.clone()];
+            paths.extend(phero_driver::workspace_imports::rosetta_candidates(file));
+            (paths, RuneSelection::Closure)
+        }
+        _ => (files.to_vec(), RuneSelection::Exact),
+    };
+    let mut pool: Vec<(String, String)> = Vec::with_capacity(paths.len());
+    for path in &paths {
+        let key = path.display().to_string();
+        let snapshot = ctx
+            .project
+            .as_deref()
+            .and_then(|project| project.source_of(&key))
+            .map(str::to_string);
+        let text = match snapshot {
+            Some(text) => text,
+            None => std::fs::read_to_string(path)
+                .map_err(|error| anyhow::anyhow!("cannot read {}: {error}", path.display()))?,
+        };
+        pool.push((key, text));
+    }
+    let named_refs: Vec<&str> = named.iter().map(String::as_str).collect();
+    let compilation = compile_rune(&named_refs, &pool, selection);
+    let own: Vec<(String, phero_driver::Diagnostic)> = compilation
+        .diagnostics
+        .iter()
+        .filter(|(key, _)| named.contains(key))
+        .cloned()
+        .collect();
+    let failed = compilation.model.is_none() || own.iter().any(|(_, d)| d.is_error());
+    if ctx.renders(failed) {
+        let shown = if compilation.model.is_none() {
+            &compilation.diagnostics
+        } else {
+            &own
+        };
+        crate::report::report_rune_diagnostics(shown, &pool);
+    }
+    let warnings = own.iter().filter(|(_, d)| !d.is_error()).count();
+    let (Some(model), false) = (compilation.model, failed) else {
+        return Ok(None);
+    };
+    let artifact = Artifact::Rune(model);
+    if let [file] = files {
+        ctx.store(file, &artifact);
+    }
+    let json = if ctx.serialize {
+        artifact.to_json_pretty()?
+    } else {
+        String::new()
+    };
+    Ok(Some(SurfaceOutcome {
+        ok: named,
+        json,
+        warnings,
+        artifact: Some(artifact),
+        imports: Vec::new(),
+        intent_spans: Vec::new(),
+    }))
+}
+
 /// The tail every single-artifact surface shares: cache the typed artifact
 /// lookup-before-compute and wrap the outcome with its `OK` path, resolved
 /// import keys, and — when asked — the artifact JSON.
@@ -551,8 +636,14 @@ mod tests {
     /// The workspace fixture application: one **compiling** file per
     /// surface (`tests/conformance/graph/app.*`).
     fn fixture(kind: SurfaceKind) -> PathBuf {
-        Path::new(env!("CARGO_MANIFEST_DIR"))
-            .join("../../tests/conformance/graph")
+        let conformance = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../tests/conformance");
+        if kind == SurfaceKind::Rune {
+            // The graph application has no Rune file (RN14 adds Rune nodes);
+            // the `import sigil` conformance pair's Rune model is the fixture.
+            return conformance.join("sigil/basic.rosetta");
+        }
+        conformance
+            .join("graph")
             .join(format!("app.{}", kind.extension()))
     }
 
@@ -570,6 +661,7 @@ mod tests {
             Artifact::Decision(_) => SurfaceKind::Dmn,
             Artifact::Flow(_) => SurfaceKind::Ifml,
             Artifact::Intents(_) => SurfaceKind::Intent,
+            Artifact::Rune(_) => SurfaceKind::Rune,
         }
     }
 

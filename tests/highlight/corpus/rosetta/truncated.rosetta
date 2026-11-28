@@ -1,0 +1,4 @@
+namespace corpus.rune
+
+type Trade:
+	tradeDate date (1..

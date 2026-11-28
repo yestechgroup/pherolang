@@ -1,5 +1,5 @@
 /**
- * The ten model surfaces, in the one place the site reads them.
+ * The eleven model surfaces, in the one place the site reads them.
  *
  * Words here are authored; the *evidence* behind them is derived by
  * `scripts/sync-model.mjs` and cross-checked by `scripts/gate.mjs`:
@@ -146,6 +146,19 @@ export const SURFACES = [
     backends: [],
     summary:
       'Requirements as model data: stable ids (`LOAN-001`), links to the elements that express them and the checks that verify them, and a coverage pass that warns on every claim nobody can honor.',
+  },
+  {
+    id: 'rosetta',
+    extension: '.rosetta',
+    name: 'Rune model',
+    tagline: 'FINOS Rune models, in tree',
+    docs: 'docs/LANGUAGE.md',
+    example: 'examples/pricing/pricing.rosetta',
+    conformance: 'tests/rune/conformance',
+    golden: null,
+    backends: [],
+    summary:
+      'FINOS Rune DSL models (the Common Domain Model\'s language), parsed, resolved and checked in tree against the Java reference implementation, and importable into a domain model with `import sigil`.',
   },
 ];
 

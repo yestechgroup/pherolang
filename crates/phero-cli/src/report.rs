@@ -27,6 +27,19 @@ pub(crate) fn report_multi_diagnostics(
     render_grouped(sigil_diagnostics, lookup);
 }
 
+/// Renders Rune diagnostics grouped per file, each against its pool text
+/// (RN10).
+pub(crate) fn report_rune_diagnostics(
+    diagnostics: &[(String, phero_driver::Diagnostic)],
+    pool: &[(String, String)],
+) {
+    render_grouped(diagnostics, |path| {
+        pool.iter()
+            .find(|(key, _)| key == path)
+            .map(|(_, text)| text.as_str())
+    });
+}
+
 /// Renders an actor compilation's diagnostics grouped per file: each file's
 /// diagnostics are ariadne-rendered against that file's own source, the way
 /// `check` renders single-model diagnostics.

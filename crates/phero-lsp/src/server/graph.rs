@@ -375,7 +375,7 @@ impl PheroBackend {
         let mut signature: Vec<(String, i32)> = documents
             .iter()
             .filter(|(uri, document)| {
-                document.surface != DocumentSurface::Other
+                in_snapshot(document.surface)
                     && uri
                         .to_file_path()
                         .is_some_and(|path| path.parent() == Some(directory))
@@ -899,7 +899,11 @@ impl PheroBackend {
                     keyed_diagnostics(&compilation.diagnostics, &key, &map),
                 )
             }
-            DocumentSurface::Other => (None, Vec::new()),
+            // A `.rosetta` file joins the snapshot as a file only: Rune
+            // nodes and its pool compile are RN14/RN15.
+            DocumentSurface::Known(SurfaceKind::Rune) | DocumentSurface::Other => {
+                (None, Vec::new())
+            }
         }
     }
 
@@ -1060,7 +1064,20 @@ fn push_artifact(
 /// lifted into the classifier the snapshot and publish pipeline match on
 /// (`None` for a file no surface owns).
 pub(super) fn surface_of_path(path: &Path) -> Option<DocumentSurface> {
-    super::surface_of_path(path).map(DocumentSurface::Known)
+    super::surface_of_path(path)
+        .map(DocumentSurface::Known)
+        .filter(|surface| in_snapshot(*surface))
+}
+
+/// Whether a document of `surface` joins a directory's graph snapshot. A
+/// `.rosetta` file stays out until it has nodes and a pool compile in the
+/// editor (RN14/RN15): its diagnostics are the routed `import sigil` ones,
+/// and the importing `.mox` already keys on its text (pherolang#398).
+pub(super) fn in_snapshot(surface: DocumentSurface) -> bool {
+    !matches!(
+        surface,
+        DocumentSurface::Other | DocumentSurface::Known(SurfaceKind::Rune)
+    )
 }
 
 /// `true` for a formatter-golden `X.fmt.<ext>` file — an output, not a
@@ -1115,7 +1132,8 @@ fn surface_index(
         // Intents carry no span table (v0.5): the file compiles in the
         // snapshot, but it owns no definitions, so it contributes no index.
         DocumentSurface::Known(SurfaceKind::Intent) => return None,
-        DocumentSurface::Other => return None,
+        // Rune span tables are RN14.
+        DocumentSurface::Known(SurfaceKind::Rune) | DocumentSurface::Other => return None,
     })
 }
 
@@ -1143,8 +1161,11 @@ pub(super) fn resolved_imports(surface: DocumentSurface, text: &str, path: &Path
 /// The `import "…"` strings one surface's source writes.
 fn written_imports(surface: DocumentSurface, text: &str) -> Vec<String> {
     match surface {
-        // `.mox` imports are schema/sigil content, not application files.
-        DocumentSurface::Known(SurfaceKind::Mox) | DocumentSurface::Other => Vec::new(),
+        // `.mox` imports are schema/sigil content, not application files, and
+        // Rune imports name namespaces, not paths.
+        DocumentSurface::Known(SurfaceKind::Mox)
+        | DocumentSurface::Known(SurfaceKind::Rune)
+        | DocumentSurface::Other => Vec::new(),
         DocumentSurface::Known(SurfaceKind::Actor) => phero_syntax::parse_actors(text)
             .ast
             .map(|ast| ast.imports.into_iter().map(|import| import.path).collect())

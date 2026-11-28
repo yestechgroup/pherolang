@@ -172,7 +172,8 @@ fn check_contribution(file: &Path) -> anyhow::Result<Option<Contribution>> {
         // The use case surfaces are consumers of the other buckets, not
         // check inputs (the `.uc`/`.cmmn` precedent): they compile — so a
         // failure still re-reports — and contribute nothing.
-        Artifact::UseCase(_) | Artifact::Case(_) => return Ok(None),
+        // A Rune model (RN10) feeds no integrity check either.
+        Artifact::UseCase(_) | Artifact::Case(_) | Artifact::Rune(_) => return Ok(None),
     };
     let source = std::fs::read_to_string(file)
         .map_err(|error| anyhow::anyhow!("cannot read {}: {error}", file.display()))?;

@@ -8,7 +8,7 @@
 use phero_driver::{NavigationIndex, SurfaceKind};
 use tower_lsp_server::ls_types::*;
 
-use super::graph::{is_formatter_golden, resolved_imports, surface_of_path};
+use super::graph::{in_snapshot, is_formatter_golden, resolved_imports, surface_of_path};
 use super::{DocumentSurface, PheroBackend, SOURCE_NAME};
 use crate::position::PositionMap;
 
@@ -247,10 +247,10 @@ impl PheroBackend {
             | DocumentSurface::Known(SurfaceKind::Uc)
             | DocumentSurface::Known(SurfaceKind::Cmmn)
             | DocumentSurface::Known(SurfaceKind::Intent) => self.snapshot_diagnostics(uri),
-            // An open `.rosetta` is not a phero surface, but it may carry
-            // the diagnostics an importing `.mox` routed to it
-            // (pherolang#398) — re-publish those rather than clearing them.
-            DocumentSurface::Other if super::rosetta::is_rosetta(uri) => {
+            // An open `.rosetta` publishes the diagnostics an importing
+            // `.mox` routed to it (pherolang#398) rather than clearing them.
+            // Its own pool compile in the editor is RN15.
+            DocumentSurface::Known(SurfaceKind::Rune) => {
                 self.rosetta_diagnostics.lock().unwrap().union_for(uri)
             }
             DocumentSurface::Other => Vec::new(),
@@ -547,7 +547,7 @@ impl PheroBackend {
             documents
                 .iter()
                 .filter(|(uri, document)| {
-                    document.surface != DocumentSurface::Other
+                    in_snapshot(document.surface)
                         && uri
                             .to_file_path()
                             .is_some_and(|path| path.parent() == Some(directory))

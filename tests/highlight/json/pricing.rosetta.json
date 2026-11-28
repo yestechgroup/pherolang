@@ -1,0 +1,674 @@
+{
+  "formatVersion": 1,
+  "surface": "rosetta",
+  "sourceHash": "sha256:554d09ac7157bf01f20a5481ced905a6503f3f7e320acdd69b233f6418ac30a0",
+  "generator": {
+    "name": "pherolang",
+    "version": "0.4.0"
+  },
+  "degraded": false,
+  "spans": [
+    {
+      "start": 0,
+      "end": 9,
+      "class": "keyword",
+      "modifiers": []
+    },
+    {
+      "start": 10,
+      "end": 17,
+      "class": "namespace",
+      "modifiers": []
+    },
+    {
+      "start": 17,
+      "end": 18,
+      "class": "punctuation",
+      "modifiers": []
+    },
+    {
+      "start": 18,
+      "end": 23,
+      "class": "namespace",
+      "modifiers": []
+    },
+    {
+      "start": 24,
+      "end": 31,
+      "class": "keyword",
+      "modifiers": []
+    },
+    {
+      "start": 32,
+      "end": 39,
+      "class": "string",
+      "modifiers": []
+    },
+    {
+      "start": 41,
+      "end": 45,
+      "class": "keyword",
+      "modifiers": []
+    },
+    {
+      "start": 46,
+      "end": 56,
+      "class": "type",
+      "modifiers": [
+        "declaration"
+      ]
+    },
+    {
+      "start": 56,
+      "end": 57,
+      "class": "punctuation",
+      "modifiers": []
+    },
+    {
+      "start": 58,
+      "end": 59,
+      "class": "operator",
+      "modifiers": []
+    },
+    {
+      "start": 59,
+      "end": 83,
+      "class": "comment",
+      "modifiers": [
+        "documentation"
+      ]
+    },
+    {
+      "start": 83,
+      "end": 84,
+      "class": "operator",
+      "modifiers": []
+    },
+    {
+      "start": 86,
+      "end": 92,
+      "class": "property",
+      "modifiers": [
+        "declaration"
+      ]
+    },
+    {
+      "start": 93,
+      "end": 99,
+      "class": "type",
+      "modifiers": []
+    },
+    {
+      "start": 100,
+      "end": 101,
+      "class": "punctuation",
+      "modifiers": []
+    },
+    {
+      "start": 101,
+      "end": 102,
+      "class": "number",
+      "modifiers": []
+    },
+    {
+      "start": 102,
+      "end": 104,
+      "class": "punctuation",
+      "modifiers": []
+    },
+    {
+      "start": 104,
+      "end": 105,
+      "class": "number",
+      "modifiers": []
+    },
+    {
+      "start": 105,
+      "end": 106,
+      "class": "punctuation",
+      "modifiers": []
+    },
+    {
+      "start": 107,
+      "end": 108,
+      "class": "operator",
+      "modifiers": []
+    },
+    {
+      "start": 108,
+      "end": 128,
+      "class": "comment",
+      "modifiers": [
+        "documentation"
+      ]
+    },
+    {
+      "start": 128,
+      "end": 129,
+      "class": "operator",
+      "modifiers": []
+    },
+    {
+      "start": 131,
+      "end": 138,
+      "class": "keyword",
+      "modifiers": []
+    },
+    {
+      "start": 139,
+      "end": 147,
+      "class": "keyword",
+      "modifiers": []
+    },
+    {
+      "start": 148,
+      "end": 156,
+      "class": "function",
+      "modifiers": [
+        "declaration"
+      ]
+    },
+    {
+      "start": 156,
+      "end": 157,
+      "class": "punctuation",
+      "modifiers": []
+    },
+    {
+      "start": 157,
+      "end": 168,
+      "class": "variable",
+      "modifiers": []
+    },
+    {
+      "start": 169,
+      "end": 179,
+      "class": "type",
+      "modifiers": []
+    },
+    {
+      "start": 179,
+      "end": 182,
+      "class": "punctuation",
+      "modifiers": []
+    },
+    {
+      "start": 183,
+      "end": 190,
+      "class": "type",
+      "modifiers": []
+    },
+    {
+      "start": 191,
+      "end": 192,
+      "class": "operator",
+      "modifiers": []
+    },
+    {
+      "start": 192,
+      "end": 235,
+      "class": "comment",
+      "modifiers": [
+        "documentation"
+      ]
+    },
+    {
+      "start": 235,
+      "end": 236,
+      "class": "operator",
+      "modifiers": []
+    },
+    {
+      "start": 238,
+      "end": 242,
+      "class": "keyword",
+      "modifiers": []
+    },
+    {
+      "start": 243,
+      "end": 253,
+      "class": "function",
+      "modifiers": [
+        "declaration"
+      ]
+    },
+    {
+      "start": 253,
+      "end": 254,
+      "class": "punctuation",
+      "modifiers": []
+    },
+    {
+      "start": 255,
+      "end": 256,
+      "class": "operator",
+      "modifiers": []
+    },
+    {
+      "start": 256,
+      "end": 287,
+      "class": "comment",
+      "modifiers": [
+        "documentation"
+      ]
+    },
+    {
+      "start": 287,
+      "end": 288,
+      "class": "operator",
+      "modifiers": []
+    },
+    {
+      "start": 290,
+      "end": 296,
+      "class": "keyword",
+      "modifiers": []
+    },
+    {
+      "start": 296,
+      "end": 297,
+      "class": "punctuation",
+      "modifiers": []
+    },
+    {
+      "start": 300,
+      "end": 308,
+      "class": "parameter",
+      "modifiers": [
+        "declaration"
+      ]
+    },
+    {
+      "start": 309,
+      "end": 315,
+      "class": "type",
+      "modifiers": []
+    },
+    {
+      "start": 316,
+      "end": 317,
+      "class": "punctuation",
+      "modifiers": []
+    },
+    {
+      "start": 317,
+      "end": 318,
+      "class": "number",
+      "modifiers": []
+    },
+    {
+      "start": 318,
+      "end": 320,
+      "class": "punctuation",
+      "modifiers": []
+    },
+    {
+      "start": 320,
+      "end": 321,
+      "class": "number",
+      "modifiers": []
+    },
+    {
+      "start": 321,
+      "end": 322,
+      "class": "punctuation",
+      "modifiers": []
+    },
+    {
+      "start": 323,
+      "end": 324,
+      "class": "operator",
+      "modifiers": []
+    },
+    {
+      "start": 324,
+      "end": 346,
+      "class": "comment",
+      "modifiers": [
+        "documentation"
+      ]
+    },
+    {
+      "start": 346,
+      "end": 347,
+      "class": "operator",
+      "modifiers": []
+    },
+    {
+      "start": 350,
+      "end": 354,
+      "class": "parameter",
+      "modifiers": [
+        "declaration"
+      ]
+    },
+    {
+      "start": 355,
+      "end": 365,
+      "class": "type",
+      "modifiers": []
+    },
+    {
+      "start": 366,
+      "end": 367,
+      "class": "punctuation",
+      "modifiers": []
+    },
+    {
+      "start": 367,
+      "end": 368,
+      "class": "number",
+      "modifiers": []
+    },
+    {
+      "start": 368,
+      "end": 370,
+      "class": "punctuation",
+      "modifiers": []
+    },
+    {
+      "start": 370,
+      "end": 371,
+      "class": "operator",
+      "modifiers": []
+    },
+    {
+      "start": 371,
+      "end": 372,
+      "class": "punctuation",
+      "modifiers": []
+    },
+    {
+      "start": 373,
+      "end": 374,
+      "class": "operator",
+      "modifiers": []
+    },
+    {
+      "start": 374,
+      "end": 392,
+      "class": "comment",
+      "modifiers": [
+        "documentation"
+      ]
+    },
+    {
+      "start": 392,
+      "end": 393,
+      "class": "operator",
+      "modifiers": []
+    },
+    {
+      "start": 396,
+      "end": 400,
+      "class": "parameter",
+      "modifiers": [
+        "declaration"
+      ]
+    },
+    {
+      "start": 401,
+      "end": 414,
+      "class": "type",
+      "modifiers": []
+    },
+    {
+      "start": 415,
+      "end": 416,
+      "class": "punctuation",
+      "modifiers": []
+    },
+    {
+      "start": 416,
+      "end": 417,
+      "class": "number",
+      "modifiers": []
+    },
+    {
+      "start": 417,
+      "end": 419,
+      "class": "punctuation",
+      "modifiers": []
+    },
+    {
+      "start": 419,
+      "end": 420,
+      "class": "number",
+      "modifiers": []
+    },
+    {
+      "start": 420,
+      "end": 421,
+      "class": "punctuation",
+      "modifiers": []
+    },
+    {
+      "start": 422,
+      "end": 423,
+      "class": "operator",
+      "modifiers": []
+    },
+    {
+      "start": 423,
+      "end": 449,
+      "class": "comment",
+      "modifiers": [
+        "documentation"
+      ]
+    },
+    {
+      "start": 449,
+      "end": 450,
+      "class": "operator",
+      "modifiers": []
+    },
+    {
+      "start": 452,
+      "end": 458,
+      "class": "keyword",
+      "modifiers": []
+    },
+    {
+      "start": 458,
+      "end": 459,
+      "class": "punctuation",
+      "modifiers": []
+    },
+    {
+      "start": 462,
+      "end": 467,
+      "class": "parameter",
+      "modifiers": [
+        "declaration"
+      ]
+    },
+    {
+      "start": 468,
+      "end": 474,
+      "class": "type",
+      "modifiers": []
+    },
+    {
+      "start": 475,
+      "end": 476,
+      "class": "punctuation",
+      "modifiers": []
+    },
+    {
+      "start": 476,
+      "end": 477,
+      "class": "number",
+      "modifiers": []
+    },
+    {
+      "start": 477,
+      "end": 479,
+      "class": "punctuation",
+      "modifiers": []
+    },
+    {
+      "start": 479,
+      "end": 480,
+      "class": "number",
+      "modifiers": []
+    },
+    {
+      "start": 480,
+      "end": 481,
+      "class": "punctuation",
+      "modifiers": []
+    },
+    {
+      "start": 482,
+      "end": 483,
+      "class": "operator",
+      "modifiers": []
+    },
+    {
+      "start": 483,
+      "end": 504,
+      "class": "comment",
+      "modifiers": [
+        "documentation"
+      ]
+    },
+    {
+      "start": 504,
+      "end": 505,
+      "class": "operator",
+      "modifiers": []
+    },
+    {
+      "start": 508,
+      "end": 517,
+      "class": "keyword",
+      "modifiers": []
+    },
+    {
+      "start": 518,
+      "end": 534,
+      "class": "function",
+      "modifiers": [
+        "declaration"
+      ]
+    },
+    {
+      "start": 534,
+      "end": 535,
+      "class": "punctuation",
+      "modifiers": []
+    },
+    {
+      "start": 538,
+      "end": 546,
+      "class": "variable",
+      "modifiers": []
+    },
+    {
+      "start": 547,
+      "end": 548,
+      "class": "operator",
+      "modifiers": []
+    },
+    {
+      "start": 549,
+      "end": 552,
+      "class": "number",
+      "modifiers": []
+    },
+    {
+      "start": 555,
+      "end": 558,
+      "class": "keyword",
+      "modifiers": []
+    },
+    {
+      "start": 559,
+      "end": 564,
+      "class": "variable",
+      "modifiers": []
+    },
+    {
+      "start": 564,
+      "end": 565,
+      "class": "punctuation",
+      "modifiers": []
+    },
+    {
+      "start": 568,
+      "end": 576,
+      "class": "variable",
+      "modifiers": []
+    },
+    {
+      "start": 578,
+      "end": 585,
+      "class": "keyword",
+      "modifiers": []
+    },
+    {
+      "start": 586,
+      "end": 594,
+      "class": "keyword",
+      "modifiers": []
+    },
+    {
+      "start": 595,
+      "end": 601,
+      "class": "function",
+      "modifiers": [
+        "declaration"
+      ]
+    },
+    {
+      "start": 601,
+      "end": 602,
+      "class": "punctuation",
+      "modifiers": []
+    },
+    {
+      "start": 602,
+      "end": 606,
+      "class": "variable",
+      "modifiers": []
+    },
+    {
+      "start": 607,
+      "end": 613,
+      "class": "type",
+      "modifiers": []
+    },
+    {
+      "start": 613,
+      "end": 614,
+      "class": "punctuation",
+      "modifiers": []
+    },
+    {
+      "start": 615,
+      "end": 621,
+      "class": "type",
+      "modifiers": []
+    },
+    {
+      "start": 622,
+      "end": 623,
+      "class": "operator",
+      "modifiers": []
+    },
+    {
+      "start": 623,
+      "end": 654,
+      "class": "comment",
+      "modifiers": [
+        "documentation"
+      ]
+    },
+    {
+      "start": 654,
+      "end": 655,
+      "class": "operator",
+      "modifiers": []
+    }
+  ]
+}

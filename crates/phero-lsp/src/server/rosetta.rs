@@ -274,8 +274,3 @@ fn display_tag(tag: &str, directory: &Path) -> String {
 fn normalize(path: &Path) -> PathBuf {
     std::fs::canonicalize(path).unwrap_or_else(|_| path.to_path_buf())
 }
-
-/// Whether `uri` names a `.rosetta` file.
-pub(super) fn is_rosetta(uri: &Uri) -> bool {
-    uri.path().as_str().ends_with(".rosetta")
-}

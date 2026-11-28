@@ -145,8 +145,8 @@ mod grammar_doc_tests {
     use std::collections::BTreeSet;
 
     use crate::words::{
-        RUNE_CONTEXTUAL, RUNE_DOC_REFERENCE_WORDS, RUNE_ELEMENT_WORDS, RUNE_EXPRESSION_WORDS,
-        RUNE_HYPHEN_KEYWORDS, RUNE_REPORT_STOP_WORDS, RUNE_TIMING_WORDS,
+        RUNE_BOOLEAN_WORDS, RUNE_CONTEXTUAL, RUNE_DOC_REFERENCE_WORDS, RUNE_ELEMENT_WORDS,
+        RUNE_EXPRESSION_WORDS, RUNE_HYPHEN_KEYWORDS, RUNE_REPORT_STOP_WORDS, RUNE_TIMING_WORDS,
     };
 
     const MODULE_SOURCE: &str = include_str!("mod.rs");
@@ -249,6 +249,7 @@ mod grammar_doc_tests {
             .chain(RUNE_REPORT_STOP_WORDS)
             .chain(RUNE_DOC_REFERENCE_WORDS)
             .chain(RUNE_EXPRESSION_WORDS)
+            .chain(RUNE_BOOLEAN_WORDS)
         {
             assert!(
                 table.contains(*word),

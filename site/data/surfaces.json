@@ -32,7 +32,7 @@
       "backends": [],
       "artifact": "artifacts/ddd.json",
       "counts": {
-        "conformanceFiles": 25
+        "conformanceFiles": 27
       }
     },
     {
@@ -159,6 +159,21 @@
       "artifact": "artifacts/intent.json",
       "counts": {
         "conformanceFiles": 1
+      }
+    },
+    {
+      "id": "rosetta",
+      "extension": ".rosetta",
+      "name": "Rune model",
+      "tagline": "FINOS Rune models, in tree",
+      "summary": "FINOS Rune DSL models (the Common Domain Model's language), parsed, resolved and checked in tree against the Java reference implementation, and importable into a domain model with `import sigil`.",
+      "docs": "docs/LANGUAGE.md",
+      "example": "examples/pricing/pricing.rosetta",
+      "status": "validated",
+      "backends": [],
+      "artifact": "artifacts/rosetta.json",
+      "counts": {
+        "conformanceFiles": 5
       }
     }
   ]

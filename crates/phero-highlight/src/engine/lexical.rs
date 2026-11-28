@@ -89,6 +89,7 @@ pub(crate) fn lex_surface<'a>(surface: Surface, source: &'a str) -> Lexed<'a> {
     match metadata_for(surface).lexer {
         LexerKind::MoxFamily => lex_mox_family(surface, source),
         LexerKind::Ifml => lex_ifml(surface, source),
+        LexerKind::Rune => lex_rune(surface, source),
     }
 }
 
@@ -358,6 +359,137 @@ fn lex_ifml<'a>(surface: Surface, source: &'a str) -> Lexed<'a> {
     lexed
 }
 
+/// Lexes a `.rosetta` source with the Rune lexer (ADR 0013).
+///
+/// Every word is an identifier; the hyphenated words are the only keyword
+/// tokens. A string written as a definition (`<"…">`) is documentation, not a
+/// literal, so it takes the documentation comment class.
+fn lex_rune<'a>(surface: Surface, source: &'a str) -> Lexed<'a> {
+    use phero_syntax::rune::lexer::RuneToken;
+
+    let tokens = phero_syntax::rune::lexer::lex_with_comments(source);
+    let code: Vec<usize> = (0..tokens.len())
+        .filter(|&index| !tokens[index].0.is_comment())
+        .collect();
+    let mut lexed = Lexed::default();
+
+    let mut position_of = vec![usize::MAX; tokens.len()];
+    for (position, &index) in code.iter().enumerate() {
+        position_of[index] = position;
+    }
+    // The nearest code token before (`-1`) or after (`1`) token `index`.
+    let neighbour = |index: usize, offset: isize| -> Option<RuneToken<'a>> {
+        let target = position_of[index].checked_add_signed(offset)?;
+        code.get(target).map(|&at| tokens[at].0)
+    };
+
+    for (index, (token, span)) in tokens.iter().enumerate() {
+        let (start, end) = (span.start, span.end);
+        if start >= end {
+            continue;
+        }
+        match *token {
+            RuneToken::LineComment(_) | RuneToken::BlockComment(_) => {
+                lexed
+                    .spans
+                    .push(HighlightSpan::new(start, end, HighlightClass::Comment));
+                lexed.protected.push((start, end));
+            }
+            RuneToken::Ident((text, escaped)) => {
+                lexed.spans.push(if escaped {
+                    escaped_ident_span(text, start, end)
+                } else {
+                    ident_span(surface, text, start, end)
+                });
+                lexed.tokens.push(LexToken {
+                    start,
+                    end,
+                    kind: LexTokenKind::Ident { text, escaped },
+                });
+            }
+            RuneToken::Word(word) => {
+                let keyword = phero_syntax::words::RUNE_HYPHEN_KEYWORDS
+                    .iter()
+                    .copied()
+                    .find(|candidate| *candidate == word)
+                    .unwrap_or("");
+                lexed
+                    .spans
+                    .push(HighlightSpan::new(start, end, HighlightClass::Keyword));
+                lexed.tokens.push(LexToken {
+                    start,
+                    end,
+                    kind: LexTokenKind::Keyword(keyword),
+                });
+            }
+            RuneToken::Int(_) | RuneToken::Decimal(_) => {
+                lexed
+                    .spans
+                    .push(HighlightSpan::new(start, end, HighlightClass::Number));
+                lexed.tokens.push(LexToken {
+                    start,
+                    end,
+                    kind: LexTokenKind::Int,
+                });
+            }
+            RuneToken::Str(_) => {
+                let definition = matches!(neighbour(index, -1), Some(RuneToken::Punct("<")))
+                    && matches!(neighbour(index, 1), Some(RuneToken::Punct(">")));
+                if definition {
+                    lexed.spans.push(HighlightSpan::with_modifiers(
+                        start,
+                        end,
+                        HighlightClass::Comment,
+                        HighlightModifiers::new()
+                            .with(crate::class::HighlightModifier::Documentation),
+                    ));
+                } else {
+                    lexed.spans.append(&mut string_spans(source, start, end));
+                }
+                lexed.protected.push((start, end));
+                lexed.tokens.push(LexToken {
+                    start,
+                    end,
+                    kind: LexTokenKind::Str,
+                });
+            }
+            RuneToken::Punct(text) => {
+                let kind = match text {
+                    "{" => LexTokenKind::OpenBrace,
+                    "}" => LexTokenKind::CloseBrace,
+                    ";" => LexTokenKind::Semi,
+                    ")" => LexTokenKind::RParen,
+                    "->" | "->>" | "*" | "+" | "-" | "/" | "=" | "<=" | "<>" | "<" | ">=" | ">" => {
+                        LexTokenKind::Operator
+                    }
+                    _ => LexTokenKind::Punct,
+                };
+                if matches!(kind, LexTokenKind::Operator) {
+                    lexed
+                        .spans
+                        .push(HighlightSpan::new(start, end, HighlightClass::Operator));
+                    lexed.tokens.push(LexToken { start, end, kind });
+                } else {
+                    lexed.push_punct_token(start, end, kind);
+                }
+            }
+            RuneToken::Error => {
+                lexed
+                    .spans
+                    .push(HighlightSpan::new(start, end, HighlightClass::Error));
+                lexed.tokens.push(LexToken {
+                    start,
+                    end,
+                    kind: LexTokenKind::Error,
+                });
+            }
+        }
+    }
+
+    lexed.protected.sort_unstable();
+    lexed
+}
+
 impl Lexed<'_> {
     fn push_punct_token(&mut self, start: usize, end: usize, kind: LexTokenKind<'static>) {
         self.spans
@@ -394,7 +526,7 @@ fn case_class(text: &str) -> HighlightClass {
 
 fn ident_span(surface: Surface, text: &str, start: usize, end: usize) -> HighlightSpan {
     let (class, modifiers) = match metadata_for(surface).lexer {
-        LexerKind::MoxFamily => ident_class(surface, text),
+        LexerKind::MoxFamily | LexerKind::Rune => ident_class(surface, text),
         LexerKind::Ifml => match keyword_class(surface, text) {
             Some(class) => {
                 let modifiers = if is_builtin_type(surface, text) {

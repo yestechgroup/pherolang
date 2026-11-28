@@ -10,7 +10,8 @@
     "cmmn": { "surface": "cmmn", "source": "examples/support/support.cmmn", "start": 42, "end": 57 },
     "ifml": { "surface": "ifml", "source": "examples/support/support.ifml", "start": 12, "end": 29 },
     "deploy": { "surface": "deploy", "source": "examples/support/support.deploy", "start": 10, "end": 30 },
-    "intent": { "surface": "intent", "source": "examples/support/support.intent", "start": 3, "end": 9 }
+    "intent": { "surface": "intent", "source": "examples/support/support.intent", "start": 3, "end": 9 },
+    "rosetta": { "surface": "rosetta", "source": "examples/pricing/pricing.rosetta", "start": 9, "end": 21 }
   },
   "pages": {
     "getting-started.domain": {

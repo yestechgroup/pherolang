@@ -32,7 +32,7 @@ the compatibility boundary and pinning expectations.
 - **Milestone 3 (LSP)**: `sigil-lsp` on `lsp-server` — incremental sync,
   publishDiagnostics, documentSymbol, cross-file definition, hover,
   context-aware completion, references, workspace symbols; VS Code
-  extension in `editors/vscode`; see [docs/lsp.md](docs/lsp.md).
+  extension in `editors/rune-vscode`; see [docs/lsp.md](docs/lsp.md).
 - **Differential testing**: 6 oracle fixtures (incl. an 88-condition
   expression corpus) match the Java implementation's resolved EMF model
   exactly.

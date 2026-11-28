@@ -162,6 +162,10 @@ pub struct GraphInputs {
     /// of its own, but it is a file in the application, so its file node,
     /// import edges, and `applications[].files` membership are emitted.
     pub design_fragments: Vec<GraphFragment>,
+    /// `.rosetta` Rune files (RN10): host facts only, like a fragment. A
+    /// Rune file is a `file` node in its application; its element nodes and
+    /// edges are RN14.
+    pub rune_files: Vec<GraphFragment>,
 }
 
 /// One `.ddd` fragment as the graph builder sees it (DD8, issue
@@ -287,7 +291,7 @@ pub fn build(inputs: &GraphInputs) -> GraphModel {
     // DD8: a `.ddd` fragment owns a file node (its declarations live in the
     // root artifact, but the file still participates in the application and
     // the import graph).
-    for fragment in &inputs.design_fragments {
+    for fragment in inputs.design_fragments.iter().chain(&inputs.rune_files) {
         if let Some(file) = builder.files.iter().find(|file| file.path == fragment.path) {
             builder.add_node(ids::file_node(&file.display, &file.application));
         }
@@ -453,7 +457,7 @@ fn cluster(inputs: &GraphInputs) -> (Vec<FileRef>, [usize; 10], Vec<GraphApplica
     for file in &inputs.intents {
         push(&file.display, &file.path, &file.imports);
     }
-    for fragment in &inputs.design_fragments {
+    for fragment in inputs.design_fragments.iter().chain(&inputs.rune_files) {
         push(&fragment.display, &fragment.path, &fragment.imports);
     }
 

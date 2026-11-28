@@ -1142,6 +1142,19 @@ fn check_fences(root: &Path, path: &Path, structure: &Structure, findings: &mut 
                     continue;
                 }
             }
+        } else if surface == "rosetta" {
+            if options.fixture.is_some() {
+                findings.push(Finding {
+                    path: path.to_path_buf(),
+                    line: fence.line,
+                    rule: "CM10",
+                    message:
+                        "`rosetta` examples are self-contained; `fixture` is for `.ddd` fences"
+                            .to_string(),
+                });
+                continue;
+            }
+            compile_rune_example(&fence.body)
         } else if surface == "ifml" {
             match compile_ifml_example(root, &fence.body, options.fixture.as_deref()) {
                 Ok(outcome) => outcome,
@@ -1565,6 +1578,31 @@ fn compile_engine_example(
     Ok(FenceOutcome { errors, rendered })
 }
 
+/// Compiles one `.rosetta` fence on its own: a fence has no sibling files, so
+/// it resolves against the Rune builtins only (RN10).
+fn compile_rune_example(body: &str) -> FenceOutcome {
+    use phero_driver::rune::{compile_rune, RuneSelection};
+
+    let pool = vec![("fence.rosetta".to_string(), body.to_string())];
+    let compilation = compile_rune(&["fence.rosetta"], &pool, RuneSelection::Closure);
+    let rendered = compilation
+        .diagnostics
+        .iter()
+        .map(|(path, diagnostic)| format!("{path}: {}", diagnostic.message))
+        .collect::<Vec<_>>()
+        .join("\n");
+    let mut errors: Vec<String> = compilation
+        .diagnostics
+        .iter()
+        .filter(|(_, diagnostic)| diagnostic.is_error())
+        .map(|(path, diagnostic)| format!("{path}: {}", diagnostic.message))
+        .collect();
+    if compilation.model.is_none() && errors.is_empty() {
+        errors.push("fence.rosetta: the Rune model did not compile".to_string());
+    }
+    FenceOutcome { errors, rendered }
+}
+
 /// Compiles one `.dmn` fence. The fixture names a directory; imports (`.mox`,
 /// `.evt`) resolve against it, and every `logic table "<path>"` markdown file is
 /// read from the same directory and supplied keyed by the path as written.
@@ -1738,7 +1776,17 @@ fn fence_allows_fragment(fence: &Fence) -> bool {
 fn is_phero_surface(surface: &str) -> bool {
     matches!(
         surface.to_ascii_lowercase().as_str(),
-        "mox" | "ddd" | "ifml" | "dmn" | "cmmn" | "evt" | "deploy" | "uc" | "intent" | "actor"
+        "mox"
+            | "ddd"
+            | "ifml"
+            | "dmn"
+            | "cmmn"
+            | "evt"
+            | "deploy"
+            | "uc"
+            | "intent"
+            | "actor"
+            | "rosetta"
     )
 }
 

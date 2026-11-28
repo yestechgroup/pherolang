@@ -1,0 +1,12 @@
+namespace corpus.rune
+
+type Good:
+	x int (1..1)
+
+type Broken
+	y int (1..1)
+
+stray tokens here 42
+
+enum Fine:
+	A

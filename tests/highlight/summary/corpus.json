@@ -521,6 +521,66 @@
     },
     {
       "classes": {
+        "constant": 1,
+        "keyword": 4,
+        "namespace": 2,
+        "number": 5,
+        "property": 1,
+        "punctuation": 9,
+        "type": 4,
+        "variable": 5
+      },
+      "degraded": true,
+      "id": "rosetta/parse-error",
+      "modifiers": {
+        "declaration": 4
+      },
+      "spans": 31,
+      "surface": "rosetta"
+    },
+    {
+      "classes": {
+        "keyword": 2,
+        "namespace": 2,
+        "number": 1,
+        "punctuation": 4,
+        "type": 1,
+        "variable": 2
+      },
+      "degraded": true,
+      "id": "rosetta/truncated",
+      "modifiers": {},
+      "spans": 12,
+      "surface": "rosetta"
+    },
+    {
+      "classes": {
+        "annotation": 3,
+        "comment": 9,
+        "constant": 2,
+        "function": 2,
+        "keyword": 21,
+        "namespace": 5,
+        "number": 14,
+        "operator": 18,
+        "parameter": 2,
+        "property": 5,
+        "punctuation": 46,
+        "string": 2,
+        "type": 15,
+        "variable": 9
+      },
+      "degraded": false,
+      "id": "rosetta/valid",
+      "modifiers": {
+        "declaration": 16,
+        "documentation": 7
+      },
+      "spans": 153,
+      "surface": "rosetta"
+    },
+    {
+      "classes": {
         "comment": 2,
         "keyword": 2,
         "namespace": 1,

@@ -192,6 +192,7 @@ const EXACT_CASES: &[&str] = &[
     "ifml/lookalikes",
     "mox/escapes",
     "mox/valid",
+    "rosetta/valid",
     "shared/comments-doc",
     "shared/crlf",
     "shared/escapes",

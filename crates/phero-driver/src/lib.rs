@@ -43,6 +43,7 @@ pub mod manifest;
 pub mod navigation;
 pub(crate) mod pipeline;
 pub mod project;
+pub mod rune;
 pub(crate) mod sigil;
 pub mod surface;
 pub(crate) mod usecases;

@@ -41,7 +41,7 @@ fn every_surface_example_highlights_and_holds_invariants() {
     for surface in Surface::ALL {
         assert!(
             surfaces.contains(&surface),
-            "examples/support has no `{surface}` file"
+            "examples has no `{surface}` example file"
         );
     }
 }

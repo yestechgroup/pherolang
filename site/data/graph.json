@@ -77,6 +77,12 @@
       ]
     },
     {
+      "id": "pricing/pricing.rosetta",
+      "files": [
+        "pricing/pricing.rosetta"
+      ]
+    },
+    {
       "id": "shapes/shapes.mox",
       "files": [
         "shapes/shapes.mox"
@@ -2256,6 +2262,13 @@
       "name": "nz.example.pricing.Quote.withSpread",
       "file": "pricing/pricing.mox",
       "application": "pricing/pricing.mox"
+    },
+    {
+      "id": "file:pricing/pricing.rosetta#pricing/pricing.rosetta",
+      "kind": "file",
+      "name": "pricing/pricing.rosetta",
+      "file": "pricing/pricing.rosetta",
+      "application": "pricing/pricing.rosetta"
     },
     {
       "id": "class:shapes/shapes.mox#nz.example.shapes.Animal",

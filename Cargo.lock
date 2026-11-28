@@ -3882,6 +3882,7 @@ dependencies = [
  "phero-driver",
  "phero-rune-model",
  "phero-rune-resolve",
+ "phero-syntax",
  "proptest",
  "serde",
  "serde_json",

@@ -12,6 +12,7 @@ description = "Language server (LSP) for the Rune (.rosetta) DSL"
 crossbeam-channel = "0.5"
 lsp-server = "0.10"
 lsp-types = "0.97"
+phero-syntax = { workspace = true }
 phero-driver = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }

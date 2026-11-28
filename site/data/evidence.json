@@ -6,11 +6,11 @@
     "reported": "pherolang 0.4.0 (x86_64-unknown-linux-gnu)"
   },
   "counts": {
-    "surfaces": 10,
-    "nodes": 317,
+    "surfaces": 11,
+    "nodes": 318,
     "edges": 491,
-    "applications": 8,
-    "crates": 24
+    "applications": 9,
+    "crates": 30
   },
   "applications": [
     {
@@ -69,6 +69,12 @@
       ]
     },
     {
+      "id": "pricing/pricing.rosetta",
+      "files": [
+        "pricing/pricing.rosetta"
+      ]
+    },
+    {
       "id": "shapes/shapes.mox",
       "files": [
         "shapes/shapes.mox"
@@ -102,7 +108,7 @@
       "error": 1,
       "event": 7,
       "feature": 66,
-      "file": 21,
+      "file": 22,
       "flow": 3,
       "inputData": 11,
       "intent": 4,
@@ -180,12 +186,18 @@
     "phero-ir",
     "phero-lsp",
     "phero-parser",
+    "phero-rune-model",
+    "phero-rune-resolve",
     "phero-runtime",
     "phero-strings",
     "phero-syntax",
     "phero-testkit",
     "phero-verify",
-    "phero-vocab"
+    "phero-vocab",
+    "sigil-cli",
+    "sigil-diag",
+    "sigil-lsp",
+    "sigil-syntax"
   ],
   "surfaces": [
     {
@@ -195,7 +207,7 @@
       "docs": {
         "path": "docs/LANGUAGE.md",
         "exists": true,
-        "bytes": 44889
+        "bytes": 46068
       },
       "example": {
         "path": "examples/support/support.mox",
@@ -231,7 +243,7 @@
       "docs": {
         "path": "docs/DDD.md",
         "exists": true,
-        "bytes": 130441
+        "bytes": 135412
       },
       "example": {
         "path": "examples/support/support.ddd",
@@ -241,7 +253,7 @@
       "conformance": {
         "path": "tests/conformance/ddd",
         "exists": true,
-        "files": 25
+        "files": 27
       },
       "golden": {
         "path": "examples/artifacts/support.ddd.json",
@@ -258,7 +270,7 @@
       "docs": {
         "path": "docs/LANGUAGE.md",
         "exists": true,
-        "bytes": 44889
+        "bytes": 46068
       },
       "example": {
         "path": "examples/support/support.actor",
@@ -289,7 +301,7 @@
       "docs": {
         "path": "docs/DMN.md",
         "exists": true,
-        "bytes": 33001
+        "bytes": 33222
       },
       "example": {
         "path": "examples/support/support.dmn",
@@ -321,7 +333,7 @@
       "docs": {
         "path": "docs/EVENTS.md",
         "exists": true,
-        "bytes": 26381
+        "bytes": 26838
       },
       "example": {
         "path": "examples/support/support.evt",
@@ -348,7 +360,7 @@
       "docs": {
         "path": "docs/USECASES.md",
         "exists": true,
-        "bytes": 25498
+        "bytes": 25710
       },
       "example": {
         "path": "examples/support/support.uc",
@@ -375,7 +387,7 @@
       "docs": {
         "path": "docs/CMMN.md",
         "exists": true,
-        "bytes": 14827
+        "bytes": 15044
       },
       "example": {
         "path": "examples/support/support.cmmn",
@@ -407,7 +419,7 @@
       "docs": {
         "path": "docs/IFML.md",
         "exists": true,
-        "bytes": 43753
+        "bytes": 43977
       },
       "example": {
         "path": "examples/support/support.ifml",
@@ -434,7 +446,7 @@
       "docs": {
         "path": "docs/DEPLOY.md",
         "exists": true,
-        "bytes": 16277
+        "bytes": 16503
       },
       "example": {
         "path": "examples/support/support.deploy",
@@ -461,7 +473,7 @@
       "docs": {
         "path": "docs/INTENTS.md",
         "exists": true,
-        "bytes": 4427
+        "bytes": 4647
       },
       "example": {
         "path": "examples/support/support.intent",
@@ -478,6 +490,29 @@
         "exists": true,
         "bytes": 1891
       },
+      "backends": [],
+      "status": "validated"
+    },
+    {
+      "id": "rosetta",
+      "extension": ".rosetta",
+      "name": "Rune model",
+      "docs": {
+        "path": "docs/LANGUAGE.md",
+        "exists": true,
+        "bytes": 46068
+      },
+      "example": {
+        "path": "examples/pricing/pricing.rosetta",
+        "exists": true,
+        "bytes": 656
+      },
+      "conformance": {
+        "path": "tests/rune/conformance",
+        "exists": true,
+        "files": 5
+      },
+      "golden": null,
       "backends": [],
       "status": "validated"
     }

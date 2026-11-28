@@ -102,7 +102,7 @@ pins it).
 | `kind` | `verificationReceipt` | `receipt::check` |
 | obligation `status` | `proved` \| `tested` \| `argued` \| `assumed` (`verified` rejected by name) | `receipt::check` |
 | evidence `kind` | `proof` \| `test` \| `mirror` \| `doc` \| `code` \| `mutant` | `receipt::check` |
-| artifact `kind` | `irModel` \| `actorModel` \| `dddDesign` \| `eventContract` \| `useCaseModel` \| `deployModel` \| `decisionModel` \| `cmmnModel` \| `ifmlManifest` | `receipt::check` |
+| artifact `kind` | `irModel` \| `actorModel` \| `dddDesign` \| `eventContract` \| `useCaseModel` \| `deployModel` \| `decisionModel` \| `cmmnModel` \| `ifmlManifest` \| `intentModel` | `receipt::check` |
 | `limits` | *(empty)* — the `mutants-unrecorded` slug was retired by #208 | `receipt::check` |
 
 The artifact vocabulary is **receipt-local**, not `pherolang artifact check`'s

@@ -37,7 +37,8 @@ pub fn assert_invariants(source: &str, spans: &[HighlightSpan]) {
     }
 }
 
-/// The ten `examples/support/support.*` files, in path order.
+/// The `examples/support/support.*` files plus the pricing Rune example, in
+/// path order.
 pub fn example_files() -> Vec<(Surface, PathBuf)> {
     let directory = repository_root().join("examples/support");
     let mut files = Vec::new();
@@ -50,6 +51,13 @@ pub fn example_files() -> Vec<(Surface, PathBuf)> {
             files.push((surface, path));
         }
     }
+    // The support application has no Rune model (it would change the
+    // support receipt's closure); the repository's Rune example is the
+    // pricing pair's.
+    files.push((
+        Surface::Rune,
+        repository_root().join("examples/pricing/pricing.rosetta"),
+    ));
     files.sort_by(|left, right| left.1.cmp(&right.1));
     files
 }

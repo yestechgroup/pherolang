@@ -890,7 +890,9 @@ pub fn import_paths(surface: crate::SurfaceKind, source: &str) -> Vec<String> {
         crate::SurfaceKind::Cmmn => declared!(phero_syntax::parse_cmmn(source)),
         crate::SurfaceKind::Deploy => declared!(phero_syntax::parse_deploy(source)),
         crate::SurfaceKind::Intent => declared!(phero_syntax::parse_intents(source)),
-        crate::SurfaceKind::Mox | crate::SurfaceKind::Ifml => Vec::new(),
+        // Rune imports name namespaces, not paths: the pool is discovered
+        // on disk (`workspace_imports::rosetta_candidates`), never written.
+        crate::SurfaceKind::Mox | crate::SurfaceKind::Ifml | crate::SurfaceKind::Rune => Vec::new(),
     }
 }
 
