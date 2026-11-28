@@ -9,6 +9,7 @@ publish = false
 description = "Name resolution and scoping for the Rune DSL"
 
 [dependencies]
+phero-diagnostics = { workspace = true }
 sigil-diag = { workspace = true }
 sigil-syntax = { workspace = true }
 sigil-model = { workspace = true }

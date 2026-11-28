@@ -1740,7 +1740,7 @@ fn parse_inner(file: &SourceFile) -> (Option<SourceUnit>, Vec<Diagnostic>) {
         Err(errors) => {
             for e in errors {
                 let span = Span::new(e.span().start, e.span().end);
-                diagnostics.push(Diagnostic::error("E0001", format!("{e}"), file, span));
+                diagnostics.push(Diagnostic::error(phero_diagnostics::E_RUNE_SYNTAX, format!("{e}"), file, span));
             }
             (None, diagnostics)
         }
@@ -2125,7 +2125,7 @@ rule source MySource {
         );
         let (_, diags) = parse(&file);
         assert!(
-            diags.iter().any(|d| d.code == "E0001"),
+            diags.iter().any(|d| d.code == phero_diagnostics::E_RUNE_SYNTAX),
             "bare-string segments must stay a syntax error (oracle-correct): {diags:?}"
         );
     }

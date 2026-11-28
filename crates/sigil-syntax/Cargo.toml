@@ -9,6 +9,7 @@ publish = false
 description = "Chumsky-based parser for the Rune (.rosetta) DSL producing a spanned AST"
 
 [dependencies]
+phero-diagnostics = { workspace = true }
 chumsky = { workspace = true }
 sigil-diag = { workspace = true }
 sigil-model = { workspace = true }

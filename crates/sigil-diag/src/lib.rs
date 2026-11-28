@@ -1,6 +1,12 @@
 //! Source file handling, spans, and diagnostics.
+//!
+//! **Staging shim (ADR 0012, RN8).** `Severity` is the workspace's
+//! `phero_diagnostics::Severity`, and every code this toolchain emits is a
+//! `phero_diagnostics` registry constant (the `rune.*` bands). What remains
+//! here — `Span`, `SourceFile`, `line_col_in`, the `Diagnostic` record and its
+//! caret renderer — goes with its last users: the parser fold (RN9), the
+//! `sigil` binary's retirement (RN10) and `sigil-lsp`'s retirement (RN15).
 
-use std::fmt;
 
 /// Byte-offset span into a source file (start inclusive, end exclusive).
 ///
@@ -94,32 +100,9 @@ impl SourceFile {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
-pub enum Severity {
-    Error,
-    Warning,
-}
-
-impl serde::Serialize for Severity {
-    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
-        serializer.serialize_str(self.as_str())
-    }
-}
-
-impl Severity {
-    pub fn as_str(self) -> &'static str {
-        match self {
-            Severity::Error => "error",
-            Severity::Warning => "warning",
-        }
-    }
-}
-
-impl fmt::Display for Severity {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.write_str(self.as_str())
-    }
-}
+/// The workspace's one severity (`phero_diagnostics::Severity`): sigil's own
+/// enum is retired in favour of it (RN8, ADR 0012 D5).
+pub use phero_diagnostics::Severity;
 
 /// A structured diagnostic with a span resolved into human-readable form.
 #[derive(Debug, Clone)]
