@@ -176,7 +176,7 @@
   },
   "resolution": {
     "diagnosticsByCode": {
-      "E0520": 3819,
+      "E0520": 3770,
       "E0523": 30,
       "E0525": 2,
       "E0526": 66
@@ -193,33 +193,24 @@
       "base-math-func.rosetta": {
         "E0520": 1
       },
-      "base-math-type.rosetta": {
-        "E0520": 2
-      },
       "base-staticdata-asset-common-func.rosetta": {
         "E0526": 1
       },
       "base-staticdata-asset-common-type.rosetta": {
-        "E0520": 28
+        "E0520": 26
       },
       "base-staticdata-party-func.rosetta": {
         "E0520": 4
-      },
-      "base-staticdata-party-type.rosetta": {
-        "E0520": 2
       },
       "event-common-func.rosetta": {
         "E0520": 41,
         "E0526": 13
       },
       "event-common-type.rosetta": {
-        "E0520": 12
+        "E0520": 10
       },
       "event-instructioncomposition-reset-func.rosetta": {
         "E0520": 4
-      },
-      "event-instructioncomposition-type.rosetta": {
-        "E0520": 2
       },
       "event-position-func.rosetta": {
         "E0520": 1
@@ -228,7 +219,7 @@
         "E0520": 24
       },
       "ingest-fpml-confirmation-common-func.rosetta": {
-        "E0520": 99
+        "E0520": 98
       },
       "ingest-fpml-confirmation-datetime-func.rosetta": {
         "E0520": 88,
@@ -367,14 +358,10 @@
       "ingest-fpml-confirmation-workflowstep-func.rosetta": {
         "E0520": 85
       },
-      "legaldocumentation-common-type.rosetta": {
-        "E0520": 2
-      },
       "legaldocumentation-csa-func.rosetta": {
         "E0526": 10
       },
       "legaldocumentation-csa-type.rosetta": {
-        "E0520": 10,
         "E0523": 1
       },
       "legaldocumentation-master-isda-type.rosetta": {
@@ -382,9 +369,6 @@
       },
       "legaldocumentation-master-isla-type.rosetta": {
         "E0520": 1
-      },
-      "legaldocumentation-master-type.rosetta": {
-        "E0520": 2
       },
       "margin-schedule-func.rosetta": {
         "E0520": 49,
@@ -402,7 +386,7 @@
         "E0520": 3
       },
       "observable-asset-type.rosetta": {
-        "E0520": 28
+        "E0520": 24
       },
       "observable-common-func.rosetta": {
         "E0520": 12
@@ -419,20 +403,19 @@
         "E0520": 2
       },
       "product-asset-type.rosetta": {
-        "E0520": 9
+        "E0520": 3
       },
       "product-collateral-func.rosetta": {
         "E0520": 14
       },
       "product-collateral-type.rosetta": {
-        "E0520": 8
+        "E0520": 6
       },
       "product-common-schedule-type.rosetta": {
-        "E0520": 2,
         "E0523": 1
       },
       "product-common-settlement-type.rosetta": {
-        "E0520": 10
+        "E0520": 2
       },
       "product-qualification-func.rosetta": {
         "E0520": 34
@@ -441,7 +424,7 @@
         "E0520": 3
       },
       "product-template-type.rosetta": {
-        "E0520": 3
+        "E0520": 1
       }
     }
   }
