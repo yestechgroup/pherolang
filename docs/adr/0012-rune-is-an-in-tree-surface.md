@@ -61,7 +61,7 @@ The sigil workspace, per crate (`src` lines / test lines):
 | RD3 | Eleven hand-written Rune keyword tables in two crates, plus a hand-written TextMate grammar | `sigil-syntax`: `ELEMENT_KEYWORDS`, `UNSUPPORTED_KEYWORDS`, `STOP`, `DOC_REFERENCE_KEYWORDS` (`parser.rs`), `EXPRESSION_KEYWORDS` (`expr.rs`) · `sigil-lsp/src/features.rs`: `RUNE_KEYWORDS`, `RUST_KEYWORDS`, `TOP_LEVEL_KEYWORDS`, `BODY_KEYWORDS`, `TOP_KEYWORDS`, a second `ELEMENT_KEYWORDS` · `editors/vscode/syntaxes/rosetta.tmLanguage.json` (100 lines) | RN9, RN15, RN16 |
 | RD4 | Two LSP stacks | `sigil-lsp` on `lsp-server` 0.10 + `lsp-types` 0.97 (3,785 src lines) vs `phero-lsp` on `tower-lsp-server` 0.23 (6,068 non-test lines) | RN15 |
 | RD5 | Two position layers | sigil `position.rs` `LineIndex`, UTF-8 preferred (262 lines) vs `crates/phero-lsp/src/position.rs` `PositionMap`, UTF-16 (327 lines) | RN15 |
-| RD6 | Three `.rosetta` discovery walks | `sigil_syntax::project::discover_rosetta_files`, `crates/phero-driver/src/workspace_imports.rs` `discover_rosetta_files`, `crates/phero-cli/src/commands/verify.rs:514` `collect_rosetta_candidates` | RN11 |
+| RD6 | Three `.rosetta` discovery walks | `sigil_syntax::project::discover_rosetta_files`, `crates/phero-driver/src/workspace_imports.rs` `discover_rosetta_files`, `crates/phero-cli/src/commands/verify.rs:514` `collect_rosetta_candidates` | RN11 (done: one `phero_driver::workspace_imports::discover_rosetta_files`) |
 | RD7 | Two chumsky majors in one lock file | `Cargo.lock`: `chumsky 0.10.1` (phero-parser, phero-syntax, phero-expr, phero-ifml) and `chumsky 0.13.0` (sigil-syntax) | RN2, RN3 |
 | RD8 | A source-text expression bridge | `sigil.rs` prints the span-less `sigil_model::expr::Expr` as phero-expr text (`translate_expr` at `sigil.rs:1642`, `write_expr`, `fragment`), then re-parses it in `check_body` | RN12 |
 | RD9 | Two highlighting sources | the TextMate grammar plus `sigil-lsp/src/semantic_tokens.rs` (723 lines) vs compiler-backed `phero-highlight` (ADR 0003) | RN16 |
@@ -89,8 +89,8 @@ nobody uses.
 | Today | Becomes | Issue |
 |---|---|---|
 | `sigil-syntax` | the `phero_syntax::rune` module (`parse_rune`, later `format_rune`) | RN9, RN17 |
-| `sigil-model` | `phero-rune-model` | RN11 |
-| `sigil-resolve` | `phero-rune-resolve` | RN11 |
+| `sigil-model` | `phero-rune-model` | RN11 (done) |
+| `sigil-resolve` | `phero-rune-resolve` | RN11 (done) |
 | `sigil-diag` | retired into `phero-parser` (span) and `phero-diagnostics` (record, codes) | RN8 |
 | `sigil-cli` | retired into `phero-cli` (`check`/`build`/`ir` on `.rosetta`) | RN10 |
 | `sigil-lsp` | retired into `phero-lsp` (graph-snapshot serving) | RN15 |
@@ -263,3 +263,13 @@ model file.
 - **Drop the oracle and freeze its output as goldens.** Rejected. The
   goldens stay (D4), but without the live oracle nothing would detect a
   normalisation or oracle-version drift.
+
+## Notes
+
+- **RN11, whole-pool resolution (2026-11-28).** The rule that Rune
+  resolution is whole-pool, with no per-file cache, was re-examined against
+  salsa and kept. The `sigil-lsp` `reanalysis` bench re-parses and
+  re-resolves on every change in 1.36 ms (2 files) and 7.8 ms (12 files).
+  Per-file memoisation would need pool-keyed cross-file invalidation, which
+  the RN15 graph snapshot owns. The decision and numbers live in the
+  `phero-rune-resolve` crate docs.

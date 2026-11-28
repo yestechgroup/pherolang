@@ -2,7 +2,7 @@
 //!
 //! This tree mirrors the surface grammar of the Rune DSL (see
 //! `docs/reference/Rosetta.xtext`). It is intentionally separate from the
-//! semantic model in `sigil-model`: the parser is replaceable, this tree is
+//! semantic model in `phero-rune-model`: the parser is replaceable, this tree is
 //! not the canonical representation.
 
 use phero_parser::Span;

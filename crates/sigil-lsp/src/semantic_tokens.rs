@@ -5,7 +5,7 @@
 //! Classification is grounded in what the toolchain knows:
 //!
 //! - *declaration names and references* come from the resolved model
-//!   ([`sigil_resolve`]), which already carries the byte spans and the
+//!   ([`phero_rune_resolve`]), which already carries the byte spans and the
 //!   resolved flat ids of every type/annotation reference;
 //! - *namespace and import names* come from the syntax AST (the lowered
 //!   model has no spans for them);
@@ -51,11 +51,11 @@ use lsp_types::{
     SemanticTokensFullOptions, SemanticTokensLegend, SemanticTokensOptions,
     SemanticTokensServerCapabilities, WorkDoneProgressOptions,
 };
-use sigil_diag::Span;
-use sigil_model::{
+use phero_rune_model::{
     AnnotationRef, Attribute, ModelFile, SemanticElement, TransformRefTarget, TypeRef,
 };
-use sigil_resolve::{ElementId, ElementKind, Resolution};
+use phero_rune_resolve::{ElementId, ElementKind, Resolution};
+use sigil_diag::Span;
 
 use crate::features;
 use crate::position::{LineIndex, PositionEncoding};

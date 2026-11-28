@@ -1,17 +1,16 @@
 //! The Rune (`.rosetta`) toolchain's syntax layer, now a thin crate over
 //! [`phero_syntax::rune`] (RN9, ADR 0012 D2).
 //!
-//! The lexer, spanned AST and parser live in `phero-syntax`. What stays here
-//! until RN11 is what depends on the semantic model or the filesystem:
-//! - [`lower`] / [`lower_expression`]: AST → `sigil_model` (phero-syntax must
+//! The lexer, spanned AST and parser live in `phero-syntax`, and `.rosetta`
+//! discovery is `phero_driver::workspace_imports::discover_rosetta_files`
+//! (RN11). What stays here is what depends on the semantic model:
+//! - [`lower`] / [`lower_expression`]: AST → `phero_rune_model` (phero-syntax must
 //!   not depend on the model);
-//! - [`project`]: `.rosetta` discovery;
 //! - the historical entry points [`parse`] / [`parse_expression_str`], which
 //!   wrap [`phero_syntax::rune::parse_rune`] and report through
 //!   `sigil_diag` (code `E0500`), so their callers are unchanged.
 
 mod lower;
-pub mod project;
 
 pub use lower::{lower, lower_expression};
 pub use phero_syntax::rune::ast;
@@ -23,8 +22,8 @@ use ast::{SourceUnit, SpannedExpr};
 ///
 /// **All or nothing:** the unit is `None` whenever any syntax error occurred,
 /// even though [`phero_syntax::rune::parse_rune`] recovers a partial unit.
-/// Every caller (resolution, the driver's `import sigil` bridge, project
-/// loading, `sigil-lsp`) treats `Some` as "parsed, lower it", and lowering a
+/// Every caller (resolution, the driver's `import sigil` bridge, the CDM
+/// conformance test, `sigil-lsp`) treats `Some` as "parsed, lower it", and lowering a
 /// partial file would change which namespaces fail. Partial units are for the
 /// phero editor tooling only.
 pub fn parse(file: &SourceFile) -> (Option<SourceUnit>, Vec<Diagnostic>) {

@@ -16,8 +16,8 @@ phero-parser = { workspace = true }
 phero-syntax = { workspace = true }
 phero-ifml = { workspace = true }
 sigil-diag = { workspace = true }
-sigil-model = { workspace = true }
-sigil-resolve = { workspace = true }
+phero-rune-model = { workspace = true }
+phero-rune-resolve = { workspace = true }
 sigil-syntax = { workspace = true }
 phero-ir = { workspace = true }
 phero-verify = { workspace = true }

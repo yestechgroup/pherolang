@@ -7,10 +7,10 @@
 
 use std::collections::HashMap;
 
-use sigil_diag::Span;
-use sigil_model::{
+use phero_rune_model::{
     Attribute, EnumValue, SemanticElement, TransformAnnotation, TransformRefTarget, TypeRef,
 };
+use sigil_diag::Span;
 use sigil_syntax::ast::{Element, SourceUnit};
 
 use crate::document::Document;
@@ -107,7 +107,7 @@ enum Node<'a> {
     Attribute(&'a Attribute, usize),
     EnumValue(&'a EnumValue, usize),
     TypeRef(&'a TypeRef),
-    AnnotationRef(&'a sigil_model::AnnotationRef),
+    AnnotationRef(&'a phero_rune_model::AnnotationRef),
     TransformRef(&'a TransformAnnotation),
 }
 
@@ -143,7 +143,7 @@ fn candidates<'a>(world: &'a World, uri: &str) -> Vec<Candidate<'a>> {
             node: Node::TypeRef(r),
         });
     };
-    let push_annotations = |annos: &'a [sigil_model::AnnotationRef],
+    let push_annotations = |annos: &'a [phero_rune_model::AnnotationRef],
                             out: &mut Vec<Candidate<'a>>| {
         for a in annos {
             out.push(Candidate {
@@ -1871,7 +1871,11 @@ fn trailing_word(s: &str) -> Option<String> {
 /// (mid-typing, the common completion moment) it is absent from the
 /// resolution, so fall back to a lenient scope: built-in library plus
 /// elements whose namespace matches the namespace declared in the text.
-fn visible_names(world: &World, uri: &str, annotation: bool) -> Vec<sigil_resolve::VisibleName> {
+fn visible_names(
+    world: &World,
+    uri: &str,
+    annotation: bool,
+) -> Vec<phero_rune_resolve::VisibleName> {
     let resolution = &world.analysis().resolution;
     let strict = if annotation {
         resolution.visible_annotations(uri)
@@ -1893,15 +1897,15 @@ fn visible_names(world: &World, uri: &str, annotation: bool) -> Vec<sigil_resolv
                 element.is_type()
             };
             if wanted
-                && (file.namespace == sigil_resolve::LIB_NAMESPACE
+                && (file.namespace == phero_rune_resolve::LIB_NAMESPACE
                     || ns.as_deref() == Some(file.namespace.as_str()))
             {
                 let simple = element.name().to_string();
                 if seen.insert(simple.clone()) {
-                    out.push(sigil_resolve::VisibleName {
+                    out.push(phero_rune_resolve::VisibleName {
                         name: simple,
                         fqn: resolution.element_names[flat].clone(),
-                        element: sigil_resolve::ElementId(flat),
+                        element: phero_rune_resolve::ElementId(flat),
                     });
                 }
             }

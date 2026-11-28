@@ -43,8 +43,8 @@ the compatibility boundary and pinning expectations.
 | --- | --- |
 | `sigil-diag` | spans, source files, diagnostics |
 | `sigil-syntax` | chumsky parser → spanned AST → lowering |
-| `sigil-model` | semantic model (Ecore-mirroring IR, parser-free) |
-| `sigil-resolve` | symbol tables, scoping, resolution diagnostics |
+| `phero-rune-model` | semantic model (Ecore-mirroring IR, parser-free) |
+| `phero-rune-resolve` | symbol tables, scoping, resolution diagnostics |
 | `sigil-cli` | the `sigil` binary |
 
 ## Usage
@@ -114,5 +114,5 @@ minutes). Known oracle-version caveats are documented in
 ## License
 
 Apache-2.0. The embedded builtin `.rosetta` files
-(`crates/sigil-resolve/builtin/`) and the vendored grammar
+(`crates/phero-rune-resolve/builtin/`) and the vendored grammar
 (`docs/reference/`) come from the FINOS rune-dsl project (Apache-2.0).

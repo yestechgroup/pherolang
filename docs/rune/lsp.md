@@ -3,7 +3,7 @@
 `sigil-lsp` is a language server (LSP 3.17) for `.rosetta` files, built on
 [`lsp-server`](https://crates.io/crates/lsp-server) (rust-analyzer's sync
 scaffold) and [`lsp-types`](https://crates.io/crates/lsp-types). It reuses
-the sigil toolchain: `sigil-syntax` for parsing and `sigil-resolve` for
+the sigil toolchain: `sigil-syntax` for parsing and `phero-rune-resolve` for
 name resolution, so editor diagnostics match `sigil check` exactly.
 
 ## Running
@@ -46,7 +46,7 @@ one end-to-end test over real stdio framing.
   change in one file can invalidate any other file's resolution — and a
   full reanalysis is fast enough for real models while being trivially
   consistent. The built-in `com.rosetta.model` files participate like any
-  other file (they are compiled into the server via `sigil-resolve`).
+  other file (they are compiled into the server via `phero-rune-resolve`).
 - **Positions**: everything internal is byte spans (`sigil_diag::Span`).
   `position::LineIndex` converts to/from LSP positions in either the
   negotiated UTF-8 mode or the UTF-16 fallback; it clamps overshooting

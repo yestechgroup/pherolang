@@ -11,12 +11,12 @@
 //!   literal.
 //! * A paren-less `only exists` has exactly one argument.
 
-use proptest::prelude::*;
-use proptest::sample::select;
-use sigil_model::expr::{
+use phero_rune_model::expr::{
     CardinalityModifier, ComparisonOperator, EqualityOperator, ExistsModifier, Expr,
     LogicalOperator, SwitchCase, SwitchGuard,
 };
+use proptest::prelude::*;
+use proptest::sample::select;
 
 const SYMBOLS: &[&str] = &["a", "b", "c", "val", "thing"];
 const FEATURES: &[&str] = &["f1", "f2"];
@@ -228,10 +228,10 @@ fn arb_expr_depth(depth: u32) -> BoxedStrategy<Expr> {
             prop::collection::vec(constructor_pair(light_sub.clone()), 0..=2)
         )
             .prop_map(|(name, values)| Expr::ConstructorExpression {
-                type_call: sigil_model::TypeRef::unresolved(name),
+                type_call: phero_rune_model::TypeRef::unresolved(name),
                 values: values
                     .into_iter()
-                    .map(|(key, value)| sigil_model::expr::ConstructorPair {
+                    .map(|(key, value)| phero_rune_model::expr::ConstructorPair {
                         key,
                         value: Box::new(value),
                     })
@@ -270,25 +270,27 @@ fn switch_case(body: BoxedStrategy<Expr>) -> impl Strategy<Value = SwitchCase> {
 
 fn inline_fn(
     body: impl Strategy<Value = Expr>,
-) -> impl Strategy<Value = sigil_model::expr::InlineFunction> {
+) -> impl Strategy<Value = phero_rune_model::expr::InlineFunction> {
     (
         prop::option::of(prop::collection::vec(select(FEATURES), 1..=2)),
         body,
     )
-        .prop_map(|(parameters, body)| sigil_model::expr::InlineFunction {
-            parameters: parameters
-                .unwrap_or_default()
-                .iter()
-                .map(|s| s.to_string())
-                .collect(),
-            body: Box::new(body),
-        })
+        .prop_map(
+            |(parameters, body)| phero_rune_model::expr::InlineFunction {
+                parameters: parameters
+                    .unwrap_or_default()
+                    .iter()
+                    .map(|s| s.to_string())
+                    .collect(),
+                body: Box::new(body),
+            },
+        )
 }
 
 fn then_fn(
     body: impl Strategy<Value = Expr>,
-) -> impl Strategy<Value = sigil_model::expr::InlineFunction> {
-    body.prop_map(|body| sigil_model::expr::InlineFunction {
+) -> impl Strategy<Value = phero_rune_model::expr::InlineFunction> {
+    body.prop_map(|body| phero_rune_model::expr::InlineFunction {
         parameters: vec![],
         body: Box::new(body),
     })

@@ -99,9 +99,10 @@ impl World {
         let Some(root) = self.root.clone() else {
             return;
         };
-        let found = sigil_syntax::project::discover_rosetta_files(std::slice::from_ref(&root));
+        let found =
+            phero_driver::workspace_imports::discover_rosetta_files(std::slice::from_ref(&root));
         for path in found {
-            let Some(uri) = sigil_syntax::project::path_to_uri(&path) else {
+            let Some(uri) = path_to_uri(&path) else {
                 continue;
             };
             if self.docs.contains_key(&uri) {
@@ -115,7 +116,7 @@ impl World {
 
     /// Re-parse and re-resolve every document in the workspace together.
     /// Full-workspace reanalysis keeps results consistent across files; the
-    /// built-in `com.rosetta.model` library is included by `sigil_resolve`.
+    /// built-in `com.rosetta.model` library is included by `phero_rune_resolve`.
     pub fn reanalyze(&mut self) {
         self.analysis = Analysis::compute(&self.docs);
     }
@@ -123,4 +124,17 @@ impl World {
     pub fn analysis(&self) -> &Analysis {
         &self.analysis
     }
+}
+
+/// The `file://` URI the server names a scanned file by. No percent-encoding:
+/// a path with spaces or non-ASCII text does not round-trip (a documented
+/// limitation, kept byte-for-byte until `phero-lsp` serves `.rosetta` in
+/// RN15). `None` for a path that is not UTF-8; text that already starts with
+/// `file://` passes through.
+pub fn path_to_uri(path: &std::path::Path) -> Option<String> {
+    let text = path.to_str()?;
+    if text.starts_with("file://") {
+        return Some(text.to_string());
+    }
+    Some(format!("file://{text}"))
 }

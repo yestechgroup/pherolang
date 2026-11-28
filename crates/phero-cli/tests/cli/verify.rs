@@ -707,3 +707,66 @@ fn check_and_check_fresh_are_mutually_exclusive() {
         String::from_utf8_lossy(&output.stderr)
     );
 }
+
+/// `verify`'s source closure follows the shared `.rosetta` discovery walk
+/// (RN11): an `import sigil` brings its discovered siblings in as sources,
+/// and a sibling under `target/` or a dot directory is not one.
+#[test]
+fn the_closure_includes_discovered_rosetta_siblings_only() {
+    let root = scratch_dir();
+    let register = root.join("docs/verification");
+    std::fs::create_dir_all(&register).expect("mkdir register");
+    std::fs::copy(
+        workspace_root().join("docs/verification/register.json"),
+        register.join("register.json"),
+    )
+    .expect("copy register");
+    let write = |relative: &str, text: &str| {
+        let path = root.join(relative);
+        std::fs::create_dir_all(path.parent().unwrap()).expect("mkdir");
+        std::fs::write(path, text).expect("write source");
+    };
+    write(
+        "oracle/trade.rosetta",
+        "namespace oracle.basic\n\nimport oracle.extra.*\n\ntype Trade:\n    extra Extra (1..1)\n",
+    );
+    write(
+        "oracle/extra/extra.rosetta",
+        "namespace oracle.extra\n\ntype Extra:\n    x int (1..1)\n",
+    );
+    write("oracle/target/stale.rosetta", "namespace stale\n");
+    write("oracle/.cache/hidden.rosetta", "namespace hidden\n");
+    write(
+        "book.mox",
+        "package demo\n\nimport sigil \"oracle/trade.rosetta\"\n\nclass Book { refers oracle.basic.Trade about }\n",
+    );
+
+    let output = pherolang()
+        .args(["verify", "book.mox", "-o", "book.receipt.json"])
+        .current_dir(&root)
+        .output()
+        .expect("run verify");
+    assert!(
+        output.status.success(),
+        "verify must succeed: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let receipt: serde_json::Value = serde_json::from_str(
+        &std::fs::read_to_string(root.join("book.receipt.json")).expect("read receipt"),
+    )
+    .expect("receipt JSON");
+    let sources: Vec<&str> = receipt["sources"]
+        .as_array()
+        .expect("sources")
+        .iter()
+        .map(|source| source["path"].as_str().expect("source path"))
+        .collect();
+    assert_eq!(
+        sources,
+        [
+            "book.mox",
+            "oracle/extra/extra.rosetta",
+            "oracle/trade.rosetta"
+        ]
+    );
+}

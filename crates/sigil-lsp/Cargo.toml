@@ -4,7 +4,7 @@ version.workspace = true
 edition.workspace = true
 license.workspace = true
 repository.workspace = true
-# Staging import (RN4, ADR 0012): not published until RN11 settles names.
+# Staging import (RN4, ADR 0012): never published; retired by RN10/RN15.
 publish = false
 description = "Language server (LSP) for the Rune (.rosetta) DSL"
 
@@ -12,12 +12,13 @@ description = "Language server (LSP) for the Rune (.rosetta) DSL"
 crossbeam-channel = "0.5"
 lsp-server = "0.10"
 lsp-types = "0.97"
+phero-driver = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 sigil-diag = { workspace = true }
 sigil-syntax = { workspace = true }
-sigil-model = { workspace = true }
-sigil-resolve = { workspace = true }
+phero-rune-model = { workspace = true }
+phero-rune-resolve = { workspace = true }
 
 [dev-dependencies]
 phero-diagnostics = { workspace = true }

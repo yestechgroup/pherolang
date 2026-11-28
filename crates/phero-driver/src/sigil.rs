@@ -33,7 +33,7 @@
 //!    reference each other unqualified). Duplicate selection (same namespace
 //!    and same text — e.g. two `.mox` files importing the same rosetta
 //!    project) keeps the first occurrence.
-//! 4. The selected files go to `sigil_resolve::resolve` in one call (sigil
+//! 4. The selected files go to `phero_rune_resolve::resolve` in one call (sigil
 //!    prepends its builtins automatically). Parse and resolution diagnostics
 //!    map to pherolang diagnostics tagged with the rosetta entry's key path;
 //!    any ERROR severity fails the namespace carrying it: that namespace's
@@ -181,11 +181,11 @@ use phero_expr::body::{
     BodyBinding, BodyDispatch, BodyGuard, BodyOutput, BodyStep, GuardPhase, RuneBody,
 };
 use phero_ir as ir;
+use phero_rune_model::expr::Expr as SigilExpr;
+use phero_rune_model::{CardinalityMax, ModelFile, SemanticElement};
+use phero_rune_resolve::{ElementId, Resolution};
 use phero_syntax::ast as mox;
 use phero_syntax::Span;
-use sigil_model::expr::Expr as SigilExpr;
-use sigil_model::{CardinalityMax, ModelFile, SemanticElement};
-use sigil_resolve::{ElementId, Resolution};
 
 use crate::diagnostic::Diagnostic;
 use crate::lower::{DomainPackage, TopKind};
@@ -484,7 +484,7 @@ pub(crate) fn compile_sigil_imports(
         .iter()
         .filter_map(|&index| candidates[index].file.clone())
         .collect();
-    let resolution = sigil_resolve::resolve(files_for_resolution);
+    let resolution = phero_rune_resolve::resolve(files_for_resolution);
     for diagnostic in &resolution.diagnostics {
         let span = diagnostic.span.map(|span| Span::from(span.start..span.end));
         // The registry code leads the message, the driver's numeric-code
@@ -978,7 +978,7 @@ impl<'a> Lowerer<'a> {
     /// Maps one resolved sigil type reference to the pherolang equivalent.
     /// Unresolved references are already sigil errors; the placeholder type
     /// is discarded with the model.
-    fn map_type_ref(&self, namespace: &str, type_ref: &sigil_model::TypeRef) -> ir::TypeRef {
+    fn map_type_ref(&self, namespace: &str, type_ref: &phero_rune_model::TypeRef) -> ir::TypeRef {
         type_ref
             .resolved
             .map(ElementId)
@@ -990,7 +990,7 @@ impl<'a> Lowerer<'a> {
     /// A non-choice `Data` → `ClassDef`: attributes become attribute
     /// features, the resolved super type becomes extends (a choice parent
     /// becomes an interface reference, which pherolang classes may extend).
-    fn lower_class(&self, data: &sigil_model::Data, namespace: &str) -> ir::ClassDef {
+    fn lower_class(&self, data: &phero_rune_model::Data, namespace: &str) -> ir::ClassDef {
         let extends = data
             .super_type
             .as_ref()
@@ -1017,7 +1017,7 @@ impl<'a> Lowerer<'a> {
 
     /// A `TypeAlias` → `DatatypeDef`, wrapping the target when it maps to a
     /// pherolang primitive and opaque otherwise (parameters are skipped).
-    fn lower_type_alias(&self, alias: &sigil_model::TypeAlias) -> ir::DatatypeDef {
+    fn lower_type_alias(&self, alias: &phero_rune_model::TypeAlias) -> ir::DatatypeDef {
         let platform = alias
             .type_ref
             .resolved
@@ -1045,7 +1045,7 @@ impl<'a> Lowerer<'a> {
     fn lower_function(
         &mut self,
         file: &ModelFile,
-        function: &sigil_model::Function,
+        function: &phero_rune_model::Function,
         namespace: &str,
     ) -> Option<ir::Operation> {
         let Some(output) = function.output.as_ref() else {
@@ -1094,7 +1094,7 @@ impl<'a> Lowerer<'a> {
     fn lower_library_function(
         &mut self,
         file: &ModelFile,
-        function: &sigil_model::LibraryFunction,
+        function: &phero_rune_model::LibraryFunction,
         namespace: &str,
     ) -> Option<ir::Operation> {
         let params = function
@@ -1158,9 +1158,9 @@ impl<'a> Lowerer<'a> {
     fn with_rune_body(
         &mut self,
         file: &ModelFile,
-        function: &sigil_model::Function,
+        function: &phero_rune_model::Function,
         operation: &mut ir::Operation,
-        output: &sigil_model::Attribute,
+        output: &phero_rune_model::Attribute,
     ) {
         let statement_bearing = function.dispatch.is_some()
             || !function.shortcuts.is_empty()
@@ -1203,9 +1203,9 @@ impl<'a> Lowerer<'a> {
     /// — translation or typing — defers with a slot-tagged reason.
     fn lower_rune_body(
         &self,
-        function: &sigil_model::Function,
+        function: &phero_rune_model::Function,
         operation: &ir::Operation,
-        output: &sigil_model::Attribute,
+        output: &phero_rune_model::Attribute,
     ) -> Result<RuneBody, String> {
         let mut body = RuneBody::default();
 
@@ -1534,7 +1534,7 @@ impl<'a> Lowerer<'a> {
 
 /// The interface a choice lowers into (options and super types are skipped:
 /// a pherolang interface declares no features and has no extends).
-fn interface_def(data: &sigil_model::Data) -> ir::InterfaceDef {
+fn interface_def(data: &phero_rune_model::Data) -> ir::InterfaceDef {
     let mut interface = ir::InterfaceDef::new(data.name.clone());
     interface.description = data.definition.clone();
     interface
@@ -1544,7 +1544,7 @@ fn interface_def(data: &sigil_model::Data) -> ir::InterfaceDef {
 /// fills `(0..1)` for the implicit choice-option cardinality and requires
 /// explicit cardinalities on regular attributes, so no default is applied
 /// here.
-fn lower_cardinality(cardinality: &sigil_model::Cardinality) -> ir::Multiplicity {
+fn lower_cardinality(cardinality: &phero_rune_model::Cardinality) -> ir::Multiplicity {
     ir::Multiplicity {
         lower: cardinality.min,
         upper: match cardinality.max {
@@ -1558,7 +1558,7 @@ fn lower_cardinality(cardinality: &sigil_model::Cardinality) -> ir::Multiplicity
 /// the required `(1..1)` stays unset (the domain-operation convention —
 /// parameters are single-valued unless stated), anything else lowers
 /// verbatim.
-fn optional_multiplicity(cardinality: &sigil_model::Cardinality) -> Option<ir::Multiplicity> {
+fn optional_multiplicity(cardinality: &phero_rune_model::Cardinality) -> Option<ir::Multiplicity> {
     let multiplicity = lower_cardinality(cardinality);
     (multiplicity != ir::Multiplicity::REQUIRED).then_some(multiplicity)
 }
@@ -1596,7 +1596,7 @@ fn element_definition(element: &SemanticElement) -> Option<String> {
 
 /// The placeholder type for references sigil could not resolve (the sigil
 /// error blocks the artifact, so the exact value is never observed).
-fn placeholder(namespace: &str, type_ref: &sigil_model::TypeRef) -> ir::TypeRef {
+fn placeholder(namespace: &str, type_ref: &phero_rune_model::TypeRef) -> ir::TypeRef {
     ir::TypeRef::Class {
         package: namespace.to_string(),
         name: type_ref
@@ -1657,7 +1657,7 @@ fn write_expr(expr: &SigilExpr, min: ExprLevel, out: &mut String) -> Result<(), 
 fn level_of(expr: &SigilExpr) -> ExprLevel {
     match expr {
         SigilExpr::LogicalOperation {
-            operator: sigil_model::expr::LogicalOperator::Or,
+            operator: phero_rune_model::expr::LogicalOperator::Or,
             ..
         } => ExprLevel::LogicOr,
         SigilExpr::LogicalOperation { .. } => ExprLevel::LogicAnd,
@@ -1666,8 +1666,8 @@ fn level_of(expr: &SigilExpr) -> ExprLevel {
         | SigilExpr::ContainsExpression { .. } => ExprLevel::Comparison,
         SigilExpr::ArithmeticOperation {
             operator:
-                sigil_model::expr::ArithmeticOperator::Add
-                | sigil_model::expr::ArithmeticOperator::Subtract,
+                phero_rune_model::expr::ArithmeticOperator::Add
+                | phero_rune_model::expr::ArithmeticOperator::Subtract,
             ..
         } => ExprLevel::Additive,
         SigilExpr::ArithmeticOperation { .. } => ExprLevel::Multiplicative,
@@ -1680,7 +1680,7 @@ fn level_of(expr: &SigilExpr) -> ExprLevel {
 /// allows its level).
 #[allow(clippy::too_many_lines)]
 fn write_bare(expr: &SigilExpr, out: &mut String) -> Result<(), String> {
-    use sigil_model::expr::{
+    use phero_rune_model::expr::{
         ArithmeticOperator, ComparisonOperator, EqualityOperator, LogicalOperator,
     };
     match expr {
@@ -1757,7 +1757,7 @@ fn write_bare(expr: &SigilExpr, out: &mut String) -> Result<(), String> {
         }
         SigilExpr::EqualityOperation {
             operator,
-            card_mod: sigil_model::expr::CardinalityModifier::None,
+            card_mod: phero_rune_model::expr::CardinalityModifier::None,
             left,
             right,
         } => {
@@ -1769,7 +1769,7 @@ fn write_bare(expr: &SigilExpr, out: &mut String) -> Result<(), String> {
         }
         SigilExpr::ComparisonOperation {
             operator,
-            card_mod: sigil_model::expr::CardinalityModifier::None,
+            card_mod: phero_rune_model::expr::CardinalityModifier::None,
             left,
             right,
         } => {
@@ -1857,7 +1857,7 @@ fn next_level(level: ExprLevel) -> ExprLevel {
 /// function: `arg.filter(p => body)` / `arg.map(p => body)`.
 fn write_inline(
     argument: &SigilExpr,
-    function: &sigil_model::expr::InlineFunction,
+    function: &phero_rune_model::expr::InlineFunction,
     name: &str,
     out: &mut String,
 ) -> Result<(), String> {
@@ -1883,7 +1883,7 @@ fn write_inline(
 /// A readable name for the statement fragments with no phero-expr form — the
 /// deferral warning names the construct, never just "unsupported".
 fn fragment(expr: &SigilExpr) -> &'static str {
-    use sigil_model::expr::Expr as E;
+    use phero_rune_model::expr::Expr as E;
     match expr {
         E::ImplicitVariable => "the implicit `item` variable",
         E::SymbolReference {

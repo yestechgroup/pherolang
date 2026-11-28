@@ -2,8 +2,8 @@
 //! a value of the in-scope `SerializationFormat` enumeration (shadowing
 //! respected, mirroring the transform-ref scope).
 
+use phero_rune_resolve::{canonical_json, resolve};
 use sigil_diag::SourceFile;
-use sigil_resolve::{canonical_json, resolve};
 
 fn resolved(src: &str) -> serde_json::Value {
     let source = SourceFile::new("test.rosetta", src.to_string());
@@ -105,13 +105,13 @@ schema S XML <"valid">
         .iter()
         .flat_map(|f| f.elements.iter())
         .find_map(|e| match e {
-            sigil_model::SemanticElement::Schema(s) => Some(s),
+            phero_rune_model::SemanticElement::Schema(s) => Some(s),
             _ => None,
         })
         .unwrap();
     let enum_id = schema.format_resolved.expect("format resolved");
     assert_eq!(
-        resolution.qname(sigil_resolve::ElementId(enum_id)),
+        resolution.qname(phero_rune_resolve::ElementId(enum_id)),
         "com.rosetta.model.SerializationFormat"
     );
 }

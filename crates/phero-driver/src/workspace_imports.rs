@@ -97,7 +97,7 @@ pub fn collect_sigil_imports(sources: &[(String, String)]) -> anyhow::Result<Sig
                 .insert(path.clone(), import.path.clone(), text.clone());
             sigil.sources.push((import.path.clone(), text));
             // Candidate pool: every rosetta file next to the named import.
-            for candidate in discover_rosetta_files(&resolved) {
+            for candidate in rosetta_candidates(&resolved) {
                 let candidate_path = candidate.display().to_string();
                 if sigil
                     .sources
@@ -124,23 +124,32 @@ pub fn collect_sigil_imports(sources: &[(String, String)]) -> anyhow::Result<Sig
     Ok(sigil)
 }
 
-/// Recursively collects `*.rosetta` files under `file`'s directory,
-/// mirroring sigil's project discovery: entries whose name starts with `.`
-/// or is exactly `target` are skipped with their subtree, and the walk is
-/// depth-capped (bounding symlink cycles). The named file itself is not
-/// included.
-fn discover_rosetta_files(file: &Path) -> Vec<PathBuf> {
-    const MAX_DEPTH: usize = 16;
-    fn collect(dir: &Path, depth: usize, named: &Path, out: &mut Vec<PathBuf>) {
-        if depth > MAX_DEPTH {
+/// The deepest directory [`discover_rosetta_files`] descends to: the root is
+/// depth 0, and a directory deeper than this is not read. The cap also bounds
+/// symlink cycles.
+pub const ROSETTA_MAX_DEPTH: usize = 16;
+
+/// Every `*.rosetta` file under `roots`: the one `.rosetta` discovery walk
+/// the CLI, `verify`, the LSP and the Rune tools share (RN11).
+///
+/// - A root that is a directory is walked; a root that is a file is taken
+///   as-is when its name ends in `.rosetta`.
+/// - An entry whose name starts with `.` or is exactly `target` is skipped
+///   with its whole subtree, files and directories alike.
+/// - The walk follows symlinks and stops below [`ROSETTA_MAX_DEPTH`].
+/// - Names are matched case-sensitively; a name that is not UTF-8 is skipped,
+///   and so is a directory or entry that cannot be read.
+/// - The result is sorted and deduplicated, so it never depends on the order
+///   the file system returns entries in.
+pub fn discover_rosetta_files(roots: &[PathBuf]) -> Vec<PathBuf> {
+    fn walk(dir: &Path, depth: usize, out: &mut Vec<PathBuf>) {
+        if depth > ROSETTA_MAX_DEPTH {
             return;
         }
         let Ok(entries) = std::fs::read_dir(dir) else {
             return;
         };
-        let mut entries: Vec<std::fs::DirEntry> = entries.filter_map(Result::ok).collect();
-        entries.sort_by_key(|entry| entry.file_name());
-        for entry in entries {
+        for entry in entries.filter_map(Result::ok) {
             let path = entry.path();
             let Some(name) = path.file_name().and_then(|name| name.to_str()) else {
                 continue;
@@ -149,16 +158,39 @@ fn discover_rosetta_files(file: &Path) -> Vec<PathBuf> {
                 continue;
             }
             if path.is_dir() {
-                collect(&path, depth + 1, named, out);
-            } else if name.ends_with(".rosetta") && path != named {
+                walk(&path, depth + 1, out);
+            } else if name.ends_with(".rosetta") {
                 out.push(path);
             }
         }
     }
     let mut out = Vec::new();
-    let base = crate::engine_common::dir_of(file);
-    collect(&base, 0, file, &mut out);
+    for root in roots {
+        if root.is_dir() {
+            walk(root, 0, &mut out);
+        } else if root
+            .file_name()
+            .and_then(|name| name.to_str())
+            .is_some_and(|name| name.ends_with(".rosetta"))
+        {
+            out.push(root.clone());
+        }
+    }
+    out.sort();
+    out.dedup();
     out
+}
+
+/// The `import sigil` candidate pool for the named rosetta file: every
+/// [`discover_rosetta_files`] result under its directory except the named
+/// file itself. A candidate changes the lowering, so `verify` counts each one
+/// as a source.
+pub fn rosetta_candidates(named: &Path) -> Vec<PathBuf> {
+    let base = crate::engine_common::dir_of(named);
+    discover_rosetta_files(&[base])
+        .into_iter()
+        .filter(|path| path != named)
+        .collect()
 }
 
 /// Collects the import content for one source whose **driver key** differs
@@ -213,4 +245,131 @@ pub fn collect_for_source(
         schemas: rekeyed_schemas,
         sigil: rekeyed_sigil,
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use std::sync::atomic::{AtomicU32, Ordering};
+
+    use super::*;
+
+    static NEXT_ID: AtomicU32 = AtomicU32::new(0);
+
+    /// A fresh directory, removed again on drop.
+    struct TempTree(PathBuf);
+
+    impl TempTree {
+        fn new(name: &str) -> Self {
+            let dir = std::env::temp_dir().join(format!(
+                "phero-driver-rosetta-{}-{}-{name}",
+                std::process::id(),
+                NEXT_ID.fetch_add(1, Ordering::SeqCst),
+            ));
+            std::fs::create_dir_all(&dir).expect("create temp dir");
+            TempTree(dir)
+        }
+
+        fn write(&self, relative: &str) -> PathBuf {
+            let path = self.0.join(relative);
+            std::fs::create_dir_all(path.parent().unwrap()).expect("create parent dirs");
+            std::fs::write(&path, "namespace test\n").expect("write file");
+            path
+        }
+
+        fn root(&self) -> Vec<PathBuf> {
+            vec![self.0.clone()]
+        }
+    }
+
+    impl Drop for TempTree {
+        fn drop(&mut self) {
+            let _ = std::fs::remove_dir_all(&self.0);
+        }
+    }
+
+    #[test]
+    fn discovery_is_sorted_and_recursive() {
+        let tree = TempTree::new("sorted");
+        let z = tree.write("z.rosetta");
+        let e = tree.write("b/d/e.rosetta");
+        let a = tree.write("a.rosetta");
+        let c = tree.write("b/c.rosetta");
+        tree.write("b/notes.txt");
+        tree.write("b/upper.ROSETTA");
+        assert_eq!(discover_rosetta_files(&tree.root()), [a, c, e, z]);
+    }
+
+    #[test]
+    fn discovery_skips_dot_entries_and_target() {
+        let tree = TempTree::new("skips");
+        let kept = tree.write("kept.rosetta");
+        let nested = tree.write("nested/also_kept.rosetta");
+        tree.write(".hidden/dropped.rosetta");
+        tree.write(".dotfile.rosetta");
+        tree.write("target/dropped.rosetta");
+        tree.write("nested/target/dropped.rosetta");
+        tree.write("nested/.hidden/dropped_too.rosetta");
+        // A name that merely contains `target` is not skipped.
+        let targets = tree.write("targets/kept.rosetta");
+        assert_eq!(
+            discover_rosetta_files(&tree.root()),
+            [kept, nested, targets]
+        );
+    }
+
+    #[test]
+    fn discovery_stops_below_the_depth_cap() {
+        let tree = TempTree::new("depth");
+        let at_cap = "d/".repeat(ROSETTA_MAX_DEPTH);
+        let reached = tree.write(&format!("{at_cap}at_cap.rosetta"));
+        tree.write(&format!("{at_cap}d/too_deep.rosetta"));
+        assert_eq!(discover_rosetta_files(&tree.root()), [reached]);
+    }
+
+    #[test]
+    fn discovery_is_deterministic_across_runs() {
+        let tree = TempTree::new("deterministic");
+        for relative in [
+            "m/n/o/deep.rosetta",
+            "m/p/q/deep.rosetta",
+            "m/p/deep.rosetta",
+            "m/deep.rosetta",
+            "sibling.rosetta",
+        ] {
+            tree.write(relative);
+        }
+        let first = discover_rosetta_files(&tree.root());
+        for _ in 0..4 {
+            assert_eq!(discover_rosetta_files(&tree.root()), first);
+        }
+    }
+
+    #[test]
+    fn file_and_directory_roots_are_merged_and_deduplicated() {
+        let tree = TempTree::new("roots");
+        let one = tree.write("a/one.rosetta");
+        let two = tree.write("b/two.rosetta");
+        let loose = tree.write("loose.rosetta");
+        let other = tree.write("b/other.txt");
+        let roots = [
+            tree.0.join("b"),
+            loose.clone(),
+            tree.0.join("a"),
+            one.clone(),
+            other,
+            tree.0.join("missing"),
+        ];
+        assert_eq!(discover_rosetta_files(&roots), [one, two, loose]);
+    }
+
+    #[test]
+    fn candidates_are_the_named_files_siblings_without_it() {
+        let tree = TempTree::new("candidates");
+        let named = tree.write("model/main.rosetta");
+        let sibling = tree.write("model/dep.rosetta");
+        let nested = tree.write("model/extra/extra.rosetta");
+        tree.write("model/target/built.rosetta");
+        tree.write("elsewhere.rosetta");
+        assert_eq!(rosetta_candidates(&named), [sibling, nested]);
+    }
 }

@@ -14,8 +14,8 @@ use std::hint::black_box;
 use std::path::PathBuf;
 
 use criterion::{criterion_group, criterion_main, BatchSize, Criterion};
+use phero_rune_model::ModelFile;
 use sigil_diag::{Severity, SourceFile};
-use sigil_model::ModelFile;
 use sigil_syntax::ast::SourceUnit;
 
 fn data(rel: &str) -> PathBuf {
@@ -63,7 +63,7 @@ fn clean_models(units: &[(String, SourceUnit)], clean_resolve: bool) -> Vec<Mode
         .map(|(name, unit)| sigil_syntax::lower(name, unit))
         .collect();
     if clean_resolve {
-        let resolution = sigil_resolve::resolve(models.clone());
+        let resolution = phero_rune_resolve::resolve(models.clone());
         assert!(
             resolution.diagnostics.is_empty(),
             "bench fixtures must resolve without diagnostics: {:?}",
@@ -108,7 +108,7 @@ fn bench_stage(c: &mut Criterion, group: &str, rels: &[&str], clean_resolve: boo
     g.bench_function("resolve", |b| {
         b.iter_batched(
             || models.clone(),
-            |models| black_box(sigil_resolve::resolve(models)),
+            |models| black_box(phero_rune_resolve::resolve(models)),
             BatchSize::SmallInput,
         )
     });
@@ -121,8 +121,8 @@ fn bench_stage(c: &mut Criterion, group: &str, rels: &[&str], clean_resolve: boo
                     unit.map(|u| sigil_syntax::lower(&f.name, &u))
                 })
                 .collect();
-            let resolution = sigil_resolve::resolve(models);
-            black_box(sigil_resolve::canonical_json(
+            let resolution = phero_rune_resolve::resolve(models);
+            black_box(phero_rune_resolve::canonical_json(
                 &resolution,
                 black_box(&sources),
             ))

@@ -4,7 +4,7 @@
 
 Native-Rust toolchain for the FINOS **Rune DSL** (the language of `.rosetta` files). This is **not** a port built on the Java implementation — all toolchain code is Rust. The Java implementation (`com.regnosys.rosetta` 9.58.1) is used only as the **behavioural oracle**: `sigil model` output must match the Java EMF dump exactly after normalization.
 
-`docs/compatibility.md` is the working specification (concept matrix, Ecore mapping, Xtext scoping rules, diagnostic codes `E0001`/`E01xx`, oracle-version caveats). Read it before changing grammar, model, or resolution — it explains *why* code is shaped the way it is. `docs/api-stability.md` is the consumer-facing compatibility boundary (rev-pinning) — keep it in sync when changing `sigil-model` serde shapes, `resolve()`/`project` semantics, or `canonical_json`.
+`docs/compatibility.md` is the working specification (concept matrix, Ecore mapping, Xtext scoping rules, diagnostic codes `E0001`/`E01xx`, oracle-version caveats). Read it before changing grammar, model, or resolution — it explains *why* code is shaped the way it is. `docs/api-stability.md` is the consumer-facing compatibility boundary (rev-pinning) — keep it in sync when changing `phero-rune-model` serde shapes, `resolve()`/discovery semantics, or `canonical_json`.
 
 ## Commands
 
@@ -37,11 +37,11 @@ Requires JDK 21 + Maven. The script compiles the dumper itself (`mvn compile exe
 
 ## Architecture
 
-Pipeline: `sigil-diag` (spans, diagnostics) → `sigil-syntax` (chumsky parser → spanned AST → `lower()` to `ModelFile`) → `sigil-model` (parser-independent IR mirroring Rune's Ecore metamodel, incl. `expr::Expr`) → `sigil-resolve` (Xtext-faithful scoping, `resolve()`, `canonical_json()`) → `sigil-cli` / `sigil-lsp`.
+Pipeline: `sigil-diag` (spans, diagnostics) → `sigil-syntax` (chumsky parser → spanned AST → `lower()` to `ModelFile`) → `phero-rune-model` (parser-independent IR mirroring Rune's Ecore metamodel, incl. `expr::Expr`) → `phero-rune-resolve` (Xtext-faithful scoping, `resolve()`, `canonical_json()`) → `sigil-cli` / `sigil-lsp`.
 
 - Resolution is whole-workspace: `resolve(models)` takes all files at once because models are multi-file. The LSP re-parses/re-resolves everything on every change by design — don't "optimize" this into per-file caching.
-- Multi-file ingestion is public API: `sigil_syntax::project::{discover_rosetta_files, load_user_files}` (depth-capped walk, dot-dir/`target` skips, sorted-deterministic). The LSP workspace scan and the CDM harness both go through it.
-- Builtins (`com.rosetta.model`) are `.rosetta` files compiled into `sigil-resolve` from `crates/sigil-resolve/builtin/` — copied verbatim from the FINOS rune-dsl repo (Apache-2.0). Don't edit except to re-sync upstream; same for the vendored grammar `docs/reference/Rosetta.xtext`.
+- Multi-file ingestion is public API: `phero_driver::workspace_imports::{discover_rosetta_files, rosetta_candidates}` (depth-capped walk, dot-entry/`target` skips, sorted-deterministic), the one walk since RN11. The CLI, `verify`, both language servers and the CDM harness go through it.
+- Builtins (`com.rosetta.model`) are `.rosetta` files compiled into `phero-rune-resolve` from `crates/phero-rune-resolve/builtin/` — copied verbatim from the FINOS rune-dsl repo (Apache-2.0). Don't edit except to re-sync upstream; same for the vendored grammar `docs/reference/Rosetta.xtext`.
 - LSP: `lsp-server` sync scaffold; all spans are byte offsets internally, converted to LSP positions at the edges; builtin definitions use `builtin:` pseudo-URIs. Features: definition/references/rename/semanticTokens, each behind harness goldens in `crates/sigil-lsp/tests/`. See `docs/lsp.md`.
 
 ## Tests

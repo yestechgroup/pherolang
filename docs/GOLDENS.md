@@ -89,7 +89,7 @@ is a property of the writer, not of git.
 | `site/packages/highlighting/**/*.json` | pretty JSON with one trailing newline |
 | `docs/DIAGNOSTICS.md`, `docs/VERIFICATION.md` | Markdown with one trailing newline |
 | `tests/conformance/fmt/*.fmt.*` | the formatter's own text output, which ends with one newline |
-| `tests/rune/conformance/**/expected.json` | sigil's canonical model JSON (`sigil_resolve::canonical_json`), pretty, with one trailing newline |
+| `tests/rune/conformance/**/expected.json` | sigil's canonical model JSON (`phero_rune_resolve::canonical_json`), pretty, with one trailing newline |
 
 Two rules follow:
 
