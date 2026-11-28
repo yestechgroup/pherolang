@@ -479,7 +479,11 @@ fn complete_closure(path: &Path, out: &mut BTreeSet<PathBuf>) {
                 out.insert(resolved.clone());
             }
             if kind == phero_syntax::ast::ImportKind::Sigil {
-                collect_rosetta_candidates(&resolved, out);
+                // A sibling candidate changes the lowering, so it is a
+                // source like any other.
+                out.extend(phero_driver::workspace_imports::rosetta_candidates(
+                    &resolved,
+                ));
             }
         }
         return;
@@ -504,40 +508,6 @@ fn complete_closure(path: &Path, out: &mut BTreeSet<PathBuf>) {
             out.insert(resolved);
         }
     }
-}
-
-/// The rosetta candidate pool `import sigil` discovery reads: every
-/// `*.rosetta` file under the named import's directory, dot and `target`
-/// directories skipped, depth-capped (the collector's documented policy).
-/// A sibling candidate changes the lowering, so it is a source like any
-/// other.
-fn collect_rosetta_candidates(named: &Path, out: &mut BTreeSet<PathBuf>) {
-    const MAX_DEPTH: usize = 16;
-    fn walk(dir: &Path, depth: usize, named: &Path, out: &mut BTreeSet<PathBuf>) {
-        if depth > MAX_DEPTH {
-            return;
-        }
-        let Ok(entries) = std::fs::read_dir(dir) else {
-            return;
-        };
-        let mut entries: Vec<std::fs::DirEntry> = entries.filter_map(Result::ok).collect();
-        entries.sort_by_key(std::fs::DirEntry::file_name);
-        for entry in entries {
-            let path = entry.path();
-            let Some(name) = path.file_name().and_then(|name| name.to_str()) else {
-                continue;
-            };
-            if name.starts_with('.') || name == "target" {
-                continue;
-            }
-            if path.is_dir() {
-                walk(&path, depth + 1, named, out);
-            } else if name.ends_with(".rosetta") && path != named {
-                out.insert(path);
-            }
-        }
-    }
-    walk(&dir_of(named), 0, named, out);
 }
 
 /// The importing file's directory, `"."` for a bare file name (the import

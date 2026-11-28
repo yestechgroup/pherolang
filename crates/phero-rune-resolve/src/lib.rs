@@ -11,6 +11,18 @@
 //! 4. the implicit wildcard import of the built-in `com.rosetta.model`
 //!    namespace,
 //! 5. fully-qualified names resolve against the global index.
+//!
+//! # Whole-pool resolution, no per-file cache
+//!
+//! [`resolve`] takes every file at once and recomputes everything, because
+//! one file's change can invalidate any other's resolution (an import, a
+//! same-namespace sibling, a first-match shadowing). RN11 re-examined this
+//! rule against a salsa per-file cache and **kept it**: the
+//! `sigil-lsp` `reanalysis` bench (full re-parse + re-resolve per change)
+//! measured 1.36 ms for 2 files and 7.8 ms for 12 files, well inside an
+//! editor keystroke budget, and per-file memoisation would need
+//! cross-file invalidation keyed on the whole pool, which is what the
+//! RN15 graph snapshot provides. Revisit when RN15 serves `.rosetta`.
 
 use phero_rune_model::{ModelFile, SemanticElement, TypeRef};
 use serde::Serialize;

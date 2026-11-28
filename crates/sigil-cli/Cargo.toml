@@ -20,6 +20,7 @@ phero-rune-resolve = { workspace = true }
 serde_json = { workspace = true }
 
 [dev-dependencies]
+phero-driver = { workspace = true }
 phero-diagnostics = { workspace = true }
 criterion = { workspace = true }
 # The workspace's canonical key order for written goldens (`serde_json`

@@ -6,7 +6,7 @@ license.workspace = true
 repository.workspace = true
 # Staging import (RN4, ADR 0012): never published; retired by RN10/RN15.
 publish = false
-description = "The Rune (.rosetta) syntax layer over phero_syntax::rune: lowering to phero-rune-model and project discovery"
+description = "The Rune (.rosetta) syntax layer over phero_syntax::rune: lowering to phero-rune-model"
 
 [dependencies]
 phero-diagnostics = { workspace = true }

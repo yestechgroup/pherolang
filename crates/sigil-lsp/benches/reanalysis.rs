@@ -18,11 +18,11 @@ use sigil_lsp::{Analysis, Document};
 fn workspace_docs(count: usize) -> BTreeMap<String, Document> {
     let dir =
         PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../sigil-cli/benches/data/synthetic/ws");
-    let paths = sigil_syntax::project::discover_rosetta_files(&[dir]);
+    let paths = phero_driver::workspace_imports::discover_rosetta_files(&[dir]);
     let mut docs = BTreeMap::new();
     for path in paths.into_iter().take(count) {
-        let uri = sigil_syntax::project::path_to_uri(&path)
-            .unwrap_or_else(|| panic!("no URI for {path:?}"));
+        let uri =
+            sigil_lsp::world::path_to_uri(&path).unwrap_or_else(|| panic!("no URI for {path:?}"));
         let text =
             std::fs::read_to_string(&path).unwrap_or_else(|e| panic!("cannot read {path:?}: {e}"));
         docs.insert(uri, Document::new(text, 0));

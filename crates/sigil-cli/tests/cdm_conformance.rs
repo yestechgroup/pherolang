@@ -43,6 +43,36 @@ fn corpus_dir() -> Option<PathBuf> {
 
 /// Last path segment of a `file://` URI — the corpus is a flat directory,
 /// so basenames are unique and keep the snapshot machine-independent.
+/// A corpus file's model name: its `file://` URI, unencoded (the naming the
+/// snapshot was recorded with).
+fn path_to_uri(path: &Path) -> String {
+    format!("file://{}", path.to_str().expect("utf-8 corpus path"))
+}
+
+/// Parses and lowers every readable file, collecting syntax diagnostics. A
+/// file that does not parse yields no model, and its diagnostics name it.
+fn load_files(
+    paths: &[PathBuf],
+) -> (
+    Vec<phero_rune_model::ModelFile>,
+    Vec<sigil_syntax::Diagnostic>,
+) {
+    let mut models = Vec::new();
+    let mut diagnostics = Vec::new();
+    for path in paths {
+        let Ok(text) = std::fs::read_to_string(path) else {
+            continue;
+        };
+        let source = sigil_syntax::SourceFile::new(path_to_uri(path), text);
+        let (unit, diags) = sigil_syntax::parse(&source);
+        diagnostics.extend(diags);
+        if let Some(unit) = unit {
+            models.push(sigil_syntax::lower(&source.name, &unit));
+        }
+    }
+    (models, diagnostics)
+}
+
 fn basename(uri: &str) -> &str {
     uri.rsplit('/').next().unwrap_or(uri)
 }
@@ -80,7 +110,7 @@ fn counts_by_code<I: IntoIterator<Item = String>>(codes: I) -> BTreeMap<String, 
 /// JSON shape. Deterministic by construction: file discovery is sorted,
 /// every map is a `BTreeMap`.
 fn analyse(corpus: &Path) -> serde_json::Value {
-    let paths = sigil_syntax::project::discover_rosetta_files(&[corpus.to_path_buf()]);
+    let paths = phero_driver::workspace_imports::discover_rosetta_files(&[corpus.to_path_buf()]);
 
     let mut lines = 0usize;
     let mut file_names = BTreeSet::new();
@@ -92,8 +122,7 @@ fn analyse(corpus: &Path) -> serde_json::Value {
         }
     }
 
-    let (models, syntax_diagnostics) =
-        sigil_syntax::project::load_user_files(&[corpus.to_path_buf()]);
+    let (models, syntax_diagnostics) = load_files(&paths);
 
     // Per-file parse status: `parse` yields a unit iff the file parsed, and
     // a file that failed to parse gets E0500 diagnostics, so the first
@@ -101,7 +130,7 @@ fn analyse(corpus: &Path) -> serde_json::Value {
     let parsed: BTreeSet<String> = models.iter().map(|m| m.name.clone()).collect();
     let mut parse_per_file: BTreeMap<String, String> = BTreeMap::new();
     for path in &paths {
-        let uri = sigil_syntax::project::path_to_uri(path).expect("utf-8 corpus path");
+        let uri = path_to_uri(path);
         let name = basename(&uri).to_string();
         let status = if parsed.contains(&uri) {
             "ok".to_string()

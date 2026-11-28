@@ -17,7 +17,7 @@ AST, not the LSP internals.
 | Semantic model types | `phero-rune-model` (`ModelFile`, `SemanticElement`, `expr::Expr`, …) | **stable** (the boundary) |
 | Canonical JSON artifact | `phero_rune_resolve::canonical_json`, format `sigil-model/1` | **stable** (shape contract below) |
 | Resolution | `phero_rune_resolve::resolve`, `Resolution`, `ElementId`, `ElementKind` | **stable** (semantics below) |
-| Multi-file ingestion | `sigil_syntax::project::{discover_rosetta_files, load_user_files}` | **stable** (walk rules below) |
+| Multi-file ingestion | `phero_driver::workspace_imports::{discover_rosetta_files, rosetta_candidates}` | **stable** (walk rules below) |
 | Expression traversal | `phero_rune_model::expr::{ExprVisitor, walk, ExprFamily, Expr::family}` | **stable** (protocol below) |
 | Parser AST (`sigil_syntax::ast`), lowering internals | — | *not* stable |
 | LSP internals, CLI arg parsing, bench data, conformance fixture JSONs | — | *not* stable (fixtures are test artifacts, not API) |
@@ -142,8 +142,8 @@ pub fn resolve(user_files: Vec<ModelFile>) -> Resolution
 - **Deterministic order.** Flat `ElementId`s (a `pub struct ElementId(pub
   usize)`) are assigned in file submission order, then declaration order
   within the file; `element_names` / `element_spans` are aligned with that
-  flat order. Combine `sigil_syntax::project::load_user_files` (§3) or sort
-  your own file list to keep the order stable.
+  flat order. Discover files with `discover_rosetta_files` (§3) or sort your
+  own file list to keep the order stable.
 - **Whole-workspace resolution is by design, not an omission.** Models are
   multi-file — a change in one file can invalidate any other file's
   resolution — so the language server re-parses and re-resolves the entire
@@ -155,38 +155,32 @@ pub fn resolve(user_files: Vec<ModelFile>) -> Resolution
   (`ResolutionDiagnostic { severity, code, message, file, path, span }`;
   the byte `span` is not serialized).
 
-## 3. Multi-file ingestion: `sigil_syntax::project`
+## 3. Multi-file ingestion: `phero_driver::workspace_imports`
 
-`sigil_syntax::project` (module docs + code,
-`crates/sigil-syntax/src/project.rs`) exists so embedders don't reimplement
-file-system traversal. The rules mirror the language server's workspace
-scan, which is the behavioural source of truth:
+Since RN11 there is one `.rosetta` discovery walk, shared by the `pherolang`
+CLI (`import sigil` candidates, `verify`'s source closure), `phero-lsp`, the
+staged `sigil-lsp` workspace scan and the CDM harness. It lives in the
+driver's host-side filesystem bridge, `crates/phero-driver/src/workspace_imports.rs`.
+The former `sigil_syntax::project` module is gone: `load_user_files` was used
+only by the CDM harness, which now parses its discovered files itself, and the
+unencoded `path_to_uri` moved to `sigil_lsp::world`, its one owner.
 
 `discover_rosetta_files(roots: &[PathBuf]) -> Vec<PathBuf>`:
 
 - only file names ending in `.rosetta` are collected (a root that is a
   regular file is collected as-is under the same rule);
-- entries whose file name starts with `.` (hidden/dot directories) or whose
-  file name is exactly `target` are skipped **with their whole subtree**;
+- entries whose file name starts with `.` (dot directories and dot files) or
+  whose file name is exactly `target` are skipped **with their whole subtree**;
 - recursion is depth-capped: the root counts as depth 0 and traversal stops
-  once depth exceeds `MAX_DEPTH` (16) — this also bounds symlink cycles;
-- unreadable directories are skipped silently;
+  once depth exceeds `ROSETTA_MAX_DEPTH` (16), which also bounds symlink
+  cycles;
+- unreadable directories and non-UTF-8 names are skipped silently;
 - the result is **sorted by path and deduplicated**, independent of
-  directory iteration order (entries are additionally sorted per directory
-  during the walk).
+  directory iteration order.
 
-`load_user_files(paths: &[PathBuf]) -> (Vec<ModelFile>, Vec<Diagnostic>)`:
-
-- accepts a mixed list of files and directories (directories are expanded
-  with the rules above); the combined list is sorted + deduplicated, so
-  models and diagnostics come back in a deterministic order regardless of
-  input order;
-- each parsed file's `SourceFile`/`ModelFile` name is its `file://` URI
-  (same convention as the LSP; **no percent-encoding** — paths with spaces
-  or non-ASCII will not round-trip, a documented limitation);
-- unreadable files are skipped;
-- returns the **syntax** diagnostics of all parsed files; resolution
-  diagnostics come from the subsequent `resolve` call.
+`rosetta_candidates(named: &Path) -> Vec<PathBuf>` is the `import sigil`
+candidate pool: `discover_rosetta_files` over the named file's directory,
+without the named file.
 
 ## 4. Recent embedder APIs (stable-for-pinning)
 
@@ -239,7 +233,7 @@ single import site (`crates/phero-rune-model/src/expr.rs`):
   of upgrade.
 - **Rev bumps should be deliberate.** Any rev bump that touches §1–§4
   (model shapes, the canonical JSON contract or its format constant,
-  `resolve` semantics, the `project` walk rules, or the visitor protocol)
+  `resolve` semantics, the discovery walk rules, or the visitor protocol)
   is *breaking* for embedders and must be called out.
 - **Where bumps are documented:** there is currently **no `CHANGELOG.md`**
   in this repo and no git tags yet (verified: `git tag` is empty), so rev
