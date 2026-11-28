@@ -2,7 +2,7 @@
 # Fetch the FINOS Common Domain Model (CDM) `.rosetta` corpus for sigil's
 # golden conformance suite (issue #10).
 #
-# Usage: scripts/fetch-cdm.sh [master|legacy [tag]] [--force]
+# Usage: scripts/rune/fetch-cdm.sh [master|legacy [tag]] [--force]
 #
 #   master   pin at MASTER_SHA below (Phase 1 golden snapshot)
 #   legacy   pin at a tag, default LEGACY_TAG below (Phase 2 reverse-drift)
@@ -102,7 +102,7 @@ cat >"$notice" <<EOF
 # NOTICE
 
 This directory contains material copied from the **FINOS Common Domain Model
-(CDM)**, fetched by sigil's \`scripts/fetch-cdm.sh\` for conformance testing.
+(CDM)**, fetched by pherolang's \`scripts/rune/fetch-cdm.sh\` for conformance testing.
 
 - Material: FINOS Common Domain Model, \`$SPARSE_PATH\`
 - Version: $label

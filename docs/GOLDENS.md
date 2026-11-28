@@ -52,6 +52,7 @@ deliberately has no write path.
 | `phero-driver` `cmmn_golden` | `tests/conformance/cmmn/{lending,decision}.cmmn.json` |
 | `phero-driver` `dmn_golden` | `tests/conformance/dmn/*.dmn.json` |
 | `phero-driver` `sigil_golden` | `tests/conformance/sigil/{basic,funcs}.mox.json` |
+| `sigil-cli` `conformance` | `tests/rune/conformance/**/expected.json` (also `UPDATE_EXPECT=1`); the CDM snapshot `tests/rune/cdm/master-snapshot.json` regenerates only with `UPDATE_CDM_SNAPSHOT=1` and a fetched corpus |
 | `phero-driver` `examples_artifacts` | `examples/artifacts/*.{evt,ddd,uc,deploy,cmmn,dmn,intent}.json` |
 | `phero-driver` `graph_analytics` | `tests/conformance/graph/app.graph.json`, `tests/conformance/graph/queries/*.json` |
 | `phero-backend-cedar` `golden` | `tests/conformance/cedar/Support.cedar`, `Support.cedarschema.json` |
@@ -88,6 +89,7 @@ is a property of the writer, not of git.
 | `site/packages/highlighting/**/*.json` | pretty JSON with one trailing newline |
 | `docs/DIAGNOSTICS.md`, `docs/VERIFICATION.md` | Markdown with one trailing newline |
 | `tests/conformance/fmt/*.fmt.*` | the formatter's own text output, which ends with one newline |
+| `tests/rune/conformance/**/expected.json` | sigil's canonical model JSON (`sigil_resolve::canonical_json`), pretty, with one trailing newline |
 
 Two rules follow:
 

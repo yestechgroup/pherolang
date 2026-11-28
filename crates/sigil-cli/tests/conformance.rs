@@ -1,6 +1,7 @@
-//! Conformance harness: each directory under `tests/conformance/` holds one
+//! Conformance harness: each directory under `tests/rune/conformance/` holds one
 //! or more `.rosetta` files plus an `expected.json` containing the canonical
-//! resolved-model JSON. Set `UPDATE_EXPECT=1` to regenerate expectations.
+//! resolved-model JSON. Set `UPDATE_EXPECT=1` (or the workspace-wide
+//! `PHERO_UPDATE_FIXTURES=1`, see `docs/GOLDENS.md`) to regenerate expectations.
 
 use std::path::{Path, PathBuf};
 
@@ -10,9 +11,9 @@ use sigil_resolve::{canonical_json, resolve};
 
 fn conformance_root() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR"))
-        .join("../../tests/conformance")
+        .join("../../tests/rune/conformance")
         .canonicalize()
-        .expect("tests/conformance must exist")
+        .expect("tests/rune/conformance must exist")
 }
 
 fn run_case(dir: &Path) -> Result<serde_json::Value, String> {
@@ -62,10 +63,19 @@ fn run_case(dir: &Path) -> Result<serde_json::Value, String> {
     Ok(value)
 }
 
+/// Whether this run regenerates `expected.json`: sigil's own `UPDATE_EXPECT=1`
+/// or the workspace regeneration switch `PHERO_UPDATE_FIXTURES=1`
+/// (`scripts/regen-goldens.sh`).
+fn updating() -> bool {
+    ["UPDATE_EXPECT", "PHERO_UPDATE_FIXTURES"]
+        .iter()
+        .any(|name| std::env::var(name).is_ok_and(|v| v == "1"))
+}
+
 #[test]
 fn conformance_corpus_matches_expected() {
     let root = conformance_root();
-    let update = std::env::var("UPDATE_EXPECT").is_ok_and(|v| v == "1");
+    let update = updating();
     let mut checked = 0usize;
     let mut failures = Vec::new();
 
@@ -132,7 +142,7 @@ fn conformance_corpus_matches_expected() {
 fn error_case_expected_spans_point_at_source() {
     // The corpus test regenerates expected.json concurrently under
     // UPDATE_EXPECT; don't race against it.
-    if std::env::var("UPDATE_EXPECT").is_ok_and(|v| v == "1") {
+    if updating() {
         return;
     }
     let case = conformance_root().join("resolution/errors");

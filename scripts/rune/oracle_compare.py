@@ -2,16 +2,16 @@
 """Differential test: compare `sigil model` against the Java oracle dumper.
 
 Usage:
-    python3 scripts/oracle_compare.py <fixture.rosetta>...
-    python3 scripts/oracle_compare.py --cdm            (alias: --cdm-legacy)
+    python3 scripts/rune/oracle_compare.py <fixture.rosetta>...
+    python3 scripts/rune/oracle_compare.py --cdm            (alias: --cdm-legacy)
 
 The explicitly-passed files are compared as one workspace in a single
 invocation of each tool (CI passes exactly one file per call).
 
-Multi-file groups: a directory tests/oracle/<group>.multi/ holding two or
+Multi-file groups: a directory tests/rune/oracle/<group>.multi/ holding two or
 more .rosetta files is one cross-file scoping fixture. Every invocation
-that names a fixture under tests/oracle/ additionally sweeps all
-tests/oracle/*.multi/ groups — each group's files are passed to BOTH tools
+that names a fixture under tests/rune/oracle/ additionally sweeps all
+tests/rune/oracle/*.multi/ groups — each group's files are passed to BOTH tools
 in a single invocation (sorted by path, so both sides see the same
 argument order; both dump `files` in argument order, which makes the
 per-group file sequence deterministic regardless of directory enumeration
@@ -43,7 +43,7 @@ compared file by file; the run exits non-zero on any unskipped mismatch.
 
 Requires: JDK 21 + Maven (oracle side), a built sigil binary
 (`cargo build -p sigil-cli`), and the dumper compiled
-(`mvn compile` in tools/oracle-dumper).
+(`mvn compile` in tools/rune-oracle-dumper).
 """
 
 import copy
@@ -54,9 +54,9 @@ import subprocess
 import sys
 from pathlib import Path
 
-REPO = Path(__file__).resolve().parent.parent
-DUMPER = REPO / "tools/oracle-dumper"
-FIXTURES = REPO / "tests/oracle"
+REPO = Path(__file__).resolve().parents[2]  # scripts/rune/ -> repo root
+DUMPER = REPO / "tools/rune-oracle-dumper"
+FIXTURES = REPO / "tests/rune/oracle"
 MULTI_SUFFIX = ".multi"
 SIGIL = REPO / "target/debug/sigil"
 
@@ -275,7 +275,7 @@ def resolve_ref(value):
 # ---- CDM-specific normalization -------------------------------------------
 #
 # The 9.58.1 oracle and sigil's newer-main grammar diverge on a handful of
-# constructs that occur in CDM 6.7.0 but not in the tests/oracle fixtures.
+# constructs that occur in CDM 6.7.0 but not in the tests/rune/oracle fixtures.
 # Each reduction below is a documented, shape-exact mapping — never a value
 # guess. The inventory (with occurrence counts over the corpus) lives in
 # docs/cdm-conformance.md; the grammar-drift background in
@@ -502,7 +502,7 @@ def cdm_compare() -> bool:
 
 
 def multi_groups() -> list[list[str]]:
-    """Every tests/oracle/<group>.multi/ directory as a sorted file list."""
+    """Every tests/rune/oracle/<group>.multi/ directory as a sorted file list."""
     groups = []
     for group_dir in sorted(FIXTURES.glob(f"*{MULTI_SUFFIX}")):
         if group_dir.is_dir():
@@ -539,9 +539,9 @@ def main() -> int:
         print(__doc__)
         return 2
     ok = compare(files)
-    # CI (which always passes tests/oracle fixtures) also sweeps the
+    # CI (which always passes tests/rune/oracle fixtures) also sweeps the
     # multi-file groups on every invocation; ad-hoc runs outside
-    # tests/oracle/ stay single-file.
+    # tests/rune/oracle/ stay single-file.
     if any(Path(f).is_relative_to(FIXTURES) for f in files):
         for group in multi_groups():
             ok = compare(group) and ok

@@ -699,7 +699,7 @@ impl Expr {
     /// Normalized JSON: the compatibility artifact. The Java oracle dumper
     /// (`tools/oracle-dumper`) emits the same shape; the mapping between
     /// EClass names and these tags is documented in
-    /// `scripts/oracle_compare.py`.
+    /// `scripts/rune/oracle_compare.py`.
     pub fn to_json(&self) -> serde_json::Value {
         match self {
             Expr::BooleanLiteral { value } => json!({ "kind": "Boolean", "value": value }),

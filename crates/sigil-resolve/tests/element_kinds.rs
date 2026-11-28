@@ -10,9 +10,9 @@ use sigil_resolve::{resolve, ElementId, ElementKind, Resolution};
 
 fn conformance_root() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR"))
-        .join("../../tests/conformance")
+        .join("../../tests/rune/conformance")
         .canonicalize()
-        .expect("tests/conformance must exist")
+        .expect("tests/rune/conformance must exist")
 }
 
 fn case_dirs() -> Vec<PathBuf> {

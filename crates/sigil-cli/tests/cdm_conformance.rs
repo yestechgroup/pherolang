@@ -1,7 +1,7 @@
 //! Golden conformance over the FINOS **Common Domain Model** (CDM): the
 //! full published `.rosetta` corpus (145 files), pinned by SHA, as the
 //! "does sigil digest the real world?" companion to the small curated
-//! `tests/conformance/` corpus. See `docs/cdm-conformance.md`.
+//! `tests/rune/conformance/` corpus. See `docs/rune/cdm-conformance.md`.
 //!
 //! The corpus is **not** vendored into this repo (license size) and is
 //! **not** expected to be diagnostic-clean: it references the external
@@ -11,7 +11,7 @@
 //! `UPDATE_CDM_SNAPSHOT=1`.
 //!
 //! Skips (prints a note, passes) when the corpus is absent; fetch it with
-//! `scripts/fetch-cdm.sh master`. When the corpus *is* present the analysis
+//! `scripts/rune/fetch-cdm.sh master`. When the corpus *is* present the analysis
 //! runs twice and both runs must agree (determinism guard).
 
 use std::collections::{BTreeMap, BTreeSet};
@@ -19,16 +19,16 @@ use std::path::{Path, PathBuf};
 
 use sigil_resolve::{resolve, ElementKind};
 
-/// The pinned CDM revision (see `scripts/fetch-cdm.sh`); the snapshot must
+/// The pinned CDM revision (see `scripts/rune/fetch-cdm.sh`); the snapshot must
 /// always record exactly this SHA.
 const MASTER_SHA: &str = "eb0eea955ef8409f034e1a9c28714d00a511a61a";
 
 fn snapshot_path() -> PathBuf {
-    Path::new(env!("CARGO_MANIFEST_DIR")).join("../../tests/cdm/master-snapshot.json")
+    Path::new(env!("CARGO_MANIFEST_DIR")).join("../../tests/rune/cdm/master-snapshot.json")
 }
 
 /// Locate the fetched CDM corpus; `None` when it has not been fetched.
-/// Mirrors the default/env logic of `scripts/fetch-cdm.sh` (do not add a
+/// Mirrors the default/env logic of `scripts/rune/fetch-cdm.sh` (do not add a
 /// dependency on the shell script).
 fn corpus_dir() -> Option<PathBuf> {
     let cache_root = match std::env::var("SIGIL_CDM_CACHE") {
@@ -180,7 +180,7 @@ fn analyse(corpus: &Path) -> serde_json::Value {
 fn cdm_corpus_matches_golden_snapshot() {
     let Some(corpus) = corpus_dir() else {
         println!(
-            "skipping cdm_conformance: CDM corpus not fetched — run scripts/fetch-cdm.sh master"
+            "skipping cdm_conformance: CDM corpus not fetched — run scripts/rune/fetch-cdm.sh master"
         );
         return;
     };
@@ -189,7 +189,7 @@ fn cdm_corpus_matches_golden_snapshot() {
     let actual = analyse(&corpus);
     if update {
         let path = snapshot_path();
-        std::fs::create_dir_all(path.parent().unwrap()).expect("create tests/cdm");
+        std::fs::create_dir_all(path.parent().unwrap()).expect("create tests/rune/cdm");
         std::fs::write(&path, serde_json::to_string_pretty(&actual).unwrap() + "\n")
             .expect("write master-snapshot.json");
         println!("updated {}", path.display());
@@ -206,14 +206,14 @@ fn cdm_corpus_matches_golden_snapshot() {
 
     let expected: serde_json::Value = serde_json::from_str(
         &std::fs::read_to_string(snapshot_path())
-            .expect("tests/cdm/master-snapshot.json — regenerate with UPDATE_CDM_SNAPSHOT=1"),
+            .expect("tests/rune/cdm/master-snapshot.json — regenerate with UPDATE_CDM_SNAPSHOT=1"),
     )
     .expect("master-snapshot.json must be valid JSON");
 
     assert_eq!(
         expected["masterSha"], actual["masterSha"],
         "snapshot is pinned to a different CDM revision than the fetched corpus — \
-         refetch with scripts/fetch-cdm.sh master --force (or re-pin deliberately, \
+         refetch with scripts/rune/fetch-cdm.sh master --force (or re-pin deliberately, \
          see docs/cdm-conformance.md)"
     );
     assert_eq!(

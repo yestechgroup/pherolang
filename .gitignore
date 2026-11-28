@@ -2,3 +2,6 @@
 /verif
 /.creusot-cache*
 /.why3find
+
+# The Rune oracle dumper builds with Maven (RN5).
+/tools/rune-oracle-dumper/target

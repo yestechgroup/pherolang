@@ -4,6 +4,8 @@ version.workspace = true
 edition.workspace = true
 license.workspace = true
 repository.workspace = true
+# Staging import (RN4, ADR 0012): not published until RN11 settles names.
+publish = false
 description = "Name resolution and scoping for the Rune DSL"
 
 [dependencies]
@@ -12,3 +14,6 @@ sigil-syntax = { workspace = true }
 sigil-model = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
+
+[lints]
+workspace = true
