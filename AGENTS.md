@@ -58,7 +58,7 @@ scripts/regen-goldens.sh         # regenerate every golden in one pass (`--check
 PHERO_UPDATE_FIXTURES=1 cargo test -p phero-verify  # regenerate the register tables in docs/VERIFICATION.md (hand-edit register.json, never the tables)
 ```
 
-CI (`.github/workflows/ci.yml`) **invokes `scripts/ci-local.sh` for every gate** (build, rebrand, tests, clippy, fmt, receipt, docs) — the script is the single source of truth for the gate sequence and the `pherolang fmt --check` fixture-glob list (`FIXTURE_FORMAT_GLOBS`), so a new fixture directory is a one-file edit and local/remote can never drift (issue #121). CI also runs two fast supply-chain jobs: `cargo audit` (advisories — must stay at zero) and `cargo deny check` (advisories/licenses/bans/sources per `deny.toml`); the script's `audit` subcommand replicates both locally. A warning anywhere is a failure.
+CI (`.github/workflows/ci.yml`) **invokes `scripts/ci-local.sh` for every gate** (build, rebrand, tests, clippy, fmt, receipt, docs), and each step **exits non-zero on a `*-FAIL` marker** (`all` reports every step, then exits non-zero), so a red marker is a red CI step — the script is the single source of truth for the gate sequence and the `pherolang fmt --check` fixture-glob list (`FIXTURE_FORMAT_GLOBS`), so a new fixture directory is a one-file edit and local/remote can never drift (issue #121). CI also runs two fast supply-chain jobs: `cargo audit` (advisories — must stay at zero) and `cargo deny check` (advisories/licenses/bans/sources per `deny.toml`); the script's `audit` subcommand replicates both locally. A warning anywhere is a failure.
 
 ## Build cache (mbx)
 

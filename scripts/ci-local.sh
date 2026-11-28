@@ -20,8 +20,18 @@
 #
 # Usage: scripts/ci-local.sh [all|build|rebrand|docs-lint|test|clippy|fmt|receipt|docs|audit|mutants]
 #        (default: all — the full sequence; ~30-60 min cold)
+#
+# Exit status: non-zero when any step printed a *-FAIL marker. `all` still
+# runs every step, so one run reports every gate, then exits non-zero.
 set -u
 . "$(dirname "$0")/ci-env.sh" || exit 1
+
+# Every gate step prints an X-OK or X-FAIL marker. `fail` prints the marker
+# and records it, and the script exits non-zero at the end when any step
+# failed. A red marker is therefore a red CI step: before this, every step
+# exited 0, so CI stayed green whatever the markers said.
+GATE_FAILED=0
+fail() { echo "$*"; GATE_FAILED=1; }
 
 step() { echo; echo "=== $1 ==="; }
 kill_orphans() {
@@ -95,7 +105,7 @@ FIXTURE_FORMAT_GLOBS=(
 step_build() {
   step "CI 1/8: cargo build --workspace --all-targets"
   disk_budget
-  nice -n 19 cargo build --workspace --all-targets && echo "BUILD-OK" || echo "BUILD-FAIL"
+  nice -n 19 cargo build --workspace --all-targets && echo "BUILD-OK" || fail "BUILD-FAIL"
   kill_orphans
 }
 
@@ -107,8 +117,8 @@ step_build() {
 # docs/adr/0004 and docs/NAMING.md.
 step_rebrand() {
   step "CI 2/8: platform + rebrand guards (scripts/check-platforms.sh, scripts/check-rebrand.sh)"
-  ./scripts/check-platforms.sh && echo "PLATFORMS-STEP-OK" || echo "PLATFORMS-STEP-FAIL"
-  ./scripts/check-rebrand.sh && echo "REBRAND-STEP-OK" || echo "REBRAND-STEP-FAIL"
+  ./scripts/check-platforms.sh && echo "PLATFORMS-STEP-OK" || fail "PLATFORMS-STEP-FAIL"
+  ./scripts/check-rebrand.sh && echo "REBRAND-STEP-OK" || fail "REBRAND-STEP-FAIL"
 }
 
 # The documentation quality gate (docs/documentation/EDITORIAL_POLICY.md and
@@ -118,7 +128,7 @@ step_rebrand() {
 # documentation regression should fail fast — before the test step.
 step_docs_lint() {
   step "CI 3/8: documentation quality (pherolang docs lint)"
-  nice -n 19 cargo run -q -p phero-cli -- docs lint && echo "DOCS-LINT-OK" || echo "DOCS-LINT-FAIL"
+  nice -n 19 cargo run -q -p phero-cli -- docs lint && echo "DOCS-LINT-OK" || fail "DOCS-LINT-FAIL"
 }
 
 step_test() {
@@ -134,27 +144,27 @@ step_test() {
     echo "TESTS-OK"
   else
     grep -E "test result:|FAILED|panicked at|error\[|^error" "$test_log" | head -80
-    echo "TESTS-FAIL (full output: $test_log)"
+    fail "TESTS-FAIL (full output: $test_log)"
   fi
   kill_orphans
 }
 
 step_clippy() {
   step "CI 5/8: clippy -D warnings"
-  nice -n 19 cargo clippy --workspace --all-targets -- -D warnings && echo "CLIPPY-OK" || echo "CLIPPY-FAIL"
+  nice -n 19 cargo clippy --workspace --all-targets -- -D warnings && echo "CLIPPY-OK" || fail "CLIPPY-FAIL"
   kill_orphans
 }
 
 step_fmt() {
   step "CI 6/8: format check"
-  nice -n 19 cargo fmt --all -- --check && echo "RUSTFMT-OK" || echo "RUSTFMT-FAIL"
+  nice -n 19 cargo fmt --all -- --check && echo "RUSTFMT-OK" || fail "RUSTFMT-FAIL"
   nice -n 19 cargo run -q -p phero-cli -- fmt --check "${FIXTURE_FORMAT_GLOBS[@]}" \
-    && echo "PHEROFMT-OK" || echo "PHEROFMT-FAIL"
+    && echo "PHEROFMT-OK" || fail "PHEROFMT-FAIL"
   # The generated editor grammar package is a golden too (SH5/SH8). `--check`
   # is Rust-only and byte-compares `site/packages/highlighting`, so a hand edit
   # or a metadata change without regeneration fails here without needing Node.
   nice -n 19 cargo run -q -p phero-cli -- grammar --check site/packages/highlighting \
-    && echo "GRAMMAR-CHECK-OK" || echo "GRAMMAR-CHECK-FAIL"
+    && echo "GRAMMAR-CHECK-OK" || fail "GRAMMAR-CHECK-FAIL"
   kill_orphans
 }
 
@@ -169,7 +179,7 @@ step_receipt() {
       examples/artifacts/support.receipt.json; then
     echo "RECEIPT-OK"
   else
-    echo "RECEIPT-FAIL"
+    fail "RECEIPT-FAIL"
     echo "Regenerate the flagship receipt (and read the diff — it is the spec):"
     echo "  cargo run -q -p phero-cli -- verify \\"
     echo "    examples/support/support.actor examples/support/support.cmmn \\"
@@ -188,7 +198,7 @@ step_docs() {
   # doctests, but it inherits the script's TMPDIR export like every step.
   step "CI 8/8: RUSTDOCFLAGS=-D warnings cargo doc --workspace --no-deps"
   nice -n 19 env RUSTDOCFLAGS="-D warnings" cargo doc --workspace --no-deps \
-    && echo "DOC-OK" || echo "DOC-FAIL"
+    && echo "DOC-OK" || fail "DOC-FAIL"
   kill_orphans
 }
 
@@ -196,14 +206,14 @@ step_docs() {
 # as separate fast jobs (`audit` + `deny`), locally in one shot.
 if [ "${1:-}" = "audit" ]; then
   step "audit: cargo deny check + cargo audit"
-  nice -n 19 cargo deny check && echo "DENY-OK" || echo "DENY-FAIL"
-  nice -n 19 cargo audit && echo "AUDIT-OK" || echo "AUDIT-FAIL"
-  exit 0
+  nice -n 19 cargo deny check && echo "DENY-OK" || fail "DENY-FAIL"
+  nice -n 19 cargo audit && echo "AUDIT-OK" || fail "AUDIT-FAIL"
+  exit "$GATE_FAILED"
 fi
 
 # Optional subcommand (issue #208): the anti-vacuity mutant harness CI runs as
 # its own fast job. A survivor must turn the job red without blocking the
-# seven-step gate, so unlike the gate steps this one exits non-zero on a red
+# seven-step gate, so this one exits non-zero immediately on a red
 # run — CI invokes it directly (`scripts/ci-local.sh mutants`). It mutates the
 # tree per row and builds test binaries, which is why it is never part of
 # `all` and why it insists on a clean tree.
@@ -244,4 +254,8 @@ case "${1:-all}" in
     exit 2
     ;;
 esac
+if [ "$GATE_FAILED" -ne 0 ]; then
+  echo "CI-LOCAL-FAILED: at least one step above reported *-FAIL"
+  exit 1
+fi
 echo "CI-LOCAL-DONE"
