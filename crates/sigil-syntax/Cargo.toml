@@ -9,9 +9,7 @@ publish = false
 description = "Chumsky-based parser for the Rune (.rosetta) DSL producing a spanned AST"
 
 [dependencies]
-# chumsky 0.13 directly, not the workspace pin (0.10): RN2/RN3 move the
-# workspace to 0.13 and this becomes `workspace = true` (ADR 0012 D3).
-chumsky = "0.13.0"
+chumsky = { workspace = true }
 sigil-diag = { workspace = true }
 sigil-model = { workspace = true }
 

@@ -19,13 +19,16 @@
 //! [`Tokens`] input exists because chumsky's built-in `MappedInput` maps an
 //! *empty* cursor range to the end-of-input offset; parsers that report
 //! zero-width positions (missing tokens, empty declarations) need the true
-//! cursor location instead. [`Tokens`] therefore reports an empty range as an
+//! cursor location instead. (0.13's `split_token_span` input has the same
+//! class of flaw: an empty range spans from the next token's start to the
+//! previous token's end, which is inverted.) [`Tokens`] therefore reports an empty range as an
 //! empty span at the start token's byte offset, and the EOF offset only when
 //! the cursor really is at the end of the input.
 //!
 //! # The unsafe exception
 //!
-//! chumsky 0.10's [`chumsky::input::Input`] trait declares required `unsafe fn`s;
+//! chumsky's [`chumsky::input::Input`] trait (0.10 and, re-checked for ADR 0012
+//! D3, still 0.13) declares required `unsafe fn`s;
 //! [`input`] implements them exactly as documented (cursors come from
 //! [`chumsky::input::Input::begin`], are never shared across inputs, and the token
 //! slice is immutable). There are no other unsafe blocks in this crate, and
