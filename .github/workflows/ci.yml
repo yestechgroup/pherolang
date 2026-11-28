@@ -100,6 +100,10 @@ jobs:
       - uses: Swatinem/rust-cache@v2
       - name: Build
         run: scripts/ci-local.sh build
+      # Each gate step below exits non-zero when it prints a *-FAIL marker,
+      # so a red marker is a red step. `if: !cancelled()` keeps every later
+      # gate running after an earlier one fails, so one run still reports
+      # every gate (the old always-green steps ran them all too).
       # The platform guard (ADR 0004, issue #284) and the rebrand guard
       # (epic #270, P0-03): revived non-Linux platform tokens and revived
       # pre-0.3 spellings are documentation/identifier regressions no build
@@ -107,12 +111,14 @@ jobs:
       # The contracts are docs/adr/0004 and docs/NAMING.md; the allowlists
       # live in scripts/check-platforms.sh and scripts/check-rebrand.sh.
       - name: Platform and rebrand guards
+        if: ${{ !cancelled() }}
         run: scripts/ci-local.sh rebrand
       # The documentation quality gate (docs/documentation/EDITORIAL_POLICY.md):
       # the content model, heading sets, terminology, and every compilable
       # Guide example. Runs before the expensive test step so a documentation
       # regression fails fast; it only needs the binary from the build step.
       - name: Documentation quality
+        if: ${{ !cancelled() }}
         run: scripts/ci-local.sh docs-lint
       # Every gate below invokes scripts/ci-local.sh — the single source
       # of truth for the gate sequence and the fixture-glob list (issue
@@ -124,18 +130,23 @@ jobs:
       # points TMPDIR at the disk-backed target/ and caps the job count so
       # the eleven phero-driver doctests don't link concurrently.
       - name: Tests
+        if: ${{ !cancelled() }}
         run: scripts/ci-local.sh test
       - name: Clippy
+        if: ${{ !cancelled() }}
         run: scripts/ci-local.sh clippy
       - name: Format check
+        if: ${{ !cancelled() }}
         run: scripts/ci-local.sh fmt
       # The verification receipt is a golden (issue #207): regenerate it from
       # the sources it names and byte-compare with the committed file, so a
       # source, artifact, or register change without regeneration is red.
       - name: Receipt freshness
+        if: ${{ !cancelled() }}
         run: scripts/ci-local.sh receipt
       # Broken intra-doc links are warnings by default; -D warnings makes
       # them errors so the gate stays visible (issue #175). cargo doc runs
       # no doctests, so it needs no TMPDIR dance.
       - name: Docs
+        if: ${{ !cancelled() }}
         run: scripts/ci-local.sh docs
