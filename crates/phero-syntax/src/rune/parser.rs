@@ -1504,6 +1504,58 @@ fn qualifiable_configuration<'src>(
         .labelled("qualifiable configuration")
 }
 
+/// Whether `token` starts a top-level element: an unescaped element word
+/// ([`RUNE_ELEMENT_WORDS`]) or the `reporting`/`eligibility` rule prefixes.
+/// This is the recovery stop set.
+fn is_element_start(token: &RuneToken<'_>) -> bool {
+    matches!(
+        token,
+        RuneToken::Ident((text, false))
+            if RUNE_ELEMENT_WORDS.contains(text) || *text == "reporting" || *text == "eligibility"
+    )
+}
+
+/// One element slot of a file, with element-level recovery.
+///
+/// - A well-formed element is `Some`.
+/// - **Stray tokens** (a run that starts no element) are one house-style
+///   error spanning the run, then `None`.
+/// - **A broken element** keeps its own precise error. chumsky rewinds to
+///   the element's start and the recovery parser skips its first token, then
+///   everything up to the next element start, yielding `None`.
+///
+/// Both skips consume at least one token, so the enclosing repetition always
+/// progresses: recovery terminates structurally.
+fn element_or_junk<'src>() -> impl Parser<'src, I<'src>, Option<Element>, AErr<'src>> + Clone {
+    let not_start = any().filter(|token: &RuneToken<'_>| !is_element_start(token));
+    let stray = not_start
+        .then(not_start.repeated())
+        .map_with(|(first, ()), e| (first, e.span()))
+        .validate(|(first, span): (RuneToken<'_>, Span), _, emitter| {
+            emitter.emit(Rich::custom(
+                span,
+                format!(
+                    "expected a Rune element (type, choice, enum, func, annotation, typeAlias, \
+                     rule, report, ...), found {first}"
+                ),
+            ));
+            None
+        });
+    let skip_broken = any().ignore_then(not_start.repeated()).to(None::<Element>);
+    // An element must end where the next one starts (or at the end of the
+    // input). A half-written member then fails the element itself, with the
+    // member's own furthest error, instead of closing the element early and
+    // leaving the member as a stray run.
+    let boundary = choice((
+        end(),
+        any()
+            .filter(|token: &RuneToken<'_>| is_element_start(token))
+            .ignored(),
+    ))
+    .rewind();
+    choice((element().then_ignore(boundary).map(Some), stray)).recover_with(via_parser(skip_broken))
+}
+
 pub fn source_unit<'src>() -> impl Parser<'src, I<'src>, SourceUnit, AErr<'src>> + Clone {
     let header = ws().ignore_then(
         kw("override")
@@ -1532,7 +1584,12 @@ pub fn source_unit<'src>() -> impl Parser<'src, I<'src>, SourceUnit, AErr<'src>>
     header
         .then(import_decl().repeated().collect::<Vec<_>>())
         .then(qualifiable_configuration().repeated().collect::<Vec<_>>())
-        .then(element().repeated().collect::<Vec<_>>())
+        .then(
+            element_or_junk()
+                .repeated()
+                .collect::<Vec<_>>()
+                .map(|slots: Vec<Option<Element>>| slots.into_iter().flatten().collect::<Vec<_>>()),
+        )
         .then_ignore(end())
         .map_with(
             |((((namespace, scope, version), imports), configurations), elements), ex| SourceUnit {
@@ -1548,33 +1605,61 @@ pub fn source_unit<'src>() -> impl Parser<'src, I<'src>, SourceUnit, AErr<'src>>
         .labelled("model")
 }
 
-/// The result of parsing one `.rosetta` file: the spanned AST (`None` when
-/// any parse error occurred — this parser has no recovery yet) and the
-/// errors, each with a byte span.
+/// The result of parsing one `.rosetta` file.
+///
+/// - `ast` is the spanned AST. With errors present it is the **partial** unit:
+///   every element that parsed, with each broken element or stray run
+///   skipped. It is `None` only when the header (`namespace` …) itself
+///   failed, or the input exceeds the nesting budget.
+/// - `errors` lists every syntax error, each with a byte span.
 #[derive(Debug, Clone)]
 pub struct RuneParseResult {
     pub ast: Option<SourceUnit>,
     pub errors: Vec<ParseError>,
 }
 
-/// Parse one `.rosetta` file into a spanned AST plus parse errors.
+/// The deepest `()`/`[]`/`{}` nesting a `.rosetta` file may have.
 ///
-/// Runs on a dedicated thread with a large stack: chumsky's combinator
-/// trees are stack-hungry during construction and backtracking, and real
-/// models can be deeply nested. (A nesting budget replaces the thread when
-/// recovery lands.)
-pub fn parse_rune(source: &str) -> RuneParseResult {
-    let source = source.to_string();
-    std::thread::Builder::new()
-        .stack_size(256 * 1024 * 1024)
-        .spawn(move || parse_inner(&source))
-        .expect("failed to spawn parser thread")
-        .join()
-        .expect("parser thread panicked")
+/// Deeper input is refused before the recursive descent starts, with one
+/// `nesting depth exceeds 256` error and no AST. Measured when the budget was
+/// chosen (RN9): the CDM corpus nests at most 9 deep, and a default 2 MB test
+/// thread parses more than 10 000 bracketed levels, because chumsky's
+/// `stacker` feature moves the recursive descent onto the heap. So 256 needs
+/// no dedicated parse thread.
+pub const MAX_NESTING_DEPTH: usize = 256;
+
+/// How a Rune token moves the bracket depth.
+pub(crate) fn bracket(token: &RuneToken<'_>) -> Option<phero_parser::nesting::Bracket> {
+    use phero_parser::nesting::Bracket;
+    match token {
+        RuneToken::Punct("(" | "[" | "{") => Some(Bracket::Open),
+        RuneToken::Punct(")" | "]" | "}") => Some(Bracket::Close),
+        _ => None,
+    }
 }
 
-fn parse_inner(source: &str) -> RuneParseResult {
+/// The nesting-budget error for `tokens`, if they exceed
+/// [`MAX_NESTING_DEPTH`].
+pub(crate) fn nesting_error(tokens: &[(RuneToken<'_>, Span)]) -> Option<ParseError> {
+    phero_parser::nesting::limit_exceeded(tokens, bracket, MAX_NESTING_DEPTH).map(|span| {
+        ParseError {
+            message: format!("nesting depth exceeds {MAX_NESTING_DEPTH}"),
+            span,
+        }
+    })
+}
+
+/// Parse one `.rosetta` file into a spanned AST plus parse errors.
+///
+/// Input nested deeper than [`MAX_NESTING_DEPTH`] gets one error and no AST.
+pub fn parse_rune(source: &str) -> RuneParseResult {
     let tokens = lex(source);
+    if let Some(error) = nesting_error(&tokens) {
+        return RuneParseResult {
+            ast: None,
+            errors: vec![error],
+        };
+    }
     let (ast, errors) = source_unit()
         .parse(phero_parser::Tokens::new(&tokens))
         .into_output_errors();
@@ -1585,10 +1670,7 @@ fn parse_inner(source: &str) -> RuneParseResult {
             span: *error.span(),
         })
         .collect();
-    RuneParseResult {
-        ast: if errors.is_empty() { ast } else { None },
-        errors,
-    }
+    RuneParseResult { ast, errors }
 }
 
 #[cfg(test)]
@@ -1903,11 +1985,151 @@ rule source MySource {
         );
     }
 
+    fn element_names(unit: &SourceUnit) -> Vec<String> {
+        unit.elements
+            .iter()
+            .filter_map(|element| element.name().map(str::to_string))
+            .collect()
+    }
+
+    #[test]
+    fn broken_elements_are_skipped_and_the_rest_still_parses() {
+        let result = parse_rune(
+            "namespace t\n\
+             type A:\n\tx int (1..1)\n\
+             type Broken\n\
+             enum E:\n\tV1\n\
+             type AlsoBroken: \n\tx int (1..\n\
+             type B:\n\ty int (0..1)\n",
+        );
+        assert_eq!(
+            result.errors.len(),
+            2,
+            "one error per broken element: {:?}",
+            result.errors
+        );
+        let unit = result.ast.expect("a partial unit");
+        assert_eq!(element_names(&unit), ["A", "E", "B"]);
+    }
+
+    #[test]
+    fn a_stray_run_gets_the_house_message_and_parsing_resumes() {
+        let source = "namespace t\nfoo bar 42\ntype A:\n\tx int (1..1)\n";
+        let result = parse_rune(source);
+        assert_eq!(result.errors.len(), 1, "{:?}", result.errors);
+        let error = &result.errors[0];
+        assert!(
+            error.message.starts_with("expected a Rune element (")
+                && error.message.ends_with("found 'foo'"),
+            "{}",
+            error.message
+        );
+        assert_eq!(&source[error.span.start..error.span.end], "foo bar 42");
+        assert_eq!(element_names(&result.ast.unwrap()), ["A"]);
+    }
+
+    #[test]
+    fn a_broken_header_still_has_no_unit() {
+        let result = parse_rune("namespace 42\ntype A:\n\tx int (1..1)\n");
+        assert!(result.ast.is_none());
+        assert!(!result.errors.is_empty());
+    }
+
+    /// Recovery terminates on arbitrary token soup: every run returns, and
+    /// every non-empty junk input reports at least one error.
+    #[test]
+    fn recovery_terminates_on_token_soup() {
+        const PIECES: &[&str] = &[
+            "type",
+            "enum",
+            "func",
+            "x",
+            ":",
+            "(",
+            ")",
+            "[",
+            "]",
+            "{",
+            "}",
+            "1",
+            "..",
+            "*",
+            "->",
+            "\"s\"",
+            "<",
+            ">",
+            "condition",
+            "then",
+            "if",
+            "report",
+            "rule",
+            ",",
+            "=",
+        ];
+        let mut state: u64 = 0x2545_f491_4f6c_dd1d;
+        for case in 0..300 {
+            let mut source = String::from("namespace t\n");
+            for _ in 0..(case % 40) {
+                state ^= state << 13;
+                state ^= state >> 7;
+                state ^= state << 17;
+                source.push_str(PIECES[(state % PIECES.len() as u64) as usize]);
+                source.push(' ');
+            }
+            let result = parse_rune(&source);
+            if result.errors.is_empty() {
+                assert!(result.ast.is_some(), "no errors means a unit: {source}");
+            }
+        }
+    }
+
+    fn nested_source(depth: usize) -> String {
+        // `depth` brackets in all: the inline-function `[...]` of `extract`
+        // plus `depth - 1` parentheses inside it.
+        format!(
+            "namespace t\nfunc F:\n\toutput: r int (1..1)\n\tset r: x extract [{}item{}]\n",
+            "(".repeat(depth - 1),
+            ")".repeat(depth - 1)
+        )
+    }
+
+    /// The budget is exact, and the deepest accepted input parses on the
+    /// default test-thread stack: no dedicated parse thread.
+    #[test]
+    fn the_nesting_budget_is_exact_and_fits_the_default_stack() {
+        let at_limit = parse_rune(&nested_source(MAX_NESTING_DEPTH));
+        assert!(at_limit.errors.is_empty(), "{:?}", at_limit.errors);
+        assert!(at_limit.ast.is_some());
+
+        let source = nested_source(MAX_NESTING_DEPTH + 1);
+        let over = parse_rune(&source);
+        assert!(over.ast.is_none());
+        assert_eq!(over.errors.len(), 1);
+        assert_eq!(over.errors[0].message, "nesting depth exceeds 256");
+        let offending = over.errors[0].span;
+        assert_eq!(&source[offending.start..offending.end], "(");
+
+        let deep = format!(
+            "{}x{}",
+            "(".repeat(MAX_NESTING_DEPTH + 1),
+            ")".repeat(MAX_NESTING_DEPTH + 1)
+        );
+        let errors = crate::rune::parse_rune_expression(&deep).unwrap_err();
+        assert_eq!(errors[0].message, "nesting depth exceeds 256");
+        let shallow = format!(
+            "{}x{}",
+            "(".repeat(MAX_NESTING_DEPTH),
+            ")".repeat(MAX_NESTING_DEPTH)
+        );
+        crate::rune::parse_rune_expression(&shallow).expect("at the budget");
+    }
+
     #[test]
     fn syntax_error_is_reported() {
         let result = parse_rune("namespace t\ntype Broken\n");
         assert!(!result.errors.is_empty());
-        assert!(result.ast.is_none());
+        // The header parsed, so the unit is the (empty) partial one.
+        assert!(result.ast.unwrap().elements.is_empty());
     }
 
     #[test]

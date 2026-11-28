@@ -207,31 +207,27 @@ pub fn expression_with_as_key<'src>() -> impl Parser<'src, I<'src>, SpannedExpr,
 }
 
 /// Parse a standalone expression (used by tests and tools; the grammar is
-/// identical to condition bodies).
+/// identical to condition bodies). The nesting budget of
+/// [`super::parser::MAX_NESTING_DEPTH`] applies.
 pub fn parse_rune_expression(text: &str) -> Result<SpannedExpr, Vec<ParseError>> {
-    let text = text.to_string();
-    std::thread::Builder::new()
-        .stack_size(64 * 1024 * 1024)
-        .spawn(move || {
-            let tokens = lex(&text);
-            let result = expression()
-                .then_ignore(end())
-                .parse(phero_parser::Tokens::new(&tokens))
-                .into_result()
-                .map_err(|errors| {
-                    errors
-                        .into_iter()
-                        .map(|error| ParseError {
-                            message: error.to_string(),
-                            span: *error.span(),
-                        })
-                        .collect::<Vec<_>>()
-                });
-            result
-        })
-        .expect("failed to spawn parser thread")
-        .join()
-        .expect("parser thread panicked")
+    let tokens = lex(text);
+    if let Some(error) = super::parser::nesting_error(&tokens) {
+        return Err(vec![error]);
+    }
+    let result = expression()
+        .then_ignore(end())
+        .parse(phero_parser::Tokens::new(&tokens))
+        .into_result()
+        .map_err(|errors| {
+            errors
+                .into_iter()
+                .map(|error| ParseError {
+                    message: error.to_string(),
+                    span: *error.span(),
+                })
+                .collect()
+        });
+    result
 }
 
 /// One postfix step (`UnaryOperation` continuation alternatives). Each

@@ -19,10 +19,21 @@ pub use sigil_diag::{Diagnostic, SourceFile, Span};
 
 use ast::{SourceUnit, SpannedExpr};
 
-/// Parses one `.rosetta` file into its spanned AST plus syntax diagnostics
-/// (`None` when any error occurred).
+/// Parses one `.rosetta` file into its spanned AST plus syntax diagnostics.
+///
+/// **All or nothing:** the unit is `None` whenever any syntax error occurred,
+/// even though [`phero_syntax::rune::parse_rune`] recovers a partial unit.
+/// Every caller (resolution, the driver's `import sigil` bridge, project
+/// loading, `sigil-lsp`) treats `Some` as "parsed, lower it", and lowering a
+/// partial file would change which namespaces fail. Partial units are for the
+/// phero editor tooling only.
 pub fn parse(file: &SourceFile) -> (Option<SourceUnit>, Vec<Diagnostic>) {
     let result = phero_syntax::rune::parse_rune(&file.text);
+    let ast = if result.errors.is_empty() {
+        result.ast
+    } else {
+        None
+    };
     let diagnostics = result
         .errors
         .into_iter()
@@ -35,7 +46,7 @@ pub fn parse(file: &SourceFile) -> (Option<SourceUnit>, Vec<Diagnostic>) {
             )
         })
         .collect();
-    (result.ast, diagnostics)
+    (ast, diagnostics)
 }
 
 /// Parses one standalone Rune expression (the round-trip property test's
@@ -55,4 +66,18 @@ pub fn parse_expression_str(text: &str) -> Result<SpannedExpr, Vec<Diagnostic>> 
             })
             .collect()
     })
+}
+
+#[cfg(test)]
+mod tests {
+    #[test]
+    fn a_file_with_a_syntax_error_has_no_unit() {
+        let file = super::SourceFile::new(
+            "t.rosetta",
+            "namespace t\ntype Good:\n\tx int (1..1)\ntype Broken\ntype Fine:\n\ty int (1..1)\n",
+        );
+        let (unit, diagnostics) = super::parse(&file);
+        assert!(unit.is_none(), "the shim stays all-or-nothing");
+        assert!(!diagnostics.is_empty());
+    }
 }
