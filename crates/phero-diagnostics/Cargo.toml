@@ -11,3 +11,4 @@ workspace = true
 
 [dependencies]
 phero-parser = { workspace = true }
+serde = { workspace = true }
