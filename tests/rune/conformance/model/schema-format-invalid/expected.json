@@ -9,7 +9,7 @@
       "severity": "error",
       "span": {
         "end": {
-          "column": 24,
+          "column": 23,
           "line": 4
         },
         "start": {

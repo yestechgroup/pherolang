@@ -9,8 +9,8 @@
       "severity": "error",
       "span": {
         "end": {
-          "column": 2,
-          "line": 8
+          "column": 18,
+          "line": 7
         },
         "start": {
           "column": 2,
@@ -27,8 +27,8 @@
       "severity": "error",
       "span": {
         "end": {
-          "column": 2,
-          "line": 12
+          "column": 18,
+          "line": 11
         },
         "start": {
           "column": 2,

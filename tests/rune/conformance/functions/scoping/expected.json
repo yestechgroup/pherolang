@@ -27,7 +27,7 @@
       "severity": "error",
       "span": {
         "end": {
-          "column": 12,
+          "column": 11,
           "line": 36
         },
         "start": {
