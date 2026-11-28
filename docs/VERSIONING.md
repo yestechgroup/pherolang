@@ -121,7 +121,7 @@ must stay byte-identical.
 
 - Security advisories (`cargo audit`) are fixed on the current minor;
   the CI `audit` and `deny` jobs keep the tree at zero.
-- Git-pinned toolchains (sigil, restingstate, dsntk) move by rev, with
+- Git-pinned toolchains (restingstate, dsntk) move by rev, with
   the compatibility boundary named in the workspace `Cargo.toml`
   comment.
 - New dependencies need a job the stdlib-ish status quo can't do, and an

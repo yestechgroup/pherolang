@@ -7,7 +7,7 @@ on:
 
 env:
   CARGO_TERM_COLOR: always
-  # The rev-pinned git dependencies (sigil, xstate-ir, dsntk) fetch through
+  # The rev-pinned git dependencies (xstate-ir, dsntk) fetch through
   # the git CLI: it resolves bare `rev = "<sha>"` pins more reliably than
   # cargo's default libgit2 backend. The three repositories are public, so
   # no credentials are involved.
@@ -38,7 +38,7 @@ jobs:
   deny:
     runs-on: ubuntu-latest
     env:
-      # The rev-pinned git deps (sigil, xstate-ir, dsntk) fetch through the
+      # The rev-pinned git deps (xstate-ir, dsntk) fetch through the
       # git CLI — cargo-deny reads their sources for the license check.
       # They are public repositories, so no credentials are involved.
       CARGO_NET_GIT_FETCH_WITH_CLI: "true"
