@@ -104,7 +104,14 @@ fn conformance_corpus_matches_expected() {
         if update || !expected_path.exists() {
             std::fs::write(
                 &expected_path,
-                serde_json::to_string_pretty(&actual).unwrap() + "\n",
+                // Sorted keys whatever `serde_json`'s map order is: the
+                // workspace unifies `preserve_order` on (AGENTS.md), and the
+                // committed files are in sorted order.
+                serde_json::to_string_pretty(&phero_backend_common::canonical_key_order(
+                    actual.clone(),
+                ))
+                .unwrap()
+                    + "\n",
             )
             .expect("write expected.json");
             println!("updated {}", expected_path.display());

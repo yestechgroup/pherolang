@@ -3860,6 +3860,7 @@ name = "sigil-cli"
 version = "0.4.0"
 dependencies = [
  "criterion",
+ "phero-backend-common",
  "serde_json",
  "sigil-diag",
  "sigil-model",

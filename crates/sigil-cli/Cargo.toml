@@ -21,6 +21,9 @@ serde_json = { workspace = true }
 
 [dev-dependencies]
 criterion = { workspace = true }
+# The workspace's canonical key order for written goldens (`serde_json`
+# `preserve_order` unifies workspace-wide; AGENTS.md).
+phero-backend-common = { workspace = true }
 
 [[bench]]
 name = "pipeline"
