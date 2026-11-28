@@ -153,6 +153,8 @@ the language id did not move.
 - **Diagnostic codes.** `E0104` and the rest of the allocation ledger are
   numbers, so `pherolang explain` answers the same codes as before.
 - **External toolchains.** sigil, restingstate/xstate-ir, dsntk, cmmn-rs.
+  (sigil later moved in-tree as the Rune surface; see
+  [ADR 0012](adr/0012-rune-is-an-in-tree-surface.md).)
 - **History.** The v0.2.0 tag and every historical `CHANGELOG.md` section
   stay under the old name.
 
