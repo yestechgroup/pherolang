@@ -107,12 +107,12 @@ Shape rules an embedder can rely on:
 - `Schema.format` stays the **raw written string**; the in-scope enum is
   linked internally (`Schema.format_resolved`, skip-serialized, never in
   JSON).
-- Diagnostics carry `severity`, `code` (`E0001`/`E01xx`/`W0001`/`W0101`,
+- Diagnostics carry `severity`, `code` (`E0500`/`E052x`/`W0001`/`W0580`,
   see [compatibility.md](compatibility.md)), `message`, `file`, `path`, and
   a `span` with 1-based `line`/`column` pairs plus a `file:line:col`
   `location`. Columns count plain characters (Unicode scalar values) —
   **not** LSP UTF-16 code units and not bytes. `"span": null` when no span
-  or no source text is available. `W0101` deprecation warnings are
+  or no source text is available. `W0580` deprecation warnings are
   appended after all errors and never fail resolution.
 
 The `sigil-model/1` format constant is the version marker: a change that

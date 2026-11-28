@@ -7,6 +7,19 @@ policy in [docs/VERSIONING.md](docs/VERSIONING.md).
 
 ## [Unreleased]
 
+### Changed
+
+- **Rune (`.rosetta`) diagnostics are registry codes** (RN8, issue
+  [#399](https://github.com/yestechgroup/pherolang/issues/399),
+  [ADR 0012](docs/adr/0012-rune-is-an-in-tree-surface.md) D5). Three new
+  bands, `rune.syntax` (`E0500`–`E0519`), `rune.resolve` (`E0520`–`E0579`)
+  and `rune.lints` (`W0580`–`W0599`), replace the Rune toolchain's own
+  numbers, which collided with the `.ifml` bands: `E0001` → `E0500`,
+  `E0101`–`E0107` → `E0520`–`E0526`, `W0101` → `W0580`. `pherolang explain`
+  covers them, and an `import sigil` diagnostic now leads with its code
+  (`E0520 unknown type 'Missing'`) instead of a `sigil E0101 …` hint. This is
+  a pre-1.0 break for anyone matching on the old numbers.
+
 ### Added
 
 - **Intent traceability is walkable in the semantic graph** (issue
