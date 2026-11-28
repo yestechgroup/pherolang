@@ -212,39 +212,28 @@ it is deliberately **not** a required status check: it triggers only on
 | `deploy` | push to `main` + apps + `freshness` **succeeded** | `wrangler deploy` for both apps, into the GitHub `production` environment |
 | `drift` | nightly 03:17 UTC or `workflow_dispatch` | regenerates the model data and opens/updates the `site/model-data-drift` PR |
 
-### One deploy path: keep the dashboard Git integration disconnected
+### The Workers Builds projects (dashboard Git integration)
 
-The workflow is the **only** deploy path. Do not connect this repository to the
-Workers in the Cloudflare dashboard (Workers Builds, Settings → Build): previews
-and production are already covered by `preview` and `deploy` above, and a second
-builder races them for the same two Workers.
+Each Worker also builds from the dashboard's Git integration: `wrangler deploy`
+on the production branch and `npx wrangler preview` on every other branch. Both
+`wrangler.jsonc` files carry `"previews": {}` (since `efc112e`), which
+`wrangler preview` requires.
 
-That second path is what issue #415 reported. A dashboard build ran
-`npx wrangler preview` (Wrangler 4.169.0) and failed with "Your Wrangler
-configuration is missing a `previews` block", though both `wrangler.jsonc` files
-have carried `"previews": {}` since `efc112e`. What was checked here, against
-`main` at `06433d6`:
+Wrangler must run **in the app directory, after the build**, so that it follows
+the adapter's redirect to `dist/client/wrangler.json`. A correct run prints:
 
-- `pnpm -C phero-web build` writes `dist/client/wrangler.json` with
-  `"previews":{}`, because the Astro adapter's config customizer carries the block
-  through.
-- Wrangler 4.169.0 `preview`, run in `site/phero-web`, prints
-  `Using redirected Wrangler configuration` and reaches its previews check with
-  `config.previews` set to `{}`, so the check passes.
-- The dashboard log has **no** redirect line. Its build therefore did not run in
-  an app directory: the build's root directory was not `site/phero-web` or
-  `site/phero-docs`.
+```text
+Using redirected Wrangler configuration.
+ - Configuration being used: "dist/client/wrangler.json"
+ - Original user's configuration: "wrangler.jsonc"
+```
 
-**Unverified** (the dashboard screen has not been seen): the Workers Builds
-project's root directory is unset, or set to the repo root or `site/`, where no
-Wrangler config exists, and the config Wrangler used there has no `previews`
-block. The fix is in the dashboard, not in the repository. Disconnect the Git
-integration from both Workers. If a dashboard build is ever wanted instead, use
-one project per app with root directory `site/phero-web` or `site/phero-docs`,
-build command `pnpm install --frozen-lockfile && pnpm build`, deploy command
-`npx wrangler deploy`, and non-production deploy command `npx wrangler preview`.
-Do not add a Wrangler config at the repo root to silence the error: it would
-define a third Worker.
+If that line is missing and `wrangler preview` reports "missing a `previews`
+block", Wrangler did not read either app's config: the project's root directory
+or deploy command points somewhere else (issue #415). Checked here with
+Wrangler 4.169.0, including with `WORKERS_CI=1` and `WRANGLER_CI_OVERRIDE_NAME`
+set: from `site/phero-web` after `pnpm -C phero-web build`, the previews check
+reads `{}` and passes.
 
 ### The two secrets
 
