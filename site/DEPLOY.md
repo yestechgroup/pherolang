@@ -212,6 +212,38 @@ it is deliberately **not** a required status check: it triggers only on
 | `deploy` | push to `main` + apps + `freshness` **succeeded** | `wrangler deploy` for both apps, into the GitHub `production` environment |
 | `drift` | nightly 03:17 UTC or `workflow_dispatch` | regenerates the model data and opens/updates the `site/model-data-drift` PR |
 
+### The Workers Builds projects (dashboard Git integration)
+
+Each Worker also builds from the dashboard's Git integration: `wrangler deploy`
+on the production branch and `npx wrangler preview` on every other branch. Both
+`wrangler.jsonc` files carry `"previews": {}` (since `efc112e`), which
+`wrangler preview` requires.
+
+Wrangler must run **in the app directory, after the build**, so that it follows
+the adapter's redirect to `dist/client/wrangler.json`. A correct run prints:
+
+```text
+Using redirected Wrangler configuration.
+ - Configuration being used: "dist/client/wrangler.json"
+ - Original user's configuration: "wrangler.jsonc"
+```
+
+If that line is missing and `wrangler preview` reports "missing a `previews`
+block" (issue #415), the project's **root directory is not the app directory**.
+Reproduced with Wrangler 4.169.0: run from the repo root or `site/`, where no
+Wrangler config exists, with the Worker name supplied by Workers Builds
+(`WRANGLER_CI_OVERRIDE_NAME`), `wrangler preview` prints no redirect line and
+reaches its previews check with `previews` undefined. Production deploys keep
+working from the same directory because `wrangler deploy` runs framework
+autoconfig by default when no config exists, and `wrangler preview` does not.
+
+The fix is the project setting, not the config files:
+
+| Worker | Root directory | Build command | Deploy | Non-production deploy |
+|---|---|---|---|---|
+| `pherolang-web` | `site/phero-web` | `pnpm install --frozen-lockfile && pnpm build` | `npx wrangler deploy` | `npx wrangler preview` |
+| `pherolang-docs` | `site/phero-docs` | same | same | same |
+
 ### The two secrets
 
 | Secret | Read by | Never read by |
