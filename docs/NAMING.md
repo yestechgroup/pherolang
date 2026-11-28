@@ -69,8 +69,14 @@ other type keeps its descriptive name (`Compilation`, `ActorModel`,
 - **The wire rules.** camelCase keys, adjacent tagging, the
   `formatVersion` gate, and additive-only evolution are properties of the
   format, not of the name.
-- **External toolchain names.** sigil, restingstate/xstate-ir, dsntk, and
-  cmmn-rs are other people's projects and keep their names.
+- **External toolchain names.** restingstate/xstate-ir, dsntk, and cmmn-rs
+  are other people's projects and keep their names.
+- **Rune.** The FINOS Rune DSL is the language and `.rosetta` is its file
+  kind. Its toolchain is in-tree ([ADR 0012](adr/0012-rune-is-an-in-tree-surface.md)):
+  the `phero_syntax::rune` module plus the `phero-rune-model` and
+  `phero-rune-resolve` crates. **sigil** is the toolchain's historical name.
+  Git history keeps it, but no new public name uses it, except the
+  `import sigil` alias until that alias is removed.
 
 ## History
 
