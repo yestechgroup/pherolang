@@ -229,11 +229,20 @@ Using redirected Wrangler configuration.
 ```
 
 If that line is missing and `wrangler preview` reports "missing a `previews`
-block", Wrangler did not read either app's config: the project's root directory
-or deploy command points somewhere else (issue #415). Checked here with
-Wrangler 4.169.0, including with `WORKERS_CI=1` and `WRANGLER_CI_OVERRIDE_NAME`
-set: from `site/phero-web` after `pnpm -C phero-web build`, the previews check
-reads `{}` and passes.
+block" (issue #415), the project's **root directory is not the app directory**.
+Reproduced with Wrangler 4.169.0: run from the repo root or `site/`, where no
+Wrangler config exists, with the Worker name supplied by Workers Builds
+(`WRANGLER_CI_OVERRIDE_NAME`), `wrangler preview` prints no redirect line and
+reaches its previews check with `previews` undefined. Production deploys keep
+working from the same directory because `wrangler deploy` runs framework
+autoconfig by default when no config exists, and `wrangler preview` does not.
+
+The fix is the project setting, not the config files:
+
+| Worker | Root directory | Build command | Deploy | Non-production deploy |
+|---|---|---|---|---|
+| `pherolang-web` | `site/phero-web` | `pnpm install --frozen-lockfile && pnpm build` | `npx wrangler deploy` | `npx wrangler preview` |
+| `pherolang-docs` | `site/phero-docs` | same | same | same |
 
 ### The two secrets
 

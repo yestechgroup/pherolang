@@ -1164,6 +1164,18 @@
       "language": null,
       "section": null,
       "order": 21
+    },
+    {
+      "source": "docs/adr/0012-rune-is-an-in-tree-surface.md",
+      "slug": "0012-rune-is-an-in-tree-surface",
+      "collection": "adr",
+      "target": "adr/0012-rune-is-an-in-tree-surface.md",
+      "url": "/adr/0012-rune-is-an-in-tree-surface/",
+      "title": "0012 — Rune is an in-tree surface; sigil comes into the monorepo",
+      "type": null,
+      "language": null,
+      "section": null,
+      "order": 22
     }
   ]
 }
