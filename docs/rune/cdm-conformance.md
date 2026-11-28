@@ -95,27 +95,27 @@ numeric snapshot is.
 
 Recorded verbatim by the snapshot; none of these are chased to zero:
 
-- **Parse: 142/145 ok** (`E0001` × 3, known sigil parser bugs):
+- **Parse: 142/145 ok** (`E0500` × 3, known sigil parser bugs):
   - `base-staticdata-codelist-type.rosetta` — `condition` inside a type;
   - `legaldocumentation-csa-func.rosetta`, `margin-schedule-func.rosetta`
     — decimal literals (`1.00`, `0.01`) in expressions.
-- **`E0101` × 3799** — the corpus references the external `fpml.*` model
+- **`E0520` × 3799** — the corpus references the external `fpml.*` model
   (mapping functions under `ingest-fpml-*`), which is *not* part of this
   corpus; every such reference is unknown by construction, and expression
   symbols cascade from the missing types. Also a handful of unknown
   symbols over corpus-local names.
-- **`E0104` × 29** — duplicate definitions: upstream declares *dispatch
+- **`E0523` × 29** — duplicate definitions: upstream declares *dispatch
   overloads* (several `func`s sharing one name, discriminated by a
   dispatch attribute, e.g. `YearFraction`, `DayCountBasis`); sigil's
   per-kind namespace flags the re-declarations (first wins).
-- **`E0107` × 53** — mostly dispatch attributes not found on the winning
-  overload's inputs (a direct consequence of the `E0104` overload
+- **`E0526` × 53** — mostly dispatch attributes not found on the winning
+  overload's inputs (a direct consequence of the `E0523` overload
   collapse), plus some unknown attribute/enum-value references.
-- **`E0106` × 2** — reference target of the wrong kind
+- **`E0525` × 2** — reference target of the wrong kind
   (`CalculationPeriod` used where a type is expected).
 
 When the parser bugs above are fixed and the snapshot is regenerated, the
-`E0001` entries disappear (145/145) and the per-file resolution counts may
+`E0500` entries disappear (145/145) and the per-file resolution counts may
 shift for the newly-parsed files — that is expected; regenerate and
 review.
 

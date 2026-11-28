@@ -131,7 +131,7 @@ func Ingest:
     assert_eq!(transforms(src)[0]["ref"]["name"], "NoSuchSchema");
     let diags = json["diagnostics"].as_array().unwrap();
     assert_eq!(diags.len(), 1, "{diags:?}");
-    assert_eq!(diags[0]["code"], "E0101");
+    assert_eq!(diags[0]["code"], phero_diagnostics::E_RUNE_UNKNOWN_SYMBOL);
     assert_eq!(diags[0]["severity"], "error");
     assert!(
         diags[0]["message"]
@@ -161,7 +161,7 @@ func Ingest:
     let json = resolved_json(src);
     let diags = json["diagnostics"].as_array().unwrap();
     assert_eq!(diags.len(), 1, "{diags:?}");
-    assert_eq!(diags[0]["code"], "E0106");
+    assert_eq!(diags[0]["code"], phero_diagnostics::E_RUNE_WRONG_KIND);
     assert!(
         diags[0]["message"]
             .as_str()
@@ -187,7 +187,7 @@ func Project:
     let json = resolved_json(src);
     let diags = json["diagnostics"].as_array().unwrap();
     assert_eq!(diags.len(), 1, "{diags:?}");
-    assert_eq!(diags[0]["code"], "E0101");
+    assert_eq!(diags[0]["code"], phero_diagnostics::E_RUNE_UNKNOWN_SYMBOL);
     assert!(
         diags[0]["message"].as_str().unwrap().contains("FIXML"),
         "{diags:?}"
@@ -210,7 +210,7 @@ func Project:
     let json = resolved_json(src);
     let diags = json["diagnostics"].as_array().unwrap();
     assert_eq!(diags.len(), 1, "{diags:?}");
-    assert_eq!(diags[0]["code"], "E0107");
+    assert_eq!(diags[0]["code"], phero_diagnostics::E_RUNE_UNKNOWN_MEMBER);
     assert!(
         diags[0]["message"].as_str().unwrap().contains("NONSENSE"),
         "{diags:?}"
@@ -236,7 +236,7 @@ func Project:
     let json = resolved_json(src);
     let diags = json["diagnostics"].as_array().unwrap();
     assert_eq!(diags.len(), 1, "{diags:?}");
-    assert_eq!(diags[0]["code"], "E0106");
+    assert_eq!(diags[0]["code"], phero_diagnostics::E_RUNE_WRONG_KIND);
     assert!(
         diags[0]["message"]
             .as_str()

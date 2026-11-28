@@ -87,7 +87,7 @@ against the innermost scope first, mirroring
    or the rule input type's attributes for rule expressions,
 4. the file scope (local elements, imports, own namespace, built-ins).
 
-Unknown heads produce `E0101`. A dotted head (`Product.price`,
+Unknown heads produce `E0520`. A dotted head (`Product.price`,
 `com.rosetta.model.number`) resolves as a qualified name or as a local
 `Type.feature` chain. Known limitations, deliberately unresolved:
 
@@ -120,22 +120,29 @@ Reproduced from `RosettaScopeProvider` (which extends Xtext's
 Scoping is kind-filtered: a `typeAlias calculation` and an
 `annotation calculation` may coexist in `com.rosetta.model` because type
 references and annotation references look in separate symbol spaces.
-Duplicate definitions *within* a kind are reported (`E0104`).
+Duplicate definitions *within* a kind are reported (`E0523`).
 
 ## Diagnostic codes
 
-| Code | Meaning |
-| --- | --- |
-| `E0001` | syntax error (parse) |
-| `W0001` | reserved — unused since phase 4 (unsupported-construct skip, kept for future grammar additions) |
-| `E0101` | unknown type / super type / schema-or-serialization-format / unknown expression symbol head |
-| `E0102` | unknown annotation; `externalConfig` applied to a non-schema element |
-| `E0103` | annotation has no such attribute |
-| `E0104` | duplicate definition within a kind |
-| `E0105` | inheritance cycle |
-| `E0106` | reference target of the wrong kind (incl. transform ref that is not a schema/serialization format) |
-| `E0107` | unknown attribute (operation path, dispatch attribute, rule-source attribute) or enum value (incl. unknown `SerializationFormat` literal) |
-| `W0101` | reference to a `[deprecated]` element (warning severity; never fails resolution) |
+The codes are `phero-diagnostics` registry entries: the `rune.syntax`,
+`rune.resolve` and `rune.lints` bands ([ADR 0012](../adr/0012-rune-is-an-in-tree-surface.md),
+D5), so `pherolang explain <code>` describes each one. They replaced sigil's
+own numbers, which collided with the `.ifml` bands.
+
+| Code | Formerly | Meaning |
+| --- | --- | --- |
+| `E0500` | `E0001` | syntax error (parse) |
+| `E0520` | `E0101` | unknown type / super type / schema-or-serialization-format / unknown expression symbol head |
+| `E0521` | `E0102` | unknown annotation; `externalConfig` applied to a non-schema element |
+| `E0522` | `E0103` | annotation has no such attribute |
+| `E0523` | `E0104` | duplicate definition within a kind |
+| `E0524` | `E0105` | inheritance cycle |
+| `E0525` | `E0106` | reference target of the wrong kind (incl. transform ref that is not a schema/serialization format) |
+| `E0526` | `E0107` | unknown attribute (operation path, dispatch attribute, rule-source attribute) or enum value (incl. unknown `SerializationFormat` literal) |
+| `W0580` | `W0101` | reference to a `[deprecated]` element (warning severity; never fails resolution) |
+
+`W0001` (the unsupported-construct skip) was never emitted after phase 4 and is
+not migrated; the parser fold (RN9) removes the path.
 
 ## Schema and transform-annotation resolution
 
@@ -154,13 +161,13 @@ covered by sigil-only conformance fixtures
 * **Schema formats** must be a `SerializationFormat` literal. Both lookups
   respect shadowing: a user-defined enum named `SerializationFormat`
   replaces the builtin for its file (a conformance fixture pins this).
-* **Deprecation warnings** (`W0101`) fire at every resolved reference to a
+* **Deprecation warnings** (`W0580`) fire at every resolved reference to a
   `[deprecated]` element (types, enums, type aliases, functions, schemas).
   They are computed in a post-resolution pass (link first, validate
   after), so they do not depend on element processing order, and are
   appended after all errors.
 * **Applicability**: the builtin `externalConfig` annotation is enforced
-  as schema-only (`E0102` elsewhere) — hardcoded like the Java validator,
+  as schema-only (`E0521` elsewhere) — hardcoded like the Java validator,
   since `annotation` declarations carry no applicability metadata.
 
 Deliberately unsupported (would require information outside the model or
@@ -287,8 +294,8 @@ for the Phase 2 reverse-drift study): 145 `.rosetta` files, ~44k lines,
 parsed and resolved whole-workspace against a committed golden snapshot of
 parse status, diagnostics by code, and element counts
 (`tests/cdm/master-snapshot.json`). The corpus is **not** diagnostic-clean
-by design — it references the external `fpml.*` model (`E0101`s) and
-declares dispatch overloads that sigil flags as `E0104`s — so this is a
+by design — it references the external `fpml.*` model (`E0520`s) and
+declares dispatch overloads that sigil flags as `E0523`s — so this is a
 sigil-only golden suite rather than an oracle comparison. The **legacy**
 pin (CDM 6.7.0) additionally gets a full value-level Java-oracle
 differential: `python3 scripts/oracle_compare.py --cdm` (issue #10

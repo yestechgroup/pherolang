@@ -1,7 +1,7 @@
 {
   "diagnostics": [
     {
-      "code": "E0101",
+      "code": "E0520",
       "file": "case.rosetta",
       "location": "case.rosetta:10:2",
       "message": "unknown type 'Natural'",

@@ -454,7 +454,7 @@ impl<'a> ElementResolver<'a> {
                 if let Some(dispatch) = &mut function.dispatch {
                     if !inputs.contains(&dispatch.attribute) {
                         self.res.diagnostics.push(ResolutionDiagnostic::error(
-                            "E0107",
+                            phero_diagnostics::E_RUNE_UNKNOWN_MEMBER,
                             &self.file.name,
                             &format!("{path}.dispatch"),
                             format!(
@@ -476,7 +476,7 @@ impl<'a> ElementResolver<'a> {
                             SemanticElement::Enumeration(_)
                         ) {
                             self.res.diagnostics.push(ResolutionDiagnostic::error(
-                                "E0106",
+                                phero_diagnostics::E_RUNE_WRONG_KIND,
                                 &self.file.name,
                                 &format!("{path}.dispatch"),
                                 format!(
@@ -489,7 +489,7 @@ impl<'a> ElementResolver<'a> {
                             .contains(&dispatch.value)
                         {
                             self.res.diagnostics.push(ResolutionDiagnostic::error(
-                                "E0107",
+                                phero_diagnostics::E_RUNE_UNKNOWN_MEMBER,
                                 &self.file.name,
                                 &format!("{path}.dispatch"),
                                 format!(
@@ -538,7 +538,7 @@ impl<'a> ElementResolver<'a> {
                     roots.extend(shortcuts.iter().cloned());
                     if !roots.contains(&operation.assign_root) {
                         self.res.diagnostics.push(ResolutionDiagnostic::error(
-                            "E0101",
+                            phero_diagnostics::E_RUNE_UNKNOWN_SYMBOL,
                             &self.file.name,
                             &format!("{o_path}.assignRoot"),
                             format!("unknown symbol '{}'", operation.assign_root),
@@ -563,7 +563,7 @@ impl<'a> ElementResolver<'a> {
                                     }
                                     None => {
                                         self.res.diagnostics.push(ResolutionDiagnostic::error(
-                                            "E0107",
+                                            phero_diagnostics::E_RUNE_UNKNOWN_MEMBER,
                                             &self.file.name,
                                             &format!("{o_path}.path[{seg_idx}]"),
                                             format!(
@@ -695,7 +695,7 @@ impl<'a> ElementResolver<'a> {
                             SemanticElement::Data(_)
                         ) {
                             self.res.diagnostics.push(ResolutionDiagnostic::error(
-                                "E0106",
+                                phero_diagnostics::E_RUNE_WRONG_KIND,
                                 &self.file.name,
                                 &c_path,
                                 format!("'{}' is not a data type", self.res.qname(ElementId(id))),
@@ -713,7 +713,7 @@ impl<'a> ElementResolver<'a> {
                                 attribute.resolved = true;
                             } else {
                                 self.res.diagnostics.push(ResolutionDiagnostic::error(
-                                    "E0107",
+                                    phero_diagnostics::E_RUNE_UNKNOWN_MEMBER,
                                     &self.file.name,
                                     &a_path,
                                     format!(
@@ -781,7 +781,7 @@ impl<'a> ElementResolver<'a> {
                     t.resolved = Some(id.0);
                 } else {
                     self.res.diagnostics.push(ResolutionDiagnostic::error(
-                        "E0106",
+                        phero_diagnostics::E_RUNE_WRONG_KIND,
                         &self.file.name,
                         path,
                         format!("'{}' is not a {kind_name}", self.res.qname(id)),
@@ -791,7 +791,7 @@ impl<'a> ElementResolver<'a> {
             }
             None => {
                 self.res.diagnostics.push(ResolutionDiagnostic::error(
-                    "E0101",
+                    phero_diagnostics::E_RUNE_UNKNOWN_SYMBOL,
                     &self.file.name,
                     path,
                     format!("unknown {} '{}'", kind_name, t.name),
@@ -807,7 +807,7 @@ impl<'a> ElementResolver<'a> {
             Some(id) => {
                 if !element_at(self.res, id).is_type() {
                     self.res.diagnostics.push(ResolutionDiagnostic::error(
-                        "E0106",
+                        phero_diagnostics::E_RUNE_WRONG_KIND,
                         &self.file.name,
                         path,
                         format!("'{}' is not a type", self.res.qname(id)),
@@ -819,7 +819,7 @@ impl<'a> ElementResolver<'a> {
             }
             None => {
                 self.res.diagnostics.push(ResolutionDiagnostic::error(
-                    "E0101",
+                    phero_diagnostics::E_RUNE_UNKNOWN_SYMBOL,
                     &self.file.name,
                     path,
                     format!("unknown type '{}'", type_ref.name),
@@ -843,7 +843,7 @@ impl<'a> ElementResolver<'a> {
                         if let Some(attr_name) = &annotation.attribute {
                             if !anno.attributes.iter().any(|a| a.name == *attr_name) {
                                 self.res.diagnostics.push(ResolutionDiagnostic::error(
-                                    "E0103",
+                                    phero_diagnostics::E_RUNE_NO_SUCH_ANNOTATION_ATTRIBUTE,
                                     &self.file.name,
                                     path,
                                     format!(
@@ -865,7 +865,7 @@ impl<'a> ElementResolver<'a> {
                             && owner != ElementKind::Schema
                         {
                             self.res.diagnostics.push(ResolutionDiagnostic::error(
-                                "E0102",
+                                phero_diagnostics::E_RUNE_UNKNOWN_ANNOTATION,
                                 &self.file.name,
                                 path,
                                 "annotation 'externalConfig' may only be applied to a schema"
@@ -875,7 +875,7 @@ impl<'a> ElementResolver<'a> {
                         }
                     } else {
                         self.res.diagnostics.push(ResolutionDiagnostic::error(
-                            "E0102",
+                            phero_diagnostics::E_RUNE_UNKNOWN_ANNOTATION,
                             &self.file.name,
                             path,
                             format!("'{}' is not an annotation", self.res.qname(id)),
@@ -885,7 +885,7 @@ impl<'a> ElementResolver<'a> {
                 }
                 None => {
                     self.res.diagnostics.push(ResolutionDiagnostic::error(
-                        "E0102",
+                        phero_diagnostics::E_RUNE_UNKNOWN_ANNOTATION,
                         &self.file.name,
                         path,
                         format!("unknown annotation '{}'", annotation.annotation),
@@ -917,7 +917,7 @@ impl<'a> ElementResolver<'a> {
                             Some(sigil_model::TransformRefTarget::Schema(id.0));
                     } else {
                         self.res.diagnostics.push(ResolutionDiagnostic::error(
-                            "E0106",
+                            phero_diagnostics::E_RUNE_WRONG_KIND,
                             &self.file.name,
                             &t_path,
                             format!(
@@ -953,7 +953,7 @@ impl<'a> ElementResolver<'a> {
                                         ));
                                 } else {
                                     self.res.diagnostics.push(ResolutionDiagnostic::error(
-                                        "E0107",
+                                        phero_diagnostics::E_RUNE_UNKNOWN_MEMBER,
                                         &self.file.name,
                                         &t_path,
                                         format!(
@@ -966,7 +966,7 @@ impl<'a> ElementResolver<'a> {
                             }
                             Some(id) => {
                                 self.res.diagnostics.push(ResolutionDiagnostic::error(
-                                    "E0106",
+                                    phero_diagnostics::E_RUNE_WRONG_KIND,
                                     &self.file.name,
                                     &t_path,
                                     format!(
@@ -978,7 +978,7 @@ impl<'a> ElementResolver<'a> {
                             }
                             None => {
                                 self.res.diagnostics.push(ResolutionDiagnostic::error(
-                                    "E0101",
+                                    phero_diagnostics::E_RUNE_UNKNOWN_SYMBOL,
                                     &self.file.name,
                                     &t_path,
                                     format!("unknown schema or serialization format '{name}'"),
@@ -1004,7 +1004,7 @@ impl<'a> ElementResolver<'a> {
                                     );
                                 } else {
                                     self.res.diagnostics.push(ResolutionDiagnostic::error(
-                                        "E0101",
+                                        phero_diagnostics::E_RUNE_UNKNOWN_SYMBOL,
                                         &self.file.name,
                                         &t_path,
                                         format!("unknown schema or serialization format '{name}'"),
@@ -1014,7 +1014,7 @@ impl<'a> ElementResolver<'a> {
                             }
                             Some(id) => {
                                 self.res.diagnostics.push(ResolutionDiagnostic::error(
-                                    "E0106",
+                                    phero_diagnostics::E_RUNE_WRONG_KIND,
                                     &self.file.name,
                                     &t_path,
                                     format!(
@@ -1026,7 +1026,7 @@ impl<'a> ElementResolver<'a> {
                             }
                             None => {
                                 self.res.diagnostics.push(ResolutionDiagnostic::error(
-                                    "E0101",
+                                    phero_diagnostics::E_RUNE_UNKNOWN_SYMBOL,
                                     &self.file.name,
                                     &t_path,
                                     format!("unknown schema or serialization format '{name}'"),
@@ -1060,7 +1060,7 @@ impl<'a> ElementResolver<'a> {
                     schema.format_resolved = Some(id.0);
                 } else {
                     self.res.diagnostics.push(ResolutionDiagnostic::error(
-                        "E0107",
+                        phero_diagnostics::E_RUNE_UNKNOWN_MEMBER,
                         &self.file.name,
                         path,
                         format!("'{name}' is not a value of '{}'", self.res.qname(id)),
@@ -1070,7 +1070,7 @@ impl<'a> ElementResolver<'a> {
             }
             Some(id) => {
                 self.res.diagnostics.push(ResolutionDiagnostic::error(
-                    "E0106",
+                    phero_diagnostics::E_RUNE_WRONG_KIND,
                     &self.file.name,
                     path,
                     format!("'{}' is not a serialization format", self.res.qname(id)),
@@ -1079,7 +1079,7 @@ impl<'a> ElementResolver<'a> {
             }
             None => {
                 self.res.diagnostics.push(ResolutionDiagnostic::error(
-                    "E0101",
+                    phero_diagnostics::E_RUNE_UNKNOWN_SYMBOL,
                     &self.file.name,
                     path,
                     "unknown symbol 'SerializationFormat'".to_string(),
@@ -1104,7 +1104,7 @@ impl<'a> ElementResolver<'a> {
                     reference.resolved = Some(id.0);
                 } else {
                     self.res.diagnostics.push(ResolutionDiagnostic::error(
-                        "E0106",
+                        phero_diagnostics::E_RUNE_WRONG_KIND,
                         &self.file.name,
                         path,
                         format!("'{}' is not a {kind_name}", self.res.qname(id)),
@@ -1114,7 +1114,7 @@ impl<'a> ElementResolver<'a> {
             }
             None => {
                 self.res.diagnostics.push(ResolutionDiagnostic::error(
-                    "E0101",
+                    phero_diagnostics::E_RUNE_UNKNOWN_SYMBOL,
                     &self.file.name,
                     path,
                     format!("unknown {kind_name} '{}'", name),
@@ -1138,7 +1138,7 @@ impl<'a> ElementResolver<'a> {
                     rule.resolved = Some(id.0);
                 } else {
                     self.res.diagnostics.push(ResolutionDiagnostic::error(
-                        "E0106",
+                        phero_diagnostics::E_RUNE_WRONG_KIND,
                         &self.file.name,
                         path,
                         format!("'{}' is not a rule", self.res.qname(id)),
@@ -1148,7 +1148,7 @@ impl<'a> ElementResolver<'a> {
             }
             None => {
                 self.res.diagnostics.push(ResolutionDiagnostic::error(
-                    "E0101",
+                    phero_diagnostics::E_RUNE_UNKNOWN_SYMBOL,
                     &self.file.name,
                     path,
                     format!("unknown rule '{}'", name),
@@ -1205,7 +1205,7 @@ impl<'a> ElementResolver<'a> {
             Some(id) => {
                 if element_at(self.res, id).is_annotation() {
                     self.res.diagnostics.push(ResolutionDiagnostic::error(
-                        "E0106",
+                        phero_diagnostics::E_RUNE_WRONG_KIND,
                         &self.file.name,
                         path,
                         format!("'{}' is not a symbol", self.res.qname(id)),
@@ -1221,7 +1221,7 @@ impl<'a> ElementResolver<'a> {
                     return;
                 }
                 self.res.diagnostics.push(ResolutionDiagnostic::error(
-                    "E0101",
+                    phero_diagnostics::E_RUNE_UNKNOWN_SYMBOL,
                     &self.file.name,
                     path,
                     format!("unknown symbol '{symbol}'"),
@@ -1286,7 +1286,7 @@ impl SymbolTable {
         }
         if table.contains_key(&fqn) {
             diagnostics.push(ResolutionDiagnostic::error(
-                "E0104",
+                phero_diagnostics::E_RUNE_DUPLICATE_DEFINITION,
                 &file.name,
                 element.name(),
                 format!("duplicate definition of '{fqn}'"),
@@ -1577,7 +1577,7 @@ fn emit_deprecation_warnings(res: &mut Resolution) {
     ) {
         if target_is_deprecated(res, id) {
             warnings.push(ResolutionDiagnostic::warning(
-                "W0101",
+                phero_diagnostics::W_RUNE_DEPRECATED_REFERENCE,
                 file,
                 path,
                 format!("'{}' is deprecated", res.qname(ElementId(id))),
@@ -1941,7 +1941,7 @@ fn detect_cycles(res: &mut Resolution) {
                         0 => stack.push(next),
                         1 if !pushed_grey => {
                             res.diagnostics.push(ResolutionDiagnostic::error(
-                                "E0105",
+                                phero_diagnostics::E_RUNE_INHERITANCE_CYCLE,
                                 file_of_element(res, next),
                                 res.qname(ElementId(next)),
                                 format!(
@@ -2419,7 +2419,7 @@ type Trade:
             .into_iter()
             .next()
             .expect("expected a diagnostic");
-        assert_eq!(code, "E0101");
+        assert_eq!(code, phero_diagnostics::E_RUNE_UNKNOWN_SYMBOL);
         assert!(message.contains("unknown symbol 'result'"), "{message}");
     }
 
@@ -2438,7 +2438,7 @@ type Trade:
             .into_iter()
             .next()
             .expect("expected a diagnostic");
-        assert_eq!(code, "E0107");
+        assert_eq!(code, phero_diagnostics::E_RUNE_UNKNOWN_MEMBER);
         assert!(message.contains("dispatch attribute 'bogus'"), "{message}");
     }
 
@@ -2458,7 +2458,7 @@ type Trade:
             .into_iter()
             .next()
             .expect("expected a diagnostic");
-        assert_eq!(code, "E0101");
+        assert_eq!(code, phero_diagnostics::E_RUNE_UNKNOWN_SYMBOL);
         assert!(message.contains("unknown symbol 'a'"), "{message}");
 
         let input_root = resolution_for(&format!(
@@ -2468,7 +2468,7 @@ type Trade:
             .into_iter()
             .next()
             .expect("expected a diagnostic");
-        assert_eq!(code, "E0101");
+        assert_eq!(code, phero_diagnostics::E_RUNE_UNKNOWN_SYMBOL);
         assert!(message.contains("unknown symbol 'trade'"), "{message}");
     }
 
@@ -2486,7 +2486,7 @@ type Trade:
         let diag = resolution
             .diagnostics
             .iter()
-            .find(|d| d.code == "E0101")
+            .find(|d| d.code == phero_diagnostics::E_RUNE_UNKNOWN_SYMBOL)
             .expect("expected an unknown-type diagnostic");
         assert_eq!(diag.file, "test.rosetta");
         let span = diag.span.expect("diagnostic must carry a span");
@@ -2504,7 +2504,7 @@ type Trade:
             .as_array()
             .unwrap()
             .iter()
-            .find(|d| d["code"] == "E0101")
+            .find(|d| d["code"] == phero_diagnostics::E_RUNE_UNKNOWN_SYMBOL)
             .unwrap();
         // `Unknown` starts on line 4, column 10 (1-based, character columns).
         assert_eq!(diag["span"]["start"]["line"], 4);

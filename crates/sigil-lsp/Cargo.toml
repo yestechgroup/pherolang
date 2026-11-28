@@ -20,6 +20,7 @@ sigil-model = { workspace = true }
 sigil-resolve = { workspace = true }
 
 [dev-dependencies]
+phero-diagnostics = { workspace = true }
 criterion = { workspace = true }
 proptest = { workspace = true }
 

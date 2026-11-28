@@ -37,7 +37,8 @@
 //! [`Severity`]) and the one diagnostic record every surface emits
 //! ([`Diagnostic`], SK2 of epic pherolang#328). A record must carry a byte
 //! span, so the crate depends on `phero-parser` for
-//! [`Span`](phero_parser::Span) and nothing
+//! [`Span`](phero_parser::Span), plus `serde` for [`Severity`]'s
+//! `Serialize` (the Rune model JSON carries severities), and nothing
 //! else: `phero-parser` is the span/token substrate every surface already
 //! sits on and has no dependency back on any surface, so every surface can
 //! keep depending on this crate without a cycle ([record] has the full
@@ -56,6 +57,7 @@ pub mod ifml_resolver;
 pub mod integrity;
 pub mod intents;
 pub mod record;
+pub mod rune;
 pub mod suggest;
 
 pub use ddd::*;
@@ -67,6 +69,7 @@ pub use ifml_lints::*;
 pub use ifml_resolver::*;
 pub use integrity::*;
 pub use record::Diagnostic;
+pub use rune::*;
 pub use suggest::*;
 
 /// How severe a diagnostic is — each registry entry's severity class.
@@ -90,6 +93,20 @@ impl Severity {
             Severity::Error => "error",
             Severity::Warning => "warning",
         }
+    }
+}
+
+impl std::fmt::Display for Severity {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(self.as_str())
+    }
+}
+
+/// Serializes as the lowercase name ([`Severity::as_str`]): the shape the
+/// Rune toolchain's canonical model JSON has always used.
+impl serde::Serialize for Severity {
+    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        serializer.serialize_str(self.as_str())
     }
 }
 
@@ -142,6 +159,7 @@ const BAND_ENTRIES: &[&[Entry]] = &[
     domain::ENTRIES,
     ddd::ENTRIES,
     intents::ENTRIES,
+    rune::ENTRIES,
 ];
 
 /// All registered entries, flattened once.
@@ -231,6 +249,27 @@ const BANDS: &[Band] = &[
         owner: "phero-driver `.intent` surface checks",
         severity_note: "error",
         next_free: "E0455",
+    },
+    Band {
+        id: "rune.syntax",
+        range: "E0500–E0519",
+        owner: "the Rune (`.rosetta`) parser (`sigil-syntax`)",
+        severity_note: "error",
+        next_free: "E0501",
+    },
+    Band {
+        id: "rune.resolve",
+        range: "E0520–E0579",
+        owner: "Rune name resolution (`sigil-resolve`)",
+        severity_note: "error",
+        next_free: "E0527",
+    },
+    Band {
+        id: "rune.lints",
+        range: "W0580–W0599",
+        owner: "Rune resolution warnings (`sigil-resolve`)",
+        severity_note: "warning",
+        next_free: "W0581",
     },
 ];
 

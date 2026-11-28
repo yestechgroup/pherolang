@@ -39,7 +39,10 @@ type Holder:
 "#;
     let ws = warnings(src);
     assert_eq!(ws.len(), 1, "{ws:?}");
-    assert_eq!(ws[0]["code"], "W0101");
+    assert_eq!(
+        ws[0]["code"],
+        phero_diagnostics::W_RUNE_DEPRECATED_REFERENCE
+    );
     assert!(
         ws[0]["message"]
             .as_str()
@@ -69,7 +72,10 @@ func Ingest:
 "#;
     let ws = warnings(src);
     assert_eq!(ws.len(), 1, "{ws:?}");
-    assert_eq!(ws[0]["code"], "W0101");
+    assert_eq!(
+        ws[0]["code"],
+        phero_diagnostics::W_RUNE_DEPRECATED_REFERENCE
+    );
     assert!(
         ws[0]["message"].as_str().unwrap().contains("OldSchema"),
         "{ws:?}"

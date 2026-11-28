@@ -15,6 +15,9 @@ Every diagnostic a pherolang surface emits carries a stable string code. The cod
 | `driver.domain` | E0300–E0349 | phero-driver .mox domain-surface checks | error | E0302 |
 | `driver.ddd` | E0350–E0449 | phero-driver `.ddd` lifecycle checks | error | E0409 |
 | `driver.intent` | E0450–E0499 | phero-driver `.intent` surface checks | error | E0455 |
+| `rune.syntax` | E0500–E0519 | the Rune (`.rosetta`) parser (`sigil-syntax`) | error | E0501 |
+| `rune.resolve` | E0520–E0579 | Rune name resolution (`sigil-resolve`) | error | E0527 |
+| `rune.lints` | W0580–W0599 | Rune resolution warnings (`sigil-resolve`) | warning | W0581 |
 
 ## Band `ifml.resolver` (E0001–E0099)
 
@@ -190,3 +193,27 @@ Every diagnostic a pherolang surface emits carries a stable string code. The cod
 | `E0452` | error | Empty intent statement | `intent '<id>' carries an empty statement` — the statement string is empty or whitespace. The statement is the requirement itself; an intent without one is a claim nobody can read, so it is refused rather than silently kept as an id with no meaning. | Write the requirement as the intent's quoted statement. |
 | `E0453` | error | Unknown link kind | `unknown <slot> kind '<kind>' in intent '<id>'` — the link's kind word is not in the slot's closed vocabulary. An `element` link names `class`, `capability`, `event`, `view`, `command`, or `op`; a `check` link names `invariant` (a designed class carrying invariants) or `decision` (a `.dmn` decision). The vocabulary is closed so a misspelled kind can never silently degrade into an unresolvable link. | Write one of the slot's kinds (`element class:RefundRequest`, `check decision:RefundAuthority`). |
 | `E0454` | error | Duplicate link | `duplicate <slot> link '<kind>:<name>' in intent '<id>'` — the same kind and name are linked twice from one intent. The coverage matrix counts links, so a duplicate would double-count the same element or check. | Remove the repeated link line — one link per element or check per intent. |
+
+## Band `rune.syntax` (E0500–E0519)
+
+| Code | Class | Title | Meaning | Fix |
+|------|-------|-------|---------|-----|
+| `E0500` | error | Rune syntax error | A `.rosetta` file does not parse against the Rune grammar (the FINOS Rune DSL, as accepted by the reference implementation sigil is checked against). The message names what the parser expected. Every namespace the file declares fails, so a `.mox` `import sigil` that needs it fails too. | Correct the syntax at the reported position. The Rune grammar is the reference in `docs/rune/` until it moves into `phero-syntax`. |
+
+## Band `rune.resolve` (E0520–E0579)
+
+| Code | Class | Title | Meaning | Fix |
+|------|-------|-------|---------|-----|
+| `E0520` | error | Unknown Rune type or symbol | A type reference, super type, schema or serialization format, or the head symbol of an expression does not resolve. Names resolve through local elements, then explicit imports (first match wins), then the file's own namespace, then the implicit `com.rosetta.model` builtins, then fully qualified names. | Fix the spelling, import the namespace that declares the name, or qualify it fully. |
+| `E0521` | error | Unknown Rune annotation | An annotation use (`[name]`) does not resolve to a declared `annotation`, or `externalConfig` is applied to an element that is not a schema. Annotations resolve in their own symbol space, separate from types. | Declare or import the annotation, or move `externalConfig` onto a schema element. |
+| `E0522` | error | No such annotation attribute | An annotation use names an attribute (`[name attr]`) that the annotation's declaration does not have. | Use one of the attributes the annotation declares, or add the attribute to its declaration. |
+| `E0523` | error | Duplicate Rune definition | Two definitions of the same kind share a name in one namespace. Kinds are separate symbol spaces, so a type alias and an annotation may share a name; two types may not. | Rename one of the definitions, or remove the duplicate. |
+| `E0524` | error | Rune inheritance cycle | A type's `extends` chain reaches the type itself, so no ancestor order exists. | Break the cycle by removing or redirecting one `extends` clause. |
+| `E0525` | error | Rune reference of the wrong kind | A reference resolves, but to an element of the wrong kind for its position: for example a function where a type is required, or a transform reference that is not a schema or serialization format. | Point the reference at an element of the kind the position requires. |
+| `E0526` | error | Unknown Rune attribute or enum value | An attribute (in an operation path, a dispatch, or a rule source) or an enum value (including a `SerializationFormat` literal) does not exist on the type or enumeration it is looked up in. | Use an attribute or value the owner declares, or add it to the owner. |
+
+## Band `rune.lints` (W0580–W0599)
+
+| Code | Class | Title | Meaning | Fix |
+|------|-------|-------|---------|-----|
+| `W0580` | warning | Reference to a deprecated Rune element | A reference names an element annotated `[deprecated]`. This is a warning: resolution still succeeds and the model still lowers. | Move the reference to the element's replacement, or accept the warning while migrating. |

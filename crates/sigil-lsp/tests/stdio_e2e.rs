@@ -139,7 +139,7 @@ fn stdio_end_to_end() {
     );
     send_notification(&mut proc, "initialized", serde_json::json!({}));
 
-    // didOpen with an unknown type -> expect publishDiagnostics with E0101.
+    // didOpen with an unknown type -> expect publishDiagnostics with E0520.
     send_notification(
         &mut proc,
         "textDocument/didOpen",
@@ -186,8 +186,9 @@ fn stdio_end_to_end() {
     assert!(
         diagnostics
             .iter()
-            .any(|d| d["code"] == "E0101" && d["range"]["start"]["line"] == 3),
-        "expected E0101 at line 3, got {diagnostics:?}"
+            .any(|d| d["code"] == phero_diagnostics::E_RUNE_UNKNOWN_SYMBOL
+                && d["range"]["start"]["line"] == 3),
+        "expected E0520 at line 3, got {diagnostics:?}"
     );
 
     let shutdown_result = messages

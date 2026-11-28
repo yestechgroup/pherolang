@@ -1,7 +1,7 @@
 {
   "diagnostics": [
     {
-      "code": "E0101",
+      "code": "E0520",
       "file": "case.rosetta",
       "location": "case.rosetta:7:10",
       "message": "unknown schema or serialization format 'NoSuchSchema'",
@@ -19,7 +19,7 @@
       }
     },
     {
-      "code": "E0106",
+      "code": "E0525",
       "file": "case.rosetta",
       "location": "case.rosetta:15:10",
       "message": "'test.functions.errors.SomeType' is not a schema or serialization format",
@@ -37,7 +37,7 @@
       }
     },
     {
-      "code": "E0101",
+      "code": "E0520",
       "file": "case.rosetta",
       "location": "case.rosetta:23:14",
       "message": "unknown schema or serialization format 'FIXML'",
@@ -55,7 +55,7 @@
       }
     },
     {
-      "code": "E0107",
+      "code": "E0526",
       "file": "case.rosetta",
       "location": "case.rosetta:31:14",
       "message": "'NONSENSE' is not a value of 'com.rosetta.model.SerializationFormat'",
@@ -73,7 +73,7 @@
       }
     },
     {
-      "code": "E0106",
+      "code": "E0525",
       "file": "case.rosetta",
       "location": "case.rosetta:39:14",
       "message": "'test.functions.errors.SomeType' is not a serialization format",

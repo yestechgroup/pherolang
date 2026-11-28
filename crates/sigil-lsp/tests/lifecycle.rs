@@ -44,7 +44,7 @@ fn syntax_and_resolution_diagnostics() {
     let tmp = TempDir::new("diagnostics");
     let mut client = TestClient::spawn_utf8(tmp.path());
 
-    // Unknown type: resolution diagnostic E0101 pointing at the reference.
+    // Unknown type: resolution diagnostic E0520 pointing at the reference.
     let u = tmp.write(
         "main.rosetta",
         "namespace test\n\ntype Foo:\n    value Unknown (1..1)\n",
@@ -55,14 +55,16 @@ fn syntax_and_resolution_diagnostics() {
         1,
     );
     let diags = client.expect_diagnostics(&u, 1);
-    assert_codes(&diags, &[("E0101", 3, 10)]);
+    assert_codes(&diags, &[(phero_diagnostics::E_RUNE_UNKNOWN_SYMBOL, 3, 10)]);
 
-    // Syntax error: E0001 from the parser.
+    // Syntax error: E0500 from the parser.
     let v = tmp.write("broken.rosetta", "namespace test\n\ntype :\n");
     client.open(&v, "namespace test\n\ntype :\n", 1);
     let diags = client.expect_diagnostics(&v, 1);
     assert!(
-        diags.iter().any(|d| common::code_of(d) == Some("E0001")),
+        diags
+            .iter()
+            .any(|d| common::code_of(d) == Some(phero_diagnostics::E_RUNE_SYNTAX)),
         "expected a syntax error, got {diags:?}"
     );
     client.shutdown();
@@ -87,8 +89,8 @@ fn deprecation_warnings_publish_with_warning_severity() {
     let diags = client.expect_diagnostics(&u, 1);
     let warning = diags
         .iter()
-        .find(|d| common::code_of(d) == Some("W0101"))
-        .expect("expected a W0101 deprecation warning, got {diags:?}");
+        .find(|d| common::code_of(d) == Some(phero_diagnostics::W_RUNE_DEPRECATED_REFERENCE))
+        .expect("expected a W0580 deprecation warning, got {diags:?}");
     assert_eq!(
         warning.severity,
         Some(lsp_types::DiagnosticSeverity::WARNING),
@@ -132,7 +134,10 @@ fn cross_file_resolution_between_two_open_files() {
     let broken = "namespace test\n\ntype Trade:\n    party Partee (1..1)\n";
     client.change_full(&main, 2, broken);
     client.expect_diagnostics(&main, 2);
-    assert_codes(&client.latest_diagnostics(&main), &[("E0101", 3, 10)]);
+    assert_codes(
+        &client.latest_diagnostics(&main),
+        &[(phero_diagnostics::E_RUNE_UNKNOWN_SYMBOL, 3, 10)],
+    );
 
     // Fixing main clears the diagnostic again (full-workspace reanalysis).
     client.change_full(&main, 3, MAIN);
@@ -171,7 +176,10 @@ fn duplicate_in_main_reports_in_later_file_and_clears() {
         1,
     );
     let base_diags = client.expect_diagnostics(&base, 1);
-    assert_codes(&base_diags, &[("E0104", 2, 0)]);
+    assert_codes(
+        &base_diags,
+        &[(phero_diagnostics::E_RUNE_DUPLICATE_DEFINITION, 2, 0)],
+    );
 
     // Fix main: rename its type.
     client.change(
@@ -229,7 +237,10 @@ fn incremental_change_updates_diagnostics() {
         )],
     );
     client.expect_diagnostics(&u, 2);
-    assert_codes(&client.latest_diagnostics(&u), &[("E0101", 3, 10)]);
+    assert_codes(
+        &client.latest_diagnostics(&u),
+        &[(phero_diagnostics::E_RUNE_UNKNOWN_SYMBOL, 3, 10)],
+    );
     assert_eq!(
         client.server_text(&u).as_deref(),
         Some("namespace test\n\ntype Trade:\n    party xParty (1..1)\n")

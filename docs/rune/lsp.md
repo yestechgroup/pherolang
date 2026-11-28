@@ -24,7 +24,7 @@ one end-to-end test over real stdio framing.
 | --- | --- |
 | Position encoding | Negotiates `positionEncoding: "utf-8"` (LSP 3.17) when the client offers `general.positionEncodings`; falls back to the LSP default UTF-16. All span math happens in bytes and converts at the edges. |
 | Text sync | `textDocumentSync`: open/close + **INCREMENTAL** (range-based) changes, applied in order, batches supported. |
-| publishDiagnostics | Syntax (`E0001`, `W0001`, ...) and resolution (`E01xx`) diagnostics per open document, re-published after every change. |
+| publishDiagnostics | Syntax (`E0500`, `W0001`, ...) and resolution (`E052x`) diagnostics per open document, re-published after every change. |
 | documentSymbol | Full tree: namespace → elements → attributes / enum values, with exact selection ranges. |
 | definition | On type references (attribute types, `extends`, type-alias/record/library types, configuration roots), annotation references (`[metadata id]`), transform-annotation references (`[ingest Schema]` → the schema; `[projection JSON]` → the in-scope `SerializationFormat` enum), and declarations themselves. Cross-file, and into the built-in `com.rosetta.model` library (location URI `builtin:<file>`). |
 | hover | Markdown: `**kind** \`fqn\`` plus the `<"...">` definition; attributes add the resolved type FQN and cardinality. Hovering a reference shows the target. |

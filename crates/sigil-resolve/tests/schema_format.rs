@@ -37,7 +37,7 @@ schema BadSchema FIXML <"not a SerializationFormat value">
     let json = resolved(src);
     let diags = json["diagnostics"].as_array().unwrap();
     assert_eq!(diags.len(), 1, "{diags:?}");
-    assert_eq!(diags[0]["code"], "E0107");
+    assert_eq!(diags[0]["code"], phero_diagnostics::E_RUNE_UNKNOWN_MEMBER);
     assert_eq!(diags[0]["severity"], "error");
     assert!(
         diags[0]["message"]

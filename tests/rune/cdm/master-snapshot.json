@@ -176,272 +176,272 @@
   },
   "resolution": {
     "diagnosticsByCode": {
-      "E0101": 3819,
-      "E0104": 30,
-      "E0106": 2,
-      "E0107": 66
+      "E0520": 3819,
+      "E0523": 30,
+      "E0525": 2,
+      "E0526": 66
     },
     "perFile": {
       "base-datetime-daycount-func.rosetta": {
-        "E0101": 72,
-        "E0104": 20,
-        "E0107": 20
+        "E0520": 72,
+        "E0523": 20,
+        "E0526": 20
       },
       "base-datetime-func.rosetta": {
-        "E0101": 4
+        "E0520": 4
       },
       "base-math-func.rosetta": {
-        "E0101": 1
+        "E0520": 1
       },
       "base-math-type.rosetta": {
-        "E0101": 2
+        "E0520": 2
       },
       "base-staticdata-asset-common-func.rosetta": {
-        "E0107": 1
+        "E0526": 1
       },
       "base-staticdata-asset-common-type.rosetta": {
-        "E0101": 28
+        "E0520": 28
       },
       "base-staticdata-party-func.rosetta": {
-        "E0101": 4
+        "E0520": 4
       },
       "base-staticdata-party-type.rosetta": {
-        "E0101": 2
+        "E0520": 2
       },
       "event-common-func.rosetta": {
-        "E0101": 41,
-        "E0107": 13
+        "E0520": 41,
+        "E0526": 13
       },
       "event-common-type.rosetta": {
-        "E0101": 12
+        "E0520": 12
       },
       "event-instructioncomposition-reset-func.rosetta": {
-        "E0101": 4
+        "E0520": 4
       },
       "event-instructioncomposition-type.rosetta": {
-        "E0101": 2
+        "E0520": 2
       },
       "event-position-func.rosetta": {
-        "E0101": 1
+        "E0520": 1
       },
       "event-qualification-func.rosetta": {
-        "E0101": 24
+        "E0520": 24
       },
       "ingest-fpml-confirmation-common-func.rosetta": {
-        "E0101": 99
+        "E0520": 99
       },
       "ingest-fpml-confirmation-datetime-func.rosetta": {
-        "E0101": 88,
-        "E0107": 5
+        "E0520": 88,
+        "E0526": 5
       },
       "ingest-fpml-confirmation-header-func.rosetta": {
-        "E0101": 16,
-        "E0107": 1
+        "E0520": 16,
+        "E0526": 1
       },
       "ingest-fpml-confirmation-legal-func.rosetta": {
-        "E0101": 25
+        "E0520": 25
       },
       "ingest-fpml-confirmation-message-func.rosetta": {
-        "E0101": 13
+        "E0520": 13
       },
       "ingest-fpml-confirmation-other-func.rosetta": {
-        "E0101": 1948
+        "E0520": 1948
       },
       "ingest-fpml-confirmation-party-func.rosetta": {
-        "E0101": 93,
-        "E0107": 1
+        "E0520": 93,
+        "E0526": 1
       },
       "ingest-fpml-confirmation-payment-func.rosetta": {
-        "E0101": 104,
-        "E0107": 2
+        "E0520": 104,
+        "E0526": 2
       },
       "ingest-fpml-confirmation-pricequantity-func.rosetta": {
-        "E0101": 297
+        "E0520": 297
       },
       "ingest-fpml-confirmation-product-bondoption-func.rosetta": {
-        "E0101": 9
+        "E0520": 9
       },
       "ingest-fpml-confirmation-product-brokerequityoption-func.rosetta": {
-        "E0101": 6
+        "E0520": 6
       },
       "ingest-fpml-confirmation-product-capfloor-func.rosetta": {
-        "E0101": 8
+        "E0520": 8
       },
       "ingest-fpml-confirmation-product-commodityforward-func.rosetta": {
-        "E0101": 7
+        "E0520": 7
       },
       "ingest-fpml-confirmation-product-commodityoption-func.rosetta": {
-        "E0101": 21
+        "E0520": 21
       },
       "ingest-fpml-confirmation-product-commodityswap-func.rosetta": {
-        "E0101": 48
+        "E0520": 48
       },
       "ingest-fpml-confirmation-product-commodityswaption-func.rosetta": {
-        "E0101": 10
+        "E0520": 10
       },
       "ingest-fpml-confirmation-product-correlationswap-func.rosetta": {
-        "E0101": 7
+        "E0520": 7
       },
       "ingest-fpml-confirmation-product-creditdefaultswap-func.rosetta": {
-        "E0101": 48
+        "E0520": 48
       },
       "ingest-fpml-confirmation-product-creditdefaultswapoption-func.rosetta": {
-        "E0101": 22
+        "E0520": 22
       },
       "ingest-fpml-confirmation-product-dividendswapoptiontransactionsupplement-func.rosetta": {
-        "E0101": 6
+        "E0520": 6
       },
       "ingest-fpml-confirmation-product-dividendswaptransactionsupplement-func.rosetta": {
-        "E0101": 25
+        "E0520": 25
       },
       "ingest-fpml-confirmation-product-equityforward-func.rosetta": {
-        "E0101": 5
+        "E0520": 5
       },
       "ingest-fpml-confirmation-product-equityoption-func.rosetta": {
-        "E0101": 7
+        "E0520": 7
       },
       "ingest-fpml-confirmation-product-equityoptiontransactionsupplement-func.rosetta": {
-        "E0101": 6
+        "E0520": 6
       },
       "ingest-fpml-confirmation-product-equityswaptransactionsupplement-func.rosetta": {
-        "E0101": 5
+        "E0520": 5
       },
       "ingest-fpml-confirmation-product-fra-func.rosetta": {
-        "E0101": 18
+        "E0520": 18
       },
       "ingest-fpml-confirmation-product-fxdigitaloption-func.rosetta": {
-        "E0101": 5
+        "E0520": 5
       },
       "ingest-fpml-confirmation-product-fxoption-func.rosetta": {
-        "E0101": 19
+        "E0520": 19
       },
       "ingest-fpml-confirmation-product-fxsingleleg-func.rosetta": {
-        "E0101": 9
+        "E0520": 9
       },
       "ingest-fpml-confirmation-product-fxswap-func.rosetta": {
-        "E0101": 5
+        "E0520": 5
       },
       "ingest-fpml-confirmation-product-fxvarianceswap-func.rosetta": {
-        "E0101": 16
+        "E0520": 16
       },
       "ingest-fpml-confirmation-product-fxvolatilityswap-func.rosetta": {
-        "E0101": 13
+        "E0520": 13
       },
       "ingest-fpml-confirmation-product-genericproduct-func.rosetta": {
-        "E0101": 21
+        "E0520": 21
       },
       "ingest-fpml-confirmation-product-returnswap-func.rosetta": {
-        "E0101": 44,
-        "E0107": 1
+        "E0520": 44,
+        "E0526": 1
       },
       "ingest-fpml-confirmation-product-swap-func.rosetta": {
-        "E0101": 77,
-        "E0106": 2,
-        "E0107": 1
+        "E0520": 77,
+        "E0525": 2,
+        "E0526": 1
       },
       "ingest-fpml-confirmation-product-swaption-func.rosetta": {
-        "E0101": 11
+        "E0520": 11
       },
       "ingest-fpml-confirmation-product-varianceoptiontransactionsupplement-func.rosetta": {
-        "E0101": 6
+        "E0520": 6
       },
       "ingest-fpml-confirmation-product-varianceswap-func.rosetta": {
-        "E0101": 9
+        "E0520": 9
       },
       "ingest-fpml-confirmation-product-varianceswaptransactionsupplement-func.rosetta": {
-        "E0101": 4
+        "E0520": 4
       },
       "ingest-fpml-confirmation-product-volatilityswap-func.rosetta": {
-        "E0101": 11
+        "E0520": 11
       },
       "ingest-fpml-confirmation-product-volatilityswaptransactionsupplement-func.rosetta": {
-        "E0101": 4
+        "E0520": 4
       },
       "ingest-fpml-confirmation-settlement-func.rosetta": {
-        "E0101": 68,
-        "E0107": 1
+        "E0520": 68,
+        "E0526": 1
       },
       "ingest-fpml-confirmation-tradestate-func.rosetta": {
-        "E0101": 32
+        "E0520": 32
       },
       "ingest-fpml-confirmation-workflowstep-func.rosetta": {
-        "E0101": 85
+        "E0520": 85
       },
       "legaldocumentation-common-type.rosetta": {
-        "E0101": 2
+        "E0520": 2
       },
       "legaldocumentation-csa-func.rosetta": {
-        "E0107": 10
+        "E0526": 10
       },
       "legaldocumentation-csa-type.rosetta": {
-        "E0101": 10,
-        "E0104": 1
+        "E0520": 10,
+        "E0523": 1
       },
       "legaldocumentation-master-isda-type.rosetta": {
-        "E0101": 12
+        "E0520": 12
       },
       "legaldocumentation-master-isla-type.rosetta": {
-        "E0101": 1
+        "E0520": 1
       },
       "legaldocumentation-master-type.rosetta": {
-        "E0101": 2
+        "E0520": 2
       },
       "margin-schedule-func.rosetta": {
-        "E0101": 49,
-        "E0107": 2
+        "E0520": 49,
+        "E0526": 2
       },
       "observable-asset-calculatedrate-func.rosetta": {
-        "E0101": 11,
-        "E0104": 3,
-        "E0107": 3
+        "E0520": 11,
+        "E0523": 3,
+        "E0526": 3
       },
       "observable-asset-fro-func.rosetta": {
-        "E0101": 2
+        "E0520": 2
       },
       "observable-asset-func.rosetta": {
-        "E0101": 3
+        "E0520": 3
       },
       "observable-asset-type.rosetta": {
-        "E0101": 28
+        "E0520": 28
       },
       "observable-common-func.rosetta": {
-        "E0101": 12
+        "E0520": 12
       },
       "product-asset-calculation-func.rosetta": {
-        "E0101": 1
+        "E0520": 1
       },
       "product-asset-floatingrate-func.rosetta": {
-        "E0101": 24,
-        "E0104": 5,
-        "E0107": 5
+        "E0520": 24,
+        "E0523": 5,
+        "E0526": 5
       },
       "product-asset-func.rosetta": {
-        "E0101": 2
+        "E0520": 2
       },
       "product-asset-type.rosetta": {
-        "E0101": 9
+        "E0520": 9
       },
       "product-collateral-func.rosetta": {
-        "E0101": 14
+        "E0520": 14
       },
       "product-collateral-type.rosetta": {
-        "E0101": 8
+        "E0520": 8
       },
       "product-common-schedule-type.rosetta": {
-        "E0101": 2,
-        "E0104": 1
+        "E0520": 2,
+        "E0523": 1
       },
       "product-common-settlement-type.rosetta": {
-        "E0101": 10
+        "E0520": 10
       },
       "product-qualification-func.rosetta": {
-        "E0101": 34
+        "E0520": 34
       },
       "product-template-func.rosetta": {
-        "E0101": 3
+        "E0520": 3
       },
       "product-template-type.rosetta": {
-        "E0101": 3
+        "E0520": 3
       }
     }
   }

@@ -1,7 +1,7 @@
 {
   "diagnostics": [
     {
-      "code": "E0101",
+      "code": "E0520",
       "file": "case.rosetta",
       "location": null,
       "message": "unknown symbol 'result'",
@@ -10,7 +10,7 @@
       "span": null
     },
     {
-      "code": "E0101",
+      "code": "E0520",
       "file": "case.rosetta",
       "location": null,
       "message": "unknown symbol 'loop'",
@@ -19,7 +19,7 @@
       "span": null
     },
     {
-      "code": "E0101",
+      "code": "E0520",
       "file": "case.rosetta",
       "location": "case.rosetta:36:6",
       "message": "unknown symbol 'trade'",
@@ -37,7 +37,7 @@
       }
     },
     {
-      "code": "E0107",
+      "code": "E0526",
       "file": "case.rosetta",
       "location": "case.rosetta:45:16",
       "message": "unknown attribute 'notThere' on 'test.functions.scoping.Trade'",
@@ -55,7 +55,7 @@
       }
     },
     {
-      "code": "E0107",
+      "code": "E0526",
       "file": "case.rosetta",
       "location": "case.rosetta:48:22",
       "message": "dispatch attribute 'bogus' is not an input of 'DispatchBadAttr'",
@@ -73,7 +73,7 @@
       }
     },
     {
-      "code": "E0106",
+      "code": "E0525",
       "file": "case.rosetta",
       "location": "case.rosetta:48:29",
       "message": "'test.functions.scoping.Trade' is not an enumeration",
@@ -91,7 +91,7 @@
       }
     },
     {
-      "code": "E0101",
+      "code": "E0520",
       "file": "case.rosetta",
       "location": null,
       "message": "unknown symbol 'nope'",
@@ -100,7 +100,7 @@
       "span": null
     },
     {
-      "code": "E0101",
+      "code": "E0520",
       "file": "case.rosetta",
       "location": null,
       "message": "unknown symbol 'alsoNope'",
