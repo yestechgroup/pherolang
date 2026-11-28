@@ -260,6 +260,14 @@ fn artifact_kind(input: &Path) -> anyhow::Result<&'static str> {
         phero_driver::SurfaceKind::Cmmn => "cmmnModel",
         phero_driver::SurfaceKind::Ifml => "ifmlManifest",
         phero_driver::SurfaceKind::Intent => "intentModel",
+        // The Rune model is the `sigil-model/1` carve-out: it has no
+        // `formatVersion`, which a receipt artifact must record. Receipts
+        // cover Rune once it has a versioned wire root (the RN10 follow-up).
+        phero_driver::SurfaceKind::Rune => anyhow::bail!(
+            "verify does not support .rosetta inputs yet ({}): the Rune model \
+             (`sigil-model/1`) has no formatVersion for a receipt to record",
+            input.display()
+        ),
     })
 }
 

@@ -551,10 +551,113 @@ pub const RUNE_EXPRESSION_WORDS: &[&str] = &[
     "False", "empty", "item", "only", "required", "optional", "any", "all",
 ];
 
+/// Rune's **reserved** words: the grammar's keyword tokens that the Java
+/// implementation (Xtext) reserves, so a plain occurrence is never a name
+/// there. It excludes the words Xtext's `ValidID` rule re-allows as names
+/// (`condition`, `source`, `version`, `scope`, `ingest`, `enrich`,
+/// `projection`). This parser reserves nothing ([`RUNE_CONTEXTUAL`]), but a
+/// rename or a generated name must still avoid these to stay valid for the
+/// reference implementation. Every entry is a [`RUNE_CONTEXTUAL`] word except
+/// `super`, an Xtext keyword with no production here.
+pub const RUNE_RESERVED_WORDS: &[&str] = &[
+    "absent",
+    "add",
+    "alias",
+    "all",
+    "and",
+    "annotation",
+    "any",
+    "as",
+    "basicType",
+    "body",
+    "choice",
+    "contains",
+    "corpus",
+    "count",
+    "default",
+    "disjoint",
+    "displayName",
+    "docReference",
+    "eligibility",
+    "else",
+    "empty",
+    "enum",
+    "exists",
+    "extends",
+    "extract",
+    "False",
+    "filter",
+    "first",
+    "flatten",
+    "for",
+    "from",
+    "func",
+    "function",
+    "if",
+    "import",
+    "in",
+    "inputs",
+    "is",
+    "item",
+    "join",
+    "label",
+    "last",
+    "library",
+    "max",
+    "metaType",
+    "min",
+    "multiple",
+    "namespace",
+    "only",
+    "or",
+    "output",
+    "override",
+    "prefix",
+    "provision",
+    "rationale",
+    "reduce",
+    "report",
+    "reportedField",
+    "reporting",
+    "reverse",
+    "root",
+    "rule",
+    "ruleReference",
+    "schema",
+    "segment",
+    "set",
+    "single",
+    "sort",
+    "sum",
+    "super",
+    "switch",
+    "then",
+    "True",
+    "type",
+    "typeAlias",
+    "when",
+    "with",
+];
+
+/// The Rune boolean literal words (`literal = STRING | "True" | "False" | …`),
+/// a subset of [`RUNE_CONTEXTUAL`] the highlighter classifies as constants.
+pub const RUNE_BOOLEAN_WORDS: &[&str] = &["True", "False"];
+
 #[cfg(test)]
 mod tests {
     use super::*;
     use std::collections::BTreeSet;
+
+    #[test]
+    fn every_rune_reserved_word_is_a_rune_grammar_word() {
+        unique(RUNE_RESERVED_WORDS, "RUNE_RESERVED_WORDS");
+        for word in RUNE_RESERVED_WORDS {
+            assert!(
+                RUNE_CONTEXTUAL.contains(word) || *word == "super",
+                "reserved Rune word `{word}` is not in RUNE_CONTEXTUAL"
+            );
+        }
+    }
 
     fn unique(words: &[&str], table: &str) {
         let set: BTreeSet<&str> = words.iter().copied().collect();

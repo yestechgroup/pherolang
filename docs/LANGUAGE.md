@@ -337,6 +337,32 @@ file's domains' import content, keyed by each domain's path.)
 `pherolang fmt` canonicalizes both import kinds into a section directly
 after the `package` declaration, before every other declaration.
 
+**Rune files on their own.** A `.rosetta` file is also a surface in its own
+right. `pherolang check`, `ir` and `build` compile it with the same candidate
+pool an `import sigil` reads: the other `*.rosetta` files under its directory,
+resolving the namespaces it imports. `ir` emits the Rune model, the
+`sigil-model/1` JSON that the Rune conformance suite and the Java oracle pin.
+That artifact is a documented exception to the `phero-ir` wire rules: it has
+no `formatVersion`. Several `.rosetta` files given to `ir` together compile as
+exactly those files. There is no Rune formatter yet, so `pherolang fmt` skips
+`.rosetta` files in a directory and refuses one named on the command line.
+
+```rosetta
+namespace pricing.model
+
+type Instrument: <"A tradable instrument.">
+	symbol string (1..1) <"The ticker symbol.">
+
+func priceQuote: <"Compute the price of a quote.">
+	inputs:
+		notional number (1..1)
+	output:
+		price number (1..1)
+
+	set price:
+		notional
+```
+
 ### Classes and features
 
 The declaration forms — `class_decl` and the six feature kinds with their

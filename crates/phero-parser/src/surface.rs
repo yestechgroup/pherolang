@@ -1,4 +1,4 @@
-//! The workspace's one surface identity: the ten source surfaces pherolang
+//! The workspace's one surface identity: the eleven source surfaces pherolang
 //! compiles, their extensions, ids, display names, and editor aliases.
 //!
 //! This module owns the **one** surface enum, the **one** `ALL` order, and the
@@ -75,6 +75,10 @@ pub enum Surface {
     /// `.intent` — the intent specification (requirement statements with
     /// stable ids, linked to model elements and checks).
     Intent,
+    /// `.rosetta` — a FINOS Rune DSL model (ADR 0012). The id is the
+    /// extension, `rosetta`; the variant is named for the language.
+    #[serde(rename = "rosetta")]
+    Rune,
 }
 
 impl Surface {
@@ -82,7 +86,7 @@ impl Surface {
     /// the highlighter's registry/grammar generator, and the "every kind is
     /// handled" tests iterate this; a new variant joins it in the same edit as
     /// its `of_extension` arm.
-    pub const ALL: [Surface; 10] = [
+    pub const ALL: [Surface; 11] = [
         Surface::Mox,
         Surface::Ifml,
         Surface::Ddd,
@@ -93,6 +97,7 @@ impl Surface {
         Surface::Cmmn,
         Surface::Dmn,
         Surface::Intent,
+        Surface::Rune,
     ];
 
     /// The stable surface id: the file extension without the dot, the
@@ -110,6 +115,7 @@ impl Surface {
             Surface::Cmmn => "cmmn",
             Surface::Dmn => "dmn",
             Surface::Intent => "intent",
+            Surface::Rune => "rosetta",
         }
     }
 
@@ -139,6 +145,7 @@ impl Surface {
             "cmmn" => Surface::Cmmn,
             "dmn" => Surface::Dmn,
             "intent" => Surface::Intent,
+            "rosetta" => Surface::Rune,
             _ => return None,
         })
     }
@@ -164,6 +171,7 @@ impl Surface {
             Surface::Cmmn => "Case management",
             Surface::Dmn => "Decision model",
             Surface::Intent => "Intent specification",
+            Surface::Rune => "Rune model",
         }
     }
 
@@ -184,6 +192,7 @@ impl Surface {
             Surface::Cmmn => &["case"],
             Surface::Dmn => &["decision", "decisions"],
             Surface::Intent => &["intents"],
+            Surface::Rune => &["rune"],
         }
     }
 
@@ -254,7 +263,7 @@ mod tests {
             assert!(!surface.extension().starts_with('.'));
             assert!(!surface.display_name().is_empty());
         }
-        assert_eq!(ids.len(), 10);
+        assert_eq!(ids.len(), 11);
         assert_eq!(ids.len(), Surface::ALL.len());
     }
 

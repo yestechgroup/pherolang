@@ -29,8 +29,8 @@ fn site_surfaces() -> BTreeMap<String, String> {
 #[test]
 fn every_surface_matches_the_site_catalogue() {
     let site = site_surfaces();
-    assert_eq!(site.len(), 10, "the site lists ten surfaces");
-    assert_eq!(all_metadata().len(), 10);
+    assert_eq!(site.len(), 11, "the site lists eleven surfaces");
+    assert_eq!(all_metadata().len(), 11);
 
     let mut seen = BTreeSet::new();
     for metadata in all_metadata() {
@@ -66,7 +66,10 @@ fn metadata_order_is_the_compiler_order_and_deterministic() {
     }
     assert_eq!(
         Surface::ALL.map(Surface::id),
-        ["mox", "ifml", "ddd", "actor", "evt", "deploy", "uc", "cmmn", "dmn", "intent"]
+        [
+            "mox", "ifml", "ddd", "actor", "evt", "deploy", "uc", "cmmn", "dmn", "intent",
+            "rosetta"
+        ]
     );
 }
 
@@ -134,6 +137,12 @@ fn every_surface_keyword_is_a_real_compiler_keyword() {
             // `.ifml` has no keyword tokens: its structural words are ordinary
             // identifiers the parser dispatches on.
             assert_eq!(metadata.keywords, phero_ifml::words::STRUCTURAL_WORDS);
+            continue;
+        }
+        if metadata.id == "rosetta" {
+            // Rune has its own lexer (ADR 0013): its only keyword tokens are
+            // the hyphenated words.
+            assert_eq!(metadata.keywords, phero_syntax::words::RUNE_HYPHEN_KEYWORDS);
             continue;
         }
         for keyword in metadata.keywords {

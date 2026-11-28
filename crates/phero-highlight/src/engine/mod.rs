@@ -236,6 +236,15 @@ fn semantic_pass(
             }
             parse_degradation(result.ast.is_some(), &result.errors)
         }
+        Surface::Rune => {
+            // The partial unit (RN9 recovery) still carries every element
+            // that parsed.
+            let result = phero_syntax::rune::parse_rune(source);
+            if let Some(unit) = &result.ast {
+                semantic::rune::walk(ctx, unit);
+            }
+            parse_degradation(result.ast.is_some(), &result.errors)
+        }
         Surface::Ifml => {
             let (ast, errors) = phero_ifml::parse_ifml_syntax_recovering(source);
             if let Some(ast) = &ast {
@@ -282,6 +291,29 @@ fn contextual_overlays(
     }
     let contextual = metadata_for(surface).contextual;
     let mut overlays = Vec::new();
+    if metadata_for(surface).lexer == LexerKind::Rune {
+        // Rune reserves no identifiers, and its grammar words appear in every
+        // position, so the lexical guess is "every contextual word is a
+        // keyword": the semantic pass then overlays each name the parser
+        // recorded, which is where a word like `condition` is an attribute.
+        let literals = metadata_for(surface).literals;
+        for token in tokens {
+            if let LexTokenKind::Ident {
+                text,
+                escaped: false,
+            } = &token.kind
+            {
+                if contextual.contains(text) && !literals.contains(text) {
+                    overlays.push(HighlightSpan::new(
+                        token.start,
+                        token.end,
+                        HighlightClass::Keyword,
+                    ));
+                }
+            }
+        }
+        return overlays;
+    }
     for (index, token) in tokens.iter().enumerate() {
         let LexTokenKind::Ident { text, escaped } = &token.kind else {
             continue;

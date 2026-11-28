@@ -1,0 +1,41 @@
+namespace corpus.rune
+version "1.0.0"
+
+import corpus.shared.* as shared
+
+// Words Rune uses as grammar are ordinary names in a name position.
+type Trade extends shared.Event: <"A trade between two parties.">
+	[metadata key]
+	tradeDate date (1..1) <"The trade date.">
+	condition int (0..1) <"An attribute named like a keyword.">
+	party Party (1..*)
+		[metadata reference]
+
+	condition DatesOrdered: <"The trade date is set.">
+		tradeDate exists
+
+choice Payload:
+	Trade
+	Party
+
+enum Side: <"The side of a trade.">
+	Buy displayName "buy"
+	Sell
+
+/* A block comment. */
+func TotalNotional: <"Sum the notionals.">
+	inputs:
+		trades Trade (0..*)
+	output:
+		total number (1..1)
+
+	set total:
+		trades
+			extract [ item -> notional ]
+			then sum
+
+annotation metadata: <"Metadata.">
+	key string (0..1)
+	reference string (0..1)
+
+typeAlias Notional: number(digits: 18, fractionalDigits: 2)

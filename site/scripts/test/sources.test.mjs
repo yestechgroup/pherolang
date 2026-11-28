@@ -19,9 +19,11 @@ test('collectSources reports no problems for the committed corpus', () => {
   assert.ok(artifact, error ?? 'the highlight artifact did not load');
 });
 
-test('all ten example surfaces are collected', () => {
+test('every example surface is collected', () => {
+  // The support application covers every surface but Rune, whose catalogue
+  // example is the pricing pair's.
   const examples = collected.sources
-    .filter((source) => source.origin.startsWith('examples/support/'))
+    .filter((source) => source.origin.startsWith('examples/'))
     .map((source) => source.surface);
   assert.deepEqual([...new Set(examples)].sort(), [...PHERO_SURFACE_IDS].sort());
 });

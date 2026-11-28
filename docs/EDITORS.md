@@ -27,10 +27,12 @@ hand — the server advertises:
 The scoping contract — one graph snapshot per directory, how surfaces
 resolve, and what the editor shares with `pherolang graph build` — is owned
 by [GRAPH.md](GRAPH.md#the-lsp-contract); this page deliberately does not
-restate it. All ten surfaces (`.mox`, `.actor`, `.ddd`, `.evt`, `.dmn`,
-`.deploy`, `.uc`, `.cmmn`, `.ifml`, `.intent`) are served by the one process.
-`.rosetta` is not yet a surface, but the diagnostics of a `.mox` file's
-`import sigil` content are published on the rosetta file itself, and the
+restate it. All ten model surfaces (`.mox`, `.actor`, `.ddd`, `.evt`,
+`.dmn`, `.deploy`, `.uc`, `.cmmn`, `.ifml`, `.intent`) are served by the one
+process. `.rosetta` is a surface too, but in the editor it gets
+compiler-backed semantic tokens only; navigation and its own diagnostics come
+with RN14/RN15. The diagnostics of a `.mox` file's `import sigil` content are
+published on the rosetta file itself, and the
 `.mox` gets one error on the `import sigil` line naming the broken file
 (pherolang#398).
 

@@ -19,9 +19,9 @@
     "source": "site/data/graph.json",
     "generator": "site/scripts/render-graph.mjs",
     "graph": {
-      "nodes": 317,
+      "nodes": 318,
       "edges": 491,
-      "applications": 8
+      "applications": 9
     },
     "excludedKinds": [
       "file"

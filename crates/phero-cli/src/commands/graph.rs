@@ -527,6 +527,12 @@ fn push(
         Artifact::Intents(model) => inputs
             .intents
             .push(GraphFile::new(display, path, imports, model)),
+        // A Rune file is a host fact in the graph (RN10): its file node only.
+        Artifact::Rune(_) => inputs.rune_files.push(GraphFragment {
+            display,
+            path,
+            imports,
+        }),
     }
 }
 

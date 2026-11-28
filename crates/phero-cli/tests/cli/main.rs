@@ -32,6 +32,7 @@ mod lsp;
 mod manifest;
 mod multi;
 mod project;
+mod rune;
 mod uc;
 mod verify;
 mod vocab;

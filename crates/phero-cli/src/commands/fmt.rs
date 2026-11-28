@@ -1,5 +1,7 @@
 //! `pherolang fmt`: format `.mox`, `.actor`, `.ddd`, `.evt`, `.dmn`, `.uc`,
-//! `.deploy`, or `.ifml` files in place, preserving comments.
+//! `.deploy`, or `.ifml` files in place, preserving comments. `.rosetta` has
+//! no formatter yet (RN17): a directory scan skips it, and a named file is an
+//! error.
 
 use std::io::{Read, Write};
 use std::path::{Path, PathBuf};
@@ -27,9 +29,27 @@ pub(crate) fn run(check: bool, files: Vec<PathBuf>) -> anyhow::Result<ExitCode> 
     // `X.fmt.<ext>` skip (they are outputs, not standalone models).
     // Explicit file arguments pass through untouched, and dispatch below
     // stays per-file by extension.
+    let explicit: Vec<PathBuf> = files
+        .iter()
+        .filter(|file| !file.is_dir())
+        .cloned()
+        .collect();
     let files = expand_check_inputs(&files)?;
     let mut unformatted = false;
     for file in &files {
+        if phero_driver::SurfaceKind::of_path(file) == Some(phero_driver::SurfaceKind::Rune) {
+            // There is no Rune formatter yet (RN17). A directory scan skips
+            // `.rosetta` files so `fmt --check` over a tree stays usable; a
+            // file named on the command line is an error, never a silent
+            // pass and never the `.mox` formatter.
+            if explicit.contains(file) {
+                anyhow::bail!(
+                    "cannot format {}: there is no Rune (.rosetta) formatter yet (RN17)",
+                    file.display()
+                );
+            }
+            continue;
+        }
         let source = std::fs::read_to_string(file)
             .map_err(|error| anyhow::anyhow!("cannot read {}: {error}", file.display()))?;
         let formatted = if is_ddd_file(file) {

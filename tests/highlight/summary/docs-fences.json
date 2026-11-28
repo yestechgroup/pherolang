@@ -361,6 +361,26 @@
     },
     {
       "classes": {
+        "comment": 3,
+        "function": 1,
+        "keyword": 6,
+        "namespace": 2,
+        "number": 6,
+        "operator": 6,
+        "parameter": 2,
+        "property": 1,
+        "punctuation": 15,
+        "type": 4,
+        "variable": 2
+      },
+      "degraded": false,
+      "file": "docs/LANGUAGE.md",
+      "line": 350,
+      "spans": 48,
+      "surface": "rosetta"
+    },
+    {
+      "classes": {
         "annotation": 2,
         "comment": 3,
         "keyword": 5,
@@ -374,7 +394,7 @@
       },
       "degraded": false,
       "file": "docs/LANGUAGE.md",
-      "line": 503,
+      "line": 529,
       "spans": 43,
       "surface": "mox"
     },
@@ -393,7 +413,7 @@
       },
       "degraded": false,
       "file": "docs/LANGUAGE.md",
-      "line": 648,
+      "line": 674,
       "spans": 57,
       "surface": "mox"
     },

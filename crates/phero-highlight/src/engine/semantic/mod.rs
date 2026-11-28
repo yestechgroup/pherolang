@@ -27,6 +27,7 @@ pub(crate) mod evt;
 pub(crate) mod ifml;
 pub(crate) mod intents;
 pub(crate) mod mox;
+pub(crate) mod rune;
 pub(crate) mod uc;
 
 /// Walk context: the source, the token table for span recovery, and the

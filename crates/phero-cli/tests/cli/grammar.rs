@@ -38,7 +38,7 @@ fn out_writes_every_surface_grammar_and_configuration() {
     let dir = fresh_dir("grammar_out");
     let output = run(&["--out", path_arg(&dir)]);
     assert!(output.status.success(), "stderr: {}", stderr(&output));
-    assert!(stdout(&output).contains("wrote 21 generated files"));
+    assert!(stdout(&output).contains("wrote 23 generated files"));
 
     assert!(dir.join("package.json").is_file());
     for surface in phero_highlight::Surface::ALL {

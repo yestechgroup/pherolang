@@ -73,7 +73,7 @@ fn rule_words(grammar: &Value, key: &str) -> BTreeSet<String> {
 #[test]
 fn every_site_surface_has_a_grammar_and_configuration() {
     let site = site_surfaces();
-    assert_eq!(site.len(), 10, "the site lists ten surfaces");
+    assert_eq!(site.len(), 11, "the site lists eleven surfaces");
 
     for (id, extension) in site {
         let surface = Surface::from_id(&id).unwrap_or_else(|| panic!("unknown surface `{id}`"));
@@ -190,16 +190,26 @@ fn vocabulary_comes_from_the_metadata() {
             "{} literal rule drifted from the metadata",
             metadata.id
         );
-        assert_eq!(
-            rule_words(&grammar, "builtinTypes"),
-            metadata
-                .builtin_types
-                .iter()
-                .map(|word| (*word).to_string())
-                .collect::<BTreeSet<_>>(),
-            "{} builtin-type rule drifted from the metadata",
-            metadata.id
-        );
+        if metadata.builtin_types.is_empty() {
+            // Rune's builtin types are library declarations the resolver
+            // loads (`com.rosetta.model`), not words: no rule.
+            assert!(
+                grammar["repository"].get("builtinTypes").is_none(),
+                "{} has a builtin-type rule but no builtin types",
+                metadata.id
+            );
+        } else {
+            assert_eq!(
+                rule_words(&grammar, "builtinTypes"),
+                metadata
+                    .builtin_types
+                    .iter()
+                    .map(|word| (*word).to_string())
+                    .collect::<BTreeSet<_>>(),
+                "{} builtin-type rule drifted from the metadata",
+                metadata.id
+            );
+        }
 
         if metadata.contextual.is_empty() {
             assert!(

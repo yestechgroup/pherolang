@@ -125,7 +125,10 @@ export function collectDocsFences(root = findRepoRoot()) {
   return { fences, problems };
 }
 
-/** Every Phero `examples/support/support.*` source, keyed by its surface. */
+/**
+ * Every Phero `examples/support/support.*` source, keyed by its surface, plus
+ * the catalogue example of a surface the support application lacks.
+ */
 export function collectExampleSources(root = findRepoRoot()) {
   const dir = join(root, 'examples', 'support');
   const byExtension = new Map(SURFACES.map((surface) => [surface.extension, surface.id]));
@@ -149,6 +152,17 @@ export function collectExampleSources(root = findRepoRoot()) {
 
   for (const surface of SURFACES) {
     if (!sources.some((entry) => entry.surface === surface.id)) {
+      // A surface the support application has no file for (Rune) uses its
+      // catalogue example instead.
+      const fallback = join(root, surface.example);
+      if (existsSync(fallback) && statSync(fallback).isFile()) {
+        sources.push({
+          surface: surface.id,
+          source: readFileSync(fallback, 'utf8'),
+          origin: surface.example,
+        });
+        continue;
+      }
       sources.push({
         surface: surface.id,
         source: null,

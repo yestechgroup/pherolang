@@ -1,6 +1,7 @@
 //! `textDocument/semanticTokens` (issue #2, task 4): exact highlighting
-//! for types vs enums vs annotations vs keywords, where the TextMate
-//! grammar in `editors/vscode/` only approximates.
+//! for types vs enums vs annotations vs keywords, where the generated
+//! TextMate grammar (`editors/rune-vscode/`, copied from
+//! `site/packages/highlighting/`) only approximates.
 //!
 //! Classification is grounded in what the toolchain knows:
 //!

@@ -25,6 +25,10 @@ pub enum LexerKind {
     MoxFamily,
     /// The `phero-ifml` lexer.
     Ifml,
+    /// The Rune (`.rosetta`) lexer, `phero_syntax::rune::lexer` (ADR 0013):
+    /// every word is an identifier, and the only keyword tokens are the
+    /// hyphenated words.
+    Rune,
 }
 
 /// The builtin primitive type names every non-`.ifml` surface shares.
@@ -353,9 +357,40 @@ pub static INTENTS: SurfaceMetadata = SurfaceMetadata {
     ],
 };
 
+/// `.rosetta` metadata (Rune, ADR 0012). Rune reserves no identifiers: its
+/// keyword tokens are the hyphenated words, and every other grammar word is
+/// contextual. Both tables are `phero-syntax`'s, never copied.
+pub static RUNE: SurfaceMetadata = SurfaceMetadata {
+    surface: Surface::Rune,
+    id: "rosetta",
+    extension: "rosetta",
+    aliases: &["rune"],
+    display_name: "Rune model",
+    documentation: "docs/LANGUAGE.md",
+    lexer: LexerKind::Rune,
+    keywords: phero_syntax::words::RUNE_HYPHEN_KEYWORDS,
+    contextual: phero_syntax::words::RUNE_CONTEXTUAL,
+    literals: phero_syntax::words::RUNE_BOOLEAN_WORDS,
+    builtin_types: &[],
+    declarations: &[
+        ("namespace", HighlightClass::Namespace),
+        ("import", HighlightClass::Namespace),
+        ("type", HighlightClass::Type),
+        ("choice", HighlightClass::Type),
+        ("enum", HighlightClass::Type),
+        ("typeAlias", HighlightClass::Type),
+        ("basicType", HighlightClass::Type),
+        ("recordType", HighlightClass::Type),
+        ("metaType", HighlightClass::Type),
+        ("annotation", HighlightClass::Annotation),
+        ("func", HighlightClass::Function),
+        ("rule", HighlightClass::Function),
+    ],
+};
+
 /// Every metadata entry, in [`Surface::ALL`] order.
-pub static ALL: [&SurfaceMetadata; 10] = [
-    &MOX, &IFML, &DDD, &ACTOR, &EVT, &DEPLOY, &UC, &CMMN, &DMN, &INTENTS,
+pub static ALL: [&SurfaceMetadata; 11] = [
+    &MOX, &IFML, &DDD, &ACTOR, &EVT, &DEPLOY, &UC, &CMMN, &DMN, &INTENTS, &RUNE,
 ];
 
 /// The metadata entry for `surface`.
@@ -372,6 +407,7 @@ pub fn metadata_for(surface: Surface) -> &'static SurfaceMetadata {
         Surface::Cmmn => &CMMN,
         Surface::Dmn => &DMN,
         Surface::Intent => &INTENTS,
+        Surface::Rune => &RUNE,
     }
 }
 
@@ -534,7 +570,7 @@ mod tests {
             assert_eq!(entry.display_name, surface.display_name());
             assert_eq!(metadata_for(surface).id, surface.id());
         }
-        assert_eq!(all_metadata().len(), 10);
+        assert_eq!(all_metadata().len(), 11);
     }
 
     #[test]
@@ -562,6 +598,16 @@ mod tests {
         let real: BTreeSet<&str> = phero_syntax::words::KEYWORDS.iter().copied().collect();
         for metadata in ALL {
             if metadata.lexer == LexerKind::Ifml {
+                continue;
+            }
+            if metadata.lexer == LexerKind::Rune {
+                // Rune's keyword tokens are its own lexer's hyphenated words.
+                for keyword in metadata.keywords {
+                    assert!(
+                        phero_syntax::words::RUNE_HYPHEN_KEYWORDS.contains(keyword),
+                        "rosetta lists `{keyword}` as a keyword but it is not a Rune lexer word"
+                    );
+                }
                 continue;
             }
             for keyword in metadata.keywords {

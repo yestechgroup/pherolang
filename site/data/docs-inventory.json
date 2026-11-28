@@ -25,8 +25,8 @@
       "slug": "ddd",
       "title": "DDD design DSL (.ddd)",
       "description": "A Sculptor-style domain-driven-design layer over `.mox` domain models. The",
-      "bytes": 130665,
-      "lines": 2203
+      "bytes": 135412,
+      "lines": 2286
     },
     {
       "path": "docs/DEPLOY.md",
@@ -43,8 +43,8 @@
       "slug": "diagnostics",
       "title": "Diagnostic codes",
       "description": "Every diagnostic a pherolang surface emits carries a stable string code. The codes live in one place — the `phero-diagnostics` crate — and this page is generated from that registry: a new code is a table row in `phero-diagnostics`, never a local constant. Two schemes are registered side by side: the numeric bands (`E####` errors, `W####` warnings, `X####` cross-surface integrity) are surface-local, human-facing codes the CLI prints, while the driver's camelCase names are payload-carrying LSP diagnostic codes (`phero_driver::DiagnosticCode`); both are first-class registry entries, cross-referenced by band. To allocate a code, claim (or find) your band in the ledger and add the constant plus its entry to the band module. Run `pherolang explain <code>` for one entry, or `pherolang explain --list` for everything.",
-      "bytes": 54939,
-      "lines": 186
+      "bytes": 61853,
+      "lines": 220
     },
     {
       "path": "docs/DMN.md",
@@ -61,8 +61,8 @@
       "slug": "editors",
       "title": "Editors and the language server",
       "description": "`pherolang lsp` serves a language server over **stdin/stdout** — the standard",
-      "bytes": 4296,
-      "lines": 115
+      "bytes": 4530,
+      "lines": 119
     },
     {
       "path": "docs/EVENTS.md",
@@ -70,8 +70,8 @@
       "slug": "events",
       "title": "Event contracts (.evt)",
       "description": "A transport-independent event-contract layer over `.mox` domain models. The",
-      "bytes": 26602,
-      "lines": 528
+      "bytes": 26838,
+      "lines": 531
     },
     {
       "path": "docs/EXPRESSIONS.md",
@@ -88,8 +88,8 @@
       "slug": "goldens",
       "title": "Golden fixtures",
       "description": "A **golden** is a committed file that a test compares byte-for-byte against",
-      "bytes": 8128,
-      "lines": 133
+      "bytes": 8585,
+      "lines": 136
     },
     {
       "path": "docs/GRAPH.md",
@@ -97,8 +97,8 @@
       "slug": "graph",
       "title": "The unified semantic graph",
       "description": "`pherolang graph build` compiles a tree of model files into **one queryable,",
-      "bytes": 63573,
-      "lines": 1012
+      "bytes": 63660,
+      "lines": 1013
     },
     {
       "path": "docs/HIGHLIGHTING.md",
@@ -142,8 +142,8 @@
       "slug": "language",
       "title": "The .mox language reference",
       "description": "Phero Lang compiles `.mox` modeling sources (inspired by Eclipse Xcore) into",
-      "bytes": 45108,
-      "lines": 811
+      "bytes": 46068,
+      "lines": 837
     },
     {
       "path": "docs/NAMING.md",
@@ -151,8 +151,8 @@
       "slug": "naming",
       "title": "Naming",
       "description": "The normative spelling contract for the product, the toolchain, and",
-      "bytes": 4134,
-      "lines": 85
+      "bytes": 4550,
+      "lines": 91
     },
     {
       "path": "docs/README.md",
@@ -169,8 +169,8 @@
       "slug": "rebrand",
       "title": "Rebranding: rexlang → Phero Lang",
       "description": "rexlang is now **Phero Lang**. From 0.3.0 the compiler is `pherolang`, the",
-      "bytes": 9138,
-      "lines": 217
+      "bytes": 9247,
+      "lines": 219
     },
     {
       "path": "docs/RECEIPTS.md",
@@ -241,7 +241,7 @@
       "slug": "versioning",
       "title": "Versioning and release policy",
       "description": "How Phero Lang versions, what compatibility each version line promises, and",
-      "bytes": 6387,
+      "bytes": 6380,
       "lines": 130
     }
   ]

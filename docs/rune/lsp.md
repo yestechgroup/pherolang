@@ -84,7 +84,7 @@ PROPTEST_CASES=512 cargo test -p sigil-lsp   # longer property runs
 
 ### VS Code
 
-See [editors/vscode](../editors/vscode/README.md) for the packaged
+See [editors/rune-vscode](../../editors/rune-vscode/README.md) for the packaged
 extension (server client + syntax highlighting).
 
 ### Neovim (nvim-lspconfig, 0.11+ style)

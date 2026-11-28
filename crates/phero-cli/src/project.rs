@@ -71,6 +71,10 @@ pub(crate) enum Artifact {
     /// An `.intent` intent specification (the standalone `IntentModel`,
     /// issue pherolang#196).
     Intents(phero_ir::intents::IntentModel),
+    /// A `.rosetta` Rune model: the `sigil-model/1` JSON over the file's
+    /// pool (a documented carve-out from the phero-ir wire rules,
+    /// `phero_driver::rune`).
+    Rune(serde_json::Value),
 }
 
 impl Artifact {
@@ -87,6 +91,9 @@ impl Artifact {
             Artifact::Deploy(model) => Ok(model.to_json_pretty()?),
             Artifact::Flow(model) => Ok(model.to_json_pretty()?),
             Artifact::Intents(model) => Ok(model.to_json_pretty()?),
+            Artifact::Rune(model) => Ok(serde_json::to_string_pretty(
+                &phero_backend_common::canonical_key_order(model.clone()),
+            )?),
         }
     }
 }
@@ -659,9 +666,10 @@ fn written_imports(path: &Path, text: &str) -> Vec<String> {
             .ast
             .map(|ast| ast.imports.into_iter().map(|import| import.path).collect())
             .unwrap_or_default(),
-        // A `.mox` member declares no surface imports; an unknown extension
-        // is no application file at all.
-        Some(SurfaceKind::Mox) | None => Vec::new(),
+        // A `.mox` member declares no surface imports, a `.rosetta` file
+        // imports namespaces rather than paths, and an unknown extension is
+        // no application file at all.
+        Some(SurfaceKind::Mox) | Some(SurfaceKind::Rune) | None => Vec::new(),
     }
 }
 

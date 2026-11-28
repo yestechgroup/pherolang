@@ -6,9 +6,12 @@ the [FINOS rune-dsl](https://github.com/finos/rune-dsl) project) to VS Code:
 - **Language server** ([sigil-lsp](../../../docs/lsp.md)): diagnostics,
   go-to-definition, hover, completion, document symbols, workspace symbols,
   find references, incremental sync.
-- **Syntax highlighting** via a TextMate grammar.
-- **Editing niceties**: comment toggling (`//`, `/* */`), bracket
-  auto-closing, indentation rules for `type`/`enum`/`choice` bodies.
+- **Syntax highlighting** via the TextMate grammar the compiler generates
+  (`pherolang grammar`, in `site/packages/highlighting/`). The extension
+  copies it in with `npm run sync-grammar`, which `vsce package` also runs;
+  the copies are gitignored, so never edit them by hand.
+- **Editing niceties**: comment toggling (`//`, `/* */`) and bracket
+  auto-closing, from the generated language configuration.
 
 ## Building sigil-lsp
 
@@ -24,8 +27,9 @@ cargo build --release -p sigil-lsp
 
 ## Using the extension during development
 
-1. `code --new-window editors/vscode` (or open `editors/vscode` and press
-   F5 after `npm install` to run an Extension Development Host).
+1. Run `npm run sync-grammar` in `editors/rune-vscode`, then
+   `code --new-window editors/rune-vscode` (or open `editors/rune-vscode`
+   and press F5 after `npm install` to run an Extension Development Host).
 2. Point the `sigil.server.path` setting at your built binary:
 
 ```jsonc
@@ -41,7 +45,7 @@ The default resolves `sigil-lsp` from `PATH`, so `cargo install
 ## Packaging (vsce)
 
 ```sh
-cd editors/vscode
+cd editors/rune-vscode
 npm install          # pulls vscode-languageclient
 npx @vscode/vsce package
 # produces rosetta-sigil-0.1.0.vsix
