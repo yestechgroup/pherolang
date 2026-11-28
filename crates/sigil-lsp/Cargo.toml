@@ -4,7 +4,7 @@ version.workspace = true
 edition.workspace = true
 license.workspace = true
 repository.workspace = true
-# Staging import (RN4, ADR 0012): not published until RN11 settles names.
+# Staging import (RN4, ADR 0012): never published; retired by RN10/RN15.
 publish = false
 description = "Language server (LSP) for the Rune (.rosetta) DSL"
 

@@ -2965,11 +2965,9 @@ dependencies = [
 name = "phero-rune-model"
 version = "0.4.0"
 dependencies = [
- "proptest",
  "serde",
  "serde_json",
  "sigil-diag",
- "sigil-syntax",
 ]
 
 [[package]]
@@ -3896,6 +3894,7 @@ dependencies = [
  "phero-diagnostics",
  "phero-rune-model",
  "phero-syntax",
+ "proptest",
  "sigil-diag",
 ]
 

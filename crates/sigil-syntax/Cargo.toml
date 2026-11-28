@@ -4,7 +4,7 @@ version.workspace = true
 edition.workspace = true
 license.workspace = true
 repository.workspace = true
-# Staging import (RN4, ADR 0012): not published until RN11 settles names.
+# Staging import (RN4, ADR 0012): never published; retired by RN10/RN15.
 publish = false
 description = "The Rune (.rosetta) syntax layer over phero_syntax::rune: lowering to phero-rune-model and project discovery"
 
@@ -13,6 +13,11 @@ phero-diagnostics = { workspace = true }
 phero-syntax = { workspace = true }
 sigil-diag = { workspace = true }
 phero-rune-model = { workspace = true }
+
+[dev-dependencies]
+# The model's round-trip property test lives here, the one crate that has
+# both the model and the parser, so the model needs no cyclic dev-dependency.
+proptest = { workspace = true }
 
 [lints]
 workspace = true

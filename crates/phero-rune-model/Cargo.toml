@@ -4,7 +4,7 @@ version.workspace = true
 edition.workspace = true
 license.workspace = true
 repository.workspace = true
-# Staging import (RN4, ADR 0012): not published until RN11 settles names.
+# Unpublished like every Rune crate (ADR 0012); the names are final since RN11.
 publish = false
 description = "Semantic model (Ecore-mirroring IR) for the Rune DSL"
 
@@ -12,12 +12,6 @@ description = "Semantic model (Ecore-mirroring IR) for the Rune DSL"
 sigil-diag = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
-
-[dev-dependencies]
-proptest = { workspace = true }
-# Cyclic dev-dependency (allowed): the round-trip property test generates
-# IR expressions, prints them, and re-parses them with the real parser.
-sigil-syntax = { workspace = true }
 
 [lints]
 workspace = true
