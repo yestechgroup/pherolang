@@ -1,0 +1,2008 @@
+//! The Rune declaration grammar over [`RuneToken`]s (the expression grammar
+//! is [`super::expr`]). It is a token-level port of the scannerless sigil
+//! parser, which transcribed `docs/rune/reference/Rosetta.xtext`: the
+//! productions, their alternative order and their keyword stop sets are
+//! unchanged (RN9, ADR 0012 D2). Only the primitives below differ: they match
+//! tokens instead of characters, so spans now cover exactly a construct's
+//! text and no longer its trailing whitespace.
+
+use chumsky::prelude::*;
+use phero_parser::{ParseError, Span};
+
+use crate::rune::ast::*;
+use crate::rune::lexer::{lex, RuneToken};
+use crate::words::{
+    RUNE_DOC_REFERENCE_WORDS, RUNE_ELEMENT_WORDS, RUNE_HYPHEN_KEYWORDS, RUNE_REPORT_STOP_WORDS,
+};
+
+/// The parser input: Rune tokens over the shared byte-span token slice.
+pub(crate) type I<'src> = phero_parser::Tokens<'src, RuneToken<'src>>;
+
+pub(crate) type AErr<'src> = extra::Err<Rich<'src, RuneToken<'src>, Span>>;
+
+/// The span of a parsed region. Spans are already byte spans (the
+/// [`phero_parser::Tokens`] input), so this is the identity; it stays so the
+/// grammar reads as it did.
+pub(crate) fn span_of(span: Span) -> Span {
+    span
+}
+
+/// Whitespace and comments: the lexer drops them, so this matches nothing.
+/// It stays so the transcribed grammar's `then_ignore(ws())` calls read as
+/// they did.
+pub(crate) fn ws<'src>() -> impl Parser<'src, I<'src>, (), AErr<'src>> + Clone {
+    empty()
+}
+
+/// An Xtext `ID`: `^? [A-Za-z_] [A-Za-z0-9_]*`.
+/// Returns `(was_caret_escaped, unescaped_name)`.
+fn id_token<'src>() -> impl Parser<'src, I<'src>, (bool, String), AErr<'src>> + Clone {
+    select! { RuneToken::Ident((text, escaped)) => (escaped, text.to_string()) }
+        .labelled("identifier")
+}
+
+/// A plain identifier (ValidID). Rune allows a few keywords as identifiers,
+/// which falls out naturally here because keywords are matched textually.
+pub(crate) fn name<'src>() -> impl Parser<'src, I<'src>, String, AErr<'src>> + Clone {
+    id_token().map(|(_, name)| name)
+}
+
+/// An identifier usable as a declaration name of the root elements whose
+/// bodies run into following elements (`body`, `corpus`, `segment`, ...).
+///
+/// In Xtext, words that start another element (`type`, `report`,
+/// `eligibility`, ...) are keyword *tokens*, so they can never satisfy an
+/// `ID`/`ValidID` and a name can never swallow the next element's first
+/// word. The textual matcher has no lexer to lean on, so the same set is
+/// excluded explicitly.
+fn element_name<'src>() -> impl Parser<'src, I<'src>, String, AErr<'src>> + Clone {
+    fn stop_words() -> Vec<&'static str> {
+        let mut stop: Vec<&'static str> = RUNE_ELEMENT_WORDS.to_vec();
+        stop.extend(["reporting", "eligibility"]);
+        stop
+    }
+    name()
+        .try_map(|text: String, span| {
+            if stop_words().contains(&text.as_str()) {
+                Err(Rich::custom(span, "name"))
+            } else {
+                Ok(text)
+            }
+        })
+        .labelled("name")
+}
+
+/// A qualified name in a *report reference position* (`body`, `corpus`,
+/// `segment` and rule references). Besides the element keywords, the
+/// report-structural keywords are keyword tokens too and must never be
+/// swallowed by the greedy reference lists.
+fn report_ref_name<'src>() -> impl Parser<'src, I<'src>, String, AErr<'src>> + Clone {
+    name()
+        .try_map(move |text: String, span| {
+            if RUNE_REPORT_STOP_WORDS.contains(&text.as_str()) {
+                Err(Rich::custom(span, "report reference"))
+            } else {
+                Ok(text)
+            }
+        })
+        .labelled("report reference")
+}
+
+/// A qualified name over [`report_ref_name`].
+fn report_ref_qname<'src>() -> impl Parser<'src, I<'src>, SpannedQName, AErr<'src>> + Clone {
+    report_ref_name()
+        .separated_by(sym("."))
+        .at_least(1)
+        .collect::<Vec<String>>()
+        .map_with(|parts, ex| SpannedQName {
+            name: QName(parts.join(".")),
+            span: span_of(ex.span()),
+        })
+        .labelled("report reference")
+}
+
+/// Matches exactly the keyword `k`, rejecting `^k` caret escapes.
+pub(crate) fn kw<'src>(k: &'static str) -> impl Parser<'src, I<'src>, (), AErr<'src>> + Clone {
+    select! { RuneToken::Ident((text, false)) if text == k => () }.labelled(k)
+}
+
+/// Matches a keyword that is not a plain identifier in the Xtext grammar:
+/// a hyphenated keyword token (`post-condition`, `real-time`), a timing word
+/// `T+1`…`T+5` (three adjacent tokens, so `T + 1` stays arithmetic), or a word
+/// keyword (`ASATP`, `in`), which is an identifier matched by text.
+pub(crate) fn word_kw<'src>(k: &'static str) -> Boxed<'src, 'src, I<'src>, (), AErr<'src>> {
+    if RUNE_HYPHEN_KEYWORDS.contains(&k) {
+        return select! { RuneToken::Word(word) if word == k => () }
+            .labelled(k)
+            .boxed();
+    }
+    if let Some(digit) = k.strip_prefix("T+") {
+        return select! { RuneToken::Ident(("T", false)) = e => e.span() }
+            .then(select! { RuneToken::Punct("+") = e => e.span() })
+            .then(select! { RuneToken::Int(n) = e if n == digit => e.span() })
+            .try_map(move |((t, plus), n): ((Span, Span), Span), span| {
+                if t.end == plus.start && plus.end == n.start {
+                    Ok(())
+                } else {
+                    Err(Rich::custom(span, format!("expected '{k}'")))
+                }
+            })
+            .labelled(k)
+            .boxed();
+    }
+    kw(k).boxed()
+}
+
+pub(crate) fn sym<'src>(s: &'static str) -> impl Parser<'src, I<'src>, (), AErr<'src>> + Clone {
+    select! { RuneToken::Punct(p) if p == s => () }.labelled(s)
+}
+
+/// An Xtext `STRING` terminal: single- or double-quoted with escapes.
+pub(crate) fn string_lit<'src>() -> impl Parser<'src, I<'src>, String, AErr<'src>> + Clone {
+    select! { RuneToken::Str(raw) => unescape(raw) }.labelled("string literal")
+}
+
+/// The payload of a quoted string token: quotes stripped, and `\\`, `\"`,
+/// `\'`, `\n`, `\t`, `\r`, `\b`, `\f` decoded. Any other escaped
+/// character stands for itself, as in the Xtext `STRING` terminal.
+fn unescape(raw: &str) -> String {
+    let inner = &raw[1..raw.len() - 1];
+    let mut out = String::with_capacity(inner.len());
+    let mut chars = inner.chars();
+    while let Some(c) = chars.next() {
+        if c != '\\' {
+            out.push(c);
+            continue;
+        }
+        match chars.next() {
+            Some('n') => out.push('\n'),
+            Some('t') => out.push('\t'),
+            Some('r') => out.push('\r'),
+            Some('b') => out.push('\u{0008}'),
+            Some('f') => out.push('\u{000C}'),
+            Some(other) => out.push(other),
+            None => {}
+        }
+    }
+    out
+}
+
+/// A `+`/`-` sign token with its span.
+fn sign<'src>() -> impl Parser<'src, I<'src>, (char, Span), AErr<'src>> + Clone {
+    select! {
+        RuneToken::Punct("+") = e => ('+', e.span()),
+        RuneToken::Punct("-") = e => ('-', e.span()),
+    }
+}
+
+/// An unsigned-digits token with its span.
+fn digits_token<'src>() -> impl Parser<'src, I<'src>, (&'src str, Span), AErr<'src>> + Clone {
+    select! { RuneToken::Int(digits) = e => (digits, e.span()) }
+}
+
+/// An optional sign that must touch the digits after it (`-1`, never `- 1`).
+fn signed_digits<'src>() -> impl Parser<'src, I<'src>, (Option<char>, &'src str), AErr<'src>> + Clone
+{
+    sign()
+        .or_not()
+        .then(digits_token())
+        .try_map(|(sign, (digits, digits_span)), span| match sign {
+            Some((_, sign_span)) if sign_span.end != digits_span.start => {
+                Err(Rich::custom(span, "a sign must touch its digits"))
+            }
+            Some((sign, _)) => Ok((Some(sign), digits)),
+            None => Ok((None, digits)),
+        })
+}
+
+/// Unsigned integer (`INT` terminal).
+fn uint<'src>() -> impl Parser<'src, I<'src>, u32, AErr<'src>> + Clone {
+    digits_token()
+        .try_map(|(s, _), span| {
+            s.parse::<u32>()
+                .map_err(|_| Rich::custom(span, format!("'{s}' is out of range")))
+        })
+        .labelled("integer")
+}
+
+/// Signed integer literal, keeping the source text verbatim (sign included).
+pub(crate) fn int_lit_raw<'src>() -> impl Parser<'src, I<'src>, String, AErr<'src>> + Clone {
+    signed_digits()
+        .try_map(|(sign, digits), span| {
+            digits
+                .parse::<i128>()
+                .map(|_| match sign {
+                    Some(sign) => format!("{sign}{digits}"),
+                    None => digits.to_string(),
+                })
+                .map_err(|_| Rich::custom(span, format!("'{digits}' is out of range")))
+        })
+        .labelled("integer literal")
+}
+
+/// Signed integer literal.
+pub(crate) fn int_lit<'src>() -> impl Parser<'src, I<'src>, i128, AErr<'src>> + Clone {
+    signed_digits()
+        .try_map(|(sign, s), span| {
+            let negative = sign == Some('-');
+            s.parse::<i128>()
+                .map(|v| if negative { -v } else { v })
+                .map_err(|_| Rich::custom(span, format!("'{s}' is out of range")))
+        })
+        .labelled("integer literal")
+}
+
+/// `BigDecimal` literal — requires a fractional part, per the grammar
+/// (`sign? ('.' INT | INT '.' | INT '.' INT) exponent?`).
+///
+/// The `INT '.' INT` and `'.' INT` forms (with any exponent) are one
+/// [`RuneToken::Decimal`]. The bare `INT '.'` form is an int token and a
+/// touching `.` (optionally followed by a touching `e5`/`e`,`-`,`5`
+/// exponent). A sign must touch the number, as in the Xtext terminal.
+pub(crate) fn number_lit<'src>() -> impl Parser<'src, I<'src>, String, AErr<'src>> + Clone {
+    let decimal = select! { RuneToken::Decimal(text) = e => (text.to_string(), e.span()) };
+    let exponent_word = select! {
+        RuneToken::Ident((word, false)) = e
+            if (word.starts_with('e') || word.starts_with('E'))
+                && word.len() > 1
+                && word[1..].bytes().all(|b| b.is_ascii_digit()) => (word.to_string(), e.span()),
+    };
+    let int_dot = digits_token()
+        .then(select! { RuneToken::Punct(".") = e => e.span() })
+        .then(exponent_word.or_not())
+        .try_map(|(((digits, digits_span), dot), exponent), span| {
+            if digits_span.end != dot.start {
+                return Err(Rich::custom(span, "number literal"));
+            }
+            let mut text = format!("{digits}.");
+            let mut end = dot.end;
+            if let Some((exponent, exponent_span)) = exponent {
+                if exponent_span.start != end {
+                    return Err(Rich::custom(span, "number literal"));
+                }
+                text.push_str(&exponent);
+                end = exponent_span.end;
+            }
+            Ok((text, Span::from(digits_span.start..end)))
+        });
+    sign()
+        .or_not()
+        .then(decimal.or(int_dot))
+        .try_map(|(sign, (core, core_span)), span| match sign {
+            Some((_, sign_span)) if sign_span.end != core_span.start => {
+                Err(Rich::custom(span, "a sign must touch its number"))
+            }
+            Some((sign, _)) => Ok(format!("{sign}{core}")),
+            None => Ok(core),
+        })
+        .labelled("number literal")
+}
+
+/// Qualified name: `ValidID ('.' ValidID)*`
+pub(crate) fn qname<'src>() -> impl Parser<'src, I<'src>, QName, AErr<'src>> + Clone {
+    name()
+        .separated_by(sym("."))
+        .at_least(1)
+        .collect::<Vec<String>>()
+        .map(|parts| QName(parts.join(".")))
+        .labelled("qualified name")
+}
+
+/// A qualified name together with the span of its text.
+fn spanned_qname<'src>() -> impl Parser<'src, I<'src>, SpannedQName, AErr<'src>> + Clone {
+    qname()
+        .map_with(|name, ex| SpannedQName {
+            name,
+            span: span_of(ex.span()),
+        })
+        .labelled("qualified name")
+}
+
+/// `<"definition text">` or nothing.
+fn definable<'src>() -> impl Parser<'src, I<'src>, Option<String>, AErr<'src>> + Clone {
+    sym("<")
+        .ignore_then(string_lit())
+        .then_ignore(sym(">"))
+        .or_not()
+}
+
+pub(crate) fn bool_kw<'src>() -> impl Parser<'src, I<'src>, bool, AErr<'src>> + Clone {
+    kw("True").to(true).or(kw("False").to(false))
+}
+
+/// `('[' ']')` — marks library function parameters as arrays.
+fn array_marker<'src>() -> impl Parser<'src, I<'src>, bool, AErr<'src>> + Clone {
+    sym("[")
+        .ignore_then(sym("]"))
+        .to(true)
+        .or_not()
+        .map(|v| v.unwrap_or(false))
+}
+
+pub fn annotation_path<'src>() -> impl Parser<'src, I<'src>, AnnotationPath, AErr<'src>> + Clone {
+    let segment = choice((sym("->>").to(true), sym("->").to(false)))
+        .then(name())
+        .map(|(deep, attribute)| AnnotationPathSegment { attribute, deep });
+    kw("item")
+        .ignore_then(segment.clone().repeated().collect::<Vec<_>>())
+        .map(|segments| AnnotationPath {
+            starts_with_item: true,
+            segments,
+        })
+        .or(name()
+            .then(segment.repeated().collect::<Vec<_>>())
+            .map(|(first, mut segments)| {
+                segments.insert(
+                    0,
+                    AnnotationPathSegment {
+                        attribute: first,
+                        deep: false,
+                    },
+                );
+                AnnotationPath {
+                    starts_with_item: false,
+                    segments,
+                }
+            }))
+        .labelled("annotation path")
+}
+
+fn qualifier_value<'src>() -> impl Parser<'src, I<'src>, QualifierValue, AErr<'src>> + Clone {
+    let path = qname()
+        .then(
+            sym("->")
+                .ignore_then(name())
+                .repeated()
+                .at_least(1)
+                .collect::<Vec<_>>(),
+        )
+        .map(|(data, attributes)| QualifierValue::Path(QualifierPath { data, attributes }));
+    string_lit()
+        .map(QualifierValue::Str)
+        .or(path)
+        .labelled("qualifier value")
+}
+
+fn annotation_qualifier<'src>(
+) -> impl Parser<'src, I<'src>, AnnotationQualifier, AErr<'src>> + Clone {
+    string_lit()
+        .then_ignore(sym("="))
+        .then(qualifier_value())
+        .map_with(|(name, value), ex| AnnotationQualifier {
+            name,
+            value,
+            span: span_of(ex.span()),
+        })
+        .labelled("annotation qualifier")
+}
+
+/// `[annotation attribute "qual"=value ...]`
+pub fn annotation_ref<'src>() -> impl Parser<'src, I<'src>, AnnotationRef, AErr<'src>> + Clone {
+    sym("[")
+        .ignore_then(qname())
+        .then(name().or_not())
+        .then(annotation_qualifier().repeated().collect::<Vec<_>>())
+        .then_ignore(sym("]"))
+        .map_with(|((annotation, attribute), qualifiers), ex| AnnotationRef {
+            annotation,
+            attribute,
+            qualifiers,
+            span: span_of(ex.span()),
+        })
+        .labelled("annotation reference")
+}
+
+fn document_rationale<'src>() -> impl Parser<'src, I<'src>, DocumentRationale, AErr<'src>> + Clone {
+    let rationale = kw("rationale").ignore_then(string_lit());
+    let author = kw("rationale_author").ignore_then(string_lit());
+    rationale
+        .clone()
+        .then(author.clone().or_not())
+        .map(|(rationale, rationale_author)| DocumentRationale {
+            rationale: Some(rationale),
+            rationale_author,
+        })
+        .or(author
+            .then(rationale.or_not())
+            .map(|(rationale_author, rationale)| DocumentRationale {
+                rationale,
+                rationale_author: Some(rationale_author),
+            }))
+}
+
+/// A name in a `[docReference ...]` reference list. The words that continue
+/// the annotation ([`RUNE_DOC_REFERENCE_WORDS`]) are keyword tokens in Xtext,
+/// so they never satisfy a `QualifiedName` here and win over the greedy pair
+/// repetition.
+fn doc_ref_name<'src>() -> impl Parser<'src, I<'src>, String, AErr<'src>> + Clone {
+    name()
+        .try_map(|text: String, span| {
+            if RUNE_DOC_REFERENCE_WORDS.contains(&text.as_str()) {
+                Err(Rich::custom(span, "doc reference"))
+            } else {
+                Ok(text)
+            }
+        })
+        .labelled("doc reference")
+}
+
+fn doc_ref_qname<'src>() -> impl Parser<'src, I<'src>, QName, AErr<'src>> + Clone {
+    doc_ref_name()
+        .separated_by(sym("."))
+        .at_least(1)
+        .collect::<Vec<String>>()
+        .map(|parts| QName(parts.join(".")))
+        .labelled("qualified name")
+}
+
+/// `[docReference for path Body Corpus (Segment "ref")* ...]`
+pub fn doc_reference<'src>() -> impl Parser<'src, I<'src>, DocReference, AErr<'src>> + Clone {
+    let for_clause = kw("for").ignore_then(annotation_path()).or_not();
+    let item = doc_ref_qname().then(string_lit().or_not());
+    let structured = kw("structured_provision")
+        .ignore_then(string_lit())
+        .or_not();
+    let provision = kw("provision").ignore_then(string_lit()).or_not();
+    let reported = kw("reportedField").to(()).or_not();
+    sym("[")
+        .ignore_then(kw("docReference"))
+        .ignore_then(for_clause)
+        .then(item.repeated().at_least(1).collect::<Vec<_>>())
+        .then(document_rationale().repeated().collect::<Vec<_>>())
+        .then(structured)
+        .then(provision)
+        .then(reported)
+        .then_ignore(sym("]"))
+        .map_with(
+            |(((((for_path, items), rationales), structured_provision), provision), reported),
+             ex| {
+                let mut names = Vec::new();
+                let mut segments = Vec::new();
+                for (name, segment_ref) in items {
+                    match segment_ref {
+                        Some(reference) => segments.push((name.0, reference)),
+                        None => names.push(name),
+                    }
+                }
+                let body = names.first().cloned().unwrap_or(QName(String::new()));
+                if !names.is_empty() {
+                    names.remove(0);
+                }
+                DocReference {
+                    for_path,
+                    body,
+                    corpora: names,
+                    segments,
+                    rationales,
+                    structured_provision,
+                    provision,
+                    reported_field: reported.is_some(),
+                    span: span_of(ex.span()),
+                }
+            },
+        )
+        .labelled("doc reference")
+}
+
+/// `[label for path "label"]`
+pub fn label_annotation<'src>() -> impl Parser<'src, I<'src>, LabelAnnotation, AErr<'src>> + Clone {
+    let for_clause = kw("for").ignore_then(annotation_path()).or_not();
+    sym("[")
+        .ignore_then(kw("label"))
+        .ignore_then(for_clause)
+        .then(string_lit())
+        .then_ignore(sym("]"))
+        .map_with(|(for_path, label), ex| LabelAnnotation {
+            for_path,
+            label,
+            span: span_of(ex.span()),
+        })
+        .labelled("label annotation")
+}
+
+/// `[ruleReference CDM.Rule]` / `[ruleReference empty]`
+pub fn rule_reference<'src>() -> impl Parser<'src, I<'src>, RuleReference, AErr<'src>> + Clone {
+    let for_clause = kw("for").ignore_then(annotation_path()).or_not();
+    sym("[")
+        .ignore_then(kw("ruleReference"))
+        .ignore_then(for_clause)
+        .then(qname().map(Some).or(kw("empty").to(None)))
+        .then_ignore(sym("]"))
+        .map_with(|(for_path, rule), ex| RuleReference {
+            for_path,
+            empty: rule.is_none(),
+            rule,
+            span: span_of(ex.span()),
+        })
+        .labelled("rule reference")
+}
+
+/// The `[...]` fragment shared by data types, attributes and enum values.
+fn references_and_annotations<'src>() -> impl Parser<
+    'src,
+    I<'src>,
+    (
+        Vec<DocReference>,
+        Vec<AnnotationRef>,
+        Vec<LabelAnnotation>,
+        Vec<RuleReference>,
+    ),
+    AErr<'src>,
+> + Clone {
+    #[derive(Debug, Clone)]
+    enum Fragment {
+        Doc(DocReference),
+        Anno(AnnotationRef),
+        Label(LabelAnnotation),
+        Rule(RuleReference),
+    }
+    choice((
+        doc_reference().map(Fragment::Doc),
+        annotation_ref().map(Fragment::Anno),
+        label_annotation().map(Fragment::Label),
+        rule_reference().map(Fragment::Rule),
+    ))
+    .repeated()
+    .collect::<Vec<_>>()
+    .map(|fragments| {
+        let mut docs = Vec::new();
+        let mut annos = Vec::new();
+        let mut labels = Vec::new();
+        let mut rules = Vec::new();
+        for fragment in fragments {
+            match fragment {
+                Fragment::Doc(d) => docs.push(d),
+                Fragment::Anno(a) => annos.push(a),
+                Fragment::Label(l) => labels.push(l),
+                Fragment::Rule(r) => rules.push(r),
+            }
+        }
+        (docs, annos, labels, rules)
+    })
+}
+
+/// A type reference with optional arguments: `number(digits: 30)`.
+pub fn type_call<'src>() -> impl Parser<'src, I<'src>, TypeCall, AErr<'src>> + Clone {
+    let argument = name()
+        .then_ignore(sym(":"))
+        .then(
+            bool_kw()
+                .map(TypeCallArgumentValue::Bool)
+                .or(string_lit().map(TypeCallArgumentValue::Str))
+                .or(number_lit().map(TypeCallArgumentValue::Number))
+                .or(int_lit().map(TypeCallArgumentValue::Int))
+                .or(name().map(TypeCallArgumentValue::Reference)),
+        )
+        .map_with(|(parameter, value), ex| TypeCallArgument {
+            parameter,
+            value,
+            span: span_of(ex.span()),
+        });
+    qname()
+        .then(
+            argument
+                .separated_by(sym(","))
+                .allow_trailing()
+                .collect::<Vec<_>>()
+                .delimited_by(sym("("), sym(")"))
+                .or_not(),
+        )
+        .map_with(|(name, arguments), ex| TypeCall {
+            name,
+            arguments: arguments.unwrap_or_default(),
+            span: span_of(ex.span()),
+        })
+        .labelled("type reference")
+}
+
+/// `(min..max)` or `(min..*)`. Required on every attribute.
+fn cardinality<'src>() -> impl Parser<'src, I<'src>, Cardinality, AErr<'src>> + Clone {
+    sym("(")
+        .ignore_then(uint())
+        .then_ignore(sym(".."))
+        .then(
+            uint()
+                .map(CardinalityMax::Finite)
+                .or(sym("*").to(CardinalityMax::Unbounded)),
+        )
+        .then_ignore(sym(")"))
+        .map(|(min, max)| Cardinality { min, max })
+        .labelled("cardinality")
+}
+
+fn attribute<'src>() -> impl Parser<'src, I<'src>, AttributeDef, AErr<'src>> + Clone {
+    kw("override")
+        .to(true)
+        .or_not()
+        .then(name())
+        .then(type_call())
+        .then(cardinality())
+        .then(definable())
+        .then(references_and_annotations())
+        .map_with(
+            |(
+                ((((is_override, name), type_call), cardinality), definition),
+                (docs, annos, labels, rules),
+            ),
+             ex| {
+                AttributeDef {
+                    name,
+                    is_override: is_override.unwrap_or(false),
+                    type_call,
+                    cardinality,
+                    definition,
+                    doc_references: docs,
+                    annotations: annos,
+                    labels,
+                    rule_references: rules,
+                    span: span_of(ex.span()),
+                }
+            },
+        )
+        .labelled("attribute")
+}
+
+/// A `choice` option: a bare type reference with implicit `(0..1)`
+/// cardinality and no `override` marker.
+fn choice_option<'src>() -> impl Parser<'src, I<'src>, AttributeDef, AErr<'src>> + Clone {
+    type_call()
+        .then(definable())
+        .then(references_and_annotations())
+        .try_map(
+            |((type_call, definition), (docs, annos, labels, rules)), span| {
+                // An option names a type; a lone element keyword is the start of
+                // the next element, not an option.
+                if type_call.name.segment_count() == 1
+                    && RUNE_ELEMENT_WORDS.contains(&type_call.name.0.as_str())
+                {
+                    Err(Rich::custom(span, "choice option"))
+                } else {
+                    Ok((type_call, definition, docs, annos, labels, rules, span))
+                }
+            },
+        )
+        .map_with(
+            |(type_call, definition, docs, annos, labels, rules, span), _| AttributeDef {
+                name: type_call.name.segments().last().unwrap_or("").to_string(),
+                is_override: false,
+                type_call,
+                cardinality: Cardinality {
+                    min: 0,
+                    max: CardinalityMax::Finite(1),
+                },
+                definition,
+                doc_references: docs,
+                annotations: annos,
+                labels,
+                rule_references: rules,
+                span: span_of(span),
+            },
+        )
+        .labelled("choice option")
+}
+
+fn enum_value<'src>() -> impl Parser<'src, I<'src>, EnumValueDef, AErr<'src>> + Clone {
+    element_name()
+        .then(kw("displayName").ignore_then(string_lit()).or_not())
+        .then(definable())
+        .then(references_and_annotations())
+        .map_with(
+            |(((name, display), definition), (docs, annos, _, _)), ex| EnumValueDef {
+                name,
+                display,
+                definition,
+                doc_references: docs,
+                annotations: annos,
+                span: span_of(ex.span()),
+            },
+        )
+        .labelled("enum value")
+}
+
+fn type_parameters<'src>() -> impl Parser<'src, I<'src>, Vec<TypeParameter>, AErr<'src>> + Clone {
+    let parameter = name().then(type_call()).then(definable()).map_with(
+        |((name, type_call), definition), ex| TypeParameter {
+            name,
+            type_call,
+            definition,
+            span: span_of(ex.span()),
+        },
+    );
+    parameter
+        .separated_by(sym(","))
+        .allow_trailing()
+        .collect::<Vec<_>>()
+        .delimited_by(sym("("), sym(")"))
+        .or_not()
+        .map(|p| p.unwrap_or_default())
+}
+
+fn data_def<'src>(choice: bool) -> impl Parser<'src, I<'src>, DataDef, AErr<'src>> + Clone {
+    let header = if choice { kw("choice") } else { kw("type") };
+    let body: Boxed<'src, 'src, I<'src>, (Vec<AttributeDef>, Vec<ConditionDef>), AErr<'src>> =
+        if choice {
+            choice_option()
+                .repeated()
+                .collect::<Vec<_>>()
+                .map(|options| (options, Vec::new()))
+                .boxed()
+        } else {
+            attribute()
+                .repeated()
+                .collect::<Vec<_>>()
+                .then(
+                    crate::rune::expr::condition_def(
+                        kw("condition"),
+                        crate::rune::expr::expression(),
+                    )
+                    .repeated()
+                    .collect::<Vec<_>>(),
+                )
+                .boxed()
+        };
+    header
+        .ignore_then(name())
+        .then(kw("extends").ignore_then(spanned_qname()).or_not())
+        .then_ignore(sym(":"))
+        .then(definable())
+        .then(references_and_annotations())
+        .then(body)
+        .map_with(
+            |((((name, super_type), definition), (docs, annos, _, _)), (members, conditions)),
+             ex| {
+                let mut span = span_of(ex.span());
+                if let Some(last_condition) = conditions.last() {
+                    span = span.union(last_condition.span);
+                }
+                DataDef {
+                    name,
+                    super_type,
+                    definition,
+                    doc_references: docs,
+                    annotations: annos,
+                    attributes: members,
+                    conditions,
+                    span,
+                }
+            },
+        )
+        .labelled(if choice { "choice" } else { "type" })
+}
+
+fn enum_def<'src>() -> impl Parser<'src, I<'src>, EnumDef, AErr<'src>> + Clone {
+    kw("enum")
+        .ignore_then(name())
+        .then(kw("extends").ignore_then(spanned_qname()).or_not())
+        .then_ignore(sym(":"))
+        .then(definable())
+        .then(references_and_annotations())
+        .then(enum_value().repeated().collect::<Vec<_>>())
+        .map_with(
+            |((((name, super_type), definition), (docs, annos, _, _)), values), ex| EnumDef {
+                name,
+                super_type,
+                definition,
+                doc_references: docs,
+                annotations: annos,
+                values,
+                span: span_of(ex.span()),
+            },
+        )
+        .labelled("enum")
+}
+
+fn annotation_decl<'src>() -> impl Parser<'src, I<'src>, AnnotationDecl, AErr<'src>> + Clone {
+    kw("annotation")
+        .ignore_then(name())
+        .then_ignore(sym(":"))
+        .then(definable())
+        .then(
+            sym("[")
+                .ignore_then(kw("prefix").ignore_then(name()))
+                .then_ignore(sym("]"))
+                .or_not(),
+        )
+        .then(attribute().repeated().collect::<Vec<_>>())
+        .map_with(
+            |(((name, definition), prefix), attributes), ex| AnnotationDecl {
+                name,
+                definition,
+                prefix,
+                attributes,
+                span: span_of(ex.span()),
+            },
+        )
+        .labelled("annotation")
+}
+
+fn type_alias<'src>() -> impl Parser<'src, I<'src>, TypeAliasDef, AErr<'src>> + Clone {
+    // Grammar rule `RosettaTypeAlias`: `'typeAlias' RosettaNamed
+    // TypeParameters? ':' RosettaDefinable? RosettaTyped Annotations*
+    // conditions += Condition*` — a type alias owns conditions directly
+    // (e.g. CDM's `typeAlias FpMLCodingScheme(...)` /
+    // `condition IsValidCodingScheme:`).
+    kw("typeAlias")
+        .ignore_then(name())
+        .then(type_parameters())
+        .then_ignore(sym(":"))
+        .then(definable())
+        .then(type_call())
+        .then(references_and_annotations())
+        .then(
+            crate::rune::expr::condition_def(kw("condition"), crate::rune::expr::expression())
+                .repeated()
+                .collect::<Vec<_>>(),
+        )
+        .map_with(
+            |(((((name, parameters), definition), type_call), (docs, annos, _, _)), conditions),
+             ex| {
+                TypeAliasDef {
+                    name,
+                    parameters,
+                    definition,
+                    type_call,
+                    doc_references: docs,
+                    annotations: annos,
+                    conditions,
+                    span: span_of(ex.span()),
+                }
+            },
+        )
+        .labelled("type alias")
+}
+
+fn basic_type<'src>() -> impl Parser<'src, I<'src>, BasicTypeDecl, AErr<'src>> + Clone {
+    kw("basicType")
+        .ignore_then(name())
+        .then(type_parameters())
+        .then(definable())
+        .map_with(|((name, parameters), definition), ex| BasicTypeDecl {
+            name,
+            parameters,
+            definition,
+            span: span_of(ex.span()),
+        })
+        .labelled("basic type")
+}
+
+fn record_type<'src>() -> impl Parser<'src, I<'src>, RecordTypeDecl, AErr<'src>> + Clone {
+    let feature = name()
+        .then(type_call())
+        .map_with(|(name, type_call), ex| RecordFeature {
+            name,
+            type_call,
+            span: span_of(ex.span()),
+        });
+    kw("recordType")
+        .ignore_then(name())
+        .then_ignore(sym("{"))
+        .then(definable())
+        .then(feature.repeated().collect::<Vec<_>>())
+        .then_ignore(sym("}"))
+        .map_with(|((name, definition), features), ex| RecordTypeDecl {
+            name,
+            definition,
+            features,
+            span: span_of(ex.span()),
+        })
+        .labelled("record type")
+}
+
+fn library_function<'src>() -> impl Parser<'src, I<'src>, LibraryFunctionDecl, AErr<'src>> + Clone {
+    let parameter = name()
+        .then(type_call())
+        .then(array_marker())
+        .map(|((name, type_call), is_array)| (name, type_call, is_array));
+    kw("library")
+        .ignore_then(kw("function"))
+        .ignore_then(name())
+        .then(
+            parameter
+                .separated_by(sym(","))
+                .allow_trailing()
+                .collect::<Vec<_>>()
+                .delimited_by(sym("("), sym(")"))
+                .or_not(),
+        )
+        .then(type_call())
+        .then(definable())
+        .map_with(
+            |(((name, parameters), return_type), definition), ex| LibraryFunctionDecl {
+                name,
+                parameters: parameters.unwrap_or_default(),
+                return_type,
+                definition,
+                span: span_of(ex.span()),
+            },
+        )
+        .labelled("library function")
+}
+
+/// `(attr: Enum->VALUE)` — the dispatch head of a `FunctionDispatch`.
+fn function_dispatch<'src>() -> impl Parser<'src, I<'src>, FunctionDispatchDef, AErr<'src>> + Clone
+{
+    sym("(")
+        .ignore_then(name().map_with(|attribute, ex| (attribute, span_of(ex.span()))))
+        .then_ignore(sym(":"))
+        .then(spanned_qname())
+        .then_ignore(sym("->"))
+        .then(name().map_with(|value, ex| (value, span_of(ex.span()))))
+        .then_ignore(sym(")"))
+        .map_with(|((attribute, enumeration), value), _| FunctionDispatchDef {
+            attribute: attribute.0,
+            attribute_span: attribute.1,
+            enumeration: enumeration.name,
+            enumeration_span: enumeration.span,
+            value: value.0,
+            value_span: value.1,
+        })
+        .labelled("dispatch")
+}
+
+/// `[ingest X]` / `[enrich]` / `[projection Y]`. The transform keyword
+/// wins over an annotation reference of the same name, matching the
+/// grammar's alternative order.
+fn transform_annotation<'src>(
+) -> impl Parser<'src, I<'src>, TransformAnnotationDef, AErr<'src>> + Clone {
+    let kind = kw("ingest")
+        .to(TransformKind::Ingest)
+        .or(kw("enrich").to(TransformKind::Enrich))
+        .or(kw("projection").to(TransformKind::Projection));
+    sym("[")
+        .ignore_then(kind)
+        .then(spanned_qname().or_not())
+        .then_ignore(sym("]"))
+        .map_with(|(kind, reference), ex| TransformAnnotationDef {
+            kind,
+            reference,
+            span: span_of(ex.span()),
+        })
+        .labelled("transform annotation")
+}
+
+/// The `[...]` fragments allowed directly after a `func` header:
+/// transform annotations win, then doc references, then annotation refs.
+fn func_annotations<'src>() -> impl Parser<
+    'src,
+    I<'src>,
+    (
+        Vec<TransformAnnotationDef>,
+        Vec<DocReference>,
+        Vec<AnnotationRef>,
+    ),
+    AErr<'src>,
+> + Clone {
+    #[derive(Debug, Clone)]
+    enum Fragment {
+        Transform(TransformAnnotationDef),
+        Doc(DocReference),
+        Anno(AnnotationRef),
+    }
+    choice((
+        transform_annotation().map(Fragment::Transform),
+        doc_reference().map(Fragment::Doc),
+        annotation_ref().map(Fragment::Anno),
+    ))
+    .repeated()
+    .collect::<Vec<_>>()
+    .map(|fragments| {
+        let mut transform = Vec::new();
+        let mut docs = Vec::new();
+        let mut annos = Vec::new();
+        for fragment in fragments {
+            match fragment {
+                Fragment::Transform(t) => transform.push(t),
+                Fragment::Doc(d) => docs.push(d),
+                Fragment::Anno(a) => annos.push(a),
+            }
+        }
+        (transform, docs, annos)
+    })
+}
+
+/// `alias name: <"...">? expr` (grammar rule `ShortcutDeclaration`).
+fn shortcut<'src, P>(expression: P) -> impl Parser<'src, I<'src>, ShortcutDef, AErr<'src>> + Clone
+where
+    P: Parser<'src, I<'src>, SpannedExpr, AErr<'src>> + Clone,
+{
+    kw("alias")
+        .ignore_then(name())
+        .then_ignore(sym(":"))
+        .then(definable())
+        .then(expression)
+        .map_with(|((name, definition), expression), ex| ShortcutDef {
+            name,
+            definition,
+            expression,
+            span: span_of(ex.span()),
+        })
+        .labelled("alias")
+}
+
+/// One `-> feature` step of an operation path.
+fn path_segment<'src>() -> impl Parser<'src, I<'src>, PathSegmentDef, AErr<'src>> + Clone {
+    sym("->")
+        .ignore_then(name().map_with(|feature, ex| PathSegmentDef {
+            feature,
+            span: span_of(ex.span()),
+        }))
+        .labelled("path segment")
+}
+
+/// `set|add root (-> segment)*: <"...">? ExpressionWithAsKey`.
+fn operation<'src, P>(expression: P) -> impl Parser<'src, I<'src>, OperationDef, AErr<'src>> + Clone
+where
+    P: Parser<'src, I<'src>, SpannedExpr, AErr<'src>> + Clone,
+{
+    choice((kw("set").to(false), kw("add").to(true)))
+        .then(name().map_with(|assign_root, ex| (assign_root, span_of(ex.span()))))
+        .then(path_segment().repeated().collect::<Vec<_>>())
+        .then_ignore(sym(":"))
+        .then(definable())
+        .then(expression)
+        .map_with(
+            |((((add, assign_root), path), definition), expression), ex| OperationDef {
+                add,
+                assign_root: assign_root.0,
+                assign_root_span: assign_root.1,
+                path,
+                definition,
+                expression,
+                span: span_of(ex.span()),
+            },
+        )
+        .labelled("operation")
+}
+
+/// `func Name (dispatch)? (extends F)? : <"...">? (transform|refs|annos)*
+/// (inputs: attrs+)? (output: attr?)? shortcuts* conditions* operations*
+/// postConditions*` — the section order is fixed by the grammar.
+fn func_def<'src>() -> impl Parser<'src, I<'src>, FunctionDef, AErr<'src>> + Clone {
+    #[derive(Debug, Clone)]
+    struct Head {
+        name: String,
+        dispatch: Option<FunctionDispatchDef>,
+        super_function: Option<SpannedQName>,
+        definition: Option<String>,
+        transform: Vec<TransformAnnotationDef>,
+        doc_references: Vec<DocReference>,
+        annotations: Vec<AnnotationRef>,
+    }
+    let expression = crate::rune::expr::expression();
+    let head = kw("func")
+        .ignore_then(name())
+        .then(function_dispatch().or_not())
+        .then(kw("extends").ignore_then(spanned_qname()).or_not())
+        .then_ignore(sym(":"))
+        .then(definable())
+        .then(func_annotations())
+        .map_with(
+            |((((name, dispatch), super_function), definition), (transform, docs, annos)), _| {
+                Head {
+                    name,
+                    dispatch,
+                    super_function,
+                    definition,
+                    transform,
+                    doc_references: docs,
+                    annotations: annos,
+                }
+            },
+        );
+    head.then(
+        kw("inputs")
+            .ignore_then(sym(":"))
+            .ignore_then(attribute().repeated().at_least(1).collect::<Vec<_>>())
+            .or_not(),
+    )
+    .then(
+        kw("output")
+            .ignore_then(sym(":"))
+            .ignore_then(attribute())
+            .or_not(),
+    )
+    .then(shortcut(expression.clone()).repeated().collect::<Vec<_>>())
+    .then(
+        crate::rune::expr::condition_def(kw("condition"), expression.clone())
+            .repeated()
+            .collect::<Vec<_>>(),
+    )
+    .then(
+        operation(crate::rune::expr::expression_with_as_key())
+            .repeated()
+            .collect::<Vec<_>>(),
+    )
+    .then(
+        crate::rune::expr::condition_def(
+            crate::rune::parser::word_kw("post-condition"),
+            expression,
+        )
+        .repeated()
+        .collect::<Vec<_>>(),
+    )
+    .map_with(
+        |((((((head, inputs), output), shortcuts), conditions), operations), post_conditions),
+         ex| {
+            FunctionDef {
+                name: head.name,
+                dispatch: head.dispatch,
+                super_function: head.super_function,
+                definition: head.definition,
+                transform: head.transform,
+                doc_references: head.doc_references,
+                annotations: head.annotations,
+                inputs: inputs.unwrap_or_default(),
+                output,
+                shortcuts,
+                conditions,
+                operations,
+                post_conditions,
+                span: span_of(ex.span()),
+            }
+        },
+    )
+    .labelled("func")
+}
+
+/// `reporting rule Name (from T)? : <"...">? docRefs* expr`.
+fn rule_def<'src>() -> impl Parser<'src, I<'src>, RuleDef, AErr<'src>> + Clone {
+    choice((kw("reporting").to(false), kw("eligibility").to(true)))
+        .then_ignore(kw("rule"))
+        .then(name())
+        .then(kw("from").ignore_then(type_call()).or_not())
+        .then_ignore(sym(":"))
+        .then(definable())
+        .then(doc_reference().repeated().collect::<Vec<_>>())
+        .then(crate::rune::expr::expression())
+        .map_with(
+            |(((((eligibility, name), input), definition), doc_references), expression), ex| {
+                RuleDef {
+                    name,
+                    eligibility,
+                    input,
+                    definition,
+                    doc_references,
+                    expression,
+                    span: span_of(ex.span()),
+                }
+            },
+        )
+        .labelled("rule")
+}
+
+/// The `real-time | T+1..T+5 | ASATP` timing keyword.
+fn report_timing<'src>() -> impl Parser<'src, I<'src>, ReportTiming, AErr<'src>> + Clone {
+    choice((
+        word_kw("real-time").to(ReportTiming::RealTime),
+        word_kw("ASATP").to(ReportTiming::Asatp),
+        word_kw("T+5").to(ReportTiming::T(5)),
+        word_kw("T+4").to(ReportTiming::T(4)),
+        word_kw("T+3").to(ReportTiming::T(3)),
+        word_kw("T+2").to(ReportTiming::T(2)),
+        word_kw("T+1").to(ReportTiming::T(1)),
+    ))
+    .labelled("report timing")
+}
+
+/// `report Body Corpus+ (Segment "ref")* in <timing> from T when R (and R)*
+/// with type T (with source S)?`.
+///
+/// The regulatory reference is a greedy `(name, string)?` sequence — the
+/// same shape as a doc reference — re-assembled by shape afterwards: bare
+/// names are the body and corpora, names followed by a string are segment
+/// references.
+fn report_def<'src>() -> impl Parser<'src, I<'src>, ReportDef, AErr<'src>> + Clone {
+    let item = report_ref_qname().then(string_lit().or_not());
+    kw("report")
+        .ignore_then(item.repeated().at_least(1).collect::<Vec<_>>())
+        .then_ignore(word_kw("in"))
+        .then(report_timing())
+        .then_ignore(kw("from"))
+        .then(type_call())
+        .then_ignore(kw("when"))
+        .then(
+            report_ref_qname()
+                .separated_by(kw("and"))
+                .at_least(1)
+                .collect::<Vec<_>>(),
+        )
+        .then_ignore(kw("with"))
+        .then_ignore(kw("type"))
+        .then(report_ref_qname())
+        .then(
+            kw("with")
+                .ignore_then(kw("source"))
+                .ignore_then(report_ref_qname())
+                .or_not(),
+        )
+        .try_map(
+            |(((((refs, timing), input_type), eligibility_rules), report_type), rule_source),
+             span| {
+                let mut names = refs.iter().filter(|(_, s)| s.is_none());
+                let body = match names.next() {
+                    Some((name, _)) => name.clone(),
+                    None => return Err(Rich::custom(span, "expected a regulatory body")),
+                };
+                let mut corpora = Vec::new();
+                let mut segments = Vec::new();
+                let mut in_segments = false;
+                let mut first_name = true;
+                for (name, reference) in refs {
+                    match reference {
+                        Some(reference) => {
+                            in_segments = true;
+                            segments.push(ReportSegmentRef {
+                                segment: name.clone(),
+                                reference: reference.clone(),
+                            });
+                        }
+                        None => {
+                            if in_segments {
+                                return Err(Rich::custom(
+                                    span,
+                                    "segment references must come last",
+                                ));
+                            }
+                            if first_name {
+                                // The first bare name is the body.
+                                first_name = false;
+                            } else {
+                                corpora.push(name.clone());
+                            }
+                        }
+                    }
+                }
+                Ok((
+                    body,
+                    corpora,
+                    segments,
+                    timing,
+                    input_type,
+                    eligibility_rules,
+                    report_type,
+                    rule_source,
+                ))
+            },
+        )
+        .map_with(
+            |(
+                body,
+                corpora,
+                segments,
+                timing,
+                input_type,
+                eligibility_rules,
+                report_type,
+                rule_source,
+            ),
+             ex| ReportDef {
+                body,
+                corpora,
+                segments,
+                timing,
+                input_type,
+                eligibility_rules,
+                report_type,
+                rule_source,
+                span: span_of(ex.span()),
+            },
+        )
+        .labelled("report")
+}
+
+/// `rule source Name (extends S)? { Data: (+|-) attr [ruleReference R]* }`.
+fn rule_source_def<'src>() -> impl Parser<'src, I<'src>, RuleSourceDef, AErr<'src>> + Clone {
+    let attribute = choice((sym("+").to(true), sym("-").to(false)))
+        .then(name().map_with(|attribute, ex| (attribute, span_of(ex.span()))))
+        .then(rule_reference().repeated().collect::<Vec<_>>())
+        .map_with(
+            |((add, attribute), rule_references), ex| ExternalAttributeDef {
+                add,
+                attribute: attribute.0,
+                attribute_span: attribute.1,
+                rule_references,
+                span: span_of(ex.span()),
+            },
+        );
+    let class = spanned_qname()
+        .then_ignore(sym(":"))
+        .then(attribute.repeated().collect::<Vec<_>>())
+        .map_with(|(data, attributes), ex| ExternalClassDef {
+            data,
+            attributes,
+            span: span_of(ex.span()),
+        });
+    kw("rule")
+        .then_ignore(kw("source"))
+        .ignore_then(name())
+        .then(kw("extends").ignore_then(spanned_qname()).or_not())
+        .then_ignore(sym("{"))
+        .then(class.repeated().collect::<Vec<_>>())
+        .then_ignore(sym("}"))
+        .map_with(|((name, super_source), classes), ex| RuleSourceDef {
+            name,
+            super_source,
+            classes,
+            span: span_of(ex.span()),
+        })
+        .labelled("rule source")
+}
+
+/// `schema Name Format <"...">? annotations*` (main-branch grammar; the
+/// 9.58.1 oracle has no Schema construct).
+fn schema_def<'src>() -> impl Parser<'src, I<'src>, SchemaDef, AErr<'src>> + Clone {
+    kw("schema")
+        .ignore_then(element_name())
+        .then(element_name().map_with(|format, ex| (format, span_of(ex.span()))))
+        .then(definable())
+        .then(annotation_ref().repeated().collect::<Vec<_>>())
+        .map_with(
+            |(((name, format), definition), annotations), ex| SchemaDef {
+                name,
+                format: format.0,
+                format_span: format.1,
+                definition,
+                annotations,
+                span: span_of(ex.span()),
+            },
+        )
+        .labelled("schema")
+}
+
+/// `body Type Name <"...">?`.
+fn body_def<'src>() -> impl Parser<'src, I<'src>, BodyDef, AErr<'src>> + Clone {
+    kw("body")
+        .ignore_then(element_name())
+        .then(element_name())
+        .then(definable())
+        .map_with(|((body_type, name), definition), ex| BodyDef {
+            name,
+            body_type,
+            definition,
+            span: span_of(ex.span()),
+        })
+        .labelled("body")
+}
+
+/// `corpus Type (Body)? ("display")? Name <"...">?`.
+///
+/// The optional body/display parts make a PEG-ordered parse commit to the
+/// wrong shape (`corpus Reg Ext` would otherwise greedily take `Ext` as a
+/// body reference and then fail to find a name). The token sequence after
+/// the corpus type is `[qname]? [string]? [qname]`, so it is collected
+/// greedily and re-assembled by shape instead.
+fn corpus_def<'src>() -> impl Parser<'src, I<'src>, CorpusDef, AErr<'src>> + Clone {
+    #[derive(Debug, Clone)]
+    enum Part {
+        Ref(SpannedQName),
+        Display(String),
+    }
+    let part = choice((
+        report_ref_qname().map(Part::Ref),
+        string_lit().map(Part::Display),
+    ));
+    kw("corpus")
+        .ignore_then(element_name())
+        .then(part.repeated().collect::<Vec<_>>())
+        .then(definable())
+        .try_map(|((corpus_type, parts), definition), span| {
+            // Shape: [Ref]? [Display]? [Ref]; the final Ref is the name.
+            let parsed = match &parts[..] {
+                [Part::Ref(name)] => (None, None, Some(name.clone())),
+                [Part::Display(display), Part::Ref(name)] => {
+                    (None, Some(display.clone()), Some(name.clone()))
+                }
+                [Part::Ref(body), Part::Ref(name)] => {
+                    (Some(body.clone()), None, Some(name.clone()))
+                }
+                [Part::Ref(body), Part::Display(display), Part::Ref(name)] => (
+                    Some(body.clone()),
+                    Some(display.clone()),
+                    Some(name.clone()),
+                ),
+                _ => (None, None, None),
+            };
+            match parsed {
+                (body, display, Some(name)) => {
+                    Ok((corpus_type, body, display, name.name.0, definition))
+                }
+                _ => Err(Rich::custom(span, "expected corpus body and/or name")),
+            }
+        })
+        .map_with(
+            |(corpus_type, body, display_name, name, definition), ex| CorpusDef {
+                name,
+                corpus_type,
+                display_name,
+                body,
+                definition,
+                span: span_of(ex.span()),
+            },
+        )
+        .labelled("corpus")
+}
+
+/// `segment Name`.
+fn segment_decl<'src>() -> impl Parser<'src, I<'src>, SegmentDecl, AErr<'src>> + Clone {
+    kw("segment")
+        .ignore_then(element_name())
+        .map_with(|name, ex| SegmentDecl {
+            name,
+            span: span_of(ex.span()),
+        })
+        .labelled("segment")
+}
+
+/// `metaType Name Type`.
+fn meta_type_decl<'src>() -> impl Parser<'src, I<'src>, MetaTypeDecl, AErr<'src>> + Clone {
+    kw("metaType")
+        .ignore_then(element_name())
+        .then(type_call())
+        .map_with(|(name, type_call), ex| MetaTypeDecl {
+            name,
+            type_call,
+            span: span_of(ex.span()),
+        })
+        .labelled("metaType")
+}
+
+fn element<'src>() -> impl Parser<'src, I<'src>, Element, AErr<'src>> + Clone {
+    choice((
+        func_def().map(Element::Function),
+        rule_def().map(Element::Rule),
+        report_def().map(Element::Report),
+        rule_source_def().map(Element::RuleSource),
+        data_def(false).map(Element::Data),
+        data_def(true).map(Element::Choice),
+        enum_def().map(Element::Enumeration),
+        annotation_decl().map(Element::Annotation),
+        type_alias().map(Element::TypeAlias),
+        basic_type().map(Element::BasicType),
+        record_type().map(Element::RecordType),
+        library_function().map(Element::LibraryFunction),
+        schema_def().map(Element::Schema),
+        body_def().map(Element::Body),
+        corpus_def().map(Element::Corpus),
+        segment_decl().map(Element::Segment),
+        meta_type_decl().map(Element::MetaType),
+    ))
+}
+
+fn import_decl<'src>() -> impl Parser<'src, I<'src>, ImportDecl, AErr<'src>> + Clone {
+    kw("import")
+        .ignore_then(qname())
+        .then(sym(".").ignore_then(sym("*")).to(true).or_not())
+        .then(kw("as").ignore_then(name()).or_not())
+        .map_with(|((namespace, wildcard), alias), ex| {
+            let wildcard = wildcard.unwrap_or(false);
+            ImportDecl {
+                namespace,
+                wildcard,
+                alias,
+                span: span_of(ex.span()),
+            }
+        })
+        .labelled("import")
+}
+
+fn qualifiable_configuration<'src>(
+) -> impl Parser<'src, I<'src>, QualifiableConfiguration, AErr<'src>> + Clone {
+    kw("isEvent")
+        .to(QualifiableType::Event)
+        .or(kw("isProduct").to(QualifiableType::Product))
+        .then_ignore(kw("root"))
+        .then(qname())
+        .then_ignore(sym(";"))
+        .map_with(|(q_type, root), ex| QualifiableConfiguration {
+            q_type,
+            root: SpannedQName {
+                name: root,
+                span: span_of(ex.span()),
+            },
+            span: span_of(ex.span()),
+        })
+        .labelled("qualifiable configuration")
+}
+
+pub fn source_unit<'src>() -> impl Parser<'src, I<'src>, SourceUnit, AErr<'src>> + Clone {
+    let header = ws().ignore_then(
+        kw("override")
+            .to(true)
+            .or_not()
+            .then_ignore(kw("namespace"))
+            .then(qname().map(Some).or(string_lit().map(|s| Some(QName(s)))))
+            .then(sym(":").ignore_then(definable()).or_not())
+            .then(kw("scope").ignore_then(name()).then(definable()).or_not())
+            .then(kw("version").ignore_then(string_lit()).or_not())
+            .map_with(
+                |((((overridden, namespace), definition), scope), version), ex| {
+                    (
+                        NamespaceDecl {
+                            overridden: overridden.unwrap_or(false),
+                            name: namespace.unwrap_or(QName(String::new())),
+                            definition: definition.flatten(),
+                            span: span_of(ex.span()),
+                        },
+                        scope,
+                        version,
+                    )
+                },
+            ),
+    );
+    header
+        .then(import_decl().repeated().collect::<Vec<_>>())
+        .then(qualifiable_configuration().repeated().collect::<Vec<_>>())
+        .then(element().repeated().collect::<Vec<_>>())
+        .then_ignore(end())
+        .map_with(
+            |((((namespace, scope, version), imports), configurations), elements), ex| SourceUnit {
+                namespace,
+                scope,
+                version,
+                imports,
+                configurations,
+                elements,
+                span: span_of(ex.span()),
+            },
+        )
+        .labelled("model")
+}
+
+/// The result of parsing one `.rosetta` file: the spanned AST (`None` when
+/// any parse error occurred — this parser has no recovery yet) and the
+/// errors, each with a byte span.
+#[derive(Debug, Clone)]
+pub struct RuneParseResult {
+    pub ast: Option<SourceUnit>,
+    pub errors: Vec<ParseError>,
+}
+
+/// Parse one `.rosetta` file into a spanned AST plus parse errors.
+///
+/// Runs on a dedicated thread with a large stack: chumsky's combinator
+/// trees are stack-hungry during construction and backtracking, and real
+/// models can be deeply nested. (A nesting budget replaces the thread when
+/// recovery lands.)
+pub fn parse_rune(source: &str) -> RuneParseResult {
+    let source = source.to_string();
+    std::thread::Builder::new()
+        .stack_size(256 * 1024 * 1024)
+        .spawn(move || parse_inner(&source))
+        .expect("failed to spawn parser thread")
+        .join()
+        .expect("parser thread panicked")
+}
+
+fn parse_inner(source: &str) -> RuneParseResult {
+    let tokens = lex(source);
+    let (ast, errors) = source_unit()
+        .parse(phero_parser::Tokens::new(&tokens))
+        .into_output_errors();
+    let errors: Vec<ParseError> = errors
+        .into_iter()
+        .map(|error| ParseError {
+            message: error.to_string(),
+            span: *error.span(),
+        })
+        .collect();
+    RuneParseResult {
+        ast: if errors.is_empty() { ast } else { None },
+        errors,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn parse_ok(src: &str) -> SourceUnit {
+        let result = parse_rune(src);
+        assert!(
+            result.errors.is_empty(),
+            "unexpected errors: {:#?}",
+            result.errors
+        );
+        result.ast.unwrap()
+    }
+
+    /// Runs one combinator over `src`, the way the old character-level tests
+    /// called `.parse(src)` directly.
+    fn run<'a, T>(
+        parser: impl Parser<'a, I<'a>, T, AErr<'a>>,
+        tokens: &'a [(RuneToken<'a>, Span)],
+    ) -> Result<T, String> {
+        parser
+            .then_ignore(end())
+            .parse(phero_parser::Tokens::new(tokens))
+            .into_result()
+            .map_err(|errors| format!("{errors:?}"))
+    }
+
+    #[test]
+    fn parses_multi_digit_fraction_literals() {
+        fn num(src: &str) -> String {
+            let tokens = lex(src);
+            run(number_lit(), &tokens)
+                .unwrap_or_else(|e| panic!("{src} should be a number literal: {e}"))
+        }
+        // One fraction digit (already worked).
+        assert_eq!(num("0.5"), "0.5");
+        // Multiple fraction digits (Xtext `BigDecimal`: INT is `digit+`).
+        assert_eq!(num("0.01"), "0.01");
+        assert_eq!(num("1.00"), "1.00");
+        assert_eq!(num("123.456"), "123.456");
+        assert_eq!(num("0.0"), "0.0");
+        // Leading zeros in exponents too (`('e'|'E') INT`).
+        assert_eq!(num("1.5e10"), "1.5e10");
+        assert_eq!(num("1.0e01"), "1.0e01");
+        // Bare `INT '.'` stays parseable, but `..` is never a fraction.
+        assert_eq!(num("1."), "1.");
+        assert!(run(number_lit(), &lex("1..1")).is_err());
+        // A fraction is required: a bare integer (or `1e01`) is `Integer`,
+        // not `BigDecimal`.
+        assert!(run(number_lit(), &lex("123")).is_err());
+        assert!(run(number_lit(), &lex("1e01")).is_err());
+    }
+
+    #[test]
+    fn parses_fractions_inside_expressions() {
+        let unit =
+            parse_ok("namespace t\ntype T:\n\tcondition C: x * 0.01\n\tcondition D: y + 1.00\n");
+        match &unit.elements[0] {
+            Element::Data(d) => {
+                assert_eq!(d.conditions.len(), 2);
+                let printed = format!("{:?}", d.conditions[0].expression);
+                assert!(printed.contains("0.01"), "0.01 lost: {printed}");
+                let printed = format!("{:?}", d.conditions[1].expression);
+                assert!(printed.contains("1.00"), "1.00 lost: {printed}");
+            }
+            other => panic!("expected data, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn cardinality_ranges_still_parse() {
+        let unit =
+            parse_ok("namespace t\ntype T:\n\tx int (1..1)\n\ty int (0..*)\n\tz int (0..10)\n");
+        match &unit.elements[0] {
+            Element::Data(d) => {
+                assert_eq!(d.attributes[0].cardinality.to_constraint_string(), "(1..1)");
+                assert_eq!(d.attributes[1].cardinality.to_constraint_string(), "(0..*)");
+                assert_eq!(
+                    d.attributes[2].cardinality.to_constraint_string(),
+                    "(0..10)"
+                );
+            }
+            other => panic!("expected data, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn parses_type_alias_with_condition() {
+        let unit = parse_ok(
+            "namespace t\n\
+             typeAlias FpMLCodingScheme(domain string):\n\
+             \tstring\n\
+             \n\
+             \tcondition IsValidCodingScheme:\n\
+             \t\tif item exists\n\
+             \t\tthen ValidateFpMLCodingSchemeDomain(item, domain)\n\
+             \n\
+             typeAlias BusinessCenter: FpMLCodingScheme(domain: \"business-center\")\n",
+        );
+        assert_eq!(unit.elements.len(), 2);
+        match &unit.elements[0] {
+            Element::TypeAlias(t) => {
+                assert_eq!(t.name, "FpMLCodingScheme");
+                assert_eq!(t.conditions.len(), 1);
+                assert_eq!(t.conditions[0].name.as_deref(), Some("IsValidCodingScheme"));
+            }
+            other => panic!("expected type alias, got {other:?}"),
+        }
+        match &unit.elements[1] {
+            Element::TypeAlias(t) => {
+                assert_eq!(t.name, "BusinessCenter");
+                assert!(t.conditions.is_empty());
+            }
+            other => panic!("expected type alias, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn parses_type_with_condition_still_works() {
+        let unit = parse_ok("namespace t\ntype T:\n\tx int (1..1)\n\tcondition C: True\n");
+        match &unit.elements[0] {
+            Element::Data(d) => assert_eq!(d.conditions.len(), 1),
+            other => panic!("expected data, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn parses_minimal_model() {
+        let unit = parse_ok("namespace test.pojo\n\ntype Foo:\n    attr int (1..1)\n");
+        assert_eq!(unit.namespace.name.0, "test.pojo");
+        assert_eq!(unit.elements.len(), 1);
+        let data = match &unit.elements[0] {
+            Element::Data(d) => d,
+            other => panic!("expected data, got {other:?}"),
+        };
+        assert_eq!(data.name, "Foo");
+        assert_eq!(data.attributes[0].name, "attr");
+        assert_eq!(
+            data.attributes[0].cardinality.to_constraint_string(),
+            "(1..1)"
+        );
+    }
+
+    #[test]
+    fn parses_pojo_sample() {
+        let unit = parse_ok(
+            "namespace test.pojo\n\ntype Foo1:\n\tnumberAttr number (0..1)\n\tparent Parent (1..1)\n\tparentList Parent (0..10)\n\totherParentList Parent (0..*)\n\n\tstringAttr string (1..1)\n\t\t[metadata scheme]\n",
+        );
+        assert_eq!(unit.elements.len(), 1);
+    }
+
+    #[test]
+    fn parses_inheritance_and_override() {
+        let text = "namespace t\ntype A:\n\tx int (1..1)\n\ntype B extends A:\n\toverride x int(digits: 30, max: 100) (1..1)\n";
+        let unit = parse_ok(text);
+        assert_eq!(unit.elements.len(), 2);
+        match &unit.elements[1] {
+            Element::Data(d) => {
+                // The super-type span must cover the reference text itself.
+                let st = d.super_type.as_ref().unwrap();
+                assert_eq!(st.name.0, "A");
+                assert_eq!(&text[st.span.start..st.span.end], "A");
+                let a = &d.attributes[0];
+                assert!(a.is_override);
+                assert_eq!(a.type_call.name.0, "int");
+                assert_eq!(a.type_call.arguments.len(), 2);
+                assert_eq!(
+                    a.type_call.arguments[0].value,
+                    TypeCallArgumentValue::Int(30)
+                );
+            }
+            other => panic!("expected data, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn parses_enum() {
+        let unit = parse_ok(
+            "namespace t\nenum E extends Base: <\"docs\">\n\tA <\"first\">\n\tB displayName \"Bee\"\n",
+        );
+        match &unit.elements[0] {
+            Element::Enumeration(e) => {
+                assert_eq!(e.values.len(), 2);
+                assert_eq!(e.values[1].display.as_deref(), Some("Bee"));
+                assert_eq!(e.definition.as_deref(), Some("docs"));
+            }
+            other => panic!("expected enum, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn parses_choice() {
+        let unit = parse_ok(
+            "namespace t\nchoice Vehicle: <\"transport\">\n\t[metadata key]\n\tCar <\"a car\">\n\tBicycle\n",
+        );
+        match &unit.elements[0] {
+            Element::Choice(c) => {
+                assert_eq!(c.attributes.len(), 2);
+                assert_eq!(c.attributes[0].name, "Car");
+                assert_eq!(c.annotations.len(), 1);
+            }
+            other => panic!("expected choice, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn parses_annotation_decl_and_ref() {
+        let unit = parse_ok(
+            "namespace t\nannotation metadata: <\"meta\">\n\tkey string (0..1)\n\tid string (0..1)\n\ntype T:\n\t[metadata key]\n\tx string (0..1)\n",
+        );
+        assert_eq!(unit.elements.len(), 2);
+        match &unit.elements[1] {
+            Element::Data(d) => {
+                assert_eq!(d.annotations.len(), 1);
+                assert_eq!(d.annotations[0].annotation.0, "metadata");
+                assert_eq!(d.annotations[0].attribute.as_deref(), Some("key"));
+            }
+            other => panic!("expected data, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn parses_imports_and_configurations() {
+        let unit = parse_ok(
+            "namespace t\nversion \"1.2.3\"\nimport a.b.* as dep\nimport c.D\nisEvent root Foo;\ntype Foo:\n\tx int (0..1)\n",
+        );
+        assert_eq!(unit.imports.len(), 2);
+        assert_eq!(unit.imports[0].alias.as_deref(), Some("dep"));
+        assert!(unit.imports[0].wildcard);
+        assert!(!unit.imports[1].wildcard);
+        assert_eq!(unit.configurations.len(), 1);
+        assert_eq!(unit.configurations[0].root.name.0, "Foo");
+    }
+
+    #[test]
+    fn parses_builtin_file_shapes() {
+        let unit = parse_ok(
+            "namespace com.rosetta.model\nversion \"9\"\n\nbasicType boolean <\"A boolean can either be True or False.\">\n\nbasicType number(\n    digits int\n  , fractionalDigits int\n) <\"A signed decimal number.\">\n\ntypeAlias int(digits int, min int, max int): <\"A signed decimal integer.\">\n\tnumber(digits: digits, fractionalDigits: 0, min: min, max: max)\n\nrecordType date\n{\n\tday   int\n\tmonth int\n\tyear  int\n}\n\nlibrary function Min(x number, y number) number\n",
+        );
+        assert_eq!(unit.elements.len(), 5);
+    }
+
+    #[test]
+    fn supports_comments_and_caret_idents() {
+        let unit = parse_ok(
+            "// leading comment\nnamespace t /* inline */\ntype ^type:\n\tx int (1..1) // trailing\n",
+        );
+        match &unit.elements[0] {
+            Element::Data(d) => assert_eq!(d.name, "type"),
+            other => panic!("expected data, got {other:?}"),
+        }
+    }
+
+    /// Every grammar element is modelled: each construct below parses into its
+    /// own element kind (the skipped-construct path is gone, RN9).
+    #[test]
+    fn no_supported_construct_is_skipped() {
+        let text = "\
+namespace t
+func MyFunc:
+	output:
+		result int (1..1)
+reporting rule MyRule:
+	True
+eligibility rule MyEligibilityRule from MyType:
+	True
+body MyBodyType MyBody <\"b\">
+corpus MyCorpus MyBody \"c\" MyCorpus
+segment MySegment
+metaType MyMeta number
+report MyBody MyCorpus in T+1 from MyType when MyEligibilityRule with type MyType
+type MyType:
+	x int (0..1)
+rule source MySource {
+	MyType:
+		+ x
+}
+";
+        let unit = parse_ok(text);
+        let kinds: Vec<String> = unit
+            .elements
+            .iter()
+            .map(|e| match e {
+                Element::Data(_) => "data".to_string(),
+                Element::Function(_) => "func".to_string(),
+                Element::Rule(_) => "rule".to_string(),
+                Element::Report(_) => "report".to_string(),
+                Element::RuleSource(_) => "rule source".to_string(),
+                Element::Body(_) => "body".to_string(),
+                Element::Corpus(_) => "corpus".to_string(),
+                Element::Segment(_) => "segment".to_string(),
+                Element::MetaType(_) => "metaType".to_string(),
+                _ => "other".to_string(),
+            })
+            .collect();
+        assert_eq!(
+            kinds,
+            vec![
+                "func",
+                "rule",
+                "rule",
+                "body",
+                "corpus",
+                "segment",
+                "metaType",
+                "report",
+                "data",
+                "rule source",
+            ]
+        );
+    }
+
+    #[test]
+    fn syntax_error_is_reported() {
+        let result = parse_rune("namespace t\ntype Broken\n");
+        assert!(!result.errors.is_empty());
+        assert!(result.ast.is_none());
+    }
+
+    #[test]
+    fn parses_doc_reference_pair_segments_with_tail_keywords() {
+        let unit = parse_ok(
+            "namespace t\n\
+             body CFTC CFTCBody <\"b\">\n\
+             corpus CFTC Part45 <\"p\">\n\
+             segment S1\n\
+             segment S2\n\
+             type Product:\n\
+             \t[docReference CFTC Part45 S1 \"r1\" S2 \"r2\" rationale \"why\" provision \"prov text\" reportedField]\n\
+             \t[docReference CFTC Part45 rationale_author \"me\" rationale \"why\"]\n\
+             \tproductId string (1..1)\n",
+        );
+        let data = match &unit.elements[4] {
+            Element::Data(d) => d,
+            other => panic!("expected data, got {other:?}"),
+        };
+        let doc = &data.doc_references[0];
+        assert_eq!(doc.body.0, "CFTC");
+        assert_eq!(
+            doc.corpora.iter().map(|c| c.0.clone()).collect::<Vec<_>>(),
+            vec!["Part45"]
+        );
+        assert_eq!(
+            doc.segments,
+            vec![
+                ("S1".to_string(), "r1".to_string()),
+                ("S2".to_string(), "r2".to_string()),
+            ]
+        );
+        assert_eq!(doc.rationales.len(), 1);
+        assert_eq!(doc.rationales[0].rationale.as_deref(), Some("why"));
+        assert_eq!(doc.rationales[0].rationale_author, None);
+        assert_eq!(doc.structured_provision, None);
+        assert_eq!(doc.provision.as_deref(), Some("prov text"));
+        assert!(doc.reported_field);
+
+        let doc = &data.doc_references[1];
+        assert_eq!(
+            doc.segments,
+            Vec::<(String, String)>::new(),
+            "tail keywords must not be eaten as segment pairs"
+        );
+        assert_eq!(doc.rationales.len(), 1);
+        assert_eq!(doc.rationales[0].rationale.as_deref(), Some("why"));
+        assert_eq!(doc.rationales[0].rationale_author.as_deref(), Some("me"));
+        assert!(!doc.reported_field);
+    }
+
+    #[test]
+    fn doc_reference_bare_string_segments_fail_to_parse() {
+        let result = parse_rune(
+            "namespace t\n\
+             body CFTC CFTCBody <\"b\">\n\
+             corpus CFTC Part45 <\"p\">\n\
+             segment S1\n\
+             segment S2\n\
+             type Product:\n\
+             \t[docReference CFTC Part45 \"S1\" \"S2\"]\n\
+             \tproductId string (1..1)\n",
+        );
+        assert!(
+            !result.errors.is_empty(),
+            "bare-string segments must stay a syntax error (oracle-correct): {:?}",
+            result.errors
+        );
+    }
+
+    #[test]
+    fn parses_doc_reference_for_path() {
+        let unit = parse_ok(
+            "namespace t\n\
+             body CFTC CFTCBody <\"b\">\n\
+             corpus CFTC Part45 <\"p\">\n\
+             segment S1\n\
+             type Product:\n\
+             \tproductId string (1..1)\n\
+             \t\t[docReference for productId->id CFTC Part45 S1 \"S1\" reportedField]\n",
+        );
+        match &unit.elements[3] {
+            Element::Data(d) => {
+                let doc = &d.attributes[0].doc_references[0];
+                let path = doc.for_path.as_ref().unwrap();
+                assert!(!path.starts_with_item);
+                assert_eq!(path.segments.len(), 2);
+                assert_eq!(path.segments[0].attribute, "productId");
+                assert!(!path.segments[0].deep);
+                assert_eq!(path.segments[1].attribute, "id");
+                assert_eq!(doc.body.0, "CFTC");
+                assert_eq!(doc.segments, vec![("S1".to_string(), "S1".to_string())]);
+                assert!(doc.reported_field);
+            }
+            other => panic!("expected data, got {other:?}"),
+        }
+    }
+}

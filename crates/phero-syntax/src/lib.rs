@@ -39,6 +39,7 @@ pub mod fmt;
 pub(crate) mod intents;
 pub mod lexer;
 pub mod parser;
+pub mod rune;
 pub(crate) mod usecases;
 pub mod words;
 

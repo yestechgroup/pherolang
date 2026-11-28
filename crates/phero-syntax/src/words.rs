@@ -355,6 +355,202 @@ pub const INTENTS_KEYWORDS: &[&str] = &["import"];
 /// grammar-special.
 pub const INTENTS_CONTEXTUAL: &[&str] = &["intent", "element", "check"];
 
+/// Every word the Rune (`.rosetta`) grammar matches by text (RN9, ADR 0013).
+/// Rune has **no** reserved identifiers: every word lexes as a Rune
+/// identifier and is special only where the grammar asks for it, so CDM
+/// attributes named `condition`, `source`, `scope` or `version` stay names.
+/// The hyphenated keywords and the `T+N` timing words are separate
+/// ([`RUNE_HYPHEN_KEYWORDS`], [`RUNE_TIMING_WORDS`]).
+pub const RUNE_CONTEXTUAL: &[&str] = &[
+    "ASATP",
+    "False",
+    "True",
+    "absent",
+    "add",
+    "alias",
+    "all",
+    "and",
+    "annotation",
+    "any",
+    "as",
+    "basicType",
+    "body",
+    "choice",
+    "condition",
+    "contains",
+    "corpus",
+    "count",
+    "default",
+    "disjoint",
+    "displayName",
+    "distinct",
+    "docReference",
+    "eligibility",
+    "else",
+    "empty",
+    "enrich",
+    "enum",
+    "exists",
+    "extends",
+    "extract",
+    "filter",
+    "first",
+    "flatten",
+    "for",
+    "from",
+    "func",
+    "function",
+    "if",
+    "import",
+    "in",
+    "ingest",
+    "inputs",
+    "is",
+    "isEvent",
+    "isProduct",
+    "item",
+    "join",
+    "label",
+    "last",
+    "library",
+    "max",
+    "metaType",
+    "min",
+    "multiple",
+    "namespace",
+    "only",
+    "optional",
+    "or",
+    "output",
+    "override",
+    "prefix",
+    "projection",
+    "provision",
+    "rationale",
+    "rationale_author",
+    "recordType",
+    "reduce",
+    "report",
+    "reportedField",
+    "reporting",
+    "required",
+    "reverse",
+    "root",
+    "rule",
+    "ruleReference",
+    "schema",
+    "scope",
+    "segment",
+    "set",
+    "single",
+    "sort",
+    "source",
+    "structured_provision",
+    "sum",
+    "switch",
+    "then",
+    "type",
+    "typeAlias",
+    "version",
+    "when",
+    "with",
+];
+
+/// The hyphenated Rune keywords. Each one is a single lexer token (Xtext's
+/// global keywords), longest first where one is a prefix of another.
+pub const RUNE_HYPHEN_KEYWORDS: &[&str] = &[
+    "to-zoned-date-time",
+    "to-date-time",
+    "to-date",
+    "to-string",
+    "to-number",
+    "to-int",
+    "to-time",
+    "to-enum",
+    "only-element",
+    "one-of",
+    "with-meta",
+    "as-key",
+    "post-condition",
+    "real-time",
+];
+
+/// The report timing words `T+1` … `T+5`: three touching tokens each, so
+/// `T + 1` in an expression stays arithmetic.
+pub const RUNE_TIMING_WORDS: &[&str] = &["T+1", "T+2", "T+3", "T+4", "T+5"];
+
+/// The words that start a top-level Rune element. A name position whose
+/// body runs into the next element never consumes one (Xtext lexes them as
+/// keyword tokens).
+pub const RUNE_ELEMENT_WORDS: &[&str] = &[
+    "namespace",
+    "type",
+    "enum",
+    "choice",
+    "annotation",
+    "typeAlias",
+    "basicType",
+    "recordType",
+    "library",
+    "func",
+    "report",
+    "rule",
+    "schema",
+    "body",
+    "corpus",
+    "segment",
+    "metaType",
+];
+
+/// The words a report reference list (`body`, `corpus`, `segment`, rule
+/// references) stops at: the element words plus the report's structural
+/// words.
+pub const RUNE_REPORT_STOP_WORDS: &[&str] = &[
+    "in",
+    "from",
+    "when",
+    "with",
+    "type",
+    "and",
+    "reporting",
+    "eligibility",
+    "namespace",
+    "enum",
+    "choice",
+    "annotation",
+    "typeAlias",
+    "basicType",
+    "recordType",
+    "library",
+    "func",
+    "report",
+    "rule",
+    "schema",
+    "body",
+    "corpus",
+    "segment",
+    "metaType",
+];
+
+/// The words that end a `docReference` segment list.
+pub const RUNE_DOC_REFERENCE_WORDS: &[&str] = &[
+    "rationale",
+    "rationale_author",
+    "structured_provision",
+    "provision",
+    "reportedField",
+];
+
+/// The expression-operator words. In Xtext they are keyword tokens, never
+/// identifiers, so a symbol, feature or key position in an expression never
+/// consumes one (unless `^`-escaped).
+pub const RUNE_EXPRESSION_WORDS: &[&str] = &[
+    "then", "and", "or", "contains", "disjoint", "default", "join", "exists", "single", "multiple",
+    "is", "absent", "count", "flatten", "distinct", "reverse", "first", "last", "sum", "min",
+    "max", "sort", "choice", "switch", "as", "filter", "extract", "reduce", "if", "else", "True",
+    "False", "empty", "item", "only", "required", "optional", "any", "all",
+];
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -392,6 +588,13 @@ mod tests {
             ("DMN_CONTEXTUAL", DMN_CONTEXTUAL),
             ("INTENTS_KEYWORDS", INTENTS_KEYWORDS),
             ("INTENTS_CONTEXTUAL", INTENTS_CONTEXTUAL),
+            ("RUNE_CONTEXTUAL", RUNE_CONTEXTUAL),
+            ("RUNE_HYPHEN_KEYWORDS", RUNE_HYPHEN_KEYWORDS),
+            ("RUNE_TIMING_WORDS", RUNE_TIMING_WORDS),
+            ("RUNE_ELEMENT_WORDS", RUNE_ELEMENT_WORDS),
+            ("RUNE_REPORT_STOP_WORDS", RUNE_REPORT_STOP_WORDS),
+            ("RUNE_DOC_REFERENCE_WORDS", RUNE_DOC_REFERENCE_WORDS),
+            ("RUNE_EXPRESSION_WORDS", RUNE_EXPRESSION_WORDS),
         ] {
             unique(words, name);
         }
