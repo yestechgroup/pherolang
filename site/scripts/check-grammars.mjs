@@ -3,8 +3,8 @@
 // lexical scopes to the compiler-backed highlight goldens.
 //
 // This script is deliberately read-only: it loads the committed files under
-// `site/packages/highlighting`, tokenizes every `examples/support/support.*`
-// source, pins the representative scopes, and reports the expected
+// `site/packages/highlighting`, tokenizes every catalogue example (`examples/support/support.*`,
+// plus `examples/pricing/pricing.rosetta`), pins the representative scopes, and reports the expected
 // TextMate-vs-compiler divergence (contextual words that need parser state,
 // and compiler semantic refinements). Regenerate the package with
 // `pherolang grammar --out site/packages/highlighting`; a hand edit fails the
@@ -17,6 +17,7 @@ import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import { createHighlighter } from 'shiki';
+import { SURFACES } from './surfaces.mjs';
 
 const here = dirname(fileURLToPath(import.meta.url));
 const root = resolve(here, '../..');
@@ -109,7 +110,10 @@ if (!catalogue) {
 }
 
 const surfaces = catalogue.surfaces;
-check(surfaces.length === 10, `site/data/surfaces.json lists ${surfaces.length} surfaces, expected 10`);
+check(
+  surfaces.length === SURFACES.length,
+  `site/data/surfaces.json lists ${surfaces.length} surfaces, expected ${SURFACES.length} (scripts/surfaces.mjs)`,
+);
 
 const loaded = [];
 for (const surface of surfaces) {
@@ -228,8 +232,10 @@ try {
 }
 
 for (const entry of loaded) {
-  const { id, extension } = entry.surface;
-  const example = join(root, 'examples/support', `support.${extension.slice(1)}`);
+  const { id } = entry.surface;
+  // The catalogue example: the support application's file, or the
+  // surface's own example where the support application has none (Rune).
+  const example = join(root, entry.surface.example);
   check(existsSync(example), `${id}: missing example ${example}`);
   if (!existsSync(example)) continue;
 
@@ -265,7 +271,11 @@ for (const entry of loaded) {
   Object.assign(entry, { source, tokens });
 
   // Compare generated lexical scopes to the committed compiler artifact.
-  const artifactPath = join(root, 'tests/highlight/json', `support.${id}.json`);
+  const artifactPath = join(
+    root,
+    'tests/highlight/json',
+    `${entry.surface.example.split('/').at(-1)}.json`,
+  );
   const artifact = readJson(artifactPath);
   if (!artifact) continue;
   const byteToIndex = byteIndexMap(source);

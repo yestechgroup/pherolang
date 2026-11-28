@@ -777,6 +777,47 @@ const entries: LanguageEntry[] = [
     artifactSummary:
       'One `IntentModel`: the intents in declaration order, each with its statement, its `element` links and its `check` links — names exactly as authored.',
   },
+
+  {
+    id: 'rosetta',
+    problem: [
+      'A `.rosetta` file is a FINOS Rune DSL model, the language the Common Domain Model is written in: namespaces of types, choices, enums, functions, rules and reports, with cardinalities, conditions and annotations.',
+      'Phero Lang parses and resolves Rune in tree, and the result is checked against the Java reference implementation, so a Rune model behaves here as it does upstream. A `.mox` domain imports one with `import sigil`, and its namespaces become ordinary packages every other surface can reference.',
+    ],
+    concepts: [
+      {
+        term: 'namespace',
+        definition: 'The unit a Rune file declares; other files import it by name, not by path.',
+      },
+      {
+        term: 'type',
+        definition: 'A data type: attributes with a type and a cardinality such as `(1..1)` or `(0..*)`.',
+      },
+      {
+        term: 'func',
+        definition: 'A function: `inputs`, one `output`, conditions, and the `set` operations that compute it.',
+      },
+      {
+        term: 'condition',
+        definition: 'A boolean rule over a type or a function\u2019s inputs, written in the Rune expression language.',
+      },
+      {
+        term: 'pool',
+        definition:
+          'The `.rosetta` files under a file\u2019s directory: a compile resolves the namespaces the file imports from it, exactly as `import sigil` does.',
+      },
+    ],
+    relations:
+      'A `.mox` domain imports a Rune model with `import sigil`, and its namespaces lower into packages that `.actor` capabilities, `.ddd` designs and every backend see as ordinary domain classes.',
+    related: ['mox'],
+    excerpt: languageExcerpt(
+      'rosetta',
+      'A Rune function: its inputs and output with cardinalities, a condition on the inputs, and the operation that sets the output.',
+    ),
+    artifactLines: 12,
+    artifactSummary:
+      'One `sigil-model/1` model: the builtin `com.rosetta.model` files first, then every resolved Rune file with its namespace and elements, and the resolution diagnostics.',
+  },
 ];
 
 function validate(list: LanguageEntry[]): LanguageEntry[] {

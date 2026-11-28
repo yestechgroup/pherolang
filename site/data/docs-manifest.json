@@ -1176,6 +1176,18 @@
       "language": null,
       "section": null,
       "order": 22
+    },
+    {
+      "source": "docs/adr/0013-rune-keeps-its-own-token-enum.md",
+      "slug": "0013-rune-keeps-its-own-token-enum",
+      "collection": "adr",
+      "target": "adr/0013-rune-keeps-its-own-token-enum.md",
+      "url": "/adr/0013-rune-keeps-its-own-token-enum/",
+      "title": "0013 — Rune keeps its own token enum inside `phero-syntax`",
+      "type": null,
+      "language": null,
+      "section": null,
+      "order": 23
     }
   ]
 }

@@ -351,16 +351,16 @@ exactly those files. There is no Rune formatter yet, so `pherolang fmt` skips
 namespace pricing.model
 
 type Instrument: <"A tradable instrument.">
-	symbol string (1..1) <"The ticker symbol.">
+    symbol string (1..1) <"The ticker symbol.">
 
 func priceQuote: <"Compute the price of a quote.">
-	inputs:
-		notional number (1..1)
-	output:
-		price number (1..1)
+    inputs:
+        notional number (1..1)
+    output:
+        price number (1..1)
 
-	set price:
-		notional
+    set price:
+        notional
 ```
 
 ### Classes and features

@@ -141,7 +141,21 @@ const excerpt = quoted.text;
 const excerptLines = excerpt.split('\n');
 const excerptLastLine = excerptLines[excerptLines.length - 1]?.trim() ?? '';
 
-if (excerptLastLine !== '}') {
+// Rune (`.rosetta`) blocks are indentation-delimited, not braced: a whole
+// block there is a range whose last line is code and whose next source line
+// is blank or the end of the file.
+const INDENTED_SURFACES = new Set(['rosetta']);
+if (INDENTED_SURFACES.has(surface.id)) {
+  const sourceLines = readRepositoryFile(surface.example).toString('utf8').split(/\r?\n/);
+  const following = sourceLines[end] ?? '';
+  if (excerptLastLine === '' || following.trim() !== '') {
+    throw new Error(
+      `LanguagePage: ${surface.id} cites ${surface.example} lines ${start}–${end}, ` +
+        'which do not cover a whole indented block (the range must end on code, ' +
+        'followed by a blank line or the end of the file). Update the catalogue range.',
+    );
+  }
+} else if (excerptLastLine !== '}') {
   throw new Error(
     `LanguagePage: ${surface.id} cites ${surface.example} lines ${start}–${end}, ` +
       `which end on '${excerptLastLine}' instead of a closing brace — the range no longer ` +
